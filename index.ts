@@ -36,6 +36,7 @@ import { registerCodesearch } from "./tools/codesearch.js";
 import { registerFileDetail } from "./tools/file_detail.js";
 import { registerSymbol } from "./tools/symbol.js";
 import { registerHover } from "./tools/hover.js";
+import { registerFindTests } from "./tools/find_tests.js";
 
 export default function (pi: ExtensionAPI): void {
 	const projectRoot = process.cwd();
@@ -122,6 +123,7 @@ export default function (pi: ExtensionAPI): void {
 	registerFileDetail(pi);
 	registerSymbol(pi);
 	registerHover(pi);
+	registerFindTests(pi);
 
 	log("pi-shazam loaded");
 }
