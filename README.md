@@ -17,7 +17,7 @@ Or add to `~/.pi/agent/settings.json`:
 
 ```json
 {
-  "packages": ["npm:pi-shazam@0.1.0"]
+  "packages": ["npm:pi-shazam@0.1.1"]
 }
 ```
 

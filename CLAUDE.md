@@ -21,7 +21,7 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 | `npm run build` | Compile TS → `dist/` |
 | `npm run typecheck` | `tsc --noEmit` — type validation without emit |
 | `npm run dev` | `tsc --watch` — incremental compilation |
-| `npm publish` | Build + publish to npm (runs `prepublishOnly`) |
+| `npm publish` | **禁止直接使用**——发布统一通过 GitHub Actions（见 Release & Publish 流程） |
 
 ## Development Environment
 
@@ -107,7 +107,7 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 ### Registered Tools (LLM-visible)
 
 All tools follow the same pattern:
-- Parameters: Zod schema via `pi.typebox` or `pi.zod`
+- Parameters: TypeBox schema via direct `import { Type } from "typebox"`（不使用 `pi.typebox`——Pi 运行时不一定注入，参考 pi-smart-fetch 的做法）
 - Output: `{ content: [{ type: "text", text: string }] }` — plain text for LLM reading
 - Optional `{ json: true }` parameter for structured JSON output
 - Write-operation tools support `{ dryRun: true }`
@@ -131,11 +131,46 @@ All tools follow the same pattern:
 
 ## Change Map
 
-- **Adding a new tool**: Create `tools/<name>.ts` with `register*` function → import and call in `index.ts` → add Zod parameter schema → implement `execute()` calling `core/` functions
+- **Adding a new tool**: Create `tools/<name>.ts` with `register*` function → import and call in `index.ts` → add TypeBox parameter schema via `import { Type } from "typebox"` → implement `execute()` calling `core/` functions
 - **Adding a new language**: Add grammar to `core/treesitter.ts` EXT_TO_LANG map → add tree-sitter query in queries section → add LSP server config in `lsp/servers.ts`
 - **Changing graph algorithm**: Modify `core/pagerank.ts` or `core/graph.ts` → verify all tools that consume `RepoGraph` still produce correct output
 - **Changing LSP protocol**: Modify `lsp/client.ts` → verify `lsp/manager.ts` lifecycle still works → test with at least 2 different language servers
 - **Changing tool output format**: Update the specific `tools/*.ts` formatter → verify JSON envelope schema
+
+## Release & Publish 流程
+
+### 发布方式：GitHub Actions（强制）
+
+**禁止直接 `npm publish`。** 本地 npm token 容易过期。发布统一通过 GitHub Actions workflow `.github/workflows/publish.yml`。
+
+发布流程：
+1. 开发完成、测试通过后，提交代码到分支
+2. `npm version patch`（或 `minor`/`major`）→ 自动创建 git tag
+3. `git push origin <branch> --tags`
+4. 创建 PR → 合并到 main
+5. 创建 GitHub Release（`gh release create vX.Y.Z`）
+6. Release 发布事件自动触发 `.github/workflows/publish.yml`
+   - 也可以手动触发：`gh workflow run publish.yml --ref main -f tag=latest`
+
+### 发布 CI 做的事
+
+`.github/workflows/publish.yml`：
+- `npm ci --legacy-peer-deps`
+- `npx tsc --noEmit`（类型检查）
+- `npm test`（单元测试）
+- `npm run build`（编译）
+- `npm publish`（用 `secrets.NPM_TOKEN` 认证）
+- 等待 15 秒后 `npm view pi-shazam` 验证
+
+**NOTE**: `secrets.NPM_TOKEN` 是 GitHub 仓库秘密，在 Settings → Secrets and variables → Actions 中配置。值是 npm 的 Automation Token（无 2FA）。
+
+### tool 参数 schema 注意事项
+
+- **使用 `import { Type } from "typebox"`**，不要用 `pi.typebox`
+  - Pi 运行时的 `ExtensionAPI.typebox` 不一定存在，`pi.typebox.Object()` 会导致 `Cannot read properties of undefined (reading 'Object')`
+  - 其他 Pi 扩展（如 `pi-smart-fetch`）都是直接导入 `@sinclair/typebox` 或 `typebox`
+- `typebox` 包版本固定在 `1.1.39`（`sinclairzx81` 的同名包）
+- API：`Type.Object({...})`、`Type.Optional(...)`、`Type.String()`、`Type.Number()`、`Type.Boolean()`、`Type.Array(...)`
 
 ## Verification Matrix
 
