@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerStateMap(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -140,6 +141,13 @@ export function executeStateMap(
 		lines.push(`Visibility: ${target.visibility}`);
 		lines.push(`PageRank: ${target.pagerank.toFixed(4)}`);
 		lines.push(`Signature: ${target.signature}`);
+	}
+
+	// Add Next recommendations
+	const nextItems = getNextForTool("state_map", { usageFile: targets[0]?.file });
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
 	}
 
 	return lines.join("\n");

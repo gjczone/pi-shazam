@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerFileDetail(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -110,6 +111,13 @@ export function executeFileDetail(graph: RepoGraph, file: string): string {
 		for (const imp of fileImports.slice(0, 20)) {
 			lines.push(`- ${imp}`);
 		}
+	}
+
+	// Add Next recommendations
+	const nextItems = getNextForTool("file_detail", { topFile: file, topSymbol: symbols[0]?.name });
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
 	}
 
 	return lines.join("\n");

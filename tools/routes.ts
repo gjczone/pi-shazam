@@ -8,6 +8,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerRoutes(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -160,6 +161,13 @@ export function executeRoutes(graph: RepoGraph, _projectRoot: string): string {
 		}
 	}
 
+	// Add Next recommendations
+	const nextItems = getNextForTool("routes", { handlerFile: routeSymbols[0]?.file });
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
+	}
+
 	return lines.join("\n");
 }
 
@@ -168,6 +176,7 @@ export function executeRoutes(graph: RepoGraph, _projectRoot: string): string {
 /**
  * Detect whether the project has web framework dependencies.
  * Searches for framework package names via file imports (fileImports).
+ * Uses whole-word matching to avoid false positives (e.g. "next" matching "next.config").
  */
 function detectWebFramework(graph: RepoGraph): string | null {
 	// Check file-level imports
@@ -175,7 +184,8 @@ function detectWebFramework(graph: RepoGraph): string | null {
 		for (const imp of imports) {
 			const lower = imp.toLowerCase();
 			for (const fw of WEB_FRAMEWORK_INDICATORS) {
-				if (lower.includes(fw)) {
+				// Match on package boundaries (e.g. "next" should match "next" or "next/server" but not "nextConfig")
+				if (lower === fw || lower.startsWith(fw + "/") || lower.startsWith(fw + "-")) {
 					return fw;
 				}
 			}

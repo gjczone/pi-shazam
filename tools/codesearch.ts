@@ -9,6 +9,7 @@ import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { isNonSourceFile } from "../core/filter.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerCodesearch(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -277,5 +278,13 @@ function formatFulltextResult(results: FulltextMatch[], query: string): string {
 			`${i + 1}. \`${r.file}:${r.line}:${r.column}\` — ${r.text.length > 80 ? r.text.slice(0, 80) + "..." : r.text}`,
 		);
 	}
+
+	// Add Next recommendations
+	const nextItems = getNextForTool("codesearch");
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
+	}
+
 	return lines.join("\n");
 }

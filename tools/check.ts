@@ -14,6 +14,7 @@ import { getLspManager } from "../core/lsp-global.js";
 import { execSync } from "child_process";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerCheck(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -187,6 +188,13 @@ function executeLspDiagnostics(
 		}
 	}
 
+	// Add Next recommendations
+	const nextItems = getNextForTool("check", { hasErrors: errors > 0, hasFixes: false });
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
+	}
+
 	return lines.join("\n");
 }
 
@@ -345,6 +353,13 @@ function runSubprocessDiagnostics(
 		lines.push("Falling back to tree-sitter parse check.");
 	}
 
+	// Add Next recommendations
+	const nextItems = getNextForTool("check");
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
+	}
+
 	return lines.join("\n");
 }
 
@@ -427,6 +442,13 @@ export function executeCheck(
 		"To get real compiler-level diagnostics, use: diagnostics=\"lsp\"",
 		"",
 	);
+
+	// Add Next recommendations
+	const nextItems = getNextForTool("check", { hasErrors: failedFiles.length > 0, hasFixes: false });
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
+	}
 
 	return lines.join("\n");
 }

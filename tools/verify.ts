@@ -11,6 +11,7 @@ import { scanProject } from "../core/scanner.js";
 import { diffBaseline, loadBaseline } from "../core/cache.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { execSync } from "node:child_process";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerVerify(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -175,6 +176,13 @@ export function executeVerify(
 		lines.push("### Analysis");
 		lines.push(`Tree-sitter parsing: ${symbolCount} symbols extracted from source files.`);
 		lines.push("");
+	}
+
+	// Add Next recommendations
+	const nextItems = getNextForTool("verify", { riskLevel: risk.level, orphanCount: orphans.length });
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
 	}
 
 	return lines.join("\n");

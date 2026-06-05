@@ -12,6 +12,7 @@ import { scanProject } from "../core/scanner.js";
 import { readFileAdaptive } from "../core/encoding.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerFix(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -144,6 +145,13 @@ export function executeFix(
 	if (dryRun) {
 		lines.push("");
 		lines.push("To apply fixes, call with `{ \"dryRun\": false }`.");
+	}
+
+	// Add Next recommendations
+	const nextItems = getNextForTool("fix");
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
 	}
 
 	return lines.join("\n");

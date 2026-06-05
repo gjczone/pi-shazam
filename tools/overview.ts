@@ -6,6 +6,7 @@ import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { isNonSourceFile } from "../core/filter.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerOverview(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -151,6 +152,13 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 		for (let i = 0; i < Math.min(5, topFiles.length); i++) {
 			lines.push(`${i + 1}. Start with \`${topFiles[i]![0]}\``);
 		}
+	}
+
+	// Add Next recommendations
+	const nextItems = getNextForTool("overview", { topFile: topFiles[0]?.[0], topSymbol: topFiles[0]?.[1].topSym });
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
 	}
 
 	return lines.join("\n");

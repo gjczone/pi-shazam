@@ -6,6 +6,7 @@ import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { isNonSourceFile } from "../core/filter.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerHotspots(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -79,6 +80,13 @@ export function executeHotspots(
 			`   ${h.symbolCount} symbols | PageRank: ${h.totalPagerank.toFixed(2)} | in:${h.incomingRefs} out:${h.outgoingRefs}`,
 		);
 		lines.push("");
+	}
+
+	// Add Next recommendations
+	const nextItems = getNextForTool("hotspots", { topFile: hotspots[0]?.file });
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
 	}
 
 	return lines.join("\n");

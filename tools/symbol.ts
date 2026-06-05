@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerSymbol(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -71,6 +72,13 @@ export function executeSymbol(
 			lines.push(`  outgoing refs: ${outgoing.length}`);
 		}
 		lines.push("");
+	}
+
+	// Add Next recommendations
+	const nextItems = getNextForTool("symbol", { topSymbol: matches[0]?.name });
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
 	}
 
 	return lines.join("\n").trim();

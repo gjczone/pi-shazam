@@ -10,6 +10,7 @@ import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { executeVerifyJson } from "./verify.js";
 import { executeCheckJson } from "./check.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 // Avoid circular imports by referencing JSON outputs and parsing them
 interface VerifyResult {
@@ -137,6 +138,13 @@ export function executeReady(graph: RepoGraph, projectRoot: string): string {
 		lines.push("Run `shazam_fix` to auto-fix format issues, then call `shazam_ready` again.");
 	} else {
 		lines.push("All checks pass. Ready to commit! 🚀");
+	}
+
+	// Add Next recommendations
+	const nextItems = getNextForTool("ready");
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
 	}
 
 	return lines.join("\n");

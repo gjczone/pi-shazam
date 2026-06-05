@@ -12,6 +12,7 @@ import { scanProject } from "../core/scanner.js";
 import { getLspManager } from "../core/lsp-global.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerHover(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -176,7 +177,15 @@ function formatHoverResult(result: HoverResult, name: string): string {
 
 	if (!result.file) {
 		lines.push(`Symbol "${name}" not found in the project.`);
-		return lines.join("\n");
+	
+	// Add Next recommendations
+	const nextItems = getNextForTool("hover", { topSymbol: result.name });
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
+	}
+
+	return lines.join("\n");
 	}
 
 	lines.push(`**Kind:** ${result.kind}`);

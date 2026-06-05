@@ -37,6 +37,9 @@ import { registerFileDetail } from "./tools/file_detail.js";
 import { registerSymbol } from "./tools/symbol.js";
 import { registerHover } from "./tools/hover.js";
 import { registerFindTests } from "./tools/find_tests.js";
+import { registerTypeHierarchy } from "./tools/type_hierarchy.js";
+import { registerRenameSymbol } from "./tools/rename_symbol.js";
+import { registerSafeDelete } from "./tools/safe_delete.js";
 
 export default function (pi: ExtensionAPI): void {
 	const projectRoot = process.cwd();
@@ -124,6 +127,9 @@ export default function (pi: ExtensionAPI): void {
 	registerSymbol(pi);
 	registerHover(pi);
 	registerFindTests(pi);
+	registerTypeHierarchy(pi);
+	registerRenameSymbol(pi);
+	registerSafeDelete(pi);
 
 	log("pi-shazam loaded");
 }
