@@ -9,7 +9,10 @@
  * Core has zero Pi or LSP imports. LSP may import from core.
  */
 
-import type { ExtensionAPI, ExtensionContext } from "./types/pi-extension.js";
+import type {
+	ExtensionAPI,
+	ExtensionCommandContext,
+} from "./types/pi-extension.js";
 import { LspManager } from "./lsp/manager.js";
 import { generateSetupReport } from "./lsp/setup.js";
 
@@ -71,7 +74,7 @@ export default function (pi: ExtensionAPI): void {
 	pi.registerCommand("shazam-setup", {
 		description:
 			"Detect and report LSP server availability with install instructions",
-		async handler(_args: string, ctx: ExtensionContext) {
+		async handler(_args: string, ctx: ExtensionCommandContext) {
 			const report = generateSetupReport(projectRoot);
 			ctx.ui.setStatus("shazam-setup", "LSP setup report generated");
 			// Send as a custom message so the user sees the report
@@ -88,7 +91,7 @@ export default function (pi: ExtensionAPI): void {
 	pi.registerCommand("shazam-doctor", {
 		description:
 			"Health check: tree-sitter grammars, LSP servers, cache integrity",
-		async handler(_args: string, ctx: ExtensionContext) {
+		async handler(_args: string, ctx: ExtensionCommandContext) {
 			const lspReport = generateSetupReport(projectRoot);
 			const msg = ["## Shazam Doctor — Health Check", "", lspReport].join("\n");
 			ctx.ui.setStatus("shazam-doctor", "Health check complete");
