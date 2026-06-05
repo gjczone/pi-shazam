@@ -1,8 +1,9 @@
 /**
- * pi-shazam tools/check — Compiler/lint diagnostics.
+ * pi-shazam tools/check — Symbol & parse diagnostics.
  *
  * Validates project files using tree-sitter parsing and reports issues.
- * Falls back to tree-sitter only when LSP is unavailable, annotated in output.
+ * Provides file-level parse status and symbol statistics.
+ * Falls back to tree-sitter only when LSP is unavailable.
  */
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
@@ -12,19 +13,18 @@ import { scanProject } from "../core/scanner.js";
 export function registerCheck(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "shazam_check",
-		label: "Compiler & Lint Diagnostics",
+		label: "Parse & Symbol Diagnostics",
 		description: `\
-Call when shazam_verify reports errors or you need compiler/linter
-diagnostics independent of git state. Runs tsc/eslint/pyright/go-vet/
-rustc directly and returns file:line:code:message for every issue.
+Call to check tree-sitter parse status and symbol statistics across
+the project. Reports which files parsed successfully and which failed,
+along with symbol and edge counts.
 
-Fix ALL errors before proceeding — a red check means broken code, not
-"warnings to ignore later." Unlike verify, check does NOT depend on git
-diff state — it runs on the entire project.
+For compiler/linter diagnostics (type errors, lint warnings), use
+the project's native tools: \`npx tsc --noEmit\`, \`npx eslint .\`,
+\`cargo clippy\`, \`golangci-lint run\`, etc.
 
-Scenario: CI failed, need local reproduction. verify says "run check
-for details." Mid-refactor before all files are saved. After npm install
-to confirm no type regressions.`,
+Scenario: after npm install to confirm files parse. Mid-refactor
+before saving. Quick health check of project parse status.`,
 		parameters: Type.Object({
 			file: Type.Optional(Type.String()),
 			json: Type.Optional(Type.Boolean()),
@@ -68,7 +68,7 @@ export function executeCheck(
 ): string {
 	const lines: string[] = [];
 
-	lines.push("## Check Diagnostics");
+	lines.push("## Parse & Symbol Diagnostics");
 	lines.push("");
 
 	// ── Filter to target file if specified ─────────────────────────────
@@ -130,11 +130,16 @@ export function executeCheck(
 	lines.push(`Edges: ${totalEdges}`);
 	lines.push("");
 
-	// ── LSP note ────────────────────────────────────────────────────────
+	// ── Compiler/linter hint ────────────────────────────────────────────
 	lines.push(
-		"*LSP diagnostics not available in direct tool mode. Run `npx tsc --noEmit` for TypeScript type checking, or use repomap check for full LSP diagnostics.*",
+		"For compiler/linter diagnostics (type errors, lint warnings), run:",
+		"",
+		"- TypeScript: `npx tsc --noEmit`",
+		"- Lint: `npx eslint .` or `npx biome check .`",
+		"- Go: `go vet ./...`",
+		"- Rust: `cargo clippy`",
+		"",
 	);
-	lines.push("");
 
 	return lines.join("\n");
 }

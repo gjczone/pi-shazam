@@ -66,6 +66,8 @@ export function executeHotspots(
 	lines.push("");
 	lines.push("Ranked by symbol density × PageRank score.");
 	lines.push("");
+	lines.push("Config and generated files (package-lock.json, package.json, tsconfig.json, dist/, node_modules/) are excluded.");
+	lines.push("");
 
 	for (let i = 0; i < hotspots.length; i++) {
 		const h = hotspots[i]!;
@@ -103,10 +105,31 @@ export function executeHotspotsJson(
 	});
 }
 
+// ── Config/generated file filtering ────────────────────────────────────────────
+
+/** 配置文件、生成文件、依赖锁定文件 —— 不应出现在热点排名或孤儿检测中 */
+const NON_SOURCE_FILE_PATTERNS = [
+	"package-lock.json",
+	"package.json",
+	"tsconfig.json",
+	"node_modules/",
+	"dist/",
+	".json",       // 其他 JSON 配置文件 (如 biome.json, tsconfig.*.json)
+];
+
+/** 判断文件是否为配置/生成/锁定文件 */
+export function isNonSourceFile(file: string): boolean {
+	return NON_SOURCE_FILE_PATTERNS.some((p) => file.includes(p));
+}
+
+// ── Core compute ────────────────────────────────────────────────────────────────
+
 function computeHotspots(graph: RepoGraph, topN: number): FileHotspot[] {
 	const fileStats = new Map<string, FileHotspot>();
 
 	for (const [file, symIds] of graph.fileSymbols) {
+		if (isNonSourceFile(file)) continue;
+
 		let totalPR = 0;
 		let incoming = 0;
 		let outgoing = 0;

@@ -1,5 +1,8 @@
 /**
  * pi-shazam tools/routes — HTTP route inventory.
+ *
+ * Detects HTTP route registrations using AST pattern matching for common
+ * web frameworks (Express, Fastify, Koa, Next.js, etc.).
  */
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
@@ -12,11 +15,17 @@ export function registerRoutes(pi: ExtensionAPI): void {
 		label: "HTTP Route Inventory",
 		description: `\
 Call when working on web/API projects to inventory ALL HTTP routes.
+Detects route registrations using AST pattern matching for common
+frameworks (Express, Fastify, Koa, Next.js, etc.).
+
 Returns: method (GET/POST/PUT/DELETE), path pattern, handler file:line.
 
 MUST call before changing any route path or handler signature — a route
 consumer you miss is a broken API endpoint in production. Also surfaces
 routes WITHOUT authentication guards (security risk).
+
+Note: Detection only works for projects using recognized web frameworks.
+For CLI tools, libraries, or non-web projects, this will return empty.
 
 Scenario: adding a new API endpoint. Changing a route path or parameter
 pattern. Refactoring middleware. Auditing auth coverage across
@@ -47,38 +56,91 @@ endpoints. Before deleting a handler function.`,
 	});
 }
 
-// HTTP method pattern keywords found in symbol names/signatures
-const ROUTE_KEYWORDS = [
-	"route", "router", "endpoint", "handler", "controller",
-	"get", "post", "put", "delete", "patch",
+// ── Framework detection patterns ────────────────────────────────────────────────
+
+/**
+ * Web framework indicators — package/symbol names that suggest HTTP routing exists.
+ * Used to detect whether the project is even a web project before searching for routes.
+ */
+const WEB_FRAMEWORK_INDICATORS = [
+	"express",
+	"fastify",
+	"koa",
+	"next",
+	"nuxt",
+	"hapi",
+	"restify",
+	"sveltekit",
+	"remix",
+	"hono",
+	"elysia",
+	"nestjs",
+	"@nestjs/core",
+];
+
+/**
+ * Route registration patterns — function/method names used to register HTTP routes.
+ */
+const ROUTE_REGISTRATION_PATTERNS = [
+	// Express-style: app.get("/path", handler)
+	// Fastify-style: fastify.get("/path", handler)
+	// These are detected by looking at the function name in the call graph
+	"app.get",
+	"app.post",
+	"app.put",
+	"app.delete",
+	"app.patch",
+	"app.all",
+	"app.use",
+	"app.route",
+	"router.get",
+	"router.post",
+	"router.put",
+	"router.delete",
+	"router.patch",
+	"server.get",
+	"server.post",
 ];
 
 export function executeRoutes(graph: RepoGraph, _projectRoot: string): string {
-	const routeSymbols: Symbol[] = [];
-
-	for (const sym of graph.symbols.values()) {
-		const lower = sym.name.toLowerCase();
-		for (const kw of ROUTE_KEYWORDS) {
-			if (lower.includes(kw)) {
-				routeSymbols.push(sym);
-				break;
-			}
-		}
-	}
-
 	const lines: string[] = [];
 	lines.push("## HTTP Route Inventory");
 	lines.push("");
 
+	// 检查项目中是否存在 Web 框架依赖
+	const hasWebFramework = detectWebFramework(graph);
+	if (!hasWebFramework) {
+		lines.push("No web framework detected in this project.");
+		lines.push("");
+		lines.push(
+			"Route inventory is only available for projects using recognized web frameworks.",
+		);
+		lines.push(
+			`Supported frameworks: ${WEB_FRAMEWORK_INDICATORS.slice(0, 6).join(", ")}, etc.`,
+		);
+		lines.push("");
+		lines.push(
+			"If this project uses a web framework not in the supported list, route detection will not find routes.",
+		);
+		return lines.join("\n");
+	}
+
+	// 搜索路由注册符号
+	const routeSymbols = findRouteSymbols(graph);
 	if (routeSymbols.length === 0) {
-		lines.push("No route-like symbols detected.");
-		lines.push("(Route detection works by keyword matching on symbol names.)");
+		lines.push(`Web framework detected (${hasWebFramework}), but no route registration patterns found.`);
+		lines.push("");
+		lines.push("This may mean:");
+		lines.push("- Routes are defined in a non-standard way (factory pattern, decorators)");
+		lines.push("- Routes are in a file not parsed by tree-sitter");
+		lines.push("- The project imports the framework but doesn't register routes");
 		return lines.join("\n");
 	}
 
 	lines.push(
-		`Found ${routeSymbols.length} route-related symbols:`,
+		`Framework: **${hasWebFramework}** | Found ${routeSymbols.length} route-related symbols`,
 	);
+	lines.push("");
 
 	// Group by file
 	const byFile = new Map<string, Symbol[]>();
@@ -99,4 +161,54 @@ export function executeRoutes(graph: RepoGraph, _projectRoot: string): string {
 	}
 
 	return lines.join("\n");
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────────
+
+/**
+ * 检测项目中是否存在 Web 框架依赖。
+ * 通过文件导入（fileImports）查找框架包名。
+ */
+function detectWebFramework(graph: RepoGraph): string | null {
+	// 检查文件级导入
+	for (const [, imports] of graph.fileImports) {
+		for (const imp of imports) {
+			const lower = imp.toLowerCase();
+			for (const fw of WEB_FRAMEWORK_INDICATORS) {
+				if (lower.includes(fw)) {
+					return fw;
+				}
+			}
+		}
+	}
+	return null;
+}
+
+/**
+ * 查找路由注册符号 —— 通过符号调用链检测 .get()/.post() 等模式。
+ */
+function findRouteSymbols(graph: RepoGraph): Symbol[] {
+	const results: Symbol[] = [];
+
+	for (const sym of graph.symbols.values()) {
+		const lower = sym.name.toLowerCase();
+
+		// 精确匹配路由注册模式名
+		for (const pattern of ROUTE_REGISTRATION_PATTERNS) {
+			if (lower === pattern || lower.endsWith("." + pattern.split(".").pop()!)) {
+				results.push(sym);
+				break;
+			}
+		}
+
+		// 检测 handler 函数的 HTTP 方法注解/装饰器
+		if (lower.startsWith("handle") || lower.endsWith("handler") || lower.endsWith("controller")) {
+			const isDuplicate = results.some((r) => r.id === sym.id);
+			if (!isDuplicate) {
+				results.push(sym);
+			}
+		}
+	}
+
+	return results;
 }

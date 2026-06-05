@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
+import { isNonSourceFile } from "./hotspots.js";
 
 export function registerOrphan(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -20,6 +21,9 @@ MUST call shazam_refs on each candidate before actual deletion to
 confirm zero references. A "dead" function that's called via
 getattr/dlsym/Reflect is still live — orphan detection cannot see
 dynamic dispatch.
+
+Config and generated files (package-lock.json, package.json, etc.)
+are excluded — only source code is analyzed.
 
 Scenario: cleaning up unused code. Finding abandoned modules. Before a
 major refactor to identify removable surface area. After removing a
@@ -78,6 +82,8 @@ export function executeOrphan(
 	);
 	lines.push("ALWAYS verify with shazam_refs before actual deletion.");
 	lines.push("");
+	lines.push("Config and generated files are excluded from analysis.");
+	lines.push("");
 
 	// Group by file
 	const byFile = new Map<string, OrphanCandidate[]>();
@@ -134,6 +140,9 @@ function findOrphans(
 
 	for (const sym of graph.symbols.values()) {
 		if (file && sym.file !== file) continue;
+
+		// 排除配置文件中的符号 —— 它们不是代码孤岛
+		if (isNonSourceFile(sym.file)) continue;
 
 		const incoming = graph.incoming.get(sym.id);
 		const outgoing = graph.outgoing.get(sym.id);

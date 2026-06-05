@@ -1,15 +1,15 @@
 /**
  * pi-shazam tools/verify — Post-edit diagnostics gate.
  *
- * Runs graph analysis → risk assessment → orphan detection → call-graph check.
- * When LSP is available, also fetches diagnostics. Falls back to tree-sitter only
- * when LSP is unavailable, annotated in output.
+ * Runs graph analysis → risk assessment → orphan detection.
+ * Falls back to tree-sitter only when LSP is unavailable.
  */
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { diffBaseline, loadBaseline } from "../core/cache.js";
+import { isNonSourceFile } from "./hotspots.js";
 
 export function registerVerify(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -17,10 +17,8 @@ export function registerVerify(pi: ExtensionAPI): void {
 		label: "Verify Changes",
 		description: `\
 MUST call after EVERY non-trivial edit or write. This is the evidence
-gate — it runs git diff → risk assessment → LSP diagnostics
-(pyright/tsc/rust-analyzer/gopls) → orphan symbol detection →
-call-graph consistency check → contract risk analysis. All in one
-pass.
+gate — it runs git diff (baseline) → risk assessment → orphan symbol
+detection. All in one pass.
 
 If verify fails, your code has problems. Fix them BEFORE committing.
 Use --quick for a 2s risk-only check after each edit. Use full verify
@@ -127,7 +125,7 @@ export function executeVerify(
 	if (orphans.length > 0) {
 		lines.push("### Potential Orphan Symbols");
 		lines.push(
-			`Found ${orphans.length} symbols with zero incoming references:`,
+			`Found ${orphans.length} symbols with zero incoming references (config files excluded):`,
 		);
 		for (const orphan of orphans.slice(0, 10)) {
 			lines.push(
@@ -157,13 +155,7 @@ export function executeVerify(
 	// ── Tree-sitter parse status (full mode) ─────────────────────────────
 	if (!quick) {
 		lines.push("### Analysis");
-		lines.push(`Tree-sitter parsing: ${symbolCount} symbols extracted successfully.`);
-		lines.push("");
-
-		// LSP note
-		lines.push(
-			"*LSP enrichment not available in direct tool mode. Use repomap verify for full LSP diagnostics.*",
-		);
+		lines.push(`Tree-sitter parsing: ${symbolCount} symbols extracted from source files.`);
 		lines.push("");
 	}
 
@@ -265,6 +257,9 @@ function findOrphanSymbols(
 		[];
 
 	for (const sym of graph.symbols.values()) {
+		// 排除配置文件中的符号
+		if (isNonSourceFile(sym.file)) continue;
+
 		const incoming = graph.incoming.get(sym.id);
 		if (!incoming || incoming.length === 0) {
 			// Skip entry-point-like symbols (exported, high pagerank)

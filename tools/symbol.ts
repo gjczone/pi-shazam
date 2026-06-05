@@ -11,12 +11,16 @@ export function registerSymbol(pi: ExtensionAPI): void {
 		name: "shazam_symbol",
 		label: "Symbol Lookup",
 		description: `\
-Call to look up a symbol by name and get its definition, kind,
-signature, file location, PageRank score, callers, and callees.
-Faster than grep for precise symbol lookup.
+MUST call to look up a symbol by name — returns definition, kind,
+signature, file location, PageRank score, callers, and callees in one
+call. Faster and more precise than grep for symbol lookup.
 
-Scenario: finding where a function is defined, checking a symbol's
-type signature, verifying a symbol exists before referencing it.`,
+Use BEFORE referencing any symbol by name in code — you confirm it
+exists AND understand its signature, not just its file location.
+
+Scenario: before importing a module. Before calling a function. When
+you see an unfamiliar symbol name and need its definition. Checking
+a symbol's visibility (public/private/exported).`,
 		parameters: Type.Object({
 			name: Type.String(),
 			file: Type.Optional(Type.String()),

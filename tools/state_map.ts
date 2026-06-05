@@ -50,6 +50,17 @@ type's members.`,
 	});
 }
 
+// ── 可作为 state map 分析的符号类型 ────────────────────────────────────────────
+
+/** 支持 state map 分析的符号 kind */
+const STATE_MAP_KINDS = new Set([
+	"enum",
+	"class",       // 可能包含常量成员或状态机
+	"interface",   // 可展示成员结构
+	"type_alias",  // union type 适合 state map
+	"const",
+]);
+
 export function executeStateMap(
 	graph: RepoGraph,
 	symbolName: string,
@@ -67,6 +78,23 @@ export function executeStateMap(
 
 	const lines: string[] = [];
 	for (const target of targets) {
+		// 检查符号类型是否适合 state map 分析
+		if (!STATE_MAP_KINDS.has(target.kind)) {
+			lines.push(
+				`## ${target.kind} \`${target.name}\` — cannot generate state map`,
+			);
+			lines.push("");
+			lines.push(
+				`Symbol \`${target.name}\` is a ${target.kind}, not an enum, const group, or state machine.`,
+			);
+			lines.push(
+				"State map analysis requires: enum, class (constants/state machine), interface, type_alias (union type), or const.",
+			);
+			lines.push("");
+			lines.push(`Use \`shazam_codequery --symbol ${target.name}\` or \`shazam_refs --symbol ${target.name}\` instead.`);
+			continue;
+		}
+
 		lines.push(
 			`## State Map: ${target.kind} \`${target.name}\` (${target.file}:${target.line})`,
 		);

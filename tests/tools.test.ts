@@ -140,6 +140,15 @@ describe("Tool: hotspots", () => {
 		expect(typeof result).toBe("string");
 		expect(result.length).toBeGreaterThan(0);
 	});
+
+	it("should NOT rank config/generated files like package-lock.json in top results", async () => {
+		const { executeHotspots } = await import("../tools/hotspots.js");
+		const result = executeHotspots(getGraph(), 20);
+		// package-lock.json and other config files should not appear in hotspots
+		// Check that no ranked line (starting with a number) contains config files
+			const rankedLines = result.split("\n").filter((l: string) => /^\d+\./.test(l));
+			expect(rankedLines).not.toContainEqual(expect.stringMatching(/package-lock\.json/));
+	});
 });
 
 describe("Tool: orphan", () => {
@@ -150,6 +159,15 @@ describe("Tool: orphan", () => {
 		expect(typeof result).toBe("string");
 		expect(result.length).toBeGreaterThan(0);
 	});
+
+	it("should NOT include symbols from config files like package-lock.json", async () => {
+		const { executeOrphan } = await import("../tools/orphan.js");
+		const result = executeOrphan(getGraph());
+		// No orphan candidates should come from package-lock.json
+		// Check that no ranked line (starting with a number) contains config files
+			const rankedLines = result.split("\n").filter((l: string) => /^\d+\./.test(l));
+			expect(rankedLines).not.toContainEqual(expect.stringMatching(/package-lock\.json/));
+	});
 });
 
 describe("Tool: routes", () => {
@@ -158,6 +176,13 @@ describe("Tool: routes", () => {
 		const result = executeRoutes(getGraph(), ".");
 		expect(result).toBeDefined();
 		expect(typeof result).toBe("string");
+	});
+
+	it("should NOT return false positives from generic symbol names in CLI projects", async () => {
+		const { executeRoutes } = await import("../tools/routes.js");
+		const result = executeRoutes(getGraph(), ".");
+		// pi-shazam is a CLI project with no web framework — should not have routes
+		expect(result).not.toMatch(/Route-related/);
 	});
 });
 
@@ -172,6 +197,20 @@ describe("Tool: state_map", () => {
 			const result = executeStateMap(graph, enumSym.name);
 			expect(result).toBeDefined();
 			expect(typeof result).toBe("string");
+		}
+	});
+
+	it("should reject non-enum/non-const symbols with a clear message", async () => {
+		const { executeStateMap } = await import("../tools/state_map.js");
+		const graph = getGraph();
+		// Find a function symbol (not enum/const/state-machine)
+		const funcSym = [...graph.symbols.values()].find(
+			(s) => s.kind === "function",
+		);
+		if (funcSym) {
+			const result = executeStateMap(graph, funcSym.name);
+			// Should indicate this is not a state-map-able symbol
+			expect(result).toMatch(/not.*enum|not.*const|not.*state|no.*state.*map|cannot.*generate/i);
 		}
 	});
 });
@@ -202,6 +241,13 @@ describe("Tool: verify", () => {
 		expect(parsed.result).toBeDefined();
 		expect(parsed.result.riskLevel).toBeDefined();
 	});
+
+	it("should NOT claim to run LSP diagnostics, call-graph consistency, or contract risk when unavailable", async () => {
+		const { executeVerify } = await import("../tools/verify.js");
+		const result = executeVerify(getGraph(), ".");
+		// Should not claim features that aren't actually running
+		expect(result).not.toMatch(/LSP diagnostics.*pyright.*tsc.*rust-analyzer.*gopls/);
+	});
 });
 
 describe("Tool: check", () => {
@@ -220,6 +266,13 @@ describe("Tool: check", () => {
 		const parsed = JSON.parse(result);
 		expect(parsed.status).toBe("ok");
 		expect(parsed.result).toBeDefined();
+	});
+
+	it("should NOT claim to run tsc/eslint/pyright/go-vet/rustc when it does not", async () => {
+		const { executeCheck } = await import("../tools/check.js");
+		const result = executeCheck(getGraph(), ".");
+		// Should not claim to run compilers/linters it doesn't actually run
+		expect(result).not.toMatch(/Run.*tsc.*eslint.*pyright.*go.vet.*rustc/);
 	});
 });
 

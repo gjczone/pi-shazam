@@ -11,16 +11,19 @@ export function registerCodesearch(pi: ExtensionAPI): void {
 		name: "shazam_codesearch",
 		label: "Code Search (BM25)",
 		description: `\
-Call to search for symbols by keyword across the entire project using
-BM25 relevance ranking with synonym expansion. Returns ranked results:
-file:line, symbol name, kind, and snippet.
+MUST call to search for symbols by keyword across the entire project
+using BM25 relevance ranking with synonym expansion. Returns ranked
+results: file:line, symbol name, kind, and snippet.
 
 More semantic than grep — understands camelCase/snake_case tokenization
 and ranks by PageRank-weighted relevance, not just substring match.
+Use this INSTEAD of grep when searching for code concepts, patterns, or
+functionality — grep finds text, this finds meaning.
 
-Scenario: finding error handling patterns. Locating all database query
-functions. Searching for "auth" across a multi-language codebase.
-Finding usage of a deprecated API before removing it.`,
+Scenario: finding all error handling patterns. Locating database query
+functions across the codebase. Searching for "auth" in a multi-language
+project. Finding all callers of a deprecated API before removing it.
+Auditing for "TODO" or "FIXME" in function names.`,
 		parameters: Type.Object({
 			query: Type.String(),
 			topN: Type.Optional(Type.Number()),
