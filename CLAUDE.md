@@ -6,7 +6,7 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 
 ## Project Snapshot
 
-- **Runtime**: TypeScript on Node.js ≥18, ES2022 target, Node16 module resolution
+- **Runtime**: TypeScript on Node.js ≥18, ES2022 target, NodeNext module resolution, ESM (`"type": "module"`)
 - **Package**: npm `pi-gewu`, entry `dist/index.js` (default export function receiving `ExtensionAPI`)
 - **Primary user flow**: LLM calls analysis tools (`overview`, `impact`, `codequery`, etc.) to understand code structure, change impact, and call chains before making edits
 - **Architecture**: 4 layers — `core/` (parsing, graph, ranking), `lsp/` (language server management), `tools/` (Pi tool wrappers), `hooks/` (automatic verification)
@@ -17,7 +17,7 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 
 | Command | Purpose |
 |---------|---------|
-| `npm install` | Install dependencies |
+| `npm install --legacy-peer-deps` | Install dependencies (legacy-peer-deps required for tree-sitter) |
 | `npm run build` | Compile TS → `dist/` |
 | `npm run typecheck` | `tsc --noEmit` — type validation without emit |
 | `npm run dev` | `tsc --watch` — incremental compilation |
@@ -26,11 +26,12 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 ## Development Environment
 
 - Node.js ≥18, npm as package manager
-- `@oh-my-pi/pi-coding-agent` ≥15.8.0 provides `ExtensionAPI` types
-- `node-tree-sitter` for AST parsing (18 language grammars)
+- `types/pi-extension.d.ts` provides self-contained `ExtensionAPI` type stub (extracted from `@oh-my-pi/pi-coding-agent@15.8.0`)
+- `npm install --legacy-peer-deps` required due to tree-sitter grammar peer dependency conflicts
+- `tree-sitter@^0.22.4` pinned via `overrides` in package.json
 - `vscode-languageserver-protocol` for LSP type definitions
 - `iconv-lite` for UTF-8/GBK/GB2312 encoding fallback
-- Test the extension by symlinking into `~/.pi/agent/extensions/pi-gewu` or configuring in Pi settings
+- Test the extension by symlinking `dist/` into `~/.pi/agent/extensions/pi-gewu` or configuring in Pi settings
 
 ## Architecture
 
@@ -147,6 +148,7 @@ All tools follow the same pattern:
 - `index.ts` — extension entry point and registration coordinator
 - `package.json` — npm manifest, dependencies, build scripts
 - `tsconfig.json` — TypeScript compiler configuration
+- `types/pi-extension.d.ts` — self-contained ExtensionAPI type stub (source of truth for Pi API types)
 - `SKILL.md` — LLM-facing tool usage guide (shipped with package)
 - `goal.md` — original design document (development reference, not shipped)
 
@@ -188,7 +190,7 @@ All tools follow the same pattern:
 
 ## Project-Specific Rules
 
-- Pi extension API: Import types from `@oh-my-pi/pi-coding-agent`. Use `ExtensionAPI`, `ExtensionContext`, `AgentToolResult` — do not redefine these types.
+- Pi extension API: Import types from `./types/pi-extension.js` (local stub). Use `ExtensionAPI`, `ExtensionContext`, `AgentToolResult` — do not redefine these types.
 - Tool naming: Prefix query tools with `code*` or `gewu_*` to avoid conflicts with other Pi extensions (e.g., `codequery` not `query`).
 - SKILL.md: Only document LLM-visible query tools. Verification tools (verify/fix/check/ready) are hook-driven — document them as automatic, not callable.
 - Symbol IDs: Format as `{file}::{name}::{line}` to match the repomap convention. Keep this stable — other tools depend on it.
