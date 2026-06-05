@@ -13,6 +13,10 @@ import type { ExtensionAPI, ExtensionContext } from "./types/pi-extension.js";
 import { LspManager } from "./lsp/manager.js";
 import { generateSetupReport } from "./lsp/setup.js";
 
+// ── Hook registrations ───────────────────────────────────────────────────
+import { registerBeforeStartHook } from "./hooks/before-start.js";
+import { registerAfterWriteHook } from "./hooks/after-write.js";
+
 // ── Tool registrations ────────────────────────────────────────────────────
 import { registerOverview } from "./tools/overview.js";
 import { registerImpact } from "./tools/impact.js";
@@ -57,6 +61,10 @@ export default function (pi: ExtensionAPI): void {
 		log("Shutting down LSP servers...");
 		lspManager.shutdown();
 	});
+
+	// ── Hooks ────────────────────────────────────────────────────────────────
+	registerBeforeStartHook(pi);
+	registerAfterWriteHook(pi);
 
 	// ── /shazam-setup command ───────────────────────────────────────────────
 
