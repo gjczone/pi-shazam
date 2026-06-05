@@ -17,6 +17,7 @@
     "test:watch": "vitest"
   },
   "keywords": [
+    "pi-package",
     "pi-coding-agent",
     "extension",
     "codebase-analysis",
@@ -24,6 +25,9 @@
     "lsp",
     "pagerank"
   ],
+  "pi": {
+    "extensions": ["./dist"]
+  },
   "author": "gjczone",
   "license": "MIT",
   "repository": {
@@ -46,7 +50,11 @@
     "tree-sitter-ruby": "0.23.1",
     "tree-sitter-rust": "0.23.2",
     "tree-sitter-typescript": "0.23.2",
+    "vscode-jsonrpc": "^9.0.0",
     "vscode-languageserver-protocol": "^3.17.0"
+  },
+  "peerDependencies": {
+    "typebox": "*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
