@@ -7,7 +7,7 @@
  * This is the main entry point that all tools compose from.
  */
 
-import { readdirSync } from "node:fs";
+import { readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { TreeSitterAdapter, EXT_TO_LANG } from "./treesitter.js";
 import {
@@ -44,11 +44,80 @@ const MAX_FILES = 20_000;
 /** File extensions to scan */
 const SOURCE_EXTS = new Set(Object.keys(EXT_TO_LANG));
 
+// ── In-memory cache ─────────────────────────────────────────────────────────
+
+let cachedGraph: RepoGraph | null = null;
+let cachedProjectPath: string = "";
+let cachedMtime: number = 0;
+
+/**
+ * Get the latest file modification time in the project (for cache invalidation).
+ * Walks project directories (same skip rules as collectSourceFiles) but only
+ * stats files instead of parsing them, so it's much cheaper than a full scan.
+ */
+function getLatestFileMtime(root: string): number {
+	let latest = 0;
+
+	function walk(dir: string) {
+		let entries;
+		try {
+			entries = readdirSync(dir, { withFileTypes: true });
+		} catch {
+			return;
+		}
+
+		for (const entry of entries) {
+			const fullPath = join(dir, entry.name);
+
+			if (entry.isDirectory()) {
+				if (SKIP_DIRS.has(entry.name)) continue;
+				if (entry.name.startsWith(".")) continue;
+				walk(fullPath);
+			} else if (entry.isFile()) {
+				const ext = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();
+				if (SOURCE_EXTS.has(ext)) {
+					try {
+						const mtime = statSync(fullPath).mtimeMs;
+						if (mtime > latest) latest = mtime;
+					} catch {
+						// skip unstatable files
+					}
+				}
+			}
+		}
+	}
+
+	walk(resolve(root));
+	return latest;
+}
+
+/**
+ * Get (or build) the project graph with caching.
+ * Returns a cached graph if no files have been modified since the last scan.
+ * The cache is per-process (not persisted to disk).
+ */
+export function getProjectGraph(projectRoot: string = ".", log?: (msg: string) => void): RepoGraph {
+	const root = resolve(projectRoot);
+	const currentMtime = getLatestFileMtime(root);
+
+	if (cachedGraph && cachedProjectPath === root && cachedMtime >= currentMtime) {
+		return cachedGraph;
+	}
+
+	cachedGraph = scanProject(root, log);
+	cachedProjectPath = root;
+	cachedMtime = currentMtime;
+	return cachedGraph;
+}
+
 // ── Scanner ──────────────────────────────────────────────────────────────────
 
 /**
  * Scan a project directory, parse all source files, build the dependency graph,
  * and compute PageRank scores.
+ *
+ * Uses an in-memory cache: subsequent calls within the same process return the
+ * cached graph unless file modification times have changed.
  *
  * @param projectPath - Absolute or relative path to the project root
  * @param log - Optional logger
@@ -60,6 +129,12 @@ export function scanProject(
 ): RepoGraph {
 	const root = resolve(projectPath);
 	const logger = log ?? (() => {});
+
+	// Check cache
+	const currentMtime = getLatestFileMtime(root);
+	if (cachedGraph && cachedProjectPath === root && cachedMtime >= currentMtime) {
+		return cachedGraph;
+	}
 	const adapter = new TreeSitterAdapter(logger);
 	const graph = createRepoGraph();
 
@@ -190,6 +265,11 @@ export function scanProject(
 
 	// Phase 3: Compute PageRank
 	calculatePageRank(graph);
+
+	// Update cache
+	cachedGraph = graph;
+	cachedProjectPath = root;
+	cachedMtime = currentMtime;
 
 	return graph;
 }
