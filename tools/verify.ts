@@ -10,6 +10,7 @@ import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { diffBaseline, loadBaseline } from "../core/cache.js";
 import { isNonSourceFile } from "../core/filter.js";
+import { execSync } from "node:child_process";
 
 export function registerVerify(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -92,6 +93,23 @@ export function executeVerify(
 	lines.push(`**Symbols:** ${symbolCount} | **Files:** ${fileCount} | **Edges:** ${edgeCount}`);
 	lines.push("");
 
+	// ── Git diff (working tree changes) ──────────────────────────────────
+	const gitChangedFiles = getGitChangedFiles(projectRoot);
+
+	lines.push("### Git Working Tree Changes");
+	if (gitChangedFiles.length > 0) {
+		lines.push(`Files changed: ${gitChangedFiles.length}`);
+		for (const f of gitChangedFiles.slice(0, 20)) {
+			lines.push(`  - ${f}`);
+		}
+		if (gitChangedFiles.length > 20) {
+			lines.push(`  ... and ${gitChangedFiles.length - 20} more`);
+		}
+	} else {
+		lines.push("No uncommitted changes.");
+	}
+	lines.push("");
+
 	// ── Baseline diff ────────────────────────────────────────────────────
 	const baseline = loadBaseline(projectRoot);
 	const diff = diffBaseline(graph, projectRoot);
@@ -115,7 +133,7 @@ export function executeVerify(
 		lines.push(
 			"### Baseline Diff",
 			"",
-			"No baseline snapshot found. Run `repomap cache save` to create one.",
+			"No baseline snapshot found. Use `shazam_check` to establish current state.",
 			"",
 		);
 	}
@@ -140,8 +158,8 @@ export function executeVerify(
 		lines.push("### Orphan Symbols: None detected", "");
 	}
 
-	// ── Risk assessment ──────────────────────────────────────────────────
-	const risk = assessRisk(graph, diff, orphans);
+	// ── Risk assessment (considers git changes + baseline diff + orphans) ─
+	const risk = assessRisk(graph, diff, orphans, gitChangedFiles);
 	lines.push("### Risk Level");
 	lines.push(`**${risk.level}** — ${risk.reason}`);
 	lines.push("");
@@ -172,7 +190,8 @@ export function executeVerifyJson(
 ): string {
 	const orphans = findOrphanSymbols(graph);
 	const diff = diffBaseline(graph, projectRoot);
-	const risk = assessRisk(graph, diff, orphans);
+	const gitChangedFiles = getGitChangedFiles(projectRoot);
+	const risk = assessRisk(graph, diff, orphans, gitChangedFiles);
 
 	let edgeCount = 0;
 	for (const [, edges] of graph.outgoing) {
@@ -204,6 +223,7 @@ export function executeVerifyJson(
 						modifiedSymbols: diff.modifiedSymbols?.length ?? 0,
 					}
 				: null,
+			gitChangedFiles: gitChangedFiles.slice(0, 50),
 			quickMode: options.quick ?? false,
 		},
 	});
@@ -216,37 +236,55 @@ interface RiskResult {
 	reason: string;
 }
 
+function getGitChangedFiles(projectRoot: string): string[] {
+	try {
+		const output = execSync(
+			"git diff --name-only --diff-filter=ACMR 2>/dev/null; git diff --cached --name-only --diff-filter=ACMR 2>/dev/null",
+			{ cwd: projectRoot, encoding: "utf-8", timeout: 5000 },
+		).trim();
+		if (!output) return [];
+		const files = output.split("\n").filter(Boolean);
+		// Deduplicate
+		return [...new Set(files)];
+	} catch {
+		return [];
+	}
+}
+
 function assessRisk(
 	_graph: RepoGraph,
 	diff: ReturnType<typeof diffBaseline>,
 	orphans: { name: string; kind: string; file: string; line: number }[],
+	gitChangedFiles?: string[],
 ): RiskResult {
-	const totalChanges =
+	const baselineChanges =
 		(diff?.addedSymbols?.length ?? 0) +
 		(diff?.removedSymbols?.length ?? 0) +
 		(diff?.modifiedSymbols?.length ?? 0);
+	const gitFileCount = gitChangedFiles?.length ?? 0;
+	const totalImpact = baselineChanges + gitFileCount + orphans.length;
 
-	if (totalChanges === 0 && orphans.length === 0) {
+	if (totalImpact === 0) {
 		return { level: "low", reason: "No changes detected, no orphan symbols." };
 	}
 
-	if (orphans.length > 10 || totalChanges > 50) {
+	if (orphans.length > 10 || totalImpact > 60) {
 		return {
 			level: "high",
-			reason: `${orphans.length} orphan symbols and ${totalChanges} graph changes detected.`,
+			reason: `${orphans.length} orphans, ${baselineChanges} graph changes, ${gitFileCount} git-modified files.`,
 		};
 	}
 
-	if (orphans.length > 0 || totalChanges > 20) {
+	if (orphans.length > 0 || totalImpact > 20) {
 		return {
 			level: "medium",
-			reason: `${orphans.length} orphans and ${totalChanges} changes — review recommended.`,
+			reason: `${orphans.length} orphans, ${baselineChanges} graph changes, ${gitFileCount} modified files — review recommended.`,
 		};
 	}
 
 	return {
 		level: "low",
-		reason: `${orphans.length} orphans, ${totalChanges} changes — acceptable.`,
+		reason: `${orphans.length} orphans, ${baselineChanges} changes, ${gitFileCount} modified files — acceptable.`,
 	};
 }
 
