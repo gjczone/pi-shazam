@@ -12,7 +12,9 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "dev": "tsc --watch",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "pi-coding-agent",
@@ -48,7 +50,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.8"
   },
   "overrides": {
     "tree-sitter": "^0.22.4"

@@ -33,6 +33,26 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 - `iconv-lite` for UTF-8/GBK/GB2312 encoding fallback
 - Test the extension by symlinking `dist/` into `~/.pi/agent/extensions/pi-shazam` or configuring in Pi settings
 
+## Dependency API Reference (context7 verified 2026-06)
+
+### tree-sitter (node-tree-sitter v0.22.4)
+
+- **Parser**: `import Parser from "tree-sitter"` → `new Parser()` → `parser.setLanguage(new Language(grammarModule))`
+- **Parsing**: `parser.parse(sourceString)` returns `Tree`; `tree.rootNode` for root `SyntaxNode`
+- **Query**: `new Query(language, queryString)` → `query.captures(node)` returns `{name: string, node: SyntaxNode}[]`
+- **无 QueryCursor**: Node.js binding 没有 Python 版的 `QueryCursor` 类，直接用 `query.captures()`
+- **Node 属性**: `node.type`, `node.text`, `node.children`, `node.parent`, `node.previousSibling`, `node.startPosition`/`endPosition`（`.row`/`.column`）, `node.childForFieldName("name")`
+- **Grammar 加载**: `new Language(grammarModule)` 包装 native module，不是 Python 的 `Language(fn())` 构造器模式
+- **输入类型**: `parse()` 接受 `string` 或回调 `(index, position) => string | null`，不接受 Buffer
+- **无内置 .d.ts**: 需要自行声明类型或使用 `@types/tree-sitter`
+
+### vscode-languageserver-protocol (v3.18.0) + vscode-jsonrpc (v9.0.0)
+
+- **协议类型**: 从 `vscode-languageserver-protocol` 导入 `Diagnostic`, `Location`, `Position`, `Range`, `SymbolKind`, `InitializeParams`, `InitializeResult`, `TextDocumentItem`, `DidOpenTextDocumentParams`, `ReferenceContext` 等
+- **LSP 客户端通信**: 使用 `vscode-jsonrpc/node` 的 `StreamMessageReader` / `StreamMessageWriter` + `createMessageConnection` 替代手写 Content-Length 帧解析。这是官方推荐的客户端模式，且 `vscode-jsonrpc@9.0.0` 已作为传递依赖存在
+- **用法示例**: `import * as rpc from "vscode-jsonrpc/node"` → `rpc.createMessageConnection(new rpc.StreamMessageReader(child.stdout), new rpc.StreamMessageWriter(child.stdin))` → `connection.sendRequest(method, params)` / `connection.onNotification(type, handler)`
+- **不用 createConnection**: `createConnection` 是服务端 API（用于构建 language server），本项目是客户端，不需要
+
 ## Architecture
 
 ```
