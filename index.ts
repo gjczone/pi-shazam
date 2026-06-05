@@ -15,6 +15,7 @@ import type {
 } from "./types/pi-extension.js";
 import { LspManager } from "./lsp/manager.js";
 import { generateSetupReport } from "./lsp/setup.js";
+import { setLspManager } from "./core/lsp-global.js";
 
 // ── Hook registrations ───────────────────────────────────────────────────
 import { registerBeforeStartHook } from "./hooks/before-start.js";
@@ -47,6 +48,9 @@ export default function (pi: ExtensionAPI): void {
 	// ── LSP manager ─────────────────────────────────────────────────────────
 
 	const lspManager = new LspManager(projectRoot, log);
+
+	// Share LspManager with tools via global reference
+	setLspManager(lspManager);
 
 	// Auto-initialize LSP on agent start
 	pi.on("before_agent_start", async (_event, _ctx) => {

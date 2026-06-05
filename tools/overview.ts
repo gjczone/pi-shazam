@@ -15,11 +15,13 @@ export function registerOverview(pi: ExtensionAPI): void {
 MUST call before touching ANY code in an unfamiliar project or repo.
 Returns: module dependency map, top-10 highest-PageRank files (the
 "spine" of the codebase), entry points, and suggested reading order.
+Supports --filter to search/find files by keyword within the project.
 Skipping this = navigating blind — you WILL miss cross-module ripple
 effects and waste turns on dead-end reads.
 
 Scenario: first turn in a new repo. After git clone. After switching
-to an unfamiliar project directory.
+to an unfamiliar project directory. Use --filter <keyword> to locate
+specific files (replaces separate find_file tool).
 
 Output: plain text summary by default. Pass { json: true } for
 structured output with file lists and PageRank scores.`,
