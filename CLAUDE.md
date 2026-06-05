@@ -267,9 +267,17 @@ All tools follow the same pattern:
 
 ## Project-Specific Rules
 
-- **Language: English only.** All source code, code comments, JSDoc, commit messages, PR titles/descriptions, and GitHub Release notes MUST be written in English. No Chinese (or any other non-English language) in any artifact that goes into the repository. The only exception is `SKILL.md` tool descriptions injected for the LLM — those follow the LLM's primary language.
+- **Language: English only.** All source code, code comments, JSDoc, commit messages, PR titles/descriptions, GitHub Issue content, and GitHub Release notes MUST be written in English. No Chinese or any other non-English language in any artifact that goes into the repository.
+- **No emoji or decorative symbols.** Emoji (✅❌🔴🟡🟢🆕⚠️💡 etc.), Unicode decorative characters, and ASCII art are forbidden in all source files, tool output, code comments, and commit messages. The only allowed symbols are standard ASCII punctuation and Markdown formatting characters. This rule applies to all repository artifacts except `AGENTS.md` itself (this file) and `SKILL.md`.
+- **Tool output must be clean.** Tool output text returned to the LLM must be minimal, structured, and free of noise. Specifically:
+  - No emoji, no decorative Unicode, no ANSI escape codes
+  - No "friendly" filler phrases — be direct and factual
+  - Consistent heading hierarchy (`## tool_name`, `### section`)
+  - Numerical data in tables or key-value pairs, not prose
+  - Truncation explicitly flagged (`... and N more`)
+  - No trailing whitespace, no excessive blank lines
 - Pi extension API: Import types from `./types/pi-extension.js` (local stub). Use `ExtensionAPI`, `ExtensionContext`, `AgentToolResult` — do not redefine these types.
-- Tool naming: Prefix query tools with `code*` or `shazam_*` to avoid conflicts with other Pi extensions (e.g., `codequery` not `query`).
+- Tool naming: Prefix all tools with `shazam_` to avoid conflicts with other Pi extensions.
 - Symbol IDs: Format as `{file}::{name}::{line}` to match the repomap convention. Keep this stable — other tools depend on it.
 
 </general-project-rules>
