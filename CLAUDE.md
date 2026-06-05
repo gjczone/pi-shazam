@@ -167,6 +167,7 @@ All tools follow the same pattern:
 ## Important Files
 
 - `index.ts` — extension entry point and registration coordinator
+- `SKILL.md` — Pi agent skill file documenting all 16 tools for LLM discovery
 - `package.json` — npm manifest, dependencies, build scripts
 - `tsconfig.json` — TypeScript compiler configuration
 - `types/pi-extension.d.ts` — self-contained ExtensionAPI type stub (source of truth for Pi API types)

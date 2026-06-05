@@ -7,7 +7,7 @@
  * This is the main entry point that all tools compose from.
  */
 
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { TreeSitterAdapter, EXT_TO_LANG } from "./treesitter.js";
 import {
@@ -16,6 +16,7 @@ import {
 } from "./graph.js";
 import type { RepoGraph, Symbol, Edge } from "./graph.js";
 import { calculatePageRank } from "./pagerank.js";
+import { readFileAdaptive } from "./encoding.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -75,7 +76,7 @@ export function scanProject(
 		if (!lang) continue;
 
 		try {
-			const source = readFileSync(absPath, "utf-8");
+			const source = readFileAdaptive(absPath);
 			const tree = adapter.parse(source, lang);
 			if (!tree) continue;
 
@@ -103,7 +104,7 @@ export function scanProject(
 		if (!lang) continue;
 
 		try {
-			const source = readFileSync(absPath, "utf-8");
+			const source = readFileAdaptive(absPath);
 			const tree = adapter.parse(source, lang);
 			if (!tree) continue;
 

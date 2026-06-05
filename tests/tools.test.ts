@@ -175,3 +175,90 @@ describe("Tool: state_map", () => {
 		}
 	});
 });
+
+describe("Tool: verify", () => {
+	it("should return verification results with risk level", async () => {
+		const { executeVerify } = await import("../tools/verify.js");
+		const result = executeVerify(getGraph(), ".");
+		expect(result).toBeDefined();
+		expect(typeof result).toBe("string");
+		expect(result.length).toBeGreaterThan(0);
+		expect(result).toMatch(/risk|changed|symbol|file/i);
+	});
+
+	it("should support quick mode", async () => {
+		const { executeVerify } = await import("../tools/verify.js");
+		const result = executeVerify(getGraph(), ".", { quick: true });
+		expect(result).toBeDefined();
+		expect(typeof result).toBe("string");
+	});
+
+	it("should support json output", async () => {
+		const { executeVerifyJson } = await import("../tools/verify.js");
+		const result = executeVerifyJson(getGraph(), ".");
+		expect(result).toBeDefined();
+		const parsed = JSON.parse(result);
+		expect(parsed.status).toBe("ok");
+		expect(parsed.result).toBeDefined();
+		expect(parsed.result.riskLevel).toBeDefined();
+	});
+});
+
+describe("Tool: check", () => {
+	it("should return diagnostic results", async () => {
+		const { executeCheck } = await import("../tools/check.js");
+		const result = executeCheck(getGraph(), ".");
+		expect(result).toBeDefined();
+		expect(typeof result).toBe("string");
+		expect(result.length).toBeGreaterThan(0);
+	});
+
+	it("should support json output", async () => {
+		const { executeCheckJson } = await import("../tools/check.js");
+		const result = executeCheckJson(getGraph(), ".");
+		expect(result).toBeDefined();
+		const parsed = JSON.parse(result);
+		expect(parsed.status).toBe("ok");
+		expect(parsed.result).toBeDefined();
+	});
+});
+
+describe("Tool: fix", () => {
+	it("should return fix results in dry-run mode", async () => {
+		const { executeFix } = await import("../tools/fix.js");
+		const result = executeFix(getGraph(), ".", { dryRun: true });
+		expect(result).toBeDefined();
+		expect(typeof result).toBe("string");
+		expect(result.length).toBeGreaterThan(0);
+	});
+
+	it("should support json output with dryRun", async () => {
+		const { executeFixJson } = await import("../tools/fix.js");
+		const result = executeFixJson(getGraph(), ".", { dryRun: true });
+		expect(result).toBeDefined();
+		const parsed = JSON.parse(result);
+		expect(parsed.status).toBe("ok");
+		expect(parsed.result).toBeDefined();
+		expect(parsed.result.dryRun).toBe(true);
+	});
+});
+
+describe("Tool: ready", () => {
+	it("should return pre-commit readiness result", async () => {
+		const { executeReady } = await import("../tools/ready.js");
+		const result = executeReady(getGraph(), ".");
+		expect(result).toBeDefined();
+		expect(typeof result).toBe("string");
+		expect(result.length).toBeGreaterThan(0);
+		expect(result).toMatch(/ready|verify|check|fix/i);
+	});
+
+	it("should support json output", async () => {
+		const { executeReadyJson } = await import("../tools/ready.js");
+		const result = executeReadyJson(getGraph(), ".");
+		expect(result).toBeDefined();
+		const parsed = JSON.parse(result);
+		expect(parsed.status).toBe("ok");
+		expect(parsed.result).toBeDefined();
+	});
+});

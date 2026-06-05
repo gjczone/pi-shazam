@@ -5,6 +5,7 @@ dist/
 *.d.ts
 *.map
 !types/**/*.d.ts
+.repomap/
 .cache/
 .pi-shazam/
 .qoder/
