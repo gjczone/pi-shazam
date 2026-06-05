@@ -257,7 +257,7 @@ function findOrphanSymbols(
 		[];
 
 	for (const sym of graph.symbols.values()) {
-		// 排除配置文件中的符号
+		// Exclude symbols from config files
 		if (isNonSourceFile(sym.file)) continue;
 
 		const incoming = graph.incoming.get(sym.id);

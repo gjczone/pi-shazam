@@ -141,7 +141,7 @@ function findOrphans(
 	for (const sym of graph.symbols.values()) {
 		if (file && sym.file !== file) continue;
 
-		// 排除配置文件中的符号 —— 它们不是代码孤岛
+		// Exclude symbols from config files — they are not code orphans
 		if (isNonSourceFile(sym.file)) continue;
 
 		const incoming = graph.incoming.get(sym.id);

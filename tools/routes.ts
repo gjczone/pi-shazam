@@ -125,7 +125,7 @@ export function executeRoutes(graph: RepoGraph, _projectRoot: string): string {
 		return lines.join("\n");
 	}
 
-	// 搜索路由注册符号
+	// Search for route registration symbols
 	const routeSymbols = findRouteSymbols(graph);
 	if (routeSymbols.length === 0) {
 		lines.push(`Web framework detected (${hasWebFramework}), but no route registration patterns found.`);
@@ -185,7 +185,7 @@ function detectWebFramework(graph: RepoGraph): string | null {
 }
 
 /**
- * 查找路由注册符号 —— 通过符号调用链检测 .get()/.post() 等模式。
+ * Find route registration symbols by detecting .get()/.post() etc. patterns in the call graph.
  */
 function findRouteSymbols(graph: RepoGraph): Symbol[] {
 	const results: Symbol[] = [];

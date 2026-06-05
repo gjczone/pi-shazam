@@ -107,17 +107,17 @@ export function executeHotspotsJson(
 
 // ── Config/generated file filtering ────────────────────────────────────────────
 
-/** 配置文件、生成文件、依赖锁定文件 —— 不应出现在热点排名或孤儿检测中 */
+/** Config files, generated files, and lockfiles — excluded from hotspots and orphan detection */
 const NON_SOURCE_FILE_PATTERNS = [
 	"package-lock.json",
 	"package.json",
 	"tsconfig.json",
 	"node_modules/",
 	"dist/",
-	".json",       // 其他 JSON 配置文件 (如 biome.json, tsconfig.*.json)
+	".json",       // other JSON config files (e.g. biome.json, tsconfig.*.json)
 ];
 
-/** 判断文件是否为配置/生成/锁定文件 */
+/** Returns true if the file is a config/generated/lockfile, not source code */
 export function isNonSourceFile(file: string): boolean {
 	return NON_SOURCE_FILE_PATTERNS.some((p) => file.includes(p));
 }
