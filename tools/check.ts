@@ -97,10 +97,10 @@ export function executeCheck(
 		}
 	}
 
-	lines.push(`✅ ${successfulFiles.length} files parsed successfully`);
+	lines.push(`[PASS] ${successfulFiles.length} files parsed successfully`);
 
 	if (failedFiles.length > 0) {
-		lines.push(`⚠️ ${failedFiles.length} files have no symbols (possible parse failure)`);
+		lines.push(`[WARN] ${failedFiles.length} files have no symbols (possible parse failure)`);
 		for (const f of failedFiles.slice(0, 10)) {
 			lines.push(`  - ${f}`);
 		}

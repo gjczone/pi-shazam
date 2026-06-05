@@ -78,10 +78,10 @@ export function handleWriteResult(
 
 		if (orphanCount > 0) {
 			lines.push(
-				`- ⚠️  Found ${orphanCount} symbols with no incoming references (potential orphans)`,
+				`- [WARN] Found ${orphanCount} symbols with no incoming references (potential orphans)`,
 			);
 		} else {
-			lines.push("- ✅ No orphan symbols detected");
+			lines.push("- [PASS] No orphan symbols detected");
 		}
 
 		// File relationship summary

@@ -122,7 +122,7 @@ export function generateSetupReport(
 
 	// Available servers
 	if (available.length > 0) {
-		lines.push("### ✅ Available LSP Servers");
+		lines.push("### [PASS] Available LSP Servers");
 		lines.push("");
 		for (const d of available) {
 			lines.push(
@@ -134,7 +134,7 @@ export function generateSetupReport(
 
 	// Missing servers with install instructions
 	if (missing.length > 0) {
-		lines.push("### ❌ Missing LSP Servers");
+		lines.push("### [FAIL] Missing LSP Servers");
 		lines.push("");
 		for (const d of missing) {
 			const instruction = INSTALL_INSTRUCTIONS.find(

@@ -107,7 +107,7 @@ export function executeRoutes(graph: RepoGraph, _projectRoot: string): string {
 	lines.push("## HTTP Route Inventory");
 	lines.push("");
 
-	// 检查项目中是否存在 Web 框架依赖
+	// Check if the project has web framework dependencies
 	const hasWebFramework = detectWebFramework(graph);
 	if (!hasWebFramework) {
 		lines.push("No web framework detected in this project.");
@@ -166,11 +166,11 @@ export function executeRoutes(graph: RepoGraph, _projectRoot: string): string {
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
 /**
- * 检测项目中是否存在 Web 框架依赖。
- * 通过文件导入（fileImports）查找框架包名。
+ * Detect whether the project has web framework dependencies.
+ * Searches for framework package names via file imports (fileImports).
  */
 function detectWebFramework(graph: RepoGraph): string | null {
-	// 检查文件级导入
+	// Check file-level imports
 	for (const [, imports] of graph.fileImports) {
 		for (const imp of imports) {
 			const lower = imp.toLowerCase();
@@ -193,7 +193,7 @@ function findRouteSymbols(graph: RepoGraph): Symbol[] {
 	for (const sym of graph.symbols.values()) {
 		const lower = sym.name.toLowerCase();
 
-		// 精确匹配路由注册模式名
+		// Exact match route registration pattern names
 		for (const pattern of ROUTE_REGISTRATION_PATTERNS) {
 			if (lower === pattern || lower.endsWith("." + pattern.split(".").pop()!)) {
 				results.push(sym);
@@ -201,7 +201,7 @@ function findRouteSymbols(graph: RepoGraph): Symbol[] {
 			}
 		}
 
-		// 检测 handler 函数的 HTTP 方法注解/装饰器
+		// Detect HTTP method annotations/decorators on handler functions
 		if (lower.startsWith("handle") || lower.endsWith("handler") || lower.endsWith("controller")) {
 			const isDuplicate = results.some((r) => r.id === sym.id);
 			if (!isDuplicate) {

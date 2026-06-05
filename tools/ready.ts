@@ -103,7 +103,7 @@ export function executeReady(graph: RepoGraph, projectRoot: string): string {
 	lines.push("");
 
 	// ── Status ──────────────────────────────────────────────────────────
-	lines.push(`**Status:** ${isReady ? "✅ READY" : "❌ NOT READY"}`);
+	lines.push(`**Status:** ${isReady ? "[PASS] READY" : "[FAIL] NOT READY"}`);
 	lines.push("");
 
 	// ── Verify summary ──────────────────────────────────────────────────

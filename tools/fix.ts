@@ -112,7 +112,7 @@ export function executeFix(
 	lines.push("");
 
 	if (issues.length === 0) {
-		lines.push("✅ No format issues detected.");
+		lines.push("[PASS] No format issues detected.");
 	} else {
 		lines.push(`Found ${issues.length} potential issue(s):`);
 		lines.push("");
