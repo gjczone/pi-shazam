@@ -66,8 +66,8 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 │   └── cache.ts            ← Graph baseline save/diff
 ├── lsp/                    ← Language server process management
 │   ├── manager.ts          ← Server lifecycle (spawn, stdio, health, shutdown)
-│   ├── client.ts           ← LSP protocol communication (JSON-RPC over stdio)
-│   ├── servers.ts          ← Language→server config table (17 languages)
+│   ├── client.ts           ← LSP protocol communication (JSON-RPC over stdio via vscode-jsonrpc)
+│   ├── servers.ts          ← Language→server config table (6 languages: Python, TypeScript, Go, JSON, YAML, Rust)
 │   └── setup.ts            ← /shazam-setup command: detect + install guidance
 ├── tools/                  ← One file per registerTool call
 │   ├── overview.ts         ← Project structure summary
@@ -100,7 +100,7 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 - **Overview injection**: `before_agent_start` event → `core/treesitter` scan → `core/pagerank` → format summary → inject into `systemPrompt` array
 - **Tool call**: LLM calls tool → `tools/*.execute()` → `core/` analysis (tree-sitter parse → graph build → pagerank) → optional LSP enrichment → return `AgentToolResult`
 - **Auto-verify**: `tool_call` event (write/edit) → `hooks/after-write` → `core/` diagnostics + LSP `textDocument/publishDiagnostics` → `pi.sendMessage()` with findings
-- **LSP lifecycle**: extension load → `lsp/manager` detects project languages → spawns servers on demand → `lsp/client` handles JSON-RPC over stdio → `session_shutdown` kills all
+- **LSP lifecycle**: extension load → `lsp/manager` detects project languages (6 supported: Python, TypeScript, Go, JSON, YAML, Rust) → spawns servers on demand → `lsp/client` handles JSON-RPC via vscode-jsonrpc over stdio → `session_shutdown` kills all
 
 ## API Surface
 
@@ -169,7 +169,6 @@ All tools follow the same pattern:
 - `package.json` — npm manifest, dependencies, build scripts
 - `tsconfig.json` — TypeScript compiler configuration
 - `types/pi-extension.d.ts` — self-contained ExtensionAPI type stub (source of truth for Pi API types)
-- `goal.md` — original design document (development reference, not shipped)
 
 <general-project-rules>
 
