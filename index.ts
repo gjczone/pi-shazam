@@ -29,6 +29,7 @@ import { registerOrphan } from "./tools/orphan.js";
 import { registerHotspots } from "./tools/hotspots.js";
 import { registerCodesearch } from "./tools/codesearch.js";
 import { registerFileDetail } from "./tools/file_detail.js";
+import { registerSymbol } from "./tools/symbol.js";
 
 export default function (pi: ExtensionAPI): void {
 	const projectRoot = process.cwd();
@@ -107,6 +108,7 @@ export default function (pi: ExtensionAPI): void {
 	registerHotspots(pi);
 	registerCodesearch(pi);
 	registerFileDetail(pi);
+	registerSymbol(pi);
 
 	log("pi-shazam loaded");
 }

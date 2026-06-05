@@ -61,7 +61,7 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 │   ├── treesitter.ts       ← AST parsing + symbol extraction (18 languages)
 │   ├── graph.ts            ← Symbol dependency graph (imports, calls, references)
 │   ├── pagerank.ts         ← PageRank symbol importance scoring
-│   ├── impact.ts           ← Change blast radius analysis
+│   ├── scanner.ts          ← Project file scanning + graph building
 │   ├── encoding.ts         ← UTF-8 → GBK → GB2312 adaptive encoding
 │   └── cache.ts            ← Graph baseline save/diff
 ├── lsp/                    ← Language server process management
@@ -152,6 +152,7 @@ All tools follow the same pattern:
 - `index.ts` — extension entry, all registrations
 - `core/treesitter.ts` — language support, symbol extraction entry
 - `core/graph.ts` — how symbols become a dependency graph
+- `core/scanner.ts` — project scanning + graph building
 - `lsp/client.ts` — LSP JSON-RPC implementation
 - `tools/overview.ts` — representative tool pattern (others follow same shape)
 - `hooks/before-start.ts` — system prompt injection pattern
