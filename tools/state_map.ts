@@ -91,7 +91,7 @@ export function executeStateMap(
 				"State map analysis requires: enum, class (constants/state machine), interface, type_alias (union type), or const.",
 			);
 			lines.push("");
-			lines.push(`Use \`shazam_codequery --symbol ${target.name}\` or \`shazam_refs --symbol ${target.name}\` instead.`);
+			lines.push(`Use \`shazam_symbol --name ${target.name}\` or \`shazam_call_chain --symbol ${target.name} --flat\` instead.`);
 			continue;
 		}
 

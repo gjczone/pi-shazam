@@ -44,27 +44,6 @@ describe("Tool: impact", () => {
 	});
 });
 
-describe("Tool: codequery", () => {
-	it("should find symbol by name", async () => {
-		const { executeCodequery } = await import("../tools/codequery.js");
-		const result = executeCodequery(getGraph(), {
-			symbol: "scanProject",
-		});
-		expect(result).toBeDefined();
-		expect(result.symbols.length).toBeGreaterThanOrEqual(1);
-		expect(result.symbols[0]!.name).toBe("scanProject");
-	});
-
-	it("should list symbols in a file", async () => {
-		const { executeCodequery } = await import("../tools/codequery.js");
-		const result = executeCodequery(getGraph(), {
-			file: "core/scanner.ts",
-		});
-		expect(result).toBeDefined();
-		expect(result.fileSymbols.length).toBeGreaterThan(0);
-	});
-});
-
 describe("Tool: codesearch", () => {
 	it("should search symbols by keyword", async () => {
 		const { executeCodesearch } = await import("../tools/codesearch.js");
@@ -85,24 +64,6 @@ describe("Tool: symbol", () => {
 	});
 });
 
-describe("Tool: refs", () => {
-	it("should find references to a symbol", async () => {
-		const { executeRefs } = await import("../tools/refs.js");
-		const graph = getGraph();
-		const syms = [...graph.symbols.values()];
-		const symWithIncoming = syms.find((s) => {
-			const incoming = graph.incoming.get(s.id);
-			return incoming && incoming.length > 0;
-		});
-		if (symWithIncoming) {
-			const result = executeRefs(graph, symWithIncoming.name);
-			expect(result).toBeDefined();
-			expect(typeof result).toBe("string");
-			expect(result.length).toBeGreaterThan(0);
-		}
-	});
-});
-
 describe("Tool: call_chain", () => {
 	it("should trace call chain for a symbol", async () => {
 		const { executeCallChain } = await import("../tools/call_chain.js");
@@ -117,6 +78,33 @@ describe("Tool: call_chain", () => {
 			const result = executeCallChain(graph, symWithEdges.name, 2);
 			expect(result).toBeDefined();
 			expect(typeof result).toBe("string");
+		}
+	});
+
+	it("should support --flat mode (replaces refs)", async () => {
+		const mod = await import("../tools/call_chain.js");
+		const graph = getGraph();
+		const refs = mod.getFlatReferences(graph, "scanProject");
+		expect(refs).toBeDefined();
+		expect(Array.isArray(refs)).toBe(true);
+		if (refs.length > 0) {
+			const formatted = mod.formatFlatReferences(refs, "scanProject");
+			expect(typeof formatted).toBe("string");
+			expect(formatted.length).toBeGreaterThan(0);
+		}
+	});
+});
+
+describe("Tool: hover", () => {
+	it("should return hover info for a symbol", async () => {
+		const { executeHover } = await import("../tools/hover.js");
+		const graph = getGraph();
+		const sym = [...graph.symbols.values()].find(s => s.name === "scanProject");
+		if (sym) {
+			const result = await executeHover(graph, sym.name);
+			expect(result).toBeDefined();
+			expect(result.name).toBe("scanProject");
+			expect(result.kind).toBeDefined();
 		}
 	});
 });
@@ -145,25 +133,6 @@ describe("Tool: hotspots", () => {
 		const { executeHotspots } = await import("../tools/hotspots.js");
 		const result = executeHotspots(getGraph(), 20);
 		// package-lock.json and other config files should not appear in hotspots
-		// Check that no ranked line (starting with a number) contains config files
-			const rankedLines = result.split("\n").filter((l: string) => /^\d+\./.test(l));
-			expect(rankedLines).not.toContainEqual(expect.stringMatching(/package-lock\.json/));
-	});
-});
-
-describe("Tool: orphan", () => {
-	it("should detect potentially dead symbols", async () => {
-		const { executeOrphan } = await import("../tools/orphan.js");
-		const result = executeOrphan(getGraph());
-		expect(result).toBeDefined();
-		expect(typeof result).toBe("string");
-		expect(result.length).toBeGreaterThan(0);
-	});
-
-	it("should NOT include symbols from config files like package-lock.json", async () => {
-		const { executeOrphan } = await import("../tools/orphan.js");
-		const result = executeOrphan(getGraph());
-		// No orphan candidates should come from package-lock.json
 		// Check that no ranked line (starting with a number) contains config files
 			const rankedLines = result.split("\n").filter((l: string) => /^\d+\./.test(l));
 			expect(rankedLines).not.toContainEqual(expect.stringMatching(/package-lock\.json/));

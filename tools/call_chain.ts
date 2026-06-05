@@ -18,27 +18,44 @@ you miss is a bug you will ship.
 
 Returns: incoming calls (who calls this), outgoing calls (what this
 calls), and full reference list. Pass --depth to control traversal
-depth (default 2).
+depth (default 2). Pass --flat for a simple flat list of all references
+(equivalent to shazam_refs, which is now removed).
 
 Scenario: changing parameter order. Removing a function. Renaming an
 exported symbol. Changing return type. Adding required parameters.`,
 		parameters: Type.Object({
 			symbol: Type.String(),
 			depth: Type.Optional(Type.Number()),
+			flat: Type.Optional(Type.Boolean()),
 			json: Type.Optional(Type.Boolean()),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const json = params.json ?? false;
+			const flat = params.flat ?? false;
 			const graph = scanProject(".");
 			const depth = params.depth ?? 2;
-			const result = executeCallChain(graph, params.symbol, depth);
+
+			if (flat) {
+				const refs = getFlatReferences(graph, params.symbol);
+				return {
+					content: [
+						{
+							type: "text",
+							text: json
+								? JSON.stringify(refs, null, 2)
+								: formatFlatReferences(refs, params.symbol),
+						},
+					],
+				};
+			}
+
 			return {
 				content: [
 					{
 						type: "text",
 						text: json
 							? executeCallChainJson(graph, params.symbol, depth)
-							: result,
+							: executeCallChain(graph, params.symbol, depth),
 					},
 				],
 			};
@@ -189,3 +206,106 @@ function traceOutgoing(
 
 	return result;
 }
+
+// ── --flat mode (replaces shazam_refs) ────────────────────────────────────────
+
+interface FlatReference {
+	symbol: string;
+	file: string;
+	line: number;
+	kind: string;
+	direction: string;
+}
+
+export function getFlatReferences(
+	graph: RepoGraph,
+	symbolName: string,
+): FlatReference[] {
+	const targets = findSymbolsByName(graph, symbolName);
+	if (targets.length === 0) return [];
+
+	const refs: FlatReference[] = [];
+	const seen = new Set<string>();
+
+	for (const target of targets) {
+		// Incoming references (who calls this symbol)
+		const incoming = graph.incoming.get(target.id);
+		if (incoming) {
+			for (const edge of incoming) {
+				const src = graph.symbols.get(edge.source);
+				if (!src) continue;
+				const key = `${src.name}:${src.file}:${src.line}`;
+				if (seen.has(key)) continue;
+				seen.add(key);
+				refs.push({
+					symbol: src.name,
+					file: src.file,
+					line: src.line,
+					kind: src.kind,
+					direction: "incoming",
+				});
+			}
+		}
+
+		// Outgoing references (what this symbol calls)
+		const outgoing = graph.outgoing.get(target.id);
+		if (outgoing) {
+			for (const edge of outgoing) {
+				const tgt = graph.symbols.get(edge.target);
+				if (!tgt) continue;
+				const key = `${tgt.name}:${tgt.file}:${tgt.line}`;
+				if (seen.has(key)) continue;
+				seen.add(key);
+				refs.push({
+					symbol: tgt.name,
+					file: tgt.file,
+					line: tgt.line,
+					kind: tgt.kind,
+					direction: "outgoing",
+				});
+			}
+		}
+	}
+
+	return refs;
+}
+
+export function formatFlatReferences(
+	refs: FlatReference[],
+	symbolName: string,
+): string {
+	if (refs.length === 0) {
+		return `No references found for "${symbolName}".`;
+	}
+
+	const lines: string[] = [
+		`## Flat References for \`${symbolName}\` (${refs.length} total)`,
+		"",
+	];
+
+	const incoming = refs.filter((r) => r.direction === "incoming");
+	const outgoing = refs.filter((r) => r.direction === "outgoing");
+
+	if (incoming.length > 0) {
+		lines.push(`### Incoming (${incoming.length})`);
+		for (const r of incoming) {
+			lines.push(
+				`- ${r.kind} \`${r.symbol}\` — ${r.file}:${r.line}`,
+			);
+		}
+		lines.push("");
+	}
+
+	if (outgoing.length > 0) {
+		lines.push(`### Outgoing (${outgoing.length})`);
+		for (const r of outgoing) {
+			lines.push(
+				`- ${r.kind} \`${r.symbol}\` — ${r.file}:${r.line}`,
+			);
+		}
+		lines.push("");
+	}
+
+	return lines.join("\n");
+}
+

@@ -128,7 +128,7 @@ export function executeReady(graph: RepoGraph, projectRoot: string): string {
 			lines.push(`- Risk level is **${riskLevel}** — run \`shazam_verify\` for details`);
 		}
 		if (orphanCount > 0) {
-			lines.push(`- ${orphanCount} orphan symbol(s) — run \`shazam_orphan\` to review`);
+			lines.push(`- ${orphanCount} orphan symbol(s) — run \`shazam_verify\` for detailed review`);
 		}
 		if (failedFiles > 0) {
 			lines.push(`- ${failedFiles} file(s) failed parse — run \`shazam_check\` for details`);
