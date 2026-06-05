@@ -267,6 +267,7 @@ All tools follow the same pattern:
 
 ## Project-Specific Rules
 
+- **Language: English only.** All source code, code comments, JSDoc, commit messages, PR titles/descriptions, and GitHub Release notes MUST be written in English. No Chinese (or any other non-English language) in any artifact that goes into the repository. The only exception is `SKILL.md` tool descriptions injected for the LLM — those follow the LLM's primary language.
 - Pi extension API: Import types from `./types/pi-extension.js` (local stub). Use `ExtensionAPI`, `ExtensionContext`, `AgentToolResult` — do not redefine these types.
 - Tool naming: Prefix query tools with `code*` or `shazam_*` to avoid conflicts with other Pi extensions (e.g., `codequery` not `query`).
 - Symbol IDs: Format as `{file}::{name}::{line}` to match the repomap convention. Keep this stable — other tools depend on it.
