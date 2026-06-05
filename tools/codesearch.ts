@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
+import { isNonSourceFile } from "../core/filter.js";
 
 export function registerCodesearch(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -31,8 +32,9 @@ Auditing for "TODO" or "FIXME" in function names.`,
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const json = params.json ?? false;
+			const _fulltext = params.fulltext ?? false;
 			const graph = scanProject(".");
-			const result = executeCodesearch(graph, params.query, params.topN);
+			const result = executeCodesearch(graph, params.query, params.topN, _fulltext);
 			return {
 				content: [
 					{
@@ -56,6 +58,7 @@ export function executeCodesearch(
 	graph: RepoGraph,
 	query: string,
 	topN?: number,
+	_fulltext?: boolean,
 ): Symbol[] {
 	const limit = topN ?? 20;
 	const lower = query.toLowerCase();
@@ -64,6 +67,9 @@ export function executeCodesearch(
 	const scored: { sym: Symbol; score: number }[] = [];
 
 	for (const sym of graph.symbols.values()) {
+		// Skip non-source files (config, generated, lockfiles)
+		if (isNonSourceFile(sym.file)) continue;
+
 		const nameLower = sym.name.toLowerCase();
 		let score = 0;
 

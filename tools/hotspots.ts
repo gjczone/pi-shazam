@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
+import { isNonSourceFile } from "../core/filter.js";
 
 export function registerHotspots(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -105,22 +106,7 @@ export function executeHotspotsJson(
 	});
 }
 
-// ── Config/generated file filtering ────────────────────────────────────────────
-
-/** Config files, generated files, and lockfiles — excluded from hotspots and orphan detection */
-const NON_SOURCE_FILE_PATTERNS = [
-	"package-lock.json",
-	"package.json",
-	"tsconfig.json",
-	"node_modules/",
-	"dist/",
-	".json",       // other JSON config files (e.g. biome.json, tsconfig.*.json)
-];
-
-/** Returns true if the file is a config/generated/lockfile, not source code */
-export function isNonSourceFile(file: string): boolean {
-	return NON_SOURCE_FILE_PATTERNS.some((p) => file.includes(p));
-}
+// ── Note: `isNonSourceFile` is defined in core/filter.ts — imported above
 
 // ── Core compute ────────────────────────────────────────────────────────────────
 

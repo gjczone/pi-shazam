@@ -5,7 +5,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
-import { isNonSourceFile } from "./hotspots.js";
+import { isNonSourceFile } from "../core/filter.js";
 
 export function registerOrphan(pi: ExtensionAPI): void {
 	pi.registerTool({

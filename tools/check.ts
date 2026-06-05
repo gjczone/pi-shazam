@@ -9,6 +9,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
+import { isNonSourceFile } from "../core/filter.js";
 
 export function registerCheck(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -71,10 +72,10 @@ export function executeCheck(
 	lines.push("## Parse & Symbol Diagnostics");
 	lines.push("");
 
-	// ── Filter to target file if specified ─────────────────────────────
+	// ── Filter to target file if specified, excluding non-source files ─
 	const targetFiles = file
 		? [file]
-		: [...graph.fileSymbols.keys()];
+		: [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
 
 	if (targetFiles.length === 0) {
 		lines.push("No files to check.");
@@ -154,7 +155,7 @@ export function executeCheckJson(
 ): string {
 	const targetFiles = file
 		? [file]
-		: [...graph.fileSymbols.keys()];
+		: [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
 
 	const successfulFiles: string[] = [];
 	const failedFiles: string[] = [];

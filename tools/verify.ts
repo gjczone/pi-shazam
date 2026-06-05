@@ -9,7 +9,7 @@ import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { diffBaseline, loadBaseline } from "../core/cache.js";
-import { isNonSourceFile } from "./hotspots.js";
+import { isNonSourceFile } from "../core/filter.js";
 
 export function registerVerify(pi: ExtensionAPI): void {
 	pi.registerTool({
