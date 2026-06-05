@@ -1,6 +1,6 @@
 {
   "name": "pi-shazam",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Pi coding agent native codebase awareness extension - Shazam: power from multiple sources (repomap, pi-lens, serena MCP, tree-sitter, LSP) unified into one",
   "type": "module",
   "main": "dist/index.js",
