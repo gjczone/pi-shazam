@@ -20,19 +20,11 @@ export function registerFileDetail(pi: ExtensionAPI): void {
 		name: "shazam_file_detail",
 		label: "File Deep Analysis",
 		description: `\
-Call to get a complete structural breakdown of a single file: all
-symbols (functions, classes, types, constants) with signatures,
-visibility, line ranges, incoming call count, and PageRank score.
-When LSP is available, also shows parent-child symbol hierarchy.
-
-MUST call before making edits to an unfamiliar file — reading the raw
-file shows you syntax, this shows you STRUCTURE. You will spot
-dependencies and side effects that raw reading misses.
-
-Scenario: before editing a file for the first time. Before refactoring
-a large file. When deciding where to add a new function (PageRank shows
-you the file's "gravity"). After someone else's PR to understand what
-changed structurally.`,
+		When you are about to edit a file you have not read before — this
+		shows structure (symbols, signatures, visibility, PageRank scores,
+		call counts), not just syntax. A raw file read shows characters; this
+		shows architecture. Also surfaces LSP document symbol hierarchy for
+		parent-child relationships.`,
 		params: Type.Object({
 			file: Type.String(),
 		}),

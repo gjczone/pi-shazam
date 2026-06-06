@@ -19,14 +19,10 @@ export function registerHover(pi: ExtensionAPI): void {
 		name: "shazam_hover",
 		label: "Symbol Hover Info",
 		description: `\
-Call to get type information and documentation for a symbol by name.
-Connects to LSP servers for rich hover content (type signatures,
-documentation comments, JSDoc). Falls back to graph metadata when
-LSP is unavailable.
-
-Use after shazam_symbol to get detailed type info before making edits.
-Scenario: understanding a symbol's type signature. Checking parameter
-types before calling a function. Getting documentation for an API.`,
+		After finding a symbol with shazam_symbol, use this to get its full
+		type signature, documentation comments, and JSDoc — content that raw
+		file reads miss. Connects to LSP hover providers for rich type info.
+		Falls back to graph metadata when LSP is unavailable.`,
 		params: Type.Object({
 			name: Type.String(),
 			file: Type.Optional(Type.String()),

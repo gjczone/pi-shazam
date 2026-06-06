@@ -21,15 +21,11 @@ export function registerTypeHierarchy(pi: ExtensionAPI): void {
 		name: "shazam_type_hierarchy",
 		label: "Type Hierarchy",
 		description: `\
-Call to explore type/class hierarchies: supertypes (parent classes,
-interfaces) and subtypes (children, implementations) for a symbol.
-Uses LSP 3.17 typeHierarchy protocol when available, with graph
-inheritance edge fallback.
-
-Combines class hierarchy + interface implementations in one tool.
-Scenario: understanding class inheritance before refactoring.
-Finding all implementations of an interface. Checking subtype
-relationships before adding a new method.`,
+		When working with classes, interfaces, or abstract types — use this
+		to see the full inheritance chain (supertypes and subtypes) in one
+		call. Uses LSP 3.17 typeHierarchy protocol with graph inheritance
+		edge fallback. Before refactoring a base class, finding all interface
+		implementations, or adding methods to a parent type.`,
 		params: Type.Object({
 			name: Type.String(),
 			direction: Type.Optional(Type.Union([Type.Literal("both"), Type.Literal("supertypes"), Type.Literal("subtypes")])),

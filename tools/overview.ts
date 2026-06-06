@@ -51,20 +51,14 @@ export function registerOverview(pi: ExtensionAPI): void {
 		name: "shazam_overview",
 		label: "Project Overview",
 		description: `\
-MUST call before touching ANY code in an unfamiliar project or repo.
-Returns: module dependency map, top-10 highest-PageRank files (the
-"spine" of the codebase), entry points, suggested reading order, and
-HTTP route inventory when a web framework is detected. Supports
---filter to search/find files by keyword within the project.
-Skipping this = navigating blind — you WILL miss cross-module ripple
-effects and waste turns on dead-end reads.
-
-Scenario: first turn in a new repo. After git clone. After switching
-to an unfamiliar project directory. Use --filter <keyword> to locate
-specific files (replaces separate find_file tool).
-
-Output: plain text summary by default. Pass { json: true } for
-structured output with file lists and PageRank scores.`,
+		When you first enter a project or return after changes — use this to
+		understand the codebase before reading a single file. Returns: module
+		dependency map, top-10 highest-PageRank files (the "spine"), entry
+		points, suggested reading order, and HTTP route inventory for web
+		projects. Supports --filter to locate files by keyword.
+		
+		Output: plain text summary by default. Pass { json: true } for
+		structured output with file lists and PageRank scores.`,
 		params: Type.Object({
 			filter: Type.Optional(Type.String()),
 		}),

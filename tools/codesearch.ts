@@ -27,14 +27,12 @@ export function registerCodesearch(pi: ExtensionAPI): void {
 		name: "shazam_codesearch",
 		label: "Code Search (BM25)",
 		description: `\
-MUST call to search for symbols or source text across the project.
-Two modes: target="symbol" (default) uses BM25 semantic ranking on
-symbol names (camelCase/snake_case aware). target="code" uses full-text
-search via ripgrep with context snippets.
-
-Scenario: finding all error handling patterns. Locating all callers of
-a function by name. Searching for literal text across the codebase.
-Finding TODO/FIXME comments. Exploring code before making edits.`,
+		Don't reach for grep or raw text search across the codebase. Use this
+		instead — it ranks results by relevance (BM25), understands
+		camelCase/snake_case token boundaries, and enriches hits with LSP
+		workspace symbols. Two modes: target="symbol" (default, semantic
+		ranking) and target="code" (full-text with context snippets via
+		ripgrep).`,
 		params: Type.Object({
 			query: Type.String(),
 			target: Type.Optional(Type.Union([Type.Literal("symbol"), Type.Literal("code")])),

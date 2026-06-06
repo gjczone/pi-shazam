@@ -12,17 +12,12 @@ export function registerImpact(pi: ExtensionAPI): void {
 		name: "shazam_impact",
 		label: "Change Impact Analysis",
 		description: `\
-MUST call before editing 2+ files or any shared/exported module.
-Returns: exact list of files affected by planned changes, symbols at
-risk, test files that need re-running. Also surfaces untested code
-paths in the blast zone. Skipping this = guessing which tests to run
-and which callers to update.
-
-Scenario: refactoring. Adding a parameter to a shared function.
-Changing a type definition. Before any PR that touches >1 file.
-
-Pass --with-symbols for per-symbol risk breakdown. Pass --compact for
-concise output (file names only). Supports multiple --files.`,
+		Required before editing 2+ files or any shared/exported module.
+		Returns every file, symbol, and test affected by your planned changes.
+		Without this, you are guessing which tests to run and which callers to
+		update. Pass --with-symbols for per-symbol risk breakdown. Pass
+		--compact for concise output (file names only). Supports multiple
+		--files.`,
 		params: Type.Object({
 			files: Type.Array(Type.String()),
 			withSymbols: Type.Optional(Type.Boolean()),

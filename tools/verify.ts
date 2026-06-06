@@ -29,21 +29,12 @@ export function registerVerify(pi: ExtensionAPI): void {
 		name: "shazam_verify",
 		label: "Verify Changes",
 		description: `\
-MUST call after EVERY non-trivial edit or write. This is the evidence
-gate — it runs LSP diagnostics (type errors, warnings) as the core
-check, then graph analysis (git diff, risk, orphans, graph diff).
-
-Verdict: PASS (no LSP errors + low risk), WARN (LSP warnings or LSP
-unavailable), FAIL (LSP errors found — must fix).
-
-Supports modes:
-- default: full LSP diagnostics + graph analysis
-- --quick: git changes + risk only (~2s)
-- --lspOnly: LSP diagnostics only, skip graph analysis
-- --preCommit: stricter thresholds for pre-commit gate
-
-Scenario: after every edit. Before git commit. Before calling
-goal_complete. When CI is red and you need local diagnostics.`,
+		After every write or edit, run this to confirm no errors were
+		introduced. Runs LSP diagnostics (type errors, warnings), then graph
+		analysis (git diff, risk level, orphan detection, graph diffs).
+		Verdict: PASS / WARN / FAIL. Use --quick for a fast git-change-only
+		check (~2s). Use --lspOnly for diagnostics only. Use --preCommit for
+		stricter thresholds.`,
 		params: Type.Object({
 			quick: Type.Optional(Type.Boolean()),
 			lspOnly: Type.Optional(Type.Boolean()),

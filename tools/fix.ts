@@ -19,17 +19,10 @@ export function registerFix(pi: ExtensionAPI): void {
 		name: "shazam_fix",
 		label: "Auto-Fix Format & Lint",
 		description: `\
-MUST call after shazam_verify or shazam_check reports format/lint
-errors. Runs nearest-wins auto-fixers (prettier, biome, ruff, cargo
-fmt, gofmt, eslint --fix). Modifies format ONLY — never touches logic.
-
-Always run with --dry-run first to preview changes before applying.
-After fixing, re-run shazam_verify to confirm clean. Do NOT commit
-code with format issues — they WILL fail CI.
-
-Scenario: trailing whitespace after an edit. Import sorting. Indentation
-mismatches. Line length violations. Mixed tabs/spaces. Missing newlines
-at end of file.`,
+		When shazam_verify reports format or lint errors, use this to
+		auto-fix them. Runs nearest-wins formatters (prettier, biome, eslint
+		--fix, ruff, cargo fmt, gofmt). Format only — never touches logic.
+		Always run with --dry-run first to preview changes before applying.`,
 		params: Type.Object({
 			dryRun: Type.Optional(Type.Boolean()),
 			file: Type.Optional(Type.String()),

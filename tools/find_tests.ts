@@ -18,13 +18,11 @@ export function registerFindTests(pi: ExtensionAPI): void {
 		name: "shazam_find_tests",
 		label: "Find Test Files",
 		description: `\
-MUST call to locate test files for a given source file or module.
-Returns test file paths, test function names, and coverage hints.
-Uses common test naming conventions (*.test.ts, *.spec.ts, __tests__/).
-
-Scenario: before adding tests to verify you found the right file.
-Before refactoring a module to know what test coverage exists.
-After changing code to locate tests that need updating.`,
+		When adding tests or modifying source code — use this to discover
+		which test files already cover a module, what test functions exist,
+		and where new tests belong. Understands *.test.ts, *.spec.ts,
+		__tests__/ conventions. Pass sourceFile or module to scope the
+		search.`,
 		params: Type.Object({
 			sourceFile: Type.Optional(Type.String()),
 			module: Type.Optional(Type.String()),

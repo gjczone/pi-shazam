@@ -36,23 +36,16 @@ export function registerSymbol(pi: ExtensionAPI): void {
 		name: "shazam_symbol",
 		label: "Symbol Lookup",
 		description: `\
-MUST call to look up a symbol by name — returns definition, kind,
-signature, file location, PageRank score, callers, and callees in one
-call. When LSP is available, also shows container (parent symbol)
-and accurate endLine. Falls back to graph data when LSP unavailable.
-
-Supports --mode state for state map analysis: filter to
-enum/class/interface/type_alias/const kinds and show members, usage,
-and dependencies. Use mode=state before adding/removing enum variants
-or changing state transitions.
-
-Use BEFORE referencing any symbol by name in code — you confirm it
-exists AND understand its signature, not just its file location.
-
-Scenario: before importing a module. Before calling a function. When
-you see an unfamiliar symbol name and need its definition. Checking
-a symbol's visibility (public/private/exported). Before changing
-state-machine states or enum variants.`,
+		When you need to look up a symbol before importing or calling it —
+		returns definition, kind, signature, file location, PageRank score,
+		callers, and callees in one call. Better than file_detail when you
+		know the symbol name but not its location. When LSP is available, also
+		shows container (parent symbol) and accurate endLine.
+		
+		Supports --mode state for state map analysis: filter to
+		enum/class/interface/type_alias/const kinds and show members, usage,
+		and dependencies. Use mode=state before adding/removing enum variants
+		or changing state transitions.`,
 		params: Type.Object({
 			name: Type.String(),
 			file: Type.Optional(Type.String()),

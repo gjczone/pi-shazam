@@ -16,17 +16,12 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 		name: "shazam_rename_symbol",
 		label: "Rename Symbol",
 		description: `\
-MUST only be used after shazam_call_chain confirms the blast radius.
-Renames a symbol across the entire project using LSP textDocument/rename.
-This is a WRITE operation — it modifies files on disk.
-
-Safety requirements:
-1. First call shazam_call_chain --symbol <name> to review all references
-2. Then call this tool to perform the rename
-3. Finally call shazam_verify to confirm no broken references
-
-Scenario: renaming a public API function. Renaming a widely-used type.
-Changing a class name to match conventions.`,
+		Required safety gate before renaming any symbol. Step 1: call
+		shazam_call_chain to review all references. Step 2: use this to
+		perform the project-wide rename via LSP textDocument/rename. Step 3:
+		call shazam_verify to confirm no broken references. This is a WRITE
+		operation — do not manually find-and-replace; missed references
+		become bugs.`,
 		params: Type.Object({
 			symbol: Type.String(),
 			newName: Type.String(),

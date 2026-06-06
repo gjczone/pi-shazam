@@ -80,20 +80,20 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 │   ├── _context.ts         ← Tool-level shared LspManager holder (replaces core/lsp-global.ts)
 │   ├── _factory.ts         ← createTool() registration factory (json/maxTokens, scanProject, envelope, truncation)
 │   ├── lsp_enrich.ts       ← Tool-layer LSP enrichment wrappers (workspace/symbol, documentSymbol, semanticTokens, foldingRange) with 5s timeout + null fallback
-│   ├── overview.ts         ← Project structure summary + HTTP route inventory
-│   ├── impact.ts           ← File-level change impact
-│   ├── codesearch.ts       ← BM25 symbol search + LSP workspace/symbol enrichment
-│   ├── file_detail.ts      ← Single file deep analysis + LSP documentSymbol hierarchy
-│   ├── call_chain.ts       ← Call graph traversal
-│   ├── symbol.ts           ← Symbol lookup + LSP container/endLine enrichment + state map (mode=state)
-│   ├── verify.ts           ← Unified post-edit verification (LSP diagnostics + graph analysis)
-│   ├── fix.ts              ← Auto-fix lint/format
-│   ├── hotspots.ts         ← Complexity hotspot ranking
-│   ├── hover.ts            ← Symbol type/documentation hover (uses LSP)
-│   ├── find_tests.ts       ← Test file discovery
-│   ├── type_hierarchy.ts   ← LSP type hierarchy + implementations
-│   ├── rename_symbol.ts    ← Symbol rename
-│   └── safe_delete.ts      ← Safe symbol deletion
+│   ├── overview.ts         ← Scenario trigger: use first in unfamiliar projects (module map, routes)
+│   ├── impact.ts           ← Prerequisite: required before editing 2+ files or shared modules
+│   ├── codesearch.ts       ← Anti-pattern: use this instead of grep (BM25 ranking + LSP enrichment)
+│   ├── file_detail.ts      ← Scenario trigger: shows structure not syntax before first edit
+│   ├── call_chain.ts       ← Consequence hint: without this you ship bugs from missed callers
+│   ├── symbol.ts           ← Scenario trigger: look up symbol before importing/calling (mode=state)
+│   ├── verify.ts           ← Action binding: run after every write/edit (PASS/WARN/FAIL)
+│   ├── fix.ts              ← Action binding: auto-fix format/lint when verify reports errors
+│   ├── hotspots.ts         ← Consequence hint: without this you optimize the wrong files
+│   ├── hover.ts            ← Action binding: get type signatures + docs after finding a symbol
+│   ├── find_tests.ts       ← Scenario trigger: discover test files before adding/modifying tests
+│   ├── type_hierarchy.ts   ← Scenario trigger: see inheritance chain for OOP/interface types
+│   ├── rename_symbol.ts    ← Prerequisite: safety gate before renaming (verify references first)
+│   └── safe_delete.ts      ← Prerequisite: safety gate before removing (verify zero refs first)
 └── hooks/                  ← Automatic (not LLM-visible)
     ├── before-start.ts     ← Inject overview into system prompt
     └── after-write.ts      ← Auto verify + fix after write/edit
@@ -130,6 +130,23 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 
 ### Registered Tools (LLM-visible)
 
+| Tool | Style | Description |
+|------|-------|-------------|
+| `shazam_overview` | Scenario trigger | When you first enter a project — see the codebase structure before reading a single file |
+| `shazam_impact` | Prerequisite | Required before editing 2+ files or any shared/exported module |
+| `shazam_codesearch` | Anti-pattern | Don't reach for grep — this ranks results by relevance with BM25 |
+| `shazam_symbol` | Scenario trigger | When you need to look up a symbol before importing or calling it |
+| `shazam_hover` | Action binding | After finding a symbol, get its full type signature and documentation |
+| `shazam_file_detail` | Scenario trigger | When about to edit an unfamiliar file — shows structure, not just syntax |
+| `shazam_call_chain` | Consequence hint | Without this you ship bugs — traces ALL upstream callers and downstream callees |
+| `shazam_verify` | Action binding | After every write or edit — confirm no errors (PASS/WARN/FAIL) |
+| `shazam_find_tests` | Scenario trigger | When adding tests — discover test files and coverage for a module |
+| `shazam_hotspots` | Consequence hint | Without this you optimize the wrong files — ranked by blast radius |
+| `shazam_fix` | Action binding | When verify reports format/lint errors — auto-fix with nearest-wins formatters |
+| `shazam_type_hierarchy` | Scenario trigger | When working with OOP types — see the full inheritance chain |
+| `shazam_rename_symbol` | Prerequisite | Safety gate before renaming — verify references first, then rename |
+| `shazam_safe_delete` | Prerequisite | Safety gate before removal — verify zero incoming references first |
+
 All tools follow the same pattern:
 - Parameters: TypeBox schema via direct `import { Type } from "typebox"`（不使用 `pi.typebox`——Pi 运行时不一定注入，参考 pi-smart-fetch 的做法）
 - Output: `{ content: [{ type: "text", text: string }] }` — plain text for LLM reading
@@ -155,7 +172,7 @@ All tools follow the same pattern:
 
 ## Change Map
 
-- **Adding a new tool**: Create `tools/<name>.ts` with `register*` function using `createTool(pi, { name, label, description, params, execute })` from `tools/_factory.ts` → import and call in `index.ts` → the factory auto-handles json/maxTokens params, scanProject, content envelope, and truncation → for complex async tools, use `customExecute` instead of `execute` → append Next recommendation rules to `NEXT_RULES` in `core/output.ts` (no switch to edit)
+- **Adding a new tool**: Create `tools/<name>.ts` with `register*` function using `createTool(pi, { name, label, description, params, execute })` from `tools/_factory.ts` → import and call in `index.ts` → the factory auto-handles json/maxTokens params, scanProject, content envelope, and truncation → for complex async tools, use `customExecute` instead of `execute` → append Next recommendation rules to `NEXT_RULES` in `core/output.ts` (no switch to edit) → choose one of 5 description styles: Prerequisite, Scenario trigger, Consequence hint, Action binding, or Anti-pattern warning → sync the tool table in `AGENTS.md` and add full docs to `SKILL.md`
 - **Adding a Next recommendation**: Append a `NextRule` object to `NEXT_RULES` in `core/output.ts`. Each rule: `{ forTools, condition(ctx, graph?), recommendation(ctx) }`. Rules evaluate against context + optional RepoGraph (for graph-aware filters like `hasTestFiles`, `hasHierarchyKinds`).
 - **Adding a new language**: Add grammar to `core/treesitter.ts` EXT_TO_LANG map → add tree-sitter query in queries section → add LSP server config in `lsp/servers.ts`
 - **Changing graph algorithm**: Modify `core/pagerank.ts` or `core/graph.ts` → verify all tools that consume `RepoGraph` still produce correct output

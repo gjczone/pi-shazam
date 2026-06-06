@@ -15,19 +15,12 @@ export function registerSafeDelete(pi: ExtensionAPI): void {
 		name: "shazam_safe_delete",
 		label: "Safe Delete",
 		description: `\
-MUST be used to safely remove a symbol that has zero incoming references.
-Automatically calls call_chain verification to confirm the symbol is
-unused before providing deletion instructions.
-This is a WRITE operation — it modifies files on disk.
-
-Safety workflow:
-1. Checks incoming references (must be 0)
-2. Reports outgoing references (what this symbol calls)
-3. Provides deletion guidance
-
-Scenario: removing dead code after confirming it's unused.
-Cleaning up deprecated functions or modules.
-Removing a utility that was replaced by a library.`,
+		Required safety gate before removing any symbol. Automatically
+		verifies zero incoming references before providing deletion
+		instructions. This is a WRITE operation. Safety workflow: checks
+		incoming references (must be 0), reports outgoing references,
+		provides deletion guidance. Do not delete based on intuition — a
+		symbol that looks unused may be called dynamically.`,
 		params: Type.Object({
 			symbol: Type.String(),
 			dryRun: Type.Optional(Type.Boolean()),

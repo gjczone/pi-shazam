@@ -13,18 +13,11 @@ export function registerHotspots(pi: ExtensionAPI): void {
 		name: "shazam_hotspots",
 		label: "Complexity Hotspots",
 		description: `\
-Call to find complexity hotspots: files ranked by (symbol density ×
-PageRank score). The top 5 results are the files where bugs are most
-expensive — these files have the highest incoming dependency weight,
-meaning changes here cascade into the largest blast radius.
-
-Use this to decide where to focus code review, where to write tests
-first, and which files a new developer should read to understand the
-project's core.
-
-Scenario: code review prioritization. Deciding which tests to write
-next. Understanding where a new team member should start reading.
-Triaging bug reports (is the affected file a hotspot?).`,
+		Without this, you optimize the wrong files. Returns files ranked by
+		(symbol density x PageRank) — these are the files where bugs have the
+		highest blast radius. Use to prioritize code review, decide where to
+		write tests first, and understand which files form the project's
+		core.`,
 		params: Type.Object({ topN: Type.Optional(Type.Number()) }),
 		execute(graph, params) {
 			const json = params.json ?? false;

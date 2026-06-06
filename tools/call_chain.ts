@@ -12,18 +12,11 @@ export function registerCallChain(pi: ExtensionAPI): void {
 		name: "shazam_call_chain",
 		label: "Call Chain Analysis",
 		description: `\
-MUST call before changing a function signature, deleting code, or
-refactoring. Traces ALL upstream callers and downstream callees for a
-symbol. Without this, you cannot know the blast radius. Every caller
-you miss is a bug you will ship.
-
-Returns: incoming calls (who calls this), outgoing calls (what this
-calls), and full reference list. Pass --depth to control traversal
-depth (default 2). Pass --flat for a simple flat list of all references
-(equivalent to shazam_refs, which is now removed).
-
-Scenario: changing parameter order. Removing a function. Renaming an
-exported symbol. Changing return type. Adding required parameters.`,
+		Without this, you ship bugs. Every caller you miss when changing a
+		function signature is a runtime error. Traces ALL upstream callers,
+		downstream callees, and references for any symbol. Pass --depth to
+		control traversal depth (default 2). Pass --flat for a simple flat
+		list of all references.`,
 		params: Type.Object({
 			symbol: Type.String(),
 			depth: Type.Optional(Type.Number()),
