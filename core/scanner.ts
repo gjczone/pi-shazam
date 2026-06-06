@@ -18,26 +18,9 @@ import type { RepoGraph, Symbol, Edge } from "./graph.js";
 import { calculatePageRank } from "./pagerank.js";
 import { readFileAdaptive } from "./encoding.js";
 import { getProjectCacheDir, saveGraphCache, loadGraphCache } from "./cache.js";
+import { SKIP_DIRS } from "./filter.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
-
-/** Directories to skip during project scan */
-const SKIP_DIRS = new Set([
-	"node_modules",
-	"dist",
-	".git",
-	".worktrees",
-	".cache",
-	".pi-shazam",
-	".qoder",
-	"__pycache__",
-	"target",       // Rust
-	".venv",
-	"venv",
-	".tox",
-	"coverage",
-	".nyc_output",
-]);
 
 /** Maximum files to scan (safety limit) */
 const MAX_FILES = 20_000;

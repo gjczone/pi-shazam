@@ -17,6 +17,7 @@ import {
 	languageForSuffix,
 	lspTimeoutFor,
 } from "./servers.js";
+import { SKIP_DIRS } from "../core/filter.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,31 +55,6 @@ export interface LspRunResult {
 
 // ── Project language detection ───────────────────────────────────────────────
 
-const SKIP_DIRS = new Set([
-	".git",
-	"node_modules",
-	"dist",
-	"build",
-	"out",
-	".venv",
-	"venv",
-	"target",
-	"__pycache__",
-	".cache",
-	".next",
-	".nuxt",
-	"coverage",
-	".nyc_output",
-	"vendor",
-	"bower_components",
-	"tmp",
-	"temp",
-	".idea",
-	".vscode",
-	".turbo",
-	".vercel",
-	".yarn",
-]);
 
 /**
  * Check if a path contains any skip directory segment.

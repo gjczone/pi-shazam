@@ -24,6 +24,43 @@ const NON_SOURCE_FILE_PATTERNS: readonly string[] = [
 	".json",
 ];
 
+/**
+ * Directories to skip during project scanning and LSP detection.
+ *
+ * Single source of truth -- consumed by core/scanner.ts and lsp/manager.ts.
+ * Includes build outputs, dependency caches, virtual environments, IDE
+ * directories, and other non-source trees that should never be walked.
+ */
+export const SKIP_DIRS = new Set([
+	"node_modules",
+	"bower_components",
+	"vendor",
+	"dist",
+	"build",
+	"out",
+	"target",
+	".git",
+	".cache",
+	".worktrees",
+	".pi-shazam",
+	".qoder",
+	"__pycache__",
+	"coverage",
+	".nyc_output",
+	"tmp",
+	"temp",
+	".venv",
+	"venv",
+	".tox",
+	".next",
+	".nuxt",
+	".turbo",
+	".vercel",
+	".yarn",
+	".idea",
+	".vscode",
+]);
+
 export function isNonSourceFile(file: string): boolean {
 	return NON_SOURCE_FILE_PATTERNS.some((p) => file.includes(p));
 }
