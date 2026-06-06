@@ -86,10 +86,8 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 │   ├── file_detail.ts      ← Single file deep analysis + LSP documentSymbol hierarchy
 │   ├── call_chain.ts       ← Call graph traversal
 │   ├── symbol.ts           ← Symbol lookup + LSP container/endLine enrichment + state map (mode=state)
-│   ├── verify.ts           ← Post-edit diagnostics gate
+│   ├── verify.ts           ← Unified post-edit verification (LSP diagnostics + graph analysis)
 │   ├── fix.ts              ← Auto-fix lint/format
-│   ├── ready.ts            ← Pre-commit readiness
-│   ├── check.ts            ← Compiler/lint diagnostics
 │   ├── hotspots.ts         ← Complexity hotspot ranking
 │   ├── hover.ts            ← Symbol type/documentation hover (uses LSP)
 │   ├── find_tests.ts       ← Test file discovery

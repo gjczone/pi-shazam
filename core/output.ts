@@ -312,46 +312,7 @@ export const NEXT_RULES: NextRule[] = [
 		}),
 	},
 
-	// check
-	{
-		forTools: ["check"],
-		condition: (ctx) => Boolean(ctx.hasErrors),
-		recommendation: () => ({
-			tool: "verify",
-			label: "Run full verification",
-			level: "required",
-		}),
-	},
-	{
-		forTools: ["check"],
-		condition: (ctx) => Boolean(ctx.hasFixes),
-		recommendation: () => ({
-			tool: "fix",
-			label: "Auto-fix format issues",
-			level: "recommended",
-		}),
-	},
-	{
-		forTools: ["check"],
-		condition: (ctx) => Boolean(ctx.brokenFile),
-		recommendation: (ctx) => ({
-			tool: "symbol",
-			params: { name: "--file " + ctx.brokenFile! },
-			label: "Check broken file symbols",
-			level: "also",
-		}),
-	},
-
 	// verify
-	{
-		forTools: ["verify"],
-		condition: (ctx) => ctx.riskLevel === "high",
-		recommendation: () => ({
-			tool: "ready",
-			label: "Run pre-commit readiness check",
-			level: "required",
-		}),
-	},
 	{
 		forTools: ["verify"],
 		condition: (ctx) => Boolean(ctx.orphanCount && ctx.orphanCount > 0),
@@ -370,26 +331,6 @@ export const NEXT_RULES: NextRule[] = [
 		recommendation: () => ({
 			tool: "verify",
 			label: "Verify after fixing",
-			level: "required",
-		}),
-	},
-	{
-		forTools: ["fix"],
-		condition: () => true,
-		recommendation: () => ({
-			tool: "check",
-			label: "Re-check for remaining issues",
-			level: "recommended",
-		}),
-	},
-
-	// ready
-	{
-		forTools: ["ready"],
-		condition: () => true,
-		recommendation: () => ({
-			tool: "",
-			label: "Commit and push changes",
 			level: "required",
 		}),
 	},

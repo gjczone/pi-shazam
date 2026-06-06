@@ -1,6 +1,6 @@
 ---
 name: pi-shazam
-description: "MUST invoke BEFORE reading, editing, searching, or understanding ANY code in a project. pi-shazam builds a codebase graph (tree-sitter AST → symbols → dependencies → PageRank) with 10 query tools + 4 write tools. Use shazam_overview first in every unfamiliar repo. Use shazam_codequery to find symbols and inspect files — faster and more accurate than grep. Use shazam_impact before editing 2+ files. Use shazam_verify after every non-trivial edit. Skipping pi-shazam = navigating blind — you WILL miss cross-module ripple effects and waste turns on dead-end reads."
+description: "MUST invoke BEFORE reading, editing, searching, or understanding ANY code in a project. pi-shazam builds a codebase graph (tree-sitter AST → symbols → dependencies → PageRank) with 10 query tools + 3 write tools. Use shazam_overview first in every unfamiliar repo. Use shazam_codequery to find symbols and inspect files — faster and more accurate than grep. Use shazam_impact before editing 2+ files. Use shazam_verify after every non-trivial edit. Skipping pi-shazam = navigating blind — you WILL miss cross-module ripple effects and waste turns on dead-end reads."
 ---
 
 # pi-shazam
@@ -13,7 +13,7 @@ pi-shazam is a Pi coding agent native extension that unifies tree-sitter AST par
 2. **`shazam_overview` before touching any new repo.** It shows the spine of the codebase in one call, including HTTP routes when web frameworks are detected.
 3. **`shazam_codequery --symbol` before editing any function/class.** Verify it exists and see its callers. Use `--mode state` for enum/state machine analysis.
 4. **`shazam_impact --files` before multi-file edits.** Assess blast radius before you break things.
-5. **`shazam_verify` after every non-trivial edit.** The evidence gate — catch problems before commit.
+5. **`shazam_verify` after every non-trivial edit.** The evidence gate — LSP diagnostics + graph analysis in one pass. Catch problems before commit.
 6. **JSON mode available on all tools.** Pass `{ "json": true }` for structured output.
 
 ## Query Tools
@@ -40,12 +40,11 @@ These tools modify files or verify changes.
 
 | Situation | Tool | Notes |
 |-----------|------|-------|
-| After every edit | `shazam_verify` | Git diff → risk → LSP diagnostics → orphan detection → call-graph check |
+| After every edit | `shazam_verify` | LSP diagnostics (core) → graph analysis (supplementary); verdict PASS/WARN/FAIL |
 | Quick post-edit check | `shazam_verify --quick` | Git changes + risk only (2s) |
-| Before commit | `shazam_verify` (full) | All checks in one pass |
-| Type/lint errors | `shazam_check` | Compiler diagnostics (tsc/pyright/rust-analyzer) + lint (eslint/ruff/clippy) |
+| Before commit | `shazam_verify --preCommit` | Stricter thresholds, pre-commit gate |
+| LSP diagnostics only | `shazam_verify --lspOnly` | Skip graph analysis, LSP type errors only |
 | Auto-fix format | `shazam_fix` | Runs formatters (prettier, biome, ruff format, gofmt, cargo fmt); use `--dry-run` to preview |
-| Pre-commit gate | `shazam_ready` | verify + check + fix — the final pre-commit readiness check |
 
 ## LSP Integration
 

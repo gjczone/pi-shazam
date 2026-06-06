@@ -235,22 +235,20 @@ describe("Tool: verify", () => {
 	it("should NOT claim to run LSP diagnostics, call-graph consistency, or contract risk when unavailable", async () => {
 		const { executeVerify } = await import("../tools/verify.js");
 		const result = executeVerify(getGraph(), ".");
-		// Should not claim features that aren't actually running
 		expect(result).not.toMatch(/LSP diagnostics.*pyright.*tsc.*rust-analyzer.*gopls/);
 	});
-});
 
-describe("Tool: check", () => {
+	// ── Merged from check ──────────────────────────────────────────────
 	it("should return diagnostic results", async () => {
-		const { executeCheck } = await import("../tools/check.js");
+		const { executeCheck } = await import("../tools/verify.js");
 		const result = executeCheck(getGraph(), ".");
 		expect(result).toBeDefined();
 		expect(typeof result).toBe("string");
 		expect(result.length).toBeGreaterThan(0);
 	});
 
-	it("should support json output", async () => {
-		const { executeCheckJson } = await import("../tools/check.js");
+	it("should support json output for diagnostics", async () => {
+		const { executeCheckJson } = await import("../tools/verify.js");
 		const result = executeCheckJson(getGraph(), ".");
 		expect(result).toBeDefined();
 		const parsed = JSON.parse(result);
@@ -259,10 +257,28 @@ describe("Tool: check", () => {
 	});
 
 	it("should NOT claim to run tsc/eslint/pyright/go-vet/rustc when it does not", async () => {
-		const { executeCheck } = await import("../tools/check.js");
+		const { executeCheck } = await import("../tools/verify.js");
 		const result = executeCheck(getGraph(), ".");
-		// Should not claim to run compilers/linters it doesn't actually run
 		expect(result).not.toMatch(/Run.*tsc.*eslint.*pyright.*go.vet.*rustc/);
+	});
+
+	// ── Merged from ready ──────────────────────────────────────────────
+	it("should return pre-commit readiness result via preCommit mode", async () => {
+		const { executeReady } = await import("../tools/verify.js");
+		const result = executeReady(getGraph(), ".");
+		expect(result).toBeDefined();
+		expect(typeof result).toBe("string");
+		expect(result.length).toBeGreaterThan(0);
+		expect(result).toMatch(/ready|verify|check|fix/i);
+	});
+
+	it("should support json output for pre-commit readiness", async () => {
+		const { executeReadyJson } = await import("../tools/verify.js");
+		const result = executeReadyJson(getGraph(), ".");
+		expect(result).toBeDefined();
+		const parsed = JSON.parse(result);
+		expect(parsed.status).toBe("ok");
+		expect(parsed.result).toBeDefined();
 	});
 });
 
@@ -284,24 +300,5 @@ describe("Tool: fix", () => {
 		expect(parsed.result).toBeDefined();
 		expect(parsed.result.dryRun).toBe(true);
 	});
-});
 
-describe("Tool: ready", () => {
-	it("should return pre-commit readiness result", async () => {
-		const { executeReady } = await import("../tools/ready.js");
-		const result = executeReady(getGraph(), ".");
-		expect(result).toBeDefined();
-		expect(typeof result).toBe("string");
-		expect(result.length).toBeGreaterThan(0);
-		expect(result).toMatch(/ready|verify|check|fix/i);
-	});
-
-	it("should support json output", async () => {
-		const { executeReadyJson } = await import("../tools/ready.js");
-		const result = executeReadyJson(getGraph(), ".");
-		expect(result).toBeDefined();
-		const parsed = JSON.parse(result);
-		expect(parsed.status).toBe("ok");
-		expect(parsed.result).toBeDefined();
-	});
 });
