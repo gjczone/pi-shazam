@@ -236,6 +236,6 @@ pi-shazam reads source files with adaptive encoding: UTF-8 -> GBK -> GB2312. It 
 ## Environment
 
 - **Runtime**: Node.js >=18, TypeScript ES2022, ESM
-- **Grammar support**: 18 languages via tree-sitter
+- **Grammar support**: 14 languages via tree-sitter
 - **LSP**: 6 languages with auto-spawned language servers
 - **Install**: `npm install pi-shazam` in Pi extensions directory

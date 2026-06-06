@@ -88,7 +88,7 @@ Plus two commands: `/shazam-setup` (LSP server detection) and `/shazam-doctor` (
 
 ## Supported Languages
 
-**Parsing (18)**: TypeScript, JavaScript, Python, Rust, Go, Java, C, C++, C#, Ruby, CSS, HTML, JSON, YAML, Bash, Lua, Kotlin, Swift
+**Tree-sitter parsing (14)**: TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, C, C++, C#, Ruby, CSS, HTML, JSON
 
 **LSP diagnostics (6)**: TypeScript/JavaScript, Python (pyright), Rust (rust-analyzer), Go (gopls), JSON, YAML
 
