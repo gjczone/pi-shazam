@@ -11,7 +11,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
-import { getLspManager } from "../core/lsp-global.js";
+import { getLspManager } from "./_context.js";
 import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";

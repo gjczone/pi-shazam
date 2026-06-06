@@ -15,7 +15,7 @@ import type {
 } from "./types/pi-extension.js";
 import { LspManager } from "./lsp/manager.js";
 import { generateSetupReport } from "./lsp/setup.js";
-import { setLspManager } from "./core/lsp-global.js";
+import { setLspManager } from "./tools/_context.js";
 
 // ── Hook registrations ───────────────────────────────────────────────────
 import { registerBeforeStartHook } from "./hooks/before-start.js";
