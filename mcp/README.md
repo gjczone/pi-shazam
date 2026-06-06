@@ -32,6 +32,26 @@ Add to your MCP config (`~/.cursor/mcp.json` or `claude_desktop_config.json`):
 }
 ```
 
+### Kimi Code
+
+In VS Code, open Settings (Cmd+,) → search "Kimi Code" → MCP Servers → add a server with:
+
+- Name: `pi-shazam`
+- Command: `npx pi-shazam-mcp`
+
+Or directly edit `kimi_mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "pi-shazam": {
+      "command": "npx",
+      "args": ["pi-shazam-mcp"]
+    }
+  }
+}
+```
+
 ### Specifying a project root
 
 ```json
