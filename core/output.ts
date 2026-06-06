@@ -251,3 +251,66 @@ export function getGraphSummary(graph: RepoGraph): { symbols: number; files: num
 		edges: edgeCount,
 	};
 }
+
+// ── Token budget truncation ─────────────────────────────────────────────────
+
+const CHARS_PER_TOKEN = 4;
+
+/**
+ * Estimate token count for a text string using ~4 chars/token heuristic.
+ * No external dependency — fast enough for inline use during formatting.
+ */
+export function estimateTokens(text: string): number {
+	return Math.ceil(text.length / CHARS_PER_TOKEN);
+}
+
+function isHighPriorityLine(line: string): boolean {
+	if (line.startsWith("## ")) return true;
+	if (line.startsWith("### ")) return true;
+	if (line.startsWith("**") && line.includes(":**")) return true;
+	return false;
+}
+
+/**
+ * Truncate an array of output lines to fit within a token budget.
+ * Preserves high-priority lines (headers, key-value pairs) and top items.
+ * Low-priority lines are replaced with "... and N more (truncated)".
+ */
+export function truncateOutput(lines: string[], maxTokens: number): string {
+	if (lines.length === 0) return "";
+
+	const totalTokens = estimateTokens(lines.join("\n"));
+	if (totalTokens <= maxTokens) {
+		return lines.join("\n");
+	}
+
+	const kept: string[] = [];
+	let usedTokens = 0;
+	let truncatedCount = 0;
+	let truncating = false;
+
+	for (const line of lines) {
+		const lineTokens = estimateTokens(line);
+
+		if (isHighPriorityLine(line)) {
+			kept.push(line);
+			usedTokens += lineTokens;
+			continue;
+		}
+
+		if (truncating || usedTokens + lineTokens > maxTokens) {
+			truncating = true;
+			truncatedCount++;
+			continue;
+		}
+
+		kept.push(line);
+		usedTokens += lineTokens;
+	}
+
+	if (truncatedCount > 0) {
+		kept.push(`... and ${truncatedCount} more (truncated)`);
+	}
+
+	return kept.join("\n");
+}

@@ -11,7 +11,7 @@ import { scanProject } from "../core/scanner.js";
 import { diffBaseline, loadBaseline } from "../core/cache.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { execSync } from "node:child_process";
-import { getNextForTool, formatNextSection } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 
 export function registerVerify(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -31,28 +31,25 @@ goal_complete. When CI is red and you need local diagnostics.`,
 		parameters: Type.Object({
 			quick: Type.Optional(Type.Boolean()),
 			json: Type.Optional(Type.Boolean()),
+			maxTokens: Type.Optional(Type.Number()),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const json = params.json ?? false;
 			const quick = params.quick ?? false;
+			const maxTokens = params.maxTokens;
 			const graph = scanProject(".");
 
-			if (json) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: executeVerifyJson(graph, ".", { quick }),
-						},
-					],
-				};
+			let text = json
+				? executeVerifyJson(graph, ".", { quick })
+				: executeVerify(graph, ".", { quick });
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
 			}
-
 			return {
 				content: [
 					{
 						type: "text",
-						text: executeVerify(graph, ".", { quick }),
+						text,
 					},
 				],
 			};

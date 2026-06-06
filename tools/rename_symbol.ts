@@ -9,7 +9,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
-import { getNextForTool, formatNextSection } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 
 export function registerRenameSymbol(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -31,28 +31,34 @@ Changing a class name to match conventions.`,
 			symbol: Type.String(),
 			newName: Type.String(),
 			json: Type.Optional(Type.Boolean()),
+			maxTokens: Type.Optional(Type.Number()),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const json = params.json ?? false;
+			const maxTokens = params.maxTokens;
 			const graph = scanProject(".");
 
 			const result = executeRenameSymbol(graph, params.symbol, params.newName);
+			let text = json
+				? JSON.stringify(
+						{
+							schema_version: "1.0",
+							command: "rename_symbol",
+							status: "ok",
+							result,
+						},
+						null,
+						2,
+					)
+				: formatRenameResult(result, params.symbol, params.newName);
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
+			}
 			return {
 				content: [
 					{
 						type: "text",
-						text: json
-							? JSON.stringify(
-									{
-										schema_version: "1.0",
-										command: "rename_symbol",
-										status: "ok",
-										result,
-									},
-									null,
-									2,
-								)
-							: formatRenameResult(result, params.symbol, params.newName),
+						text,
 					},
 				],
 			};

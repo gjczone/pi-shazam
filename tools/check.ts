@@ -14,7 +14,7 @@ import { getLspManager } from "../core/lsp-global.js";
 import { execSync } from "child_process";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
-import { getNextForTool, formatNextSection } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 
 export function registerCheck(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -39,42 +39,33 @@ errors fast. When shazam_verify reports high risk.`,
 			diagnostics: Type.Optional(
 				Type.Union([Type.Literal("lsp"), Type.Literal("parse")]),
 			),
+			maxTokens: Type.Optional(Type.Number()),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const json = params.json ?? false;
 			const diagnostics = params.diagnostics ?? "parse";
+			const maxTokens = params.maxTokens;
 			const graph = scanProject(".");
 
+			let text: string;
 			if (diagnostics === "lsp") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: json
-								? executeLspDiagnosticsJson(graph, ".", params.file)
-								: executeLspDiagnostics(graph, ".", params.file),
-						},
-					],
-				};
+				text = json
+					? executeLspDiagnosticsJson(graph, ".", params.file)
+					: executeLspDiagnostics(graph, ".", params.file);
+			} else if (json) {
+				text = executeCheckJson(graph, ".", params.file);
+			} else {
+				text = executeCheck(graph, ".", params.file);
 			}
 
-			// Default: parse-mode diagnostics
-			if (json) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: executeCheckJson(graph, ".", params.file),
-						},
-					],
-				};
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
 			}
-
 			return {
 				content: [
 					{
 						type: "text",
-						text: executeCheck(graph, ".", params.file),
+						text,
 					},
 				],
 			};

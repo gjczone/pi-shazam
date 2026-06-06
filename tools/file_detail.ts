@@ -5,7 +5,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
-import { getNextForTool, formatNextSection } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 
 export function registerFileDetail(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -28,18 +28,23 @@ changed structurally.`,
 		parameters: Type.Object({
 			file: Type.String(),
 			json: Type.Optional(Type.Boolean()),
+			maxTokens: Type.Optional(Type.Number()),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const json = params.json ?? false;
+			const maxTokens = params.maxTokens;
 			const graph = scanProject(".");
-			const result = executeFileDetail(graph, params.file);
+			let text = json
+				? executeFileDetailJson(graph, params.file)
+				: executeFileDetail(graph, params.file);
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
+			}
 			return {
 				content: [
 					{
 						type: "text",
-						text: json
-							? executeFileDetailJson(graph, params.file)
-							: result,
+						text,
 					},
 				],
 			};

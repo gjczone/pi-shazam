@@ -12,7 +12,7 @@ import { scanProject } from "../core/scanner.js";
 import { getLspManager } from "../core/lsp-global.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { getNextForTool, formatNextSection } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 
 export function registerHover(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -31,27 +31,33 @@ types before calling a function. Getting documentation for an API.`,
 			name: Type.String(),
 			file: Type.Optional(Type.String()),
 			json: Type.Optional(Type.Boolean()),
+			maxTokens: Type.Optional(Type.Number()),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const json = params.json ?? false;
+			const maxTokens = params.maxTokens;
 			const graph = scanProject(".");
 			const result = await executeHover(graph, params.name, params.file);
+			let text = json
+				? JSON.stringify(
+						{
+							schema_version: "1.0",
+							command: "hover",
+							status: "ok",
+							result,
+						},
+						null,
+						2,
+					)
+				: formatHoverResult(result, params.name);
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
+			}
 			return {
 				content: [
 					{
 						type: "text",
-						text: json
-							? JSON.stringify(
-									{
-										schema_version: "1.0",
-										command: "hover",
-										status: "ok",
-										result,
-									},
-									null,
-									2,
-								)
-							: formatHoverResult(result, params.name),
+						text,
 					},
 				],
 			};

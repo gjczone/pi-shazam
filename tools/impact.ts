@@ -5,7 +5,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
-import { getNextForTool, formatNextSection } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 
 export function registerImpact(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -28,21 +28,26 @@ concise output (file names only). Supports multiple --files.`,
 			withSymbols: Type.Optional(Type.Boolean()),
 			compact: Type.Optional(Type.Boolean()),
 			json: Type.Optional(Type.Boolean()),
+			maxTokens: Type.Optional(Type.Number()),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const json = params.json ?? false;
+			const maxTokens = params.maxTokens;
 			const graph = scanProject(".");
-			const result = executeImpact(graph, params.files, {
-				withSymbols: params.withSymbols ?? false,
-				compact: params.compact ?? false,
-			});
+			let text = json
+				? executeImpactJson(graph, params.files)
+				: executeImpact(graph, params.files, {
+					withSymbols: params.withSymbols ?? false,
+					compact: params.compact ?? false,
+				});
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
+			}
 			return {
 				content: [
 					{
 						type: "text",
-						text: json
-							? executeImpactJson(graph, params.files)
-							: result,
+						text,
 					},
 				],
 			};

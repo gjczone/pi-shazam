@@ -12,7 +12,7 @@ import { scanProject } from "../core/scanner.js";
 import { readFileAdaptive } from "../core/encoding.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getNextForTool, formatNextSection } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 
 export function registerFix(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -34,28 +34,25 @@ at end of file.`,
 			dryRun: Type.Optional(Type.Boolean()),
 			file: Type.Optional(Type.String()),
 			json: Type.Optional(Type.Boolean()),
+			maxTokens: Type.Optional(Type.Number()),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const json = params.json ?? false;
-			const dryRun = params.dryRun ?? true; // default to dry-run for safety
+			const dryRun = params.dryRun ?? true;
+			const maxTokens = params.maxTokens;
 			const graph = scanProject(".");
 
-			if (json) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: executeFixJson(graph, ".", { dryRun, file: params.file }),
-						},
-					],
-				};
+			let text = json
+				? executeFixJson(graph, ".", { dryRun, file: params.file })
+				: executeFix(graph, ".", { dryRun, file: params.file });
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
 			}
-
 			return {
 				content: [
 					{
 						type: "text",
-						text: executeFix(graph, ".", { dryRun, file: params.file }),
+						text,
 					},
 				],
 			};

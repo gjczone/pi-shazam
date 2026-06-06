@@ -5,7 +5,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
-import { getNextForTool, formatNextSection } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 
 export function registerCallChain(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -29,34 +29,44 @@ exported symbol. Changing return type. Adding required parameters.`,
 			depth: Type.Optional(Type.Number()),
 			flat: Type.Optional(Type.Boolean()),
 			json: Type.Optional(Type.Boolean()),
+			maxTokens: Type.Optional(Type.Number()),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const json = params.json ?? false;
 			const flat = params.flat ?? false;
+			const maxTokens = params.maxTokens;
 			const graph = scanProject(".");
 			const depth = params.depth ?? 2;
 
 			if (flat) {
 				const refs = getFlatReferences(graph, params.symbol);
+				let text = json
+					? JSON.stringify(refs, null, 2)
+					: formatFlatReferences(refs, params.symbol);
+				if (maxTokens && !json) {
+					text = truncateOutput(text.split("\n"), maxTokens);
+				}
 				return {
 					content: [
 						{
 							type: "text",
-							text: json
-								? JSON.stringify(refs, null, 2)
-								: formatFlatReferences(refs, params.symbol),
+							text,
 						},
 					],
 				};
 			}
 
+			let text = json
+				? executeCallChainJson(graph, params.symbol, depth)
+				: executeCallChain(graph, params.symbol, depth);
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
+			}
 			return {
 				content: [
 					{
 						type: "text",
-						text: json
-							? executeCallChainJson(graph, params.symbol, depth)
-							: executeCallChain(graph, params.symbol, depth),
+						text,
 					},
 				],
 			};
