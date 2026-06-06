@@ -49,19 +49,6 @@ function graphWithoutHierarchy(): RepoGraph {
 	return g;
 }
 
-function graphWithWebFramework(): RepoGraph {
-	const g = createRepoGraph();
-	g.fileSymbols.set("src/routes.ts", ["src/routes.ts::router::1"]);
-	g.symbols.set(
-		"src/routes.ts::router::1",
-		createSymbol("src/routes.ts::router::1", "router", "variable", "src/routes.ts", 1),
-	);
-	g.fileImportBindings.set("src/routes.ts", [
-		{ localName: "express", importedName: "default", module: "express", line: 1, kind: "default" },
-	]);
-	return g;
-}
-
 function findTool(items: ReturnType<typeof getNextForTool>, tool: string) {
 	return items.find((i) => i.tool === tool);
 }

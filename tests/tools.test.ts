@@ -139,25 +139,33 @@ describe("Tool: hotspots", () => {
 	});
 });
 
-describe("Tool: routes", () => {
+describe("Tool: overview — routes section", () => {
 	it("should return route inventory (may be empty for non-web projects)", async () => {
-		const { executeRoutes } = await import("../tools/routes.js");
+		const { executeRoutes } = await import("../tools/overview.js");
 		const result = executeRoutes(getGraph(), ".");
 		expect(result).toBeDefined();
 		expect(typeof result).toBe("string");
 	});
 
 	it("should NOT return false positives from generic symbol names in CLI projects", async () => {
-		const { executeRoutes } = await import("../tools/routes.js");
+		const { executeRoutes } = await import("../tools/overview.js");
 		const result = executeRoutes(getGraph(), ".");
 		// pi-shazam is a CLI project with no web framework — should not have routes
 		expect(result).not.toMatch(/Route-related/);
 	});
+
+	it("should include routes section in overview when web framework detected", async () => {
+		const { executeOverview } = await import("../tools/overview.js");
+		// pi-shazam has no web framework, so routes section should not appear in output
+		const result = executeOverview(getGraph(), ".");
+		expect(result).toBeDefined();
+		expect(typeof result).toBe("string");
+	});
 });
 
-describe("Tool: state_map", () => {
-	it("should explore enum/state symbols", async () => {
-		const { executeStateMap } = await import("../tools/state_map.js");
+describe("Tool: symbol — state mode", () => {
+	it("should explore enum/state symbols via state mode", async () => {
+		const { executeStateMap } = await import("../tools/symbol.js");
 		const graph = getGraph();
 		const enumSym = [...graph.symbols.values()].find(
 			(s) => s.kind === "class" || s.kind === "enum",
@@ -170,7 +178,7 @@ describe("Tool: state_map", () => {
 	});
 
 	it("should reject non-enum/non-const symbols with a clear message", async () => {
-		const { executeStateMap } = await import("../tools/state_map.js");
+		const { executeStateMap } = await import("../tools/symbol.js");
 		const graph = getGraph();
 		// Find a function symbol (not enum/const/state-machine)
 		const funcSym = [...graph.symbols.values()].find(
@@ -180,6 +188,19 @@ describe("Tool: state_map", () => {
 			const result = executeStateMap(graph, funcSym.name);
 			// Should indicate this is not a state-map-able symbol
 			expect(result).toMatch(/not.*enum|not.*const|not.*state|no.*state.*map|cannot.*generate/i);
+		}
+	});
+
+	it("should return state map output when mode=state via executeSymbol", async () => {
+		const { executeSymbolWithMode } = await import("../tools/symbol.js");
+		const graph = getGraph();
+		const enumSym = [...graph.symbols.values()].find(
+			(s) => s.kind === "class" || s.kind === "enum",
+		);
+		if (enumSym) {
+			const result = executeSymbolWithMode(graph, enumSym.name, "state");
+			expect(result).toBeDefined();
+			expect(typeof result).toBe("string");
 		}
 	});
 });

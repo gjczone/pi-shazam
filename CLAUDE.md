@@ -80,14 +80,12 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 │   ├── _context.ts         ← Tool-level shared LspManager holder (replaces core/lsp-global.ts)
 │   ├── _factory.ts         ← createTool() registration factory (json/maxTokens, scanProject, envelope, truncation)
 │   ├── lsp_enrich.ts       ← Tool-layer LSP enrichment wrappers (workspace/symbol, documentSymbol, semanticTokens, foldingRange) with 5s timeout + null fallback
-│   ├── overview.ts         ← Project structure summary
+│   ├── overview.ts         ← Project structure summary + HTTP route inventory
 │   ├── impact.ts           ← File-level change impact
 │   ├── codesearch.ts       ← BM25 symbol search + LSP workspace/symbol enrichment
 │   ├── file_detail.ts      ← Single file deep analysis + LSP documentSymbol hierarchy
 │   ├── call_chain.ts       ← Call graph traversal
-│   ├── symbol.ts           ← Symbol lookup + LSP container/endLine enrichment
-│   ├── routes.ts           ← HTTP route inventory
-│   ├── state_map.ts        ← State definition discovery
+│   ├── symbol.ts           ← Symbol lookup + LSP container/endLine enrichment + state map (mode=state)
 │   ├── verify.ts           ← Post-edit diagnostics gate
 │   ├── fix.ts              ← Auto-fix lint/format
 │   ├── ready.ts            ← Pre-commit readiness

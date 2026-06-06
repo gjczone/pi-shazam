@@ -1,12 +1,50 @@
 /**
  * pi-shazam tools/overview — Project structure summary.
+ *
+ * Includes HTTP route inventory (absorbed from tools/routes.ts).
  */
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
-import type { RepoGraph } from "../core/graph.js";
+import type { RepoGraph, Symbol } from "../core/graph.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool } from "./_factory.js";
+
+// ── Route detection (absorbed from tools/routes.ts) ──────────────────────
+
+const WEB_FRAMEWORK_INDICATORS = [
+	"express",
+	"fastify",
+	"koa",
+	"next",
+	"nuxt",
+	"hapi",
+	"restify",
+	"sveltekit",
+	"remix",
+	"hono",
+	"elysia",
+	"nestjs",
+	"@nestjs/core",
+];
+
+const ROUTE_REGISTRATION_PATTERNS = [
+	"app.get",
+	"app.post",
+	"app.put",
+	"app.delete",
+	"app.patch",
+	"app.all",
+	"app.use",
+	"app.route",
+	"router.get",
+	"router.post",
+	"router.put",
+	"router.delete",
+	"router.patch",
+	"server.get",
+	"server.post",
+];
 
 export function registerOverview(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -15,8 +53,9 @@ export function registerOverview(pi: ExtensionAPI): void {
 		description: `\
 MUST call before touching ANY code in an unfamiliar project or repo.
 Returns: module dependency map, top-10 highest-PageRank files (the
-"spine" of the codebase), entry points, and suggested reading order.
-Supports --filter to search/find files by keyword within the project.
+"spine" of the codebase), entry points, suggested reading order, and
+HTTP route inventory when a web framework is detected. Supports
+--filter to search/find files by keyword within the project.
 Skipping this = navigating blind — you WILL miss cross-module ripple
 effects and waste turns on dead-end reads.
 
@@ -136,6 +175,16 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 		lines.push(`- \`${dir}/\` — ${dirFiles.length} files`);
 	}
 
+	// HTTP Routes section (absorbed from tools/routes.ts)
+	// Only shown when no filter is active (routes are project-level)
+	if (!filter) {
+		const routesSection = buildRoutesSection(graph);
+		if (routesSection) {
+			lines.push("");
+			lines.push(routesSection);
+		}
+	}
+
 	lines.push("");
 	lines.push("### Suggested Reading Order");
 	lines.push("");
@@ -196,4 +245,145 @@ export function executeOverviewJson(
 			})),
 		},
 	});
+}
+
+// ── Route inventory (absorbed from tools/routes.ts) ─────────────────────
+
+/**
+ * Build a concise "HTTP Routes" section for the overview.
+ * Returns null when no web framework is detected or no routes found.
+ */
+function buildRoutesSection(graph: RepoGraph): string | null {
+	const framework = detectWebFramework(graph);
+	if (!framework) return null;
+
+	const routeSymbols = findRouteSymbols(graph);
+	if (routeSymbols.length === 0) return null;
+
+	const lines: string[] = [];
+	lines.push(`### HTTP Routes (${framework} detected)`);
+	lines.push("");
+
+	// Group by file
+	const byFile = new Map<string, Symbol[]>();
+	for (const sym of routeSymbols) {
+		const arr = byFile.get(sym.file) || [];
+		arr.push(sym);
+		byFile.set(sym.file, arr);
+	}
+
+	for (const [_file, syms] of [...byFile.entries()].sort()) {
+		for (const sym of syms) {
+			lines.push(
+				`- ${sym.kind} \`${sym.name}\` L${sym.line} — ${sym.signature.slice(0, 80)}`,
+			);
+		}
+	}
+
+	return lines.join("\n");
+}
+
+/**
+ * Full route inventory output (exported for backward-compatible testing).
+ */
+export function executeRoutes(graph: RepoGraph, _projectRoot: string): string {
+	const lines: string[] = [];
+	lines.push("## HTTP Route Inventory");
+	lines.push("");
+
+	const hasWebFramework = detectWebFramework(graph);
+	if (!hasWebFramework) {
+		lines.push("No web framework detected in this project.");
+		lines.push("");
+		lines.push(
+			"Route inventory is only available for projects using recognized web frameworks.",
+		);
+		lines.push(
+			`Supported frameworks: ${WEB_FRAMEWORK_INDICATORS.slice(0, 6).join(", ")}, etc.`,
+		);
+		lines.push("");
+		lines.push(
+			"If this project uses a web framework not in the supported list, route detection will not find routes.",
+		);
+		return lines.join("\n");
+	}
+
+	const routeSymbols = findRouteSymbols(graph);
+	if (routeSymbols.length === 0) {
+		lines.push(`Web framework detected (${hasWebFramework}), but no route registration patterns found.`);
+		lines.push("");
+		lines.push("This may mean:");
+		lines.push("- Routes are defined in a non-standard way (factory pattern, decorators)");
+		lines.push("- Routes are in a file not parsed by tree-sitter");
+		lines.push("- The project imports the framework but doesn't register routes");
+		return lines.join("\n");
+	}
+
+	lines.push(
+		`Framework: **${hasWebFramework}** | Found ${routeSymbols.length} route-related symbols`,
+	);
+	lines.push("");
+
+	const byFile = new Map<string, Symbol[]>();
+	for (const sym of routeSymbols) {
+		const arr = byFile.get(sym.file) || [];
+		arr.push(sym);
+		byFile.set(sym.file, arr);
+	}
+
+	for (const [file, syms] of [...byFile.entries()].sort()) {
+		lines.push("");
+		lines.push(`### ${file}`);
+		for (const sym of syms) {
+			lines.push(
+				`- ${sym.kind} \`${sym.name}\` L${sym.line} — ${sym.signature.slice(0, 80)}`,
+			);
+		}
+	}
+
+	const nextItems = getNextForTool("overview", { handlerFile: routeSymbols[0]?.file });
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
+	}
+
+	return lines.join("\n");
+}
+
+function detectWebFramework(graph: RepoGraph): string | null {
+	for (const [, imports] of graph.fileImports) {
+		for (const imp of imports) {
+			const lower = imp.toLowerCase();
+			for (const fw of WEB_FRAMEWORK_INDICATORS) {
+				if (lower === fw || lower.startsWith(fw + "/") || lower.startsWith(fw + "-")) {
+					return fw;
+				}
+			}
+		}
+	}
+	return null;
+}
+
+function findRouteSymbols(graph: RepoGraph): Symbol[] {
+	const results: Symbol[] = [];
+
+	for (const sym of graph.symbols.values()) {
+		const lower = sym.name.toLowerCase();
+
+		for (const pattern of ROUTE_REGISTRATION_PATTERNS) {
+			if (lower === pattern || lower.endsWith("." + pattern.split(".").pop()!)) {
+				results.push(sym);
+				break;
+			}
+		}
+
+		if (lower.startsWith("handle") || lower.endsWith("handler") || lower.endsWith("controller")) {
+			const isDuplicate = results.some((r) => r.id === sym.id);
+			if (!isDuplicate) {
+				results.push(sym);
+			}
+		}
+	}
+
+	return results;
 }

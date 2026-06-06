@@ -29,8 +29,6 @@ import { registerVerify } from "./tools/verify.js";
 import { registerCheck } from "./tools/check.js";
 import { registerFix } from "./tools/fix.js";
 import { registerReady } from "./tools/ready.js";
-import { registerRoutes } from "./tools/routes.js";
-import { registerStateMap } from "./tools/state_map.js";
 import { registerHotspots } from "./tools/hotspots.js";
 import { registerCodesearch } from "./tools/codesearch.js";
 import { registerFileDetail } from "./tools/file_detail.js";
@@ -119,8 +117,6 @@ export default function (pi: ExtensionAPI): void {
 	registerCheck(pi);
 	registerFix(pi);
 	registerReady(pi);
-	registerRoutes(pi);
-	registerStateMap(pi);
 	registerHotspots(pi);
 	registerCodesearch(pi);
 	registerFileDetail(pi);

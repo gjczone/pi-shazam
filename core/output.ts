@@ -271,30 +271,6 @@ export const NEXT_RULES: NextRule[] = [
 		}),
 	},
 
-	// routes
-	{
-		forTools: ["routes"],
-		condition: (ctx) => Boolean(ctx.handlerFile),
-		recommendation: (ctx) => ({
-			tool: "file_detail",
-			params: { file: ctx.handlerFile! },
-			label: "Inspect handler",
-			level: "recommended",
-		}),
-	},
-
-	// state_map
-	{
-		forTools: ["state_map"],
-		condition: (ctx) => Boolean(ctx.usageFile),
-		recommendation: (ctx) => ({
-			tool: "impact",
-			params: { files: ctx.usageFile! },
-			label: "Assess usage impact",
-			level: "recommended",
-		}),
-	},
-
 	// type_hierarchy
 	{
 		forTools: ["type_hierarchy"],

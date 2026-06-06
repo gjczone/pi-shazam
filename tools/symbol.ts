@@ -1,9 +1,15 @@
 /**
  * pi-shazam tools/symbol — Symbol lookup with optional LSP enrichment.
  *
+ * Supports two modes:
+ *   - default: standard symbol lookup with definition, kind, signature, callers, callees
+ *   - state:   state map analysis for enum/class/interface/type_alias/const symbols
+ *              (absorbed from tools/state_map.ts)
+ *
  * When LSP documentSymbols are available for the symbol's file, the
  * output is annotated with container (parent symbol) and accurate
  * endLine from LSP range. Falls back to graph data when LSP unavailable.
+ * State mode bypasses LSP enrichment and uses graph-only analysis.
  */
 import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
@@ -15,6 +21,16 @@ import { lspDocumentSymbols } from "./lsp_enrich.js";
 import type { DocumentSymbol } from "vscode-languageserver-protocol";
 import { createTool } from "./_factory.js";
 
+// ── State map (absorbed from tools/state_map.ts) ────────────────────────
+
+const STATE_MAP_KINDS = new Set([
+	"enum",
+	"class",
+	"interface",
+	"type_alias",
+	"const",
+]);
+
 export function registerSymbol(pi: ExtensionAPI): void {
 	createTool(pi, {
 		name: "shazam_symbol",
@@ -25,19 +41,41 @@ signature, file location, PageRank score, callers, and callees in one
 call. When LSP is available, also shows container (parent symbol)
 and accurate endLine. Falls back to graph data when LSP unavailable.
 
+Supports --mode state for state map analysis: filter to
+enum/class/interface/type_alias/const kinds and show members, usage,
+and dependencies. Use mode=state before adding/removing enum variants
+or changing state transitions.
+
 Use BEFORE referencing any symbol by name in code — you confirm it
 exists AND understand its signature, not just its file location.
 
 Scenario: before importing a module. Before calling a function. When
 you see an unfamiliar symbol name and need its definition. Checking
-a symbol's visibility (public/private/exported).`,
+a symbol's visibility (public/private/exported). Before changing
+state-machine states or enum variants.`,
 		params: Type.Object({
 			name: Type.String(),
 			file: Type.Optional(Type.String()),
+			mode: Type.Optional(Type.String()),
 		}),
 		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
 			const maxTokens = params.maxTokens;
+			const mode = (params.mode as string) ?? "default";
+
+			// State mode: bypass LSP, use graph-only state map analysis
+			if (mode === "state") {
+				const graph = scanProject(".");
+				const result = executeStateMap(graph, params.name as string);
+				let text = json
+					? JSON.stringify({ schema_version: "1.0", command: "symbol", status: "ok", result: { symbol: params.name, mode: "state", text: result } })
+					: result;
+				if (maxTokens && !json) {
+					text = truncateOutput(text.split("\n"), maxTokens as number);
+				}
+				return { content: [{ type: "text", text }] };
+			}
+
 			const graph = scanProject(".");
 
 			const matches = findSymbols(graph, params.name as string, params.file as string | undefined);
@@ -176,6 +214,22 @@ export function executeSymbol(
 }
 
 /**
+ * Backward-compatible symbol lookup with mode support.
+ * When mode is "state", returns state map output.
+ */
+export function executeSymbolWithMode(
+	graph: RepoGraph,
+	name: string,
+	mode?: string,
+	file?: string,
+): string {
+	if (mode === "state") {
+		return executeStateMap(graph, name);
+	}
+	return executeSymbol(graph, name, file);
+}
+
+/**
  * Backward-compatible JSON output (no LSP enrichment).
  */
 export function executeSymbolJson(
@@ -235,4 +289,99 @@ function formatSymbolResult(matches: EnrichedMatch[], name: string): string {
 	}
 
 	return lines.join("\n").trim();
+}
+
+// ── State map analysis (absorbed from tools/state_map.ts) ───────────────
+
+/**
+ * Execute state map analysis for a given symbol name.
+ * Filters to STATE_MAP_KINDS and shows members, usage, and dependencies.
+ */
+export function executeStateMap(
+	graph: RepoGraph,
+	symbolName: string,
+): string {
+	const targets: Symbol[] = [];
+	for (const sym of graph.symbols.values()) {
+		if (sym.name === symbolName) {
+			targets.push(sym);
+		}
+	}
+
+	if (targets.length === 0) {
+		return `Symbol not found: ${symbolName}`;
+	}
+
+	const lines: string[] = [];
+	for (const target of targets) {
+		// Check if symbol kind is eligible for state map analysis
+		if (!STATE_MAP_KINDS.has(target.kind)) {
+			lines.push(
+				`## ${target.kind} \`${target.name}\` — cannot generate state map`,
+			);
+			lines.push("");
+			lines.push(
+				`Symbol \`${target.name}\` is a ${target.kind}, not an enum, const group, or state machine.`,
+			);
+			lines.push(
+				"State map analysis requires: enum, class (constants/state machine), interface, type_alias (union type), or const.",
+			);
+			lines.push("");
+			lines.push(`Use \`shazam_symbol --name ${target.name}\` or \`shazam_call_chain --symbol ${target.name} --flat\` instead.`);
+			continue;
+		}
+
+		lines.push(
+			`## State Map: ${target.kind} \`${target.name}\` (${target.file}:${target.line})`,
+		);
+		lines.push("");
+
+		const incoming = graph.incoming.get(target.id) || [];
+		const outgoing = graph.outgoing.get(target.id) || [];
+
+		if (incoming.length > 0) {
+			lines.push(
+				`### Usages (${incoming.length} references from other symbols)`,
+			);
+			const byFile = new Map<string, Symbol[]>();
+			for (const edge of incoming) {
+				const sym = graph.symbols.get(edge.source);
+				if (sym) {
+					const arr = byFile.get(sym.file) || [];
+					arr.push(sym);
+					byFile.set(sym.file, arr);
+				}
+			}
+			for (const [file, syms] of [...byFile.entries()].sort()) {
+				lines.push(`  **${file}**: ${syms.map((s) => s.name).join(", ")}`);
+			}
+		}
+
+		if (outgoing.length > 0) {
+			lines.push("");
+			lines.push(
+				`### Dependencies (${outgoing.length} symbols this depends on)`,
+			);
+			for (const edge of outgoing) {
+				const sym = graph.symbols.get(edge.target);
+				if (sym) {
+					lines.push(`- ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line}`);
+				}
+			}
+		}
+
+		lines.push("");
+		lines.push(`Visibility: ${target.visibility}`);
+		lines.push(`PageRank: ${target.pagerank.toFixed(4)}`);
+		lines.push(`Signature: ${target.signature}`);
+	}
+
+	// Add Next recommendations
+	const nextItems = getNextForTool("symbol", { usageFile: targets[0]?.file });
+	if (nextItems.length > 0) {
+		lines.push("");
+		lines.push(formatNextSection(nextItems));
+	}
+
+	return lines.join("\n");
 }
