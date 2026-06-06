@@ -461,14 +461,14 @@ export function formatNextSection(nextItems: NextRecommendation[]): string {
 	const lines: string[] = ["### Next (Recommended)", ""];
 
 	for (const item of nextItems) {
-		const icon =
+		const label =
 			item.level === "required"
-				? "🔴"
+				? "REQUIRED"
 				: item.level === "recommended"
-					? "🟡"
-					: "⚪";
+					? "RECOMMENDED"
+					: "OPTIONAL";
 		const cmd = buildToolCommand(item);
-		lines.push(`- ${icon} ${item.label}: \`${cmd}\``);
+		lines.push(`- [${label}] ${item.label}: \`${cmd}\``);
 	}
 
 	return lines.join("\n");
