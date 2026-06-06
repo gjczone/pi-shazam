@@ -11,7 +11,7 @@ import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { isNonSourceFile } from "../core/filter.js";
-import { getNextForTool, formatNextSection } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 
 export function registerFindTests(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -29,11 +29,13 @@ After changing code to locate tests that need updating.`,
 			sourceFile: Type.Optional(Type.String()),
 			module: Type.Optional(Type.String()),
 			json: Type.Optional(Type.Boolean()),
+			maxTokens: Type.Optional(Type.Number()),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const sourceFile = params.sourceFile;
 			const module = params.module;
 			const json = params.json ?? false;
+			const maxTokens = params.maxTokens;
 			const graph = scanProject(".");
 
 			const result = executeFindTests(graph, ".", {
@@ -41,22 +43,26 @@ After changing code to locate tests that need updating.`,
 				module,
 			});
 
+			let text = json
+				? JSON.stringify(
+						{
+							schema_version: "1.0",
+							command: "find_tests",
+							status: "ok",
+							result,
+						},
+						null,
+						2,
+					)
+				: formatFindTestsResult(result, sourceFile, module);
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
+			}
 			return {
 				content: [
 					{
 						type: "text",
-						text: json
-							? JSON.stringify(
-									{
-										schema_version: "1.0",
-										command: "find_tests",
-										status: "ok",
-										result,
-									},
-									null,
-									2,
-								)
-							: formatFindTestsResult(result, sourceFile, module),
+						text,
 					},
 				],
 			};

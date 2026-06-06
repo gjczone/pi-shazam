@@ -6,7 +6,7 @@ import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { isNonSourceFile } from "../core/filter.js";
-import { getNextForTool, formatNextSection } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 
 export function registerHotspots(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -28,19 +28,24 @@ Triaging bug reports (is the affected file a hotspot?).`,
 		parameters: Type.Object({
 			topN: Type.Optional(Type.Number()),
 			json: Type.Optional(Type.Boolean()),
+			maxTokens: Type.Optional(Type.Number()),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const json = params.json ?? false;
 			const graph = scanProject(".");
 			const topN = params.topN ?? 10;
-			const result = executeHotspots(graph, topN);
+			const maxTokens = params.maxTokens;
+			let text = json
+				? executeHotspotsJson(graph, topN)
+				: executeHotspots(graph, topN);
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
+			}
 			return {
 				content: [
 					{
 						type: "text",
-						text: json
-							? executeHotspotsJson(graph, topN)
-							: result,
+						text,
 					},
 				],
 			};

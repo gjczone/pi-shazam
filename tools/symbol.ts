@@ -5,7 +5,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
-import { getNextForTool, formatNextSection } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 
 export function registerSymbol(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -26,18 +26,23 @@ a symbol's visibility (public/private/exported).`,
 			name: Type.String(),
 			file: Type.Optional(Type.String()),
 			json: Type.Optional(Type.Boolean()),
+			maxTokens: Type.Optional(Type.Number()),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const json = params.json ?? false;
+			const maxTokens = params.maxTokens;
 			const graph = scanProject(".");
-			const result = executeSymbol(graph, params.name, params.file);
+			let text = json
+				? executeSymbolJson(graph, params.name, params.file)
+				: executeSymbol(graph, params.name, params.file);
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
+			}
 			return {
 				content: [
 					{
 						type: "text",
-						text: json
-							? executeSymbolJson(graph, params.name, params.file)
-							: result,
+						text,
 					},
 				],
 			};

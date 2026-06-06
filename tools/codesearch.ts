@@ -9,7 +9,7 @@ import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { isNonSourceFile } from "../core/filter.js";
-import { getNextForTool, formatNextSection } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 
 export function registerCodesearch(pi: ExtensionAPI): void {
 	pi.registerTool({
@@ -29,44 +29,54 @@ Finding TODO/FIXME comments. Exploring code before making edits.`,
 			target: Type.Optional(Type.Union([Type.Literal("symbol"), Type.Literal("code")])),
 			topN: Type.Optional(Type.Number()),
 			json: Type.Optional(Type.Boolean()),
+			maxTokens: Type.Optional(Type.Number()),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const json = params.json ?? false;
 			const target = params.target ?? "symbol";
+			const maxTokens = params.maxTokens;
 			const graph = scanProject(".");
 
 			if (target === "code") {
 				const result = executeFulltextSearch(params.query, params.topN);
+				let text = json
+					? JSON.stringify({
+							schema_version: "1.0",
+							command: "codesearch",
+							status: "ok",
+							result: { query: params.query, target: "code", results: result.length },
+						})
+					: formatFulltextResult(result, params.query);
+				if (maxTokens && !json) {
+					text = truncateOutput(text.split("\n"), maxTokens);
+				}
 				return {
 					content: [
 						{
 							type: "text",
-							text: json
-								? JSON.stringify({
-										schema_version: "1.0",
-										command: "codesearch",
-										status: "ok",
-										result: { query: params.query, target: "code", results: result.length },
-									})
-								: formatFulltextResult(result, params.query),
+							text,
 						},
 					],
 				};
 			}
 
 			const result = executeCodesearch(graph, params.query, params.topN);
+			let text = json
+				? JSON.stringify({
+						schema_version: "1.0",
+						command: "codesearch",
+						status: "ok",
+						result: { query: params.query, target: "symbol", results: result.length },
+					})
+				: formatCodesearchResult(result, params.query);
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
+			}
 			return {
 				content: [
 					{
 						type: "text",
-						text: json
-							? JSON.stringify({
-									schema_version: "1.0",
-									command: "codesearch",
-									status: "ok",
-									result: { query: params.query, target: "symbol", results: result.length },
-								})
-							: formatCodesearchResult(result, params.query),
+						text,
 					},
 				],
 			};

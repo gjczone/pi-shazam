@@ -48,47 +48,39 @@ const SOURCE_EXTS = new Set(Object.keys(EXT_TO_LANG));
 
 let cachedGraph: RepoGraph | null = null;
 let cachedProjectPath: string = "";
-let cachedMtime: number = 0;
+
+interface FileCacheEntry {
+	mtime: number;
+	symbols: Symbol[];
+	imports: [string, number][];
+	calls: [string, number, string][];
+	jsImportBindings: import("./graph.js").JSImportBinding[];
+}
+
+let cachedFiles: Map<string, FileCacheEntry> = new Map();
 
 /**
- * Get the latest file modification time in the project (for cache invalidation).
- * Walks project directories (same skip rules as collectSourceFiles) but only
- * stats files instead of parsing them, so it's much cheaper than a full scan.
+ * Reset all in-memory caches. Used in tests and when cache may be stale.
  */
-function getLatestFileMtime(root: string): number {
-	let latest = 0;
+export function resetCache(): void {
+	cachedGraph = null;
+	cachedProjectPath = "";
+	cachedFiles = new Map();
+}
 
-	function walk(dir: string) {
-		let entries;
+/**
+ * Get per-file modification times for all source files in the project.
+ */
+function getFileMtimes(root: string, files: string[]): Map<string, number> {
+	const mtimes = new Map<string, number>();
+	for (const relPath of files) {
 		try {
-			entries = readdirSync(dir, { withFileTypes: true });
+			mtimes.set(relPath, statSync(join(root, relPath)).mtimeMs);
 		} catch {
-			return;
-		}
-
-		for (const entry of entries) {
-			const fullPath = join(dir, entry.name);
-
-			if (entry.isDirectory()) {
-				if (SKIP_DIRS.has(entry.name)) continue;
-				if (entry.name.startsWith(".")) continue;
-				walk(fullPath);
-			} else if (entry.isFile()) {
-				const ext = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();
-				if (SOURCE_EXTS.has(ext)) {
-					try {
-						const mtime = statSync(fullPath).mtimeMs;
-						if (mtime > latest) latest = mtime;
-					} catch {
-						// skip unstatable files
-					}
-				}
-			}
+			// skip unstatable files
 		}
 	}
-
-	walk(resolve(root));
-	return latest;
+	return mtimes;
 }
 
 /**
@@ -98,26 +90,136 @@ function getLatestFileMtime(root: string): number {
  */
 export function getProjectGraph(projectRoot: string = ".", log?: (msg: string) => void): RepoGraph {
 	const root = resolve(projectRoot);
-	const currentMtime = getLatestFileMtime(root);
-
-	if (cachedGraph && cachedProjectPath === root && cachedMtime >= currentMtime) {
-		return cachedGraph;
-	}
-
-	cachedGraph = scanProject(root, log);
-	cachedProjectPath = root;
-	cachedMtime = currentMtime;
-	return cachedGraph;
+	return scanProject(root, log);
 }
 
 // ── Scanner ──────────────────────────────────────────────────────────────────
 
 /**
+ * Remove all symbols, edges, and file-level mappings for a given file from the graph.
+ */
+function removeFileData(graph: RepoGraph, relPath: string): void {
+	const symIds = graph.fileSymbols.get(relPath) || [];
+	for (const id of symIds) {
+		graph.symbols.delete(id);
+		graph.outgoing.delete(id);
+		graph.incoming.delete(id);
+	}
+	graph.fileSymbols.delete(relPath);
+	graph.fileImports.delete(relPath);
+	graph.fileCalls.delete(relPath);
+	graph.fileImportBindings.delete(relPath);
+
+	// Remove edges in other files that pointed to this file's symbols
+	const symIdSet = new Set(symIds);
+	for (const [source, edges] of graph.outgoing) {
+		const filtered = edges.filter((e) => !symIdSet.has(e.target));
+		if (filtered.length !== edges.length) {
+			graph.outgoing.set(source, filtered);
+		}
+	}
+	for (const [target, edges] of graph.incoming) {
+		const filtered = edges.filter((e) => !symIdSet.has(e.source));
+		if (filtered.length !== edges.length) {
+			graph.incoming.set(target, filtered);
+		}
+	}
+}
+
+/**
+ * Parse a single file and extract symbols, imports, calls, and JS/TS import bindings.
+ * Returns a FileCacheEntry with all extracted data.
+ */
+function parseFile(
+	adapter: TreeSitterAdapter,
+	root: string,
+	relPath: string,
+	mtime: number,
+): FileCacheEntry | null {
+	const absPath = join(root, relPath);
+	const ext = relPath.slice(relPath.lastIndexOf(".")).toLowerCase();
+	const lang = EXT_TO_LANG[ext];
+	if (!lang) return null;
+
+	try {
+		const source = readFileAdaptive(absPath);
+		const tree = adapter.parse(source, lang);
+		if (!tree) return null;
+
+		const symbols = adapter.extractSymbols(tree, lang, relPath);
+		const imports = adapter.extractImports(tree, lang);
+		const calls = adapter.extractCalls(tree, lang);
+		const jsImportBindings = adapter.extractJsTsImportBindings(tree, lang);
+
+		return { mtime, symbols, imports, calls, jsImportBindings };
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Build edges for a single file using its cached parse data and the current graph state.
+ */
+function buildEdgesForFile(
+	graph: RepoGraph,
+	relPath: string,
+	entry: FileCacheEntry,
+): void {
+	const thisFileSymIds = graph.fileSymbols.get(relPath) || [];
+
+	// Import edges
+	if (entry.imports.length > 0) {
+		graph.fileImports.set(relPath, entry.imports.map(([m]) => m));
+		for (const [importedModule] of entry.imports) {
+			const resolvedImport = resolveImport(importedModule, relPath);
+			const targetFileSyms = graph.fileSymbols.get(resolvedImport) || [];
+			for (const srcId of thisFileSymIds) {
+				for (const tgtId of targetFileSyms) {
+					addEdge(graph, createEdge(srcId, tgtId, 0.3, "import", 0.5));
+				}
+			}
+		}
+	}
+
+	// Call edges
+	if (entry.calls.length > 0) {
+		graph.fileCalls.set(relPath, entry.calls);
+		for (const [calledName, callLine] of entry.calls) {
+			const callerSyms = findCallerSymbols(thisFileSymIds, graph.symbols, callLine);
+			const calleeSyms = findCalleeSymbols(calledName, graph.symbols);
+			for (const caller of callerSyms) {
+				for (const callee of calleeSyms) {
+					if (caller.id !== callee.id) {
+						addEdge(graph, createEdge(caller.id, callee.id, 1.0, "call", 0.9));
+					}
+				}
+			}
+		}
+	}
+
+	// JS/TS import bindings
+	if (entry.jsImportBindings.length > 0) {
+		graph.fileImportBindings.set(relPath, entry.jsImportBindings);
+		for (const binding of entry.jsImportBindings) {
+			const localSym = findSymbolByNameInFile(binding.localName, relPath, graph.symbols);
+			if (!localSym) continue;
+			const resolvedModule = resolveImport(binding.module, relPath);
+			const sourceSym = findSymbolByNameInFile(binding.importedName, resolvedModule, graph.symbols);
+			if (sourceSym) {
+				addEdge(graph, createEdge(localSym.id, sourceSym.id, 0.8, "import-binding", 1.0));
+			}
+		}
+	}
+}
+
+/**
  * Scan a project directory, parse all source files, build the dependency graph,
  * and compute PageRank scores.
  *
- * Uses an in-memory cache: subsequent calls within the same process return the
- * cached graph unless file modification times have changed.
+ * Supports incremental analysis: when called multiple times on the same project,
+ * only files with changed mtime are re-parsed. Unchanged files reuse cached
+ * parse results. Deleted files are removed from the graph. PageRank is always
+ * recomputed on the full graph (fast, <10ms for typical projects).
  *
  * @param projectPath - Absolute or relative path to the project root
  * @param log - Optional logger
@@ -130,146 +232,146 @@ export function scanProject(
 	const root = resolve(projectPath);
 	const logger = log ?? (() => {});
 
-	// Check cache
-	const currentMtime = getLatestFileMtime(root);
-	if (cachedGraph && cachedProjectPath === root && cachedMtime >= currentMtime) {
-		return cachedGraph;
-	}
 	const adapter = new TreeSitterAdapter(logger);
-	const graph = createRepoGraph();
-
-	// Collect all source files
 	const files = collectSourceFiles(root, MAX_FILES);
 	logger(`Scanned ${files.length} source files`);
 
-	// Phase 1: Extract symbols from all files
-	const fileSymbolMap = new Map<string, Symbol[]>();
+	// Determine if we can do incremental update
+	const isIncremental = cachedGraph !== null && cachedProjectPath === root && cachedFiles.size > 0;
+
+	if (isIncremental) {
+		return scanIncremental(root, files, adapter, logger);
+	}
+
+	return scanFull(root, files, adapter, logger);
+}
+
+/**
+ * Full scan: parse all files from scratch.
+ */
+function scanFull(
+	root: string,
+	files: string[],
+	adapter: TreeSitterAdapter,
+	logger: (msg: string) => void,
+): RepoGraph {
+	const graph = createRepoGraph();
+	const newFileCache = new Map<string, FileCacheEntry>();
+
+	// Phase 1: Parse all files and extract data
+	const fileMtimes = getFileMtimes(root, files);
 	for (const relPath of files) {
-		const absPath = join(root, relPath);
-		const ext = relPath.slice(relPath.lastIndexOf(".")).toLowerCase();
-		const lang = EXT_TO_LANG[ext];
-		if (!lang) continue;
+		const mtime = fileMtimes.get(relPath) ?? 0;
+		const entry = parseFile(adapter, root, relPath, mtime);
+		if (!entry) continue;
 
-		try {
-			const source = readFileAdaptive(absPath);
-			const tree = adapter.parse(source, lang);
-			if (!tree) continue;
+		newFileCache.set(relPath, entry);
 
-			const symbols = adapter.extractSymbols(tree, lang, relPath);
-			fileSymbolMap.set(relPath, symbols);
-
-			for (const sym of symbols) {
-				graph.symbols.set(sym.id, sym);
-				const fileSyms = graph.fileSymbols.get(relPath) || [];
-				fileSyms.push(sym.id);
-				graph.fileSymbols.set(relPath, fileSyms);
-			}
-		} catch {
-			// Skip unparseable files
+		// Add symbols to graph
+		for (const sym of entry.symbols) {
+			graph.symbols.set(sym.id, sym);
+			const fileSyms = graph.fileSymbols.get(relPath) || [];
+			fileSyms.push(sym.id);
+			graph.fileSymbols.set(relPath, fileSyms);
 		}
 	}
 
 	logger(`Extracted ${graph.symbols.size} symbols`);
 
-	// Phase 2: Extract imports and calls, build edges
-	for (const relPath of files) {
-		const absPath = join(root, relPath);
-		const ext = relPath.slice(relPath.lastIndexOf(".")).toLowerCase();
-		const lang = EXT_TO_LANG[ext];
-		if (!lang) continue;
-
-		try {
-			const source = readFileAdaptive(absPath);
-			const tree = adapter.parse(source, lang);
-			if (!tree) continue;
-
-			// Import edges: file-level imports → link imported symbols to files
-			const imports = adapter.extractImports(tree, lang);
-			if (imports.length > 0) {
-				graph.fileImports.set(relPath, imports.map(([m]) => m));
-				// Create edges from this file's symbols to symbols in imported files
-				const thisFileSyms = graph.fileSymbols.get(relPath) || [];
-				for (const [importedModule] of imports) {
-					const resolvedImport = resolveImport(importedModule, relPath);
-					const targetFileSyms = graph.fileSymbols.get(resolvedImport) || [];
-					for (const srcId of thisFileSyms) {
-						for (const tgtId of targetFileSyms) {
-							addEdge(graph, createEdge(srcId, tgtId, 0.3, "import", 0.5));
-						}
-					}
-				}
-			}
-
-			// Call edges: function calls → link caller to callee
-			const calls = adapter.extractCalls(tree, lang);
-			if (calls.length > 0) {
-				graph.fileCalls.set(relPath, calls);
-				const thisFileSyms = graph.fileSymbols.get(relPath) || [];
-				for (const [calledName, callLine] of calls) {
-					// Find the most specific symbol in this file that could be the caller
-					// (the symbol definition that contains this call line)
-					const callerSyms = findCallerSymbols(
-						thisFileSyms,
-						graph.symbols,
-						callLine,
-					);
-
-					// Find callee symbols across the entire project
-					const calleeSyms = findCalleeSymbols(calledName, graph.symbols);
-
-					for (const caller of callerSyms) {
-						for (const callee of calleeSyms) {
-							if (caller.id !== callee.id) {
-								addEdge(
-									graph,
-									createEdge(caller.id, callee.id, 1.0, "call", 0.9),
-								);
-							}
-						}
-					}
-				}
-			}
-
-			// JS/TS import bindings (precise symbol-level imports)
-			const jsImports = adapter.extractJsTsImportBindings(tree, lang);
-			if (jsImports.length > 0) {
-				graph.fileImportBindings.set(relPath, jsImports);
-				for (const binding of jsImports) {
-					// Find the local symbol that represents this import binding
-					const localSym = findSymbolByNameInFile(
-						binding.localName,
-						relPath,
-						graph.symbols,
-					);
-					if (!localSym) continue;
-
-					// Find the source symbol in the imported module
-					const resolvedModule = resolveImport(binding.module, relPath);
-					const sourceSym = findSymbolByNameInFile(
-						binding.importedName,
-						resolvedModule,
-						graph.symbols,
-					);
-					if (sourceSym) {
-						addEdge(
-							graph,
-							createEdge(localSym.id, sourceSym.id, 0.8, "import-binding", 1.0),
-						);
-					}
-				}
-			}
-		} catch {
-			// Skip unparseable files
-		}
+	// Phase 2: Build edges for all files
+	for (const [relPath, entry] of newFileCache) {
+		buildEdgesForFile(graph, relPath, entry);
 	}
 
 	// Phase 3: Compute PageRank
 	calculatePageRank(graph);
 
-	// Update cache
+	// Update caches
 	cachedGraph = graph;
 	cachedProjectPath = root;
-	cachedMtime = currentMtime;
+	cachedFiles = newFileCache;
+
+	return graph;
+}
+
+/**
+ * Incremental scan: only re-parse files whose mtime changed.
+ * Reuses cached parse data for unchanged files.
+ */
+function scanIncremental(
+	root: string,
+	files: string[],
+	adapter: TreeSitterAdapter,
+	logger: (msg: string) => void,
+): RepoGraph {
+	const graph = cachedGraph!;
+	const fileMtimes = getFileMtimes(root, files);
+	const currentFileSet = new Set(files);
+
+	// Determine changed, new, and deleted files
+	const changedFiles: string[] = [];
+	const deletedFiles: string[] = [];
+
+	for (const relPath of files) {
+		const mtime = fileMtimes.get(relPath) ?? 0;
+		const cached = cachedFiles.get(relPath);
+		if (!cached || cached.mtime < mtime) {
+			changedFiles.push(relPath);
+		}
+	}
+
+	for (const [relPath] of cachedFiles) {
+		if (!currentFileSet.has(relPath)) {
+			deletedFiles.push(relPath);
+		}
+	}
+
+	if (changedFiles.length === 0 && deletedFiles.length === 0) {
+			return graph;
+	}
+
+	logger(`Incremental: ${changedFiles.length} changed, ${deletedFiles.length} deleted`);
+
+	// Remove deleted files
+	for (const relPath of deletedFiles) {
+		removeFileData(graph, relPath);
+		cachedFiles.delete(relPath);
+	}
+
+	// Remove and re-parse changed files
+	for (const relPath of changedFiles) {
+		removeFileData(graph, relPath);
+		cachedFiles.delete(relPath);
+
+		const mtime = fileMtimes.get(relPath) ?? 0;
+		const entry = parseFile(adapter, root, relPath, mtime);
+		if (!entry) continue;
+
+		cachedFiles.set(relPath, entry);
+
+		for (const sym of entry.symbols) {
+			graph.symbols.set(sym.id, sym);
+			const fileSyms = graph.fileSymbols.get(relPath) || [];
+			fileSyms.push(sym.id);
+			graph.fileSymbols.set(relPath, fileSyms);
+		}
+	}
+
+	// Rebuild edges for ALL files (changed files may affect edge resolution
+	// for dependents — e.g., a new export in file A creates new import edges from file B)
+	// Clear all existing edges first
+	graph.outgoing.clear();
+	graph.incoming.clear();
+	graph.fileImports.clear();
+	graph.fileCalls.clear();
+	graph.fileImportBindings.clear();
+
+	for (const [relPath, entry] of cachedFiles) {
+		buildEdgesForFile(graph, relPath, entry);
+	}
+
+	// Recompute PageRank
+	calculatePageRank(graph);
 
 	return graph;
 }
