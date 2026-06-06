@@ -151,7 +151,8 @@ All tools follow the same pattern:
 
 ## Change Map
 
-- **Adding a new tool**: Create `tools/<name>.ts` with `register*` function → import and call in `index.ts` → add TypeBox parameter schema via `import { Type } from "typebox"` → implement `execute()` calling `core/` functions
+- **Adding a new tool**: Create `tools/<name>.ts` with `register*` function → import and call in `index.ts` → add TypeBox parameter schema via `import { Type } from "typebox"` → implement `execute()` calling `core/` functions → append Next recommendation rules to `NEXT_RULES` in `core/output.ts` (no switch to edit)
+- **Adding a Next recommendation**: Append a `NextRule` object to `NEXT_RULES` in `core/output.ts`. Each rule: `{ forTools, condition(ctx, graph?), recommendation(ctx) }`. Rules evaluate against context + optional RepoGraph (for graph-aware filters like `hasTestFiles`, `hasHierarchyKinds`).
 - **Adding a new language**: Add grammar to `core/treesitter.ts` EXT_TO_LANG map → add tree-sitter query in queries section → add LSP server config in `lsp/servers.ts`
 - **Changing graph algorithm**: Modify `core/pagerank.ts` or `core/graph.ts` → verify all tools that consume `RepoGraph` still produce correct output
 - **Changing LSP protocol**: Modify `lsp/client.ts` → verify `lsp/manager.ts` lifecycle still works → test with at least 2 different language servers
