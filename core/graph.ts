@@ -140,6 +140,7 @@ export interface SerializedEdge {
 	target: string;
 	weight: number;
 	kind: string;
+	confidence?: number;
 }
 
 export interface SerializedGraph {
@@ -173,6 +174,7 @@ export function serializeEdge(edge: Edge): SerializedEdge {
 		target: edge.target,
 		weight: edge.weight,
 		kind: edge.kind,
+		confidence: edge.confidence,
 	};
 }
 
@@ -282,7 +284,7 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 			target: e.target,
 			weight: e.weight,
 			kind: e.kind,
-			confidence: 1.0,
+			confidence: e.confidence ?? 1.0,
 		};
 		const outgoing = graph.outgoing.get(e.source) || [];
 		outgoing.push(edge);
@@ -486,25 +488,3 @@ export function compareGraphSnapshots(
 	};
 }
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
-export const LOW_SIGNAL_KINDS = new Set([
-	"element",
-	"selector",
-	"class_selector",
-	"id_selector",
-	"json_key",
-]);
-
-export const BOILERPLATE_NAMES = new Set(["__init__", "__main__"]);
-
-export function signalWeightForSymbol(
-	kind: string,
-	name: string,
-	visibility: string,
-): number {
-	if (LOW_SIGNAL_KINDS.has(kind)) return 0.002;
-	if (BOILERPLATE_NAMES.has(name)) return 0.35;
-	if (name.startsWith("_") && visibility === "private") return 0.85;
-	return 1.0;
-}

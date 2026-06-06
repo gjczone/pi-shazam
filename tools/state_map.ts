@@ -29,9 +29,10 @@ type's members.`,
 			const json = params.json ?? false;
 			const symbolName = params.symbol as string;
 			const result = executeStateMap(graph, symbolName);
-			return json
-				? JSON.stringify({ schema_version: "1.0", command: "state_map", status: "ok", result: { symbol: symbolName, found: result.includes(symbolName) } })
-				: result;
+			if (json) {
+				return JSON.stringify({ schema_version: "1.0", command: "state_map", status: "ok", result: { symbol: symbolName, found: result.includes(symbolName), text: result } });
+			}
+			return result;
 		},
 	});
 }

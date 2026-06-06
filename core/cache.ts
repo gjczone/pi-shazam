@@ -23,7 +23,6 @@ import {
 import type {
 	RepoGraph,
 	SerializedGraph,
-	SerializedGraphV2,
 	GraphDiff,
 	Symbol,
 	Edge,
@@ -83,7 +82,11 @@ export function loadBaseline(projectPath: string): SerializedGraph | null {
 	if (!existsSync(symbols)) return null;
 	try {
 		const raw = readFileSync(symbols, "utf-8");
-		return JSON.parse(raw) as SerializedGraph;
+		const data = JSON.parse(raw);
+		if (!data || !Array.isArray(data.symbols) || !Array.isArray(data.edges)) {
+			return null;
+		}
+		return data as SerializedGraph;
 	} catch {
 		return null;
 	}
@@ -182,14 +185,14 @@ export function loadGraphCache(cachePath: string): GraphCacheData | null {
 	if (!existsSync(cachePath)) return null;
 	try {
 		const raw = readFileSync(cachePath, "utf-8");
-		const data = JSON.parse(raw) as SerializedGraphV2;
-		if (data.version !== 2) return null;
+		const data = JSON.parse(raw);
+		if (!data || data.version !== 2 || !Array.isArray(data.symbols) || !Array.isArray(data.edges)) return null;
 		if (Date.now() - data.timestamp > CACHE_MAX_AGE_MS) return null;
 
 		const graph = deserializeGraphV2(data);
 		const fileMtimes = new Map<string, number>();
 		for (const [k, v] of Object.entries(data.fileMtimes)) {
-			fileMtimes.set(k, v);
+			fileMtimes.set(k, v as number);
 		}
 
 		return { graph, fileMtimes, timestamp: data.timestamp };

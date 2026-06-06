@@ -383,6 +383,11 @@ export class LspManager {
 			return null;
 		}
 
+		if (!client.isRunning()) {
+			this.log(`LSP process for ${language} died immediately after start`);
+			return null;
+		}
+
 		const info: LspServerInfo = {
 			language,
 			serverName: detection.serverName,

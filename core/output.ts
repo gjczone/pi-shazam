@@ -570,7 +570,7 @@ export function getGitChangeCount(): number {
 		const match = output.match(/(\d+)\s+file/);
 		return match ? parseInt(match[1]!, 10) : 0;
 	} catch {
-		return 0;
+		return -1;
 	}
 }
 

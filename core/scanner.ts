@@ -8,7 +8,7 @@
  */
 
 import { readdirSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, dirname } from "node:path";
 import { TreeSitterAdapter, EXT_TO_LANG } from "./treesitter.js";
 import {
 	createRepoGraph,
@@ -155,7 +155,7 @@ function buildEdgesForFile(
 	if (entry.imports.length > 0) {
 		graph.fileImports.set(relPath, entry.imports.map(([m]) => m));
 		for (const [importedModule] of entry.imports) {
-			const resolvedImport = resolveImport(importedModule, relPath);
+			const resolvedImport = resolveImport(importedModule, relPath, graph);
 			const targetFileSyms = graph.fileSymbols.get(resolvedImport) || [];
 			for (const srcId of thisFileSymIds) {
 				for (const tgtId of targetFileSyms) {
@@ -187,7 +187,7 @@ function buildEdgesForFile(
 		for (const binding of entry.jsImportBindings) {
 			const localSym = findSymbolByNameInFile(binding.localName, relPath, graph.symbols);
 			if (!localSym) continue;
-			const resolvedModule = resolveImport(binding.module, relPath);
+			const resolvedModule = resolveImport(binding.module, relPath, graph);
 			const sourceSym = findSymbolByNameInFile(binding.importedName, resolvedModule, graph.symbols);
 			if (sourceSym) {
 				addEdge(graph, createEdge(localSym.id, sourceSym.id, 0.8, "import-binding", 1.0));
@@ -281,8 +281,8 @@ export function scanProject(
 
 		// Persist updated graph to disk
 		try {
-			const fileMtimes = getFileMtimes(root, files);
-			saveGraphCache(updatedGraph, fileMtimes, cachePath);
+			const saveFileMtimes = getFileMtimes(root, files);
+			saveGraphCache(updatedGraph, saveFileMtimes, cachePath);
 			logger(`Graph cache updated: ${updatedGraph.symbols.size} symbols`);
 		} catch (err) {
 			logger(`Failed to save graph cache: ${err}`);
@@ -296,8 +296,8 @@ export function scanProject(
 
 	// Save to persistent cache
 	try {
-		const fileMtimes = getFileMtimes(root, files);
-		saveGraphCache(graph, fileMtimes, cachePath);
+		const saveFileMtimes = getFileMtimes(root, files);
+		saveGraphCache(graph, saveFileMtimes, cachePath);
 		logger(`Graph cache saved: ${graph.symbols.size} symbols`);
 	} catch (err) {
 		logger(`Failed to save graph cache: ${err}`);
@@ -431,12 +431,33 @@ function scanIncremental(
 
 	// Remove and re-parse changed files
 	for (const relPath of changedFiles) {
+		// Snapshot old data for rollback if re-parse fails
+		const oldSymbols = graph.fileSymbols.get(relPath)?.map((id) => {
+			const sym = graph.symbols.get(id);
+			return sym ? { ...sym } : null;
+		}).filter(Boolean) ?? [];
+		const oldEntry = cachedFiles.get(relPath) ?? null;
+
 		removeFileData(graph, relPath);
 		cachedFiles.delete(relPath);
 
 		const mtime = fileMtimes.get(relPath) ?? 0;
 		const entry = parseFile(adapter, root, relPath, mtime);
-		if (!entry) continue;
+		if (!entry) {
+			// Re-parse failed — restore old data
+			if (oldEntry) {
+				cachedFiles.set(relPath, oldEntry);
+				for (const sym of oldSymbols) {
+					if (sym) {
+						graph.symbols.set(sym.id, sym);
+						const fileSyms = graph.fileSymbols.get(relPath) || [];
+						fileSyms.push(sym.id);
+						graph.fileSymbols.set(relPath, fileSyms);
+					}
+				}
+			}
+			continue;
+		}
 
 		cachedFiles.set(relPath, entry);
 
@@ -522,15 +543,15 @@ function addEdge(graph: RepoGraph, edge: Edge): void {
  * Resolve a relative import path to a file path that matches the fileSymbols keys.
  * Handles extensionless imports (e.g., "./foo" → "./foo.ts" or "./foo/index.ts").
  */
-function resolveImport(importPath: string, fromFile: string): string {
-	// If it's a relative import, resolve against the fromFile's directory
+function resolveImport(
+	importPath: string,
+	fromFile: string,
+	graph?: RepoGraph,
+): string {
 	if (importPath.startsWith(".")) {
-		const fromDir = fromFile.includes("/")
-			? fromFile.slice(0, fromFile.lastIndexOf("/"))
-			: ".";
+		const fromDir = dirname(fromFile);
 		let resolved = join(fromDir, importPath);
 
-		// Try common extensions and index files
 		const candidates = [
 			resolved,
 			`${resolved}.ts`,
@@ -541,11 +562,15 @@ function resolveImport(importPath: string, fromFile: string): string {
 			`${resolved}/index.tsx`,
 			`${resolved}/index.js`,
 		];
+
+		if (graph) {
+			for (const c of candidates) {
+				if (graph.fileSymbols.has(c)) return c;
+			}
+		}
 		return candidates[0]!;
 	}
 
-	// For bare module imports (e.g., "react", "lodash"), we can't resolve
-	// them to project files, so we return the import path as-is
 	return importPath;
 }
 

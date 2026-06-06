@@ -188,6 +188,10 @@ export class LspClient {
 		this.process.on("error", (err) => {
 			this._log(`LSP process error: ${err.message}`);
 			this._running = false;
+			this.connection = null;
+			this._openedFiles.clear();
+			this._notifications = [];
+			this._serverCapabilities = {};
 		});
 
 		this.process.on("exit", (code, signal) => {
@@ -333,11 +337,14 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.connection!.sendRequest<
-				Location | Location[] | null
-			>("textDocument/definition", params);
+			const result = await this.withTimeout(
+				this.connection!.sendRequest<Location | Location[] | null>(
+					"textDocument/definition", params,
+				),
+			);
 			return result ?? null;
-		} catch {
+		} catch (err) {
+			console.warn("[lsp] definition failed:", err);
 			return null;
 		}
 	}
@@ -356,12 +363,14 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.connection!.sendRequest<Location[] | null>(
-				"textDocument/references",
-				params,
+			const result = await this.withTimeout(
+				this.connection!.sendRequest<Location[] | null>(
+					"textDocument/references", params,
+				),
 			);
 			return result ?? null;
-		} catch {
+		} catch (err) {
+			console.warn("[lsp] references failed:", err);
 			return null;
 		}
 	}
@@ -379,12 +388,14 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.connection!.sendRequest<Hover | null>(
-				"textDocument/hover",
-				params,
+			const result = await this.withTimeout(
+				this.connection!.sendRequest<Hover | null>(
+					"textDocument/hover", params,
+				),
 			);
 			return result ?? null;
-		} catch {
+		} catch (err) {
+			console.warn("[lsp] hover failed:", err);
 			return null;
 		}
 	}
@@ -399,11 +410,14 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.connection!.sendRequest<
-				DocumentSymbol[] | SymbolInformation[] | null
-			>("textDocument/documentSymbol", params);
+			const result = await this.withTimeout(
+				this.connection!.sendRequest<DocumentSymbol[] | SymbolInformation[] | null>(
+					"textDocument/documentSymbol", params,
+				),
+			);
 			return result ?? null;
-		} catch {
+		} catch (err) {
+			console.warn("[lsp] documentSymbols failed:", err);
 			return null;
 		}
 	}
@@ -426,7 +440,8 @@ export class LspClient {
 				>("workspace/symbol", params),
 			);
 			return result ?? null;
-		} catch {
+		} catch (err) {
+			console.warn("[lsp] workspaceSymbol failed:", err);
 			return null;
 		}
 	}
@@ -450,7 +465,8 @@ export class LspClient {
 				),
 			);
 			return result ?? null;
-		} catch {
+		} catch (err) {
+			console.warn("[lsp] semanticTokens failed:", err);
 			return null;
 		}
 	}
@@ -474,7 +490,8 @@ export class LspClient {
 				),
 			);
 			return result ?? null;
-		} catch {
+		} catch (err) {
+			console.warn("[lsp] foldingRange failed:", err);
 			return null;
 		}
 	}
@@ -485,12 +502,10 @@ export class LspClient {
 	 */
 	private withTimeout<T>(promise: Promise<T>): Promise<T> {
 		return new Promise<T>((resolve, reject) => {
-			// Track the reject callback so close() can cancel this request.
 			this._inFlightRequests.set(promise, reject);
 
 			const timer = setTimeout(() => {
 				this._inFlightRequests.delete(promise);
-				// Silence the original promise to prevent unhandled rejections.
 				void promise.catch(() => {});
 				reject(new Error(`LSP request timed out after ${this.timeout}ms`));
 			}, this.timeout);

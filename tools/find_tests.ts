@@ -4,7 +4,7 @@
  * Locates test files for a given source file or module using common
  * naming conventions (*.test.ts, *.spec.ts, __tests__/ directories).
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, basename, dirname } from "node:path";
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
@@ -88,7 +88,7 @@ export function executeFindTests(
 				(dirname(f) === dir || dirname(f) === join(dir, "__tests__"))
 			) {
 				matches.push(
-					extractTests(f, sourceFile, "direct", testPattern),
+					extractTests(f, sourceFile, "direct", testPattern, projectRoot),
 				);
 			}
 		}
@@ -100,7 +100,7 @@ export function executeFindTests(
 					if (f.startsWith(join(dir, td)) && testPattern.test(f)) {
 						if (!matches.some((m) => m.testFile === f)) {
 							matches.push(
-								extractTests(f, sourceFile, "direct", testPattern),
+								extractTests(f, sourceFile, "direct", testPattern, projectRoot),
 							);
 						}
 					}
@@ -125,7 +125,7 @@ export function executeFindTests(
 						.replace(/\.(test|spec|e2e)\./, ".")
 						.replace(/_(test|spec|e2e)\./, ".");
 					matches.push(
-						extractTests(f, sourceFile, "convention", testPattern),
+						extractTests(f, sourceFile, "convention", testPattern, projectRoot),
 					);
 				}
 			}
@@ -139,7 +139,7 @@ export function executeFindTests(
 					.replace(/\.(test|spec|e2e)\./, ".")
 					.replace(/_(test|spec|e2e)\./, ".");
 				matches.push(
-					extractTests(f, sourceFile, "sibling", testPattern),
+					extractTests(f, sourceFile, "sibling", testPattern, projectRoot),
 				);
 			}
 		}
@@ -159,13 +159,12 @@ function extractTests(
 	sourceFile: string,
 	type: TestFileMatch["type"],
 	_testPattern: RegExp,
+	projectRoot: string,
 ): TestFileMatch {
 	const tests: string[] = [];
 	try {
-		const { readFileSync } = require("node:fs") as typeof import("node:fs");
-		const { join } = require("node:path") as typeof import("node:path");
 		const content = readFileSync(
-			join(require("node:process").cwd(), file),
+			join(projectRoot, file),
 			"utf-8",
 		);
 		const testRegex = /(?:(?:it|test|describe)\(['"`])([^'"`]+)/g;
@@ -173,8 +172,8 @@ function extractTests(
 		while ((m = testRegex.exec(content)) !== null) {
 			tests.push(m[1]!);
 		}
-	} catch {
-		// File may not exist in workspace
+	} catch (err) {
+		console.warn("[find_tests] failed to read " + file + ": " + err);
 	}
 
 	return {

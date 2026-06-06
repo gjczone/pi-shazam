@@ -35,9 +35,11 @@ endpoints. Before deleting a handler function.`,
 		execute(graph, _params) {
 			const json = _params.json ?? false;
 			const result = executeRoutes(graph, ".");
-			return json
-				? JSON.stringify({ schema_version: "1.0", command: "routes", status: "ok", result: { routeCount: 0 } })
-				: result;
+			if (json) {
+				const routeCount = (result.match(/^- /gm) || []).length;
+				return JSON.stringify({ schema_version: "1.0", command: "routes", status: "ok", result: { routeCount } });
+			}
+			return result;
 		},
 	});
 }

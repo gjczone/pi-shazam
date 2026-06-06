@@ -17,8 +17,17 @@
 import { createRequire } from "node:module";
 
 const _require = createRequire(import.meta.url);
-const Parser = _require("tree-sitter") as new () => ParserInstance;
-const Query = _require("tree-sitter").Query as new (
+const _tsModule = _require("tree-sitter");
+const _ParserCtor = _tsModule.default ?? _tsModule;
+if (typeof _ParserCtor !== "function") {
+	throw new Error("tree-sitter: expected constructor function, got " + typeof _ParserCtor);
+}
+const Parser = _ParserCtor as new () => ParserInstance;
+const _QueryCtor = _tsModule.Query;
+if (typeof _QueryCtor !== "function") {
+	throw new Error("tree-sitter: Query is not a constructor, got " + typeof _QueryCtor);
+}
+const Query = _QueryCtor as new (
 	language: unknown,
 	source: string,
 ) => QueryInstance;
@@ -87,12 +96,7 @@ export const EXT_TO_LANG: Record<string, string> = {
 	".hpp": "cpp",
 	".hh": "cpp",
 	".java": "java",
-	".kt": "kotlin",
-	".kts": "kotlin",
-	".swift": "swift",
 	".cs": "c_sharp",
-	".php": "php",
-	".phtml": "php",
 	".rb": "ruby",
 };
 

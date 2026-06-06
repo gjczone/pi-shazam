@@ -64,20 +64,28 @@ export function executeReady(graph: RepoGraph, projectRoot: string): string {
 	let verifyData: VerifyResult = {};
 	let checkData: CheckResult = {};
 
+	let verifyParseError = false;
+	let checkParseError = false;
 	try {
 		verifyData = JSON.parse(verifyJsonRaw) as VerifyResult;
-	} catch { /* use defaults */ }
+	} catch (err) {
+		console.warn("[ready] verify JSON parse failed:", err);
+		verifyParseError = true;
+	}
 
 	try {
 		checkData = JSON.parse(checkJsonRaw) as CheckResult;
-	} catch { /* use defaults */ }
+	} catch (err) {
+		console.warn("[ready] check JSON parse failed:", err);
+		checkParseError = true;
+	}
 
 	const riskLevel = verifyData.result?.riskLevel ?? "unknown";
 	const orphanCount = verifyData.result?.orphanCount ?? 0;
 	const failedFiles = checkData.result?.failedFiles ?? 0;
 	const parsedFiles = checkData.result?.parsedFiles ?? 0;
 
-	const isReady = riskLevel === "low" && orphanCount === 0 && failedFiles === 0;
+	const isReady = !verifyParseError && !checkParseError && riskLevel === "low" && orphanCount === 0 && failedFiles === 0;
 
 	const lines: string[] = [];
 	lines.push("## Pre-Commit Readiness");
@@ -117,7 +125,7 @@ export function executeReady(graph: RepoGraph, projectRoot: string): string {
 		lines.push("");
 		lines.push("Run `shazam_fix` to auto-fix format issues, then call `shazam_ready` again.");
 	} else {
-		lines.push("All checks pass. Ready to commit! 🚀");
+		lines.push("All checks pass. Ready to commit.");
 	}
 
 	// Add Next recommendations

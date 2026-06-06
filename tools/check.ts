@@ -88,7 +88,7 @@ async function executeLspDiagnostics(
 	let failedFiles: string[] = [];
 	let lspDiagnostics: string[] = [];
 
-	for (const filePath of targetFiles) {
+	for (const filePath of targetFiles.slice(0, 100)) {
 		const serverInfo = lspManager.getServerForFile(filePath);
 		if (!serverInfo) {
 			failedFiles.push(filePath);

@@ -5,8 +5,7 @@ import {
 	createRepoGraph,
 	compareGraphSnapshots,
 	serializeSymbol,
-	signalWeightForSymbol,
-} from "../core/graph.js";
+	} from "../core/graph.js";
 import type { Symbol, Edge } from "../core/graph.js";
 
 describe("graph", () => {
@@ -108,26 +107,4 @@ describe("graph", () => {
 		});
 	});
 
-	describe("signalWeightForSymbol", () => {
-		it("should return 1.0 for normal symbols", () => {
-			expect(signalWeightForSymbol("function", "foo", "public")).toBe(1.0);
-		});
-
-		it("should return 0.002 for low-signal kinds", () => {
-			expect(signalWeightForSymbol("element", "div", "public")).toBe(0.002);
-			expect(signalWeightForSymbol("json_key", "key", "public")).toBe(0.002);
-		});
-
-		it("should return 0.35 for boilerplate names", () => {
-			expect(signalWeightForSymbol("function", "__init__", "public")).toBe(
-				0.35,
-			);
-		});
-
-		it("should return 0.85 for private underscore symbols", () => {
-			expect(signalWeightForSymbol("function", "_helper", "private")).toBe(
-				0.85,
-			);
-		});
-	});
 });

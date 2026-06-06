@@ -106,7 +106,7 @@ export function executeTypeHierarchy(
 						resolve(serverInfo.workspaceRoot, symbol.file),
 						"utf-8",
 					);
-					client.didOpen(symbol.file, content);
+					void client.didOpen(symbol.file, content).catch(() => {});
 				}
 			} catch {
 				// Fall through to graph-based

@@ -6,6 +6,7 @@
  * a +50 score boost so they float to the top. Output is annotated
  * "(LSP enriched)" or "(tree-sitter only)" accordingly.
  */
+import { readdirSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -358,7 +359,7 @@ function builtinFulltextSearch(query: string, limit: number): FulltextMatch[] {
 		if (results.length >= limit) return;
 		let entries: string[] = [];
 		try {
-			entries = execSync(`ls -1a ${JSON.stringify(dir)} 2>/dev/null`, { encoding: "utf-8", timeout: 1000 }).split("\n").filter(Boolean);
+			entries = readdirSync(dir);
 		} catch {
 			return;
 		}
@@ -373,8 +374,8 @@ function builtinFulltextSearch(query: string, limit: number): FulltextMatch[] {
 			if (skipFiles.some((s) => entry.includes(s))) continue;
 
 			try {
-				const stat = execSync(`stat -c %F ${JSON.stringify(fullPath)} 2>/dev/null`, { encoding: "utf-8", timeout: 1000 }).trim();
-				if (stat === "directory") {
+				const st = statSync(fullPath);
+				if (st.isDirectory()) {
 					scanDir(fullPath);
 				} else {
 					// Check if it's a text file by extension
