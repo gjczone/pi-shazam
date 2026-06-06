@@ -307,3 +307,56 @@ describe("LspClient exit handler", () => {
 		expect(client.isRunning()).toBe(false);
 	});
 });
+
+// ═══ withTimeout tests ═══
+describe("LspClient withTimeout", () => {
+	it("should track and cancel in-flight requests on timeout", async () => {
+		const { client } = createStartedClient();
+
+		const withTimeout = (client as any).withTimeout.bind(client) as <T>(p: Promise<T>) => Promise<T>;
+		(client as any).timeout = 1;
+
+		// Create a slow promise
+		const slowPromise = new Promise<null>((resolve) => {
+			setTimeout(() => resolve(null), 1000);
+		});
+
+		const result = withTimeout(slowPromise);
+		await expect(result).rejects.toThrow("timed out");
+
+		// After timeout, the in-flight set should be empty (promise was cleaned up)
+		const inFlight = (client as any)._inFlightRequests as Set<Promise<unknown>> | undefined;
+		if (inFlight) {
+			expect(inFlight.size).toBe(0);
+		}
+	});
+
+	it("should cancel in-flight requests when close() is called", async () => {
+		const { client, conn } = createStartedClient();
+		conn.sendRequest.mockResolvedValue(null);
+
+		const withTimeout = (client as any).withTimeout.bind(client) as <T>(p: Promise<T>) => Promise<T>;
+		(client as any).timeout = 60000;
+
+		// Start a request that never resolves
+		const neverResolves = new Promise<null>(() => {});
+		const timeoutPromise = withTimeout(neverResolves);
+
+		// Verify it's tracked as in-flight
+		const inFlight = (client as any)._inFlightRequests as Map<Promise<unknown>, (err: Error) => void>;
+		expect(inFlight).toBeDefined();
+		expect(inFlight.size).toBe(1);
+
+		// Close should cancel all in-flight
+		const closePromise = client.close();
+
+		// The timeout promise should reject (connection closed)
+		await expect(timeoutPromise).rejects.toThrow("connection closed");
+
+		await closePromise;
+		expect(client.isRunning()).toBe(false);
+
+		// In-flight set should be empty
+		expect(inFlight.size).toBe(0);
+	});
+});

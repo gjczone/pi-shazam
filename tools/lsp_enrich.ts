@@ -66,7 +66,12 @@ export function withEnrichTimeout<T>(
 	ms: number = DEFAULT_LSP_ENRICH_TIMEOUT_MS,
 ): Promise<T | null> {
 	return new Promise<T | null>((resolve) => {
-		const timer = setTimeout(() => resolve(null), ms);
+		const timer = setTimeout(() => {
+			// Silence the original promise to prevent unhandled rejections
+			// if it resolves/rejects after timeout.
+			void promise.catch(() => {});
+			resolve(null);
+		}, ms);
 		promise
 			.then((v) => {
 				clearTimeout(timer);

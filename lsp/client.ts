@@ -138,6 +138,10 @@ export class LspClient {
 	// Store notifications (e.g., diagnostics) received outside request-response
 	private _notifications: PublishDiagnosticsParams[] = [];
 
+	// Track in-flight LSP requests with their reject callbacks so close()
+	// can cancel all pending requests.
+	private _inFlightRequests = new Map<Promise<unknown>, (err: Error) => void>();
+
 	constructor(
 		command: readonly string[],
 		workspaceRoot: string,
@@ -479,15 +483,23 @@ export class LspClient {
 	 */
 	private withTimeout<T>(promise: Promise<T>): Promise<T> {
 		return new Promise<T>((resolve, reject) => {
+			// Track the reject callback so close() can cancel this request.
+			this._inFlightRequests.set(promise, reject);
+
 			const timer = setTimeout(() => {
+				this._inFlightRequests.delete(promise);
+				// Silence the original promise to prevent unhandled rejections.
+				void promise.catch(() => {});
 				reject(new Error(`LSP request timed out after ${this.timeout}ms`));
 			}, this.timeout);
 			promise
 				.then((v) => {
+					this._inFlightRequests.delete(promise);
 					clearTimeout(timer);
 					resolve(v);
 				})
 				.catch((err) => {
+					this._inFlightRequests.delete(promise);
 					clearTimeout(timer);
 					reject(err);
 				});
@@ -566,6 +578,14 @@ export class LspClient {
 		if (proc && proc.exitCode === null) {
 			proc.kill();
 		}
+
+		// 4. Cancel all in-flight LSP requests to prevent unhandled rejections.
+		const closeError = new Error("connection closed");
+		for (const [p, reject] of this._inFlightRequests) {
+			void p.catch(() => {});
+			reject(closeError);
+		}
+		this._inFlightRequests.clear();
 
 		this._running = false;
 		this.connection = null;
