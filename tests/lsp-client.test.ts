@@ -1,5 +1,132 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { EventEmitter } from "node:events";
+
+// ── Mock connections ───────────────────────────────────────────────────────────
+
+interface MockConnection {
+	sendRequest: ReturnType<typeof vi.fn>;
+	sendNotification: ReturnType<typeof vi.fn>;
+	onNotification: ReturnType<typeof vi.fn>;
+	listen: ReturnType<typeof vi.fn>;
+	dispose: ReturnType<typeof vi.fn>;
+}
+
+function createMockConnection(): MockConnection {
+	return {
+		sendRequest: vi.fn(),
+		sendNotification: vi.fn(),
+		onNotification: vi.fn(),
+		listen: vi.fn(),
+		dispose: vi.fn(),
+	};
+}
+
+// ── Mock process ───────────────────────────────────────────────────────────────
+
+class MockProcess extends EventEmitter {
+	exitCode: number | null = null;
+	killed = false;
+	pid = 12345;
+	stdin = { on: vi.fn(), write: vi.fn() };
+	stdout = { on: vi.fn() };
+	stderr = { on: vi.fn() };
+
+	kill(signal?: string): boolean {
+		this.killed = true;
+		this.exitCode = this.exitCode ?? 1;
+		this.emit("exit", this.exitCode, signal);
+		return true;
+	}
+}
+
+// ── Mock dynamic require for vscode-jsonrpc/node ──────────────────────────────
+
+// client.ts uses createRequire() + _require(), not ESM import.
+// vi.mock() only intercepts ESM imports, so we mock createRequire itself.
+let mockConnForStart: MockConnection | null = null;
+
+vi.mock("node:module", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("node:module")>();
+	return {
+		...actual,
+		createRequire: vi.fn(() => (moduleName: string) => {
+			if (moduleName === "vscode-jsonrpc/node") {
+				return {
+					StreamMessageReader: vi.fn(),
+					StreamMessageWriter: vi.fn(),
+					createMessageConnection: vi.fn(() => {
+						// Return the mock connection prepared for start()
+						return mockConnForStart ?? createMockConnection();
+					}),
+				};
+			}
+			// For any other dynamic require, use the real createRequire
+			return actual.createRequire(import.meta.url)(moduleName);
+		}),
+	};
+});
+
+// Mock child_process spawn
+vi.mock("node:child_process", () => ({
+	spawn: vi.fn(),
+}));
+
+import { spawn } from "node:child_process";
 import { LspClient } from "../lsp/client.js";
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+/**
+ * Create a client with internal state set directly (bypasses start()).
+ * Used for testing close() logic without needing a real LSP handshake.
+ */
+function createRunningClient(opts?: {
+	process?: MockProcess;
+	connection?: MockConnection;
+}): { client: LspClient; process: MockProcess; conn: MockConnection } {
+	const proc = opts?.process ?? new MockProcess();
+	const conn = opts?.connection ?? createMockConnection();
+
+	const client = new LspClient(
+		["mock-server", "--stdio"],
+		"/test/workspace",
+		5000,
+	);
+
+	(client as any).process = proc;
+	(client as any).connection = conn;
+	(client as any)._running = true;
+
+	return { client, process: proc, conn };
+}
+
+/**
+ * Create a client via start() (registers real event handlers on process).
+ * Requires mocked child_process spawn and vscode-jsonrpc.
+ */
+function createStartedClient(conn?: MockConnection): {
+	client: LspClient;
+	process: MockProcess;
+	conn: MockConnection;
+} {
+	const proc = new MockProcess();
+	const spawnMock = spawn as any as ReturnType<typeof vi.fn>;
+	spawnMock.mockReturnValue(proc);
+
+	const c = conn ?? createMockConnection();
+	mockConnForStart = c;
+
+	const client = new LspClient(
+		["mock-server", "--stdio"],
+		"/test/workspace",
+		5000,
+	);
+	client.start();
+
+	return { client, process: proc, conn: c };
+}
+
+// ── Original tests ─────────────────────────────────────────────────────────────
 
 describe("lsp/client", () => {
 	describe("LspClient constructor", () => {
@@ -30,7 +157,6 @@ describe("lsp/client", () => {
 
 		it("should track running state", () => {
 			expect(client.isRunning()).toBe(false);
-			// Note: start/stop tested in integration; unit test verifies API shape
 		});
 
 		it("should have a close method", () => {
@@ -67,5 +193,117 @@ describe("lsp/client", () => {
 			const client = new LspClient(["mock"], "/ws", 5000);
 			expect(client.isFileOpened("/test/file.ts")).toBe(false);
 		});
+	});
+});
+
+// ── close() tests ──────────────────────────────────────────────────────────────
+
+describe("LspClient close()", () => {
+	// ═══ Bug 1: Zombie process — process reference nulled before timeout fires ═══
+	describe("process cleanup", () => {
+		it("should kill the process", async () => {
+			const proc = new MockProcess();
+			proc.exitCode = null;
+			const conn = createMockConnection();
+			conn.sendRequest.mockResolvedValue(null);
+			const { client } = createRunningClient({ process: proc, connection: conn });
+
+			const closeResult = client.close();
+			expect(closeResult).toBeInstanceOf(Promise);
+			await closeResult;
+
+			expect(proc.killed).toBe(true);
+		});
+
+		it("should not throw if process already exited", async () => {
+			const proc = new MockProcess();
+			proc.exitCode = 0;
+			const conn = createMockConnection();
+			conn.sendRequest.mockResolvedValue(null);
+			const { client } = createRunningClient({ process: proc, connection: conn });
+
+			const closeResult = client.close();
+			expect(closeResult).toBeInstanceOf(Promise);
+			await closeResult;
+		});
+	});
+
+	// ═══ Bug 2: Premature dispose — shutdown not awaited ═══
+	describe("shutdown sequence", () => {
+		it("should send shutdown before exit notification", async () => {
+			const { client, conn } = createRunningClient();
+			conn.sendRequest.mockResolvedValue(null);
+
+			const closeResult = client.close();
+			expect(closeResult).toBeInstanceOf(Promise);
+			await closeResult;
+
+			const shutdownCalls = conn.sendRequest.mock.calls.filter(
+				(c: any[]) => c[0] === "shutdown",
+			);
+			const exitCalls = conn.sendNotification.mock.calls.filter(
+				(c: any[]) => c[0] === "exit",
+			);
+
+			expect(shutdownCalls.length).toBeGreaterThanOrEqual(1);
+			expect(exitCalls.length).toBeGreaterThanOrEqual(1);
+		});
+
+		it("should complete shutdown before dispose", async () => {
+			const { client, conn } = createRunningClient();
+
+			let shutdownCompleted = false;
+			conn.sendRequest.mockImplementation(async (method: string) => {
+				if (method === "shutdown") {
+					await new Promise((r) => setTimeout(r, 10));
+					shutdownCompleted = true;
+					return null;
+				}
+				return null;
+			});
+
+			const closeResult = client.close();
+			expect(closeResult).toBeInstanceOf(Promise);
+			await closeResult;
+
+			expect(shutdownCompleted).toBe(true);
+			expect(conn.dispose).toHaveBeenCalled();
+		});
+	});
+
+	// ═══ State cleanup ═══
+	describe("state cleanup", () => {
+		it("should set isRunning to false after close", async () => {
+			const { client, conn } = createRunningClient();
+			conn.sendRequest.mockResolvedValue(null);
+
+			expect(client.isRunning()).toBe(true);
+
+			const closeResult = client.close();
+			expect(closeResult).toBeInstanceOf(Promise);
+			await closeResult;
+
+			expect(client.isRunning()).toBe(false);
+		});
+	});
+});
+
+// ═══ Exit handler cleanup ═══
+describe("LspClient exit handler", () => {
+	beforeEach(() => {
+		mockConnForStart = null;
+	});
+
+	it("should set _running to false when process exits unexpectedly", () => {
+		const conn = createMockConnection();
+		const { client, process: proc } = createStartedClient(conn);
+
+		expect(client.isRunning()).toBe(true);
+
+		// Simulate unexpected process crash (exit handler registered by start())
+		proc.exitCode = 1;
+		proc.emit("exit", 1, "SIGTERM");
+
+		expect(client.isRunning()).toBe(false);
 	});
 });

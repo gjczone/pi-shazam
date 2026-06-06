@@ -68,9 +68,9 @@ export default function (pi: ExtensionAPI): void {
 	});
 
 	// Shutdown LSP servers on session shutdown
-	pi.on("session_shutdown", () => {
+	pi.on("session_shutdown", async () => {
 		log("Shutting down LSP servers...");
-		lspManager.shutdown();
+		await lspManager.shutdown();
 	});
 
 	// ── Hooks ────────────────────────────────────────────────────────────────

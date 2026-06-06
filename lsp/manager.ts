@@ -447,10 +447,10 @@ export class LspManager {
 	/**
 	 * Shutdown all LSP servers gracefully.
 	 */
-	shutdown(): void {
+	async shutdown(): Promise<void> {
 		for (const [language, info] of this.servers) {
 			try {
-				info.client.close();
+				await info.client.close();
 				this.log(`LSP shutdown: ${language}`);
 			} catch (err) {
 				this.log(`LSP shutdown error for ${language}: ${err}`);
