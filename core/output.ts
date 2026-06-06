@@ -6,7 +6,11 @@
  *   2. ### Detail (per-item expansion)
  *   3. ### Next (actionable tool recommendations)
  *
- * This module provides builders for each section.
+ * This module provides builders for each section. The Next recommendation
+ * system is driven by a declarative rule array (NEXT_RULES) — adding a
+ * new tool = adding rules, not editing a switch. Rules can evaluate against
+ * the RepoGraph to suppress irrelevant recommendations (e.g., no find_tests
+ * when project has zero test files).
  */
 
 import type { RepoGraph } from "./graph.js";
@@ -24,8 +28,432 @@ export interface NextRecommendation {
 }
 
 /**
+ * Runtime context passed by each tool when asking for Next recommendations.
+ * Fields are optional — rules check only what they need.
+ */
+export interface NextContext {
+	topFile?: string;
+	topSymbol?: string;
+	hasErrors?: boolean;
+	hasFixes?: boolean;
+	riskLevel?: string;
+	orphanCount?: number;
+	testFunc?: string;
+	handlerFile?: string;
+	usageFile?: string;
+	brokenFile?: string;
+}
+
+/**
+ * Declarative rule: for a set of tools, when condition holds, emit
+ * recommendation. The recommendation is a factory so it can read context
+ * (e.g., substitute topFile into --file).
+ *
+ * - `forTools`: tool names this rule applies to
+ * - `condition`: returns true to emit; receives context + optional graph.
+ *   When graph is undefined (legacy callers), graph-aware rules must
+ *   short-circuit to preserve backward-compatible output.
+ * - `recommendation`: factory returning the recommendation, or null to skip.
+ */
+export interface NextRule {
+	forTools: string[];
+	condition: (ctx: NextContext, graph?: RepoGraph) => boolean;
+	recommendation: (ctx: NextContext) => NextRecommendation | null;
+}
+
+// ── Graph-aware filter helpers ───────────────────────────────────────────────
+
+const TEST_FILE_PATTERNS = [
+	/(?:^|[/.])tests?\//,
+	/(?:^|[/.])__tests__\//,
+	/\.test\.[a-z]+$/,
+	/\.spec\.[a-z]+$/,
+	/(?:^|[/.])test_[a-z_]+\.[a-z]+$/,
+];
+
+/**
+ * True when the graph has at least one file matching test-file heuristics.
+ */
+export function hasTestFiles(graph?: RepoGraph): boolean {
+	if (!graph) return false;
+	for (const file of graph.fileSymbols.keys()) {
+		for (const pat of TEST_FILE_PATTERNS) {
+			if (pat.test(file)) return true;
+		}
+	}
+	return false;
+}
+
+const HIERARCHY_KINDS = new Set(["class", "interface", "type_alias", "struct"]);
+
+/**
+ * True when the graph contains at least one class/interface/type_alias symbol.
+ */
+export function hasHierarchyKinds(graph?: RepoGraph): boolean {
+	if (!graph) return false;
+	for (const sym of graph.symbols.values()) {
+		if (HIERARCHY_KINDS.has(sym.kind)) return true;
+	}
+	return false;
+}
+
+// ── Rules ────────────────────────────────────────────────────────────────────
+
+/**
+ * The single source of truth for Next recommendations. Each rule is a pure
+ * function of (context, optional graph). To add a recommendation for a new
+ * tool: append a rule here. No switch to edit.
+ */
+export const NEXT_RULES: NextRule[] = [
+	// overview
+	{
+		forTools: ["overview"],
+		condition: (ctx) => Boolean(ctx.topFile),
+		recommendation: (ctx) => ({
+			tool: "file_detail",
+			params: { file: ctx.topFile! },
+			label: "Inspect top file",
+			level: "recommended",
+		}),
+	},
+	{
+		forTools: ["overview"],
+		condition: () => true,
+		recommendation: () => ({
+			tool: "codesearch",
+			params: { query: "<keyword>" },
+			label: "Search for related symbols",
+			level: "also",
+		}),
+	},
+
+	// hotspots
+	{
+		forTools: ["hotspots"],
+		condition: (ctx) => Boolean(ctx.topFile),
+		recommendation: (ctx) => ({
+			tool: "file_detail",
+			params: { file: ctx.topFile! },
+			label: "Inspect top hotspot",
+			level: "recommended",
+		}),
+	},
+	{
+		forTools: ["hotspots"],
+		condition: () => true,
+		recommendation: () => ({
+			tool: "overview",
+			label: "Review project overview",
+			level: "also",
+		}),
+	},
+
+	// symbol
+	{
+		forTools: ["symbol"],
+		condition: (ctx) => Boolean(ctx.topSymbol),
+		recommendation: (ctx) => ({
+			tool: "call_chain",
+			params: { symbol: ctx.topSymbol! },
+			label: "Trace call chain",
+			level: "recommended",
+		}),
+	},
+	{
+		forTools: ["symbol"],
+		condition: (ctx) => Boolean(ctx.topSymbol),
+		recommendation: (ctx) => ({
+			tool: "hover",
+			params: { name: ctx.topSymbol! },
+			label: "Get type info",
+			level: "also",
+		}),
+	},
+
+	// codesearch (find_tests suppressed when graph has no tests)
+	{
+		forTools: ["codesearch"],
+		condition: (ctx) => Boolean(ctx.topSymbol),
+		recommendation: (ctx) => ({
+			tool: "symbol",
+			params: { name: ctx.topSymbol! },
+			label: "View top result details",
+			level: "recommended",
+		}),
+	},
+	{
+		forTools: ["codesearch"],
+		condition: (_ctx, graph) => graph === undefined || hasTestFiles(graph),
+		recommendation: () => ({
+			tool: "find_tests",
+			label: "Find related tests",
+			level: "also",
+		}),
+	},
+
+	// call_chain
+	{
+		forTools: ["call_chain"],
+		condition: () => true,
+		recommendation: () => ({
+			tool: "impact",
+			params: { files: "<caller-file>" },
+			label: "Assess blast radius",
+			level: "recommended",
+		}),
+	},
+	{
+		forTools: ["call_chain"],
+		condition: (ctx) => Boolean(ctx.topSymbol),
+		recommendation: (ctx) => ({
+			tool: "hover",
+			params: { name: ctx.topSymbol! },
+			label: "Inspect symbol type",
+			level: "also",
+		}),
+	},
+
+	// hover (type_hierarchy suppressed when graph has no class/interface)
+	{
+		forTools: ["hover"],
+		condition: (ctx) => Boolean(ctx.topSymbol),
+		recommendation: (ctx) => ({
+			tool: "symbol",
+			params: { name: ctx.topSymbol! },
+			label: "View symbol graph info",
+			level: "recommended",
+		}),
+	},
+	{
+		forTools: ["hover"],
+		condition: (ctx, graph) =>
+			Boolean(ctx.topSymbol) && (graph === undefined || hasHierarchyKinds(graph)),
+		recommendation: (ctx) => ({
+			tool: "type_hierarchy",
+			params: { name: ctx.topSymbol! },
+			label: "Explore type hierarchy",
+			level: "also",
+		}),
+	},
+
+	// file_detail (find_tests suppressed when graph has no tests)
+	{
+		forTools: ["file_detail"],
+		condition: (ctx) => Boolean(ctx.topSymbol),
+		recommendation: (ctx) => ({
+			tool: "symbol",
+			params: { name: ctx.topSymbol! },
+			label: "Inspect top symbol",
+			level: "recommended",
+		}),
+	},
+	{
+		forTools: ["file_detail"],
+		condition: (ctx, graph) =>
+			Boolean(ctx.topFile) && (graph === undefined || hasTestFiles(graph)),
+		recommendation: (ctx) => ({
+			tool: "find_tests",
+			params: { sourceFile: ctx.topFile! },
+			label: "Find tests for this file",
+			level: "also",
+		}),
+	},
+
+	// find_tests
+	{
+		forTools: ["find_tests"],
+		condition: (ctx) => Boolean(ctx.testFunc),
+		recommendation: (ctx) => ({
+			tool: "call_chain",
+			params: { symbol: ctx.testFunc! },
+			label: "Trace test function",
+			level: "recommended",
+		}),
+	},
+
+	// routes
+	{
+		forTools: ["routes"],
+		condition: (ctx) => Boolean(ctx.handlerFile),
+		recommendation: (ctx) => ({
+			tool: "file_detail",
+			params: { file: ctx.handlerFile! },
+			label: "Inspect handler",
+			level: "recommended",
+		}),
+	},
+
+	// state_map
+	{
+		forTools: ["state_map"],
+		condition: (ctx) => Boolean(ctx.usageFile),
+		recommendation: (ctx) => ({
+			tool: "impact",
+			params: { files: ctx.usageFile! },
+			label: "Assess usage impact",
+			level: "recommended",
+		}),
+	},
+
+	// type_hierarchy
+	{
+		forTools: ["type_hierarchy"],
+		condition: () => true,
+		recommendation: () => ({
+			tool: "find_tests",
+			label: "Find tests for related types",
+			level: "recommended",
+		}),
+	},
+	{
+		forTools: ["type_hierarchy"],
+		condition: () => true,
+		recommendation: () => ({
+			tool: "hover",
+			label: "Get hover info",
+			level: "also",
+		}),
+	},
+
+	// impact
+	{
+		forTools: ["impact"],
+		condition: () => true,
+		recommendation: () => ({
+			tool: "verify",
+			label: "Run verification after changes",
+			level: "required",
+		}),
+	},
+	{
+		forTools: ["impact"],
+		condition: (ctx) => Boolean(ctx.topSymbol),
+		recommendation: (ctx) => ({
+			tool: "call_chain",
+			params: { symbol: ctx.topSymbol! },
+			label: "Trace top impacted symbol",
+			level: "recommended",
+		}),
+	},
+
+	// check
+	{
+		forTools: ["check"],
+		condition: (ctx) => Boolean(ctx.hasErrors),
+		recommendation: () => ({
+			tool: "verify",
+			label: "Run full verification",
+			level: "required",
+		}),
+	},
+	{
+		forTools: ["check"],
+		condition: (ctx) => Boolean(ctx.hasFixes),
+		recommendation: () => ({
+			tool: "fix",
+			label: "Auto-fix format issues",
+			level: "recommended",
+		}),
+	},
+	{
+		forTools: ["check"],
+		condition: (ctx) => Boolean(ctx.brokenFile),
+		recommendation: (ctx) => ({
+			tool: "symbol",
+			params: { name: "--file " + ctx.brokenFile! },
+			label: "Check broken file symbols",
+			level: "also",
+		}),
+	},
+
+	// verify
+	{
+		forTools: ["verify"],
+		condition: (ctx) => ctx.riskLevel === "high",
+		recommendation: () => ({
+			tool: "ready",
+			label: "Run pre-commit readiness check",
+			level: "required",
+		}),
+	},
+	{
+		forTools: ["verify"],
+		condition: (ctx) => Boolean(ctx.orphanCount && ctx.orphanCount > 0),
+		recommendation: () => ({
+			tool: "call_chain",
+			params: { symbol: "<orphan>" },
+			label: "Trace orphan symbols",
+			level: "recommended",
+		}),
+	},
+
+	// fix
+	{
+		forTools: ["fix"],
+		condition: () => true,
+		recommendation: () => ({
+			tool: "verify",
+			label: "Verify after fixing",
+			level: "required",
+		}),
+	},
+	{
+		forTools: ["fix"],
+		condition: () => true,
+		recommendation: () => ({
+			tool: "check",
+			label: "Re-check for remaining issues",
+			level: "recommended",
+		}),
+	},
+
+	// ready
+	{
+		forTools: ["ready"],
+		condition: () => true,
+		recommendation: () => ({
+			tool: "",
+			label: "Commit and push changes",
+			level: "required",
+		}),
+	},
+
+	// rename_symbol
+	{
+		forTools: ["rename_symbol"],
+		condition: (ctx) => Boolean(ctx.topSymbol),
+		recommendation: (ctx) => ({
+			tool: "call_chain",
+			params: { symbol: ctx.topSymbol! },
+			label: "Verify blast radius before rename",
+			level: "required",
+		}),
+	},
+	{
+		forTools: ["rename_symbol"],
+		condition: () => true,
+		recommendation: () => ({
+			tool: "hover",
+			label: "Inspect symbol type",
+			level: "also",
+		}),
+	},
+
+	// safe_delete
+	{
+		forTools: ["safe_delete"],
+		condition: (ctx) => Boolean(ctx.topSymbol),
+		recommendation: (ctx) => ({
+			tool: "call_chain",
+			params: { symbol: ctx.topSymbol! },
+			label: "Verify zero references before delete",
+			level: "required",
+		}),
+	},
+];
+
+/**
  * Build a standardized "Next" section with tool recommendations.
- * 🔴 Required / 🟡 Recommended / ⚪ Also
  */
 export function formatNextSection(nextItems: NextRecommendation[]): string {
 	if (nextItems.length === 0) return "";
@@ -57,120 +485,29 @@ function buildToolCommand(item: NextRecommendation): string {
 
 /**
  * Get standardized Next recommendations for a given tool and context.
- * Follows the Next recommendation system table from issue #18.
- * Pass available context (topFile, topSymbol, orphanCount, riskLevel, etc.)
- * to generate context-aware recommendations.
+ * Driven by the declarative NEXT_RULES array. Adding a new tool =
+ * adding rules to NEXT_RULES, not editing this function.
+ *
+ * Pass the RepoGraph when available to enable graph-aware filters
+ * (e.g., suppress find_tests when project has no test files). When
+ * graph is undefined, filters preserve legacy (always-emit) behavior.
  */
 export function getNextForTool(
 	toolName: string,
-	context?: {
-		topFile?: string;
-		topSymbol?: string;
-		hasErrors?: boolean;
-		hasFixes?: boolean;
-		riskLevel?: string;
-		orphanCount?: number;
-		testFunc?: string;
-		handlerFile?: string;
-		usageFile?: string;
-		brokenFile?: string;
-	},
+	context?: NextContext,
+	graph?: RepoGraph,
 ): NextRecommendation[] {
-	const c = context ?? {};
-	const items: NextRecommendation[] = [];
+	const ctx: NextContext = context ?? {};
+	const out: NextRecommendation[] = [];
 
-	switch (toolName) {
-		case "overview":
-			if (c.topFile) items.push({ tool: "file_detail", params: { file: c.topFile }, label: "Inspect top file", level: "recommended" });
-			items.push({ tool: "codesearch", params: { query: "<keyword>" }, label: "Search for related symbols", level: "also" });
-			break;
-
-		case "hotspots":
-			if (c.topFile) items.push({ tool: "file_detail", params: { file: c.topFile }, label: "Inspect top hotspot", level: "recommended" });
-			items.push({ tool: "overview", label: "Review project overview", level: "also" });
-			break;
-
-		case "symbol":
-			if (c.topSymbol) items.push({ tool: "call_chain", params: { symbol: c.topSymbol }, label: "Trace call chain", level: "recommended" });
-			if (c.topSymbol) items.push({ tool: "hover", params: { name: c.topSymbol }, label: "Get type info", level: "also" });
-			break;
-
-		case "codesearch":
-			if (c.topSymbol) items.push({ tool: "symbol", params: { name: c.topSymbol }, label: "View top result details", level: "recommended" });
-			items.push({ tool: "find_tests", label: "Find related tests", level: "also" });
-			break;
-
-		case "call_chain":
-			items.push({ tool: "impact", params: { files: "<caller-file>" }, label: "Assess blast radius", level: "recommended" });
-			if (c.topSymbol) items.push({ tool: "hover", params: { name: c.topSymbol }, label: "Inspect symbol type", level: "also" });
-			break;
-
-		case "hover":
-			if (c.topSymbol) items.push({ tool: "symbol", params: { name: c.topSymbol }, label: "View symbol graph info", level: "recommended" });
-			if (c.topSymbol) items.push({ tool: "type_hierarchy", params: { name: c.topSymbol }, label: "Explore type hierarchy", level: "also" });
-			break;
-
-		case "file_detail":
-			if (c.topSymbol) items.push({ tool: "symbol", params: { name: c.topSymbol }, label: "Inspect top symbol", level: "recommended" });
-			if (c.topFile) items.push({ tool: "find_tests", params: { sourceFile: c.topFile }, label: "Find tests for this file", level: "also" });
-			break;
-
-		case "find_tests":
-			if (c.testFunc) items.push({ tool: "call_chain", params: { symbol: c.testFunc }, label: "Trace test function", level: "recommended" });
-			break;
-
-		case "routes":
-			if (c.handlerFile) items.push({ tool: "file_detail", params: { file: c.handlerFile }, label: "Inspect handler", level: "recommended" });
-			break;
-
-		case "state_map":
-			if (c.usageFile) items.push({ tool: "impact", params: { files: c.usageFile }, label: "Assess usage impact", level: "recommended" });
-			break;
-
-		case "type_hierarchy":
-			items.push({ tool: "find_tests", label: "Find tests for related types", level: "recommended" });
-			items.push({ tool: "hover", label: "Get hover info", level: "also" });
-			break;
-
-		case "impact":
-			items.push({ tool: "verify", label: "Run verification after changes", level: "required" });
-			if (c.topSymbol) items.push({ tool: "call_chain", params: { symbol: c.topSymbol }, label: "Trace top impacted symbol", level: "recommended" });
-			break;
-
-		case "check":
-			if (c.hasErrors) items.push({ tool: "verify", label: "Run full verification", level: "required" });
-			if (c.hasFixes) items.push({ tool: "fix", label: "Auto-fix format issues", level: "recommended" });
-			if (c.brokenFile) items.push({ tool: "symbol", params: { name: "--file " + c.brokenFile }, label: "Check broken file symbols", level: "also" });
-			break;
-
-		case "verify":
-			if (c.riskLevel === "high") items.push({ tool: "ready", label: "Run pre-commit readiness check", level: "required" });
-			if (c.orphanCount && c.orphanCount > 0) items.push({ tool: "call_chain", params: { symbol: "<orphan>" }, label: "Trace orphan symbols", level: "recommended" });
-			break;
-
-		case "fix":
-			items.push({ tool: "verify", label: "Verify after fixing", level: "required" });
-			items.push({ tool: "check", label: "Re-check for remaining issues", level: "recommended" });
-			break;
-
-		case "ready":
-			items.push({ tool: "", label: "Commit and push changes", level: "required" });
-			break;
-
-		case "rename_symbol":
-			if (c.topSymbol) items.push({ tool: "call_chain", params: { symbol: c.topSymbol }, label: "Verify blast radius before rename", level: "required" });
-			items.push({ tool: "hover", label: "Inspect symbol type", level: "also" });
-			break;
-
-		case "safe_delete":
-			if (c.topSymbol) items.push({ tool: "call_chain", params: { symbol: c.topSymbol }, label: "Verify zero references before delete", level: "required" });
-			break;
-
-		default:
-			break;
+	for (const rule of NEXT_RULES) {
+		if (!rule.forTools.includes(toolName)) continue;
+		if (!rule.condition(ctx, graph)) continue;
+		const rec = rule.recommendation(ctx);
+		if (rec) out.push(rec);
 	}
 
-	return items;
+	return out;
 }
 
 // ── Section builders ──────────────────────────────────────────────────────
