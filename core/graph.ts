@@ -195,6 +195,123 @@ export function serializeGraph(graph: RepoGraph): SerializedGraph {
 	};
 }
 
+export interface SerializedGraphV2 {
+	version: 2;
+	timestamp: number;
+	symbols: SerializedSymbol[];
+	edges: SerializedEdge[];
+	fileSymbols: Record<string, string[]>;
+	fileImports: Record<string, string[]>;
+	fileCalls: Record<string, [string, number, string][]>;
+	fileImportBindings: Record<string, JSImportBinding[]>;
+	fileExports: Record<string, JSExportBinding[]>;
+	fileMtimes: Record<string, number>;
+}
+
+export function serializeGraphV2(
+	graph: RepoGraph,
+	fileMtimes: Map<string, number>,
+): SerializedGraphV2 {
+	const symbols: SerializedSymbol[] = [];
+	for (const sym of graph.symbols.values()) {
+		symbols.push(serializeSymbol(sym));
+	}
+	const edges: SerializedEdge[] = [];
+	for (const [, edgeList] of graph.outgoing) {
+		for (const edge of edgeList) {
+			edges.push(serializeEdge(edge));
+		}
+	}
+
+	const fileSymbols: Record<string, string[]> = {};
+	for (const [k, v] of graph.fileSymbols) fileSymbols[k] = v;
+
+	const fileImports: Record<string, string[]> = {};
+	for (const [k, v] of graph.fileImports) fileImports[k] = v;
+
+	const fileCalls: Record<string, [string, number, string][]> = {};
+	for (const [k, v] of graph.fileCalls) fileCalls[k] = v;
+
+	const fileImportBindings: Record<string, JSImportBinding[]> = {};
+	for (const [k, v] of graph.fileImportBindings) fileImportBindings[k] = v;
+
+	const fileExports: Record<string, JSExportBinding[]> = {};
+	for (const [k, v] of graph.fileExports) fileExports[k] = v;
+
+	const fileMtimesObj: Record<string, number> = {};
+	for (const [k, v] of fileMtimes) fileMtimesObj[k] = v;
+
+	return {
+		version: 2,
+		timestamp: Date.now(),
+		symbols,
+		edges,
+		fileSymbols,
+		fileImports,
+		fileCalls,
+		fileImportBindings,
+		fileExports,
+		fileMtimes: fileMtimesObj,
+	};
+}
+
+export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
+	const graph = createRepoGraph();
+
+	for (const s of data.symbols) {
+		graph.symbols.set(s.id, {
+			id: s.id,
+			name: s.name,
+			kind: s.kind,
+			file: s.file,
+			line: s.line,
+			endLine: s.endLine,
+			col: s.col,
+			visibility: s.visibility as "public" | "private" | "exported",
+			docstring: s.docstring,
+			signature: s.signature,
+			returnType: s.returnType,
+			params: s.params,
+			pagerank: s.pagerank,
+		});
+	}
+
+	for (const e of data.edges) {
+		const edge: Edge = {
+			source: e.source,
+			target: e.target,
+			weight: e.weight,
+			kind: e.kind,
+			confidence: 1.0,
+		};
+		const outgoing = graph.outgoing.get(e.source) || [];
+		outgoing.push(edge);
+		graph.outgoing.set(e.source, outgoing);
+
+		const incoming = graph.incoming.get(e.target) || [];
+		incoming.push(edge);
+		graph.incoming.set(e.target, incoming);
+	}
+
+	for (const [k, v] of Object.entries(data.fileSymbols)) {
+		graph.fileSymbols.set(k, v);
+	}
+	for (const [k, v] of Object.entries(data.fileImports)) {
+		graph.fileImports.set(k, v);
+	}
+	for (const [k, v] of Object.entries(data.fileCalls)) {
+		graph.fileCalls.set(k, v);
+	}
+	for (const [k, v] of Object.entries(data.fileImportBindings)) {
+		graph.fileImportBindings.set(k, v);
+	}
+	for (const [k, v] of Object.entries(data.fileExports)) {
+		graph.fileExports.set(k, v);
+	}
+
+	return graph;
+}
+
 // ── Graph snapshot comparison ────────────────────────────────────────────────
 
 export interface GraphDiff {

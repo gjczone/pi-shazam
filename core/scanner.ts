@@ -17,6 +17,7 @@ import {
 import type { RepoGraph, Symbol, Edge } from "./graph.js";
 import { calculatePageRank } from "./pagerank.js";
 import { readFileAdaptive } from "./encoding.js";
+import { getProjectCacheDir, saveGraphCache, loadGraphCache } from "./cache.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -213,13 +214,20 @@ function buildEdgesForFile(
 }
 
 /**
+ * Get the persistent graph cache file path for a project.
+ */
+function getGraphCachePath(projectRoot: string): string {
+	return join(getProjectCacheDir(projectRoot), "graph-cache.json");
+}
+
+/**
  * Scan a project directory, parse all source files, build the dependency graph,
  * and compute PageRank scores.
  *
- * Supports incremental analysis: when called multiple times on the same project,
- * only files with changed mtime are re-parsed. Unchanged files reuse cached
- * parse results. Deleted files are removed from the graph. PageRank is always
- * recomputed on the full graph (fast, <10ms for typical projects).
+ * Supports persistent caching: on first call, loads from disk cache if available
+ * and validates file mtimes. If all files match, returns cached graph instantly.
+ * If some files changed, loads cache and does incremental update.
+ * Falls back to full scan when no cache exists.
  *
  * @param projectPath - Absolute or relative path to the project root
  * @param log - Optional logger
@@ -236,14 +244,114 @@ export function scanProject(
 	const files = collectSourceFiles(root, MAX_FILES);
 	logger(`Scanned ${files.length} source files`);
 
-	// Determine if we can do incremental update
-	const isIncremental = cachedGraph !== null && cachedProjectPath === root && cachedFiles.size > 0;
-
-	if (isIncremental) {
+	// Check in-memory cache first (same process, fastest path)
+	const isInMemory = cachedGraph !== null && cachedProjectPath === root && cachedFiles.size > 0;
+	if (isInMemory) {
 		return scanIncremental(root, files, adapter, logger);
 	}
 
-	return scanFull(root, files, adapter, logger);
+	// Try persistent disk cache
+	const cachePath = getGraphCachePath(root);
+	const diskCache = loadGraphCache(cachePath);
+	if (diskCache) {
+		const fileMtimes = getFileMtimes(root, files);
+		const currentFileSet = new Set(files);
+		const cachedFileSet = new Set(diskCache.fileMtimes.keys());
+
+		// Detect changes
+		const changedFiles: string[] = [];
+		const newFiles: string[] = [];
+		const deletedFiles: string[] = [];
+
+		for (const relPath of files) {
+			const currentMtime = fileMtimes.get(relPath) ?? 0;
+			const cachedMtime = diskCache.fileMtimes.get(relPath);
+			if (cachedMtime === undefined) {
+				newFiles.push(relPath);
+			} else if (cachedMtime < currentMtime) {
+				changedFiles.push(relPath);
+			}
+		}
+		for (const relPath of cachedFileSet) {
+			if (!currentFileSet.has(relPath)) {
+				deletedFiles.push(relPath);
+			}
+		}
+
+		const hasChanges = changedFiles.length > 0 || newFiles.length > 0 || deletedFiles.length > 0;
+
+		if (!hasChanges) {
+			// All mtimes match — use cached graph directly
+			logger(`Cache hit: ${diskCache.graph.symbols.size} symbols loaded from disk`);
+			cachedGraph = diskCache.graph;
+			cachedProjectPath = root;
+			cachedFiles = reconstructFileCache(diskCache.graph, diskCache.fileMtimes);
+			return cachedGraph;
+		}
+
+		// Some files changed — load cache into memory, then incremental
+		logger(`Cache partial hit: ${changedFiles.length} changed, ${newFiles.length} new, ${deletedFiles.length} deleted`);
+		cachedGraph = diskCache.graph;
+		cachedProjectPath = root;
+		cachedFiles = reconstructFileCache(diskCache.graph, diskCache.fileMtimes);
+		const updatedGraph = scanIncremental(root, files, adapter, logger);
+
+		// Persist updated graph to disk
+		try {
+			const fileMtimes = getFileMtimes(root, files);
+			saveGraphCache(updatedGraph, fileMtimes, cachePath);
+			logger(`Graph cache updated: ${updatedGraph.symbols.size} symbols`);
+		} catch (err) {
+			logger(`Failed to save graph cache: ${err}`);
+		}
+
+		return updatedGraph;
+	}
+
+	// No cache — full scan
+	const graph = scanFull(root, files, adapter, logger);
+
+	// Save to persistent cache
+	try {
+		const fileMtimes = getFileMtimes(root, files);
+		saveGraphCache(graph, fileMtimes, cachePath);
+		logger(`Graph cache saved: ${graph.symbols.size} symbols`);
+	} catch (err) {
+		logger(`Failed to save graph cache: ${err}`);
+	}
+
+	return graph;
+}
+
+/**
+ * Reconstruct the per-file cache entries from a deserialized graph and mtimes.
+ * Symbols are resolved from graph.symbols by ID; imports/calls/bindings are
+ * restored from the graph's file-level maps.
+ */
+function reconstructFileCache(
+	graph: RepoGraph,
+	fileMtimes: Map<string, number>,
+): Map<string, FileCacheEntry> {
+	const entries = new Map<string, FileCacheEntry>();
+
+	for (const [relPath, mtime] of fileMtimes) {
+		const symIds = graph.fileSymbols.get(relPath) || [];
+		const symbols: Symbol[] = [];
+		for (const id of symIds) {
+			const sym = graph.symbols.get(id);
+			if (sym) symbols.push(sym);
+		}
+
+		const importModules = graph.fileImports.get(relPath) || [];
+		const imports: [string, number][] = importModules.map((m) => [m, 0]);
+
+		const calls = graph.fileCalls.get(relPath) || [];
+		const jsImportBindings = graph.fileImportBindings.get(relPath) || [];
+
+		entries.set(relPath, { mtime, symbols, imports, calls, jsImportBindings });
+	}
+
+	return entries;
 }
 
 /**

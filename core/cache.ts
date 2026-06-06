@@ -16,11 +16,14 @@ import {
 	serializeGraph,
 	serializeSymbol,
 	serializeEdge,
+	serializeGraphV2,
+	deserializeGraphV2,
 	compareGraphSnapshots,
 } from "./graph.js";
 import type {
 	RepoGraph,
 	SerializedGraph,
+	SerializedGraphV2,
 	GraphDiff,
 	Symbol,
 	Edge,
@@ -146,6 +149,53 @@ export function diffBaseline(
 		baseline.symbols,
 		baseline.edges,
 	);
+}
+
+// ── Persistent graph cache (V2) ──────────────────────────────────────────────
+
+const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Save the full graph + file mtimes to a persistent cache file.
+ */
+export function saveGraphCache(
+	graph: RepoGraph,
+	fileMtimes: Map<string, number>,
+	cachePath: string,
+): void {
+	const serialized = serializeGraphV2(graph, fileMtimes);
+	mkdirSync(dirname(cachePath), { recursive: true });
+	writeFileSync(cachePath, JSON.stringify(serialized), "utf-8");
+}
+
+export interface GraphCacheData {
+	graph: RepoGraph;
+	fileMtimes: Map<string, number>;
+	timestamp: number;
+}
+
+/**
+ * Load a persistent graph cache. Returns null if missing, corrupt, wrong
+ * version, or older than 7 days.
+ */
+export function loadGraphCache(cachePath: string): GraphCacheData | null {
+	if (!existsSync(cachePath)) return null;
+	try {
+		const raw = readFileSync(cachePath, "utf-8");
+		const data = JSON.parse(raw) as SerializedGraphV2;
+		if (data.version !== 2) return null;
+		if (Date.now() - data.timestamp > CACHE_MAX_AGE_MS) return null;
+
+		const graph = deserializeGraphV2(data);
+		const fileMtimes = new Map<string, number>();
+		for (const [k, v] of Object.entries(data.fileMtimes)) {
+			fileMtimes.set(k, v);
+		}
+
+		return { graph, fileMtimes, timestamp: data.timestamp };
+	} catch {
+		return null;
+	}
 }
 
 /**
