@@ -28,7 +28,7 @@ When you first enter a project or return after changes — use this to understan
 - `filter`: optional keyword to locate specific files
 - `json`: set `true` for structured output
 
-**Returns**: module dependency map, top-10 PageRank files, entry points, reading order, HTTP routes (web projects).
+**Returns**: module dependency map, top-10 PageRank files, key dependencies (from package.json), recent git commits, entry points, reading order, HTTP routes (web projects). Key Dependencies and Recent Changes sections are suppressed in filter mode.
 
 **When to use**: first turn in a new repo, after git clone, after switching to an unfamiliar project.
 

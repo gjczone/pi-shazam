@@ -9,6 +9,9 @@ import type { RepoGraph, Symbol } from "../core/graph.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool } from "./_factory.js";
+import { readFileSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { join } from "node:path";
 
 // ── Route detection (absorbed from tools/routes.ts) ──────────────────────
 
@@ -95,6 +98,20 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 	lines.push(
 		`${graph.symbols.size} symbols across ${files.length} source files`,
 	);
+
+	// Key Dependencies and Recent Changes (only in full overview, not filter mode)
+	if (!filter) {
+		const depsSection = buildKeyDependenciesSection(_projectRoot);
+		if (depsSection) {
+			lines.push("");
+			lines.push(depsSection);
+		}
+		const changesSection = buildRecentChangesSection(_projectRoot);
+		if (changesSection) {
+			lines.push("");
+			lines.push(changesSection);
+		}
+	}
 
 	// Calculate per-file symbol counts and aggregate PageRank
 	const fileStats = new Map<
@@ -232,6 +249,8 @@ export function executeOverviewJson(
 		result: {
 			totalSymbols: graph.symbols.size,
 			totalFiles: graph.fileSymbols.size,
+			keyDependencies: filter ? undefined : buildKeyDependenciesSection(projectRoot),
+			recentChanges: filter ? undefined : buildRecentChangesSection(projectRoot),
 			topFiles: topFiles.map(([file, stats]) => ({
 				file,
 				symbolCount: stats.count,
@@ -380,4 +399,77 @@ function findRouteSymbols(graph: RepoGraph): Symbol[] {
 	}
 
 	return results;
+}
+
+// ── Key Dependencies section ────────────────────────────────────────
+
+/**
+ * Build a "Key Dependencies" section for the overview.
+ * Reads package.json and extracts dependencies + devDependencies (top 15).
+ * Returns null when no package.json is found.
+ */
+export function buildKeyDependenciesSection(projectRoot: string): string | null {
+	try {
+		const pkgPath = join(projectRoot, "package.json");
+		const raw = readFileSync(pkgPath, "utf-8");
+		const pkg = JSON.parse(raw);
+		const lines: string[] = [];
+		lines.push("### Key Dependencies");
+		lines.push("");
+
+		const deps = Object.entries(pkg.dependencies ?? {});
+		const devDeps = Object.entries(pkg.devDependencies ?? {});
+
+		if (deps.length === 0 && devDeps.length === 0) {
+			lines.push("(none)");
+			return lines.join("\n");
+		}
+
+		// Show top 15 dependencies (deps first, then devDeps)
+		const all = [
+			...deps.map(([name, ver]) => ({ name, version: ver as string, type: "dep" })),
+			...devDeps.map(([name, ver]) => ({ name, version: ver as string, type: "devDep" })),
+		].slice(0, 15);
+
+		lines.push("| Package | Version | Type |");
+		lines.push("|---------|---------|------|");
+		for (const d of all) {
+			lines.push(`| ${d.name} | ${d.version} | ${d.type} |`);
+		}
+
+		return lines.join("\n");
+	} catch {
+		return null;
+	}
+}
+
+// ── Recent Changes section ──────────────────────────────────────────
+
+/**
+ * Build a "Recent Changes" section for the overview.
+ * Runs `git log --oneline -10` in the project root.
+ * Returns null when git is not available or the command fails.
+ */
+export function buildRecentChangesSection(projectRoot: string): string | null {
+	try {
+		const stdout = execSync("git log --oneline -10", {
+			cwd: projectRoot,
+			timeout: 5000,
+			encoding: "utf-8",
+		}).trim();
+
+		if (!stdout) return null;
+
+		const commits = stdout.split("\n").filter(Boolean);
+		const lines: string[] = [];
+		lines.push("### Recent Changes");
+		lines.push("");
+		for (const c of commits) {
+			lines.push(`- ${c}`);
+		}
+
+		return lines.join("\n");
+	} catch {
+		return null;
+	}
 }

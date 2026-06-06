@@ -80,7 +80,7 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 │   ├── _context.ts         ← Tool-level shared LspManager holder (replaces core/lsp-global.ts)
 │   ├── _factory.ts         ← createTool() registration factory (json/maxTokens, scanProject, envelope, truncation)
 │   ├── lsp_enrich.ts       ← Tool-layer LSP enrichment wrappers (workspace/symbol, documentSymbol, semanticTokens, foldingRange) with 5s timeout + null fallback
-│   ├── overview.ts         ← Scenario trigger: use first in unfamiliar projects (module map, routes)
+│   ├── overview.ts         ← Scenario trigger: use first in unfamiliar projects (module map, deps, git history, routes)
 │   ├── impact.ts           ← Prerequisite: required before editing 2+ files or shared modules
 │   ├── codesearch.ts       ← Anti-pattern: use this instead of grep (BM25 ranking + LSP enrichment)
 │   ├── file_detail.ts      ← Scenario trigger: shows structure not syntax before first edit
@@ -132,7 +132,7 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 
 | Tool | Style | Description |
 |------|-------|-------------|
-| `shazam_overview` | Scenario trigger | When you first enter a project — see the codebase structure before reading a single file |
+| `shazam_overview` | Scenario trigger | When you first enter a project — see structure, deps, git history before reading a single file |
 | `shazam_impact` | Prerequisite | Required before editing 2+ files or any shared/exported module |
 | `shazam_codesearch` | Anti-pattern | Don't reach for grep — this ranks results by relevance with BM25 |
 | `shazam_symbol` | Scenario trigger | When you need to look up a symbol before importing or calling it |

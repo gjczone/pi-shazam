@@ -32,6 +32,44 @@ describe("Tool: overview", () => {
 		expect(parsed.status).toBe("ok");
 		expect(parsed.result).toBeDefined();
 	});
+
+	it("should include Key Dependencies section", async () => {
+		const { buildKeyDependenciesSection } = await import("../tools/overview.js");
+		const section = buildKeyDependenciesSection(".");
+		expect(section).toBeDefined();
+		expect(section).not.toBeNull();
+		expect(section).toMatch(/### Key Dependencies/);
+		expect(section).toMatch(/tree-sitter|typebox|vscode-jsonrpc/i);
+	});
+
+	it("should include Recent Changes section", async () => {
+		const { buildRecentChangesSection } = await import("../tools/overview.js");
+		const section = buildRecentChangesSection(".");
+		expect(section).toBeDefined();
+		expect(section).not.toBeNull();
+		expect(section).toMatch(/### Recent Changes/);
+	});
+
+	it("should include new sections in overview output", async () => {
+		const { executeOverview } = await import("../tools/overview.js");
+		const result = executeOverview(getGraph(), ".");
+		expect(result).toMatch(/### Key Dependencies/);
+		expect(result).toMatch(/### Recent Changes/);
+	});
+
+	it("should include new sections in json output", async () => {
+		const { executeOverviewJson } = await import("../tools/overview.js");
+		const result = executeOverviewJson(getGraph(), ".");
+		const parsed = JSON.parse(result);
+		expect(parsed.result.keyDependencies).toBeDefined();
+		expect(parsed.result.recentChanges).toBeDefined();
+	});
+
+	it("should return null for Key Dependencies when no package.json", async () => {
+		const { buildKeyDependenciesSection } = await import("../tools/overview.js");
+		const section = buildKeyDependenciesSection("/tmp/nonexistent");
+		expect(section).toBeNull();
+	});
 });
 
 describe("Tool: impact", () => {
