@@ -21,6 +21,7 @@ import { setLspManager } from "./tools/_context.js";
 import { registerBeforeStartHook } from "./hooks/before-start.js";
 import { registerAfterWriteHook } from "./hooks/after-write.js";
 import { registerToolLogger } from "./hooks/tool-logger.js";
+import { registerShazamGuide } from "./hooks/shasam-guide.js";
 
 // ── Tool registrations ────────────────────────────────────────────────────
 import { registerOverview } from "./tools/overview.js";
@@ -74,6 +75,7 @@ export default function (pi: ExtensionAPI): void {
 	registerBeforeStartHook(pi);
 	registerAfterWriteHook(pi);
 	registerToolLogger(pi);
+	registerShazamGuide(pi);
 
 	// ── /shazam-setup command ───────────────────────────────────────────────
 

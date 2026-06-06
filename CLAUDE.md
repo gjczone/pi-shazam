@@ -97,7 +97,8 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 └── hooks/                  ← Automatic (not LLM-visible)
     ├── before-start.ts     ← Inject overview into system prompt
     ├── after-write.ts      ← Auto verify + fix after write/edit
-    └── tool-logger.ts      ← Log shazam tool calls to ~/.pi/shazam-calls.log
+    ├── tool-logger.ts      ← Log shazam calls to ~/.pi/hooks/audit/shazam-calls.log
+    └── shazam-guide.ts     ← Inject shazam usage guidance into system prompt
 mcp/                        ← MCP server for non-Pi clients
 ├── entry.ts                ← McpServer + StdioServerTransport init
 ├── tools.ts                ← 13 MCP tool registrations wrapping core
