@@ -360,3 +360,71 @@ describe("LspClient withTimeout", () => {
 		expect(inFlight.size).toBe(0);
 	});
 });
+
+// ═══ Edge case tests (from #47) ═══
+describe("LspClient edge cases", () => {
+	beforeEach(() => {
+		mockConnForStart = null;
+	});
+
+	it("should clear _notifications and _serverCapabilities after close", async () => {
+		const { client, conn } = createRunningClient();
+		conn.sendRequest.mockResolvedValue(null);
+
+		// Pre-populate state
+		(client as any)._notifications = [{ uri: "file:///test.ts", diagnostics: [] }];
+		(client as any)._serverCapabilities = { hoverProvider: true };
+
+		const closeResult = client.close();
+		expect(closeResult).toBeInstanceOf(Promise);
+		await closeResult;
+
+		expect((client as any)._notifications).toEqual([]);
+		expect((client as any)._serverCapabilities).toEqual({});
+	});
+
+	it("should be a no-op when close() is called twice", async () => {
+		const { client, conn } = createRunningClient();
+		conn.sendRequest.mockResolvedValue(null);
+
+		await client.close();
+		expect(client.isRunning()).toBe(false);
+
+		// Second close: should not throw
+		const closeResult2 = client.close();
+		expect(closeResult2).toBeInstanceOf(Promise);
+		await closeResult2;
+
+		expect(client.isRunning()).toBe(false);
+	});
+
+	it("should be safe to call close() before start()", async () => {
+		const client = new LspClient(["mock"], "/ws", 5000);
+
+		// close() on unstarted client: guard should return immediately
+		const closeResult = client.close();
+		expect(closeResult).toBeInstanceOf(Promise);
+		await closeResult;
+
+		// No crash, client still not running
+		expect(client.isRunning()).toBe(false);
+	});
+
+	it("should clean up if process crashes and then close() is called", async () => {
+		// Simulate: process crashes, exit handler fires (_running=false),
+		// but this.process still references the dead ChildProcess.
+		const conn = createMockConnection();
+		conn.sendRequest.mockResolvedValue(null);
+		const { client, process: proc } = createStartedClient(conn);
+
+		// Crash the process
+		proc.exitCode = 1;
+		proc.emit("exit", 1, "SIGTERM");
+
+		expect(client.isRunning()).toBe(false);
+
+		// close() should still clean up the stale process reference
+		await client.close();
+		expect(client.isRunning()).toBe(false);
+	});
+});

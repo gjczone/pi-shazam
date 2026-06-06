@@ -538,7 +538,7 @@ export class LspClient {
 	// ── Close ──────────────────────────────────────────────────────────────────
 
 	async close(): Promise<void> {
-		if (!this.process || !this._running) return;
+		if (!this.process) return;
 
 		this._log(`Closing LSP: ${this.command[0]}`);
 
