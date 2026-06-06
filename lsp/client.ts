@@ -187,6 +187,10 @@ export class LspClient {
 		this.process.on("exit", (code, signal) => {
 			this._log(`LSP process exited: code=${code}, signal=${signal}`);
 			this._running = false;
+			this.connection = null;
+			this._openedFiles.clear();
+			this._notifications = [];
+			this._serverCapabilities = {};
 		});
 
 		// Drain stderr to prevent deadlock
@@ -521,32 +525,46 @@ export class LspClient {
 
 	// ── Close ──────────────────────────────────────────────────────────────────
 
-	close(): void {
+	async close(): Promise<void> {
 		if (!this.process || !this._running) return;
 
 		this._log(`Closing LSP: ${this.command[0]}`);
 
-		try {
-			if (this.connection) {
-				// Send shutdown request (best-effort)
-				this.connection.sendRequest("shutdown").catch(() => {});
-				this.connection.sendNotification("exit");
-				this.connection.dispose();
+		// Capture process reference before nulling — the 2s kill timeout
+		// needs it after this.process is set to null below.
+		const proc = this.process;
+
+		// 1. Clean shutdown handshake: await shutdown, then exit, then dispose.
+		if (this.connection) {
+			try {
+				await this.connection.sendRequest("shutdown");
+			} catch (err) {
+				this._log(`LSP close: shutdown request failed: ${err}`);
 			}
-		} catch {
-			// Best-effort cleanup
+			try {
+				await this.connection.sendNotification("exit");
+			} catch (err) {
+				this._log(`LSP close: exit notification failed: ${err}`);
+			}
+			this.connection.dispose();
 		}
 
-		try {
-			if (this.process.exitCode === null) {
-				setTimeout(() => {
-					if (this.process && this.process.exitCode === null) {
-						this.process.kill();
-					}
-				}, 2000);
+		// 2. Remove only our event listeners (not Node.js internal ones).
+		if (proc) {
+			proc.removeAllListeners("exit");
+			proc.removeAllListeners("error");
+			try {
+				if (proc.stderr) {
+					proc.stderr.removeAllListeners("data");
+				}
+			} catch {
+				// stderr may not be an EventEmitter (e.g., in tests).
 			}
-		} catch {
-			// Already dead
+		}
+
+		// 3. Kill the process if it hasn't exited after the shutdown handshake.
+		if (proc && proc.exitCode === null) {
+			proc.kill();
 		}
 
 		this._running = false;
@@ -554,6 +572,7 @@ export class LspClient {
 		this.process = null;
 		this._openedFiles.clear();
 		this._notifications = [];
+		this._serverCapabilities = {};
 	}
 
 	// ── Internal ───────────────────────────────────────────────────────────────
