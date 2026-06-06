@@ -1,5 +1,12 @@
 # pi-shazam
 
+> **DEVELOPMENT RULE: All development and maintenance of this project MUST follow
+> the conventions, workflows, and contracts defined in [INSTRUCTION.md](./INSTRUCTION.md).
+> This includes Pi extension API contracts, architecture layer boundaries, tool
+> registration patterns, content format contracts, release process, and verification
+> gates. INSTRUCTION.md is the single source of truth for how to build and maintain
+> pi-shazam. Read it before making any change.**
+
 Pi coding agent native codebase awareness extension. "Shazam" — like the superhero whose power comes from multiple deities, pi-shazam unifies the strength of multiple analysis engines (repomap/aider, pi-lens, serena MCP, tree-sitter, LSP) into one coherent interface for the agent.
 
 Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as a native Pi extension in TypeScript. All analysis capabilities register as first-class Pi tools — LLM sees them alongside `read`/`write`/`bash` with no distinction.

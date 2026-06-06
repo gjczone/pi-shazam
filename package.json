@@ -38,8 +38,8 @@
     "url": "https://github.com/gjczone/pi-shazam.git"
   },
   "dependencies": {
-    "iconv-lite": "^0.6.3",
-    "typebox": "^1.1.39",
+    "iconv-lite": "^0.7.2",
+    "typebox": "^1.2.1",
     "tree-sitter": "^0.22.4",
     "tree-sitter-c": "0.23.4",
     "tree-sitter-c-sharp": "0.23.1",
@@ -55,7 +55,7 @@
     "tree-sitter-rust": "0.23.2",
     "tree-sitter-typescript": "0.23.2",
     "vscode-jsonrpc": "^9.0.0",
-    "vscode-languageserver-protocol": "^3.17.0"
+    "vscode-languageserver-protocol": "^3.18.0"
   },
   "peerDependencies": {
     "typebox": "*"
