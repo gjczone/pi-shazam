@@ -12,6 +12,7 @@
  * These helpers live here to preserve that boundary.
  */
 import type { LspClient } from "../lsp/client.js";
+import { uriToPath } from "../lsp/client.js";
 import { readFileAdaptive } from "../core/encoding.js";
 import type {
 	SymbolInformation,
@@ -226,7 +227,7 @@ function toEnrichedHit(
 	if ("location" in s && s.location) {
 		const loc = s.location as Location;
 		if (!loc.range) return null;
-		const file = uriToPathLocal(loc.uri);
+		const file = uriToPath(loc.uri);
 		return {
 			name: s.name,
 			kind,
@@ -242,18 +243,6 @@ function toEnrichedHit(
 	return null;
 }
 
-function uriToPathLocal(uri: string): string {
-	if (uri.startsWith("file://")) {
-		let p = uri.slice("file://".length);
-		if (!p.startsWith("/")) p = "/" + p;
-		try {
-			return decodeURIComponent(p);
-		} catch {
-			return p;
-		}
-	}
-	return uri;
-}
 
 // ── documentSymbol enrichment ────────────────────────────────────────────────
 

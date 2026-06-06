@@ -87,15 +87,17 @@ function pathToUri(filePath: string): string {
 	return `file://${normalized}`;
 }
 
-function uriToPath(uri: string): string {
+export function uriToPath(uri: string): string {
 	if (uri.startsWith("file://")) {
-		// Handle file:/// on Unix and file:///C:/ on Windows
 		let p = uri.slice("file://".length);
-		// On Unix, paths start with /
 		if (!p.startsWith("/")) {
 			p = "/" + p;
 		}
-		return decodeURIComponent(p);
+		try {
+			return decodeURIComponent(p);
+		} catch {
+			return p;
+		}
 	}
 	return uri;
 }
