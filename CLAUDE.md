@@ -71,6 +71,7 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 │   └── setup.ts            ← /shazam-setup command: detect + install guidance
 ├── tools/                  ← One file per registerTool call
 │   ├── _context.ts         ← Tool-level shared LspManager holder (replaces core/lsp-global.ts)
+│   ├── _factory.ts         ← createTool() registration factory (json/maxTokens, scanProject, envelope, truncation)
 │   ├── lsp_enrich.ts       ← Tool-layer LSP enrichment wrappers (workspace/symbol, documentSymbol, semanticTokens, foldingRange) with 5s timeout + null fallback
 │   ├── overview.ts         ← Project structure summary
 │   ├── impact.ts           ← File-level change impact
@@ -151,7 +152,7 @@ All tools follow the same pattern:
 
 ## Change Map
 
-- **Adding a new tool**: Create `tools/<name>.ts` with `register*` function → import and call in `index.ts` → add TypeBox parameter schema via `import { Type } from "typebox"` → implement `execute()` calling `core/` functions → append Next recommendation rules to `NEXT_RULES` in `core/output.ts` (no switch to edit)
+- **Adding a new tool**: Create `tools/<name>.ts` with `register*` function using `createTool(pi, { name, label, description, params, execute })` from `tools/_factory.ts` → import and call in `index.ts` → the factory auto-handles json/maxTokens params, scanProject, content envelope, and truncation → for complex async tools, use `customExecute` instead of `execute` → append Next recommendation rules to `NEXT_RULES` in `core/output.ts` (no switch to edit)
 - **Adding a Next recommendation**: Append a `NextRule` object to `NEXT_RULES` in `core/output.ts`. Each rule: `{ forTools, condition(ctx, graph?), recommendation(ctx) }`. Rules evaluate against context + optional RepoGraph (for graph-aware filters like `hasTestFiles`, `hasHierarchyKinds`).
 - **Adding a new language**: Add grammar to `core/treesitter.ts` EXT_TO_LANG map → add tree-sitter query in queries section → add LSP server config in `lsp/servers.ts`
 - **Changing graph algorithm**: Modify `core/pagerank.ts` or `core/graph.ts` → verify all tools that consume `RepoGraph` still produce correct output
@@ -230,7 +231,8 @@ All tools follow the same pattern:
 - `core/graph.ts` — how symbols become a dependency graph
 - `core/scanner.ts` — project scanning + graph building
 - `lsp/client.ts` — LSP JSON-RPC implementation
-- `tools/overview.ts` — representative tool pattern (others follow same shape)
+- `tools/_factory.ts` — createTool() factory: eliminates per-tool boilerplate
+- `tools/overview.ts` — representative tool using the factory (others follow same shape)
 - `hooks/before-start.ts` — system prompt injection pattern
 
 ## Key Directories
