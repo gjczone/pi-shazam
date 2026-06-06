@@ -7,10 +7,10 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
-import { scanProject } from "../core/scanner.js";
+import { createTool } from "./_factory.js";
 import { executeVerifyJson } from "./verify.js";
 import { executeCheckJson } from "./check.js";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 // Avoid circular imports by referencing JSON outputs and parsing them
 interface VerifyResult {
@@ -31,7 +31,7 @@ interface CheckResult {
 }
 
 export function registerReady(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_ready",
 		label: "Pre-Commit Readiness",
 		description: `\
@@ -42,29 +42,12 @@ Fix all issues and call ready again until it passes with zero errors.
 
 Scenario: about to git commit. About to push. About to open a PR.
 About to call goal_complete. Before merging to main.`,
-		parameters: Type.Object({
-			json: Type.Optional(Type.Boolean()),
-			maxTokens: Type.Optional(Type.Number()),
-		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		params: Type.Object({}),
+		execute(graph, params) {
 			const json = params.json ?? false;
-			const maxTokens = params.maxTokens;
-			const graph = scanProject(".");
-
-			let text = json
+			return json
 				? executeReadyJson(graph, ".")
 				: executeReady(graph, ".");
-			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
-			}
-			return {
-				content: [
-					{
-						type: "text",
-						text,
-					},
-				],
-			};
 		},
 	});
 }

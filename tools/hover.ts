@@ -8,14 +8,14 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
-import { scanProject } from "../core/scanner.js";
 import { getLspManager } from "./_context.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
+import { createTool } from "./_factory.js";
 
 export function registerHover(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_hover",
 		label: "Symbol Hover Info",
 		description: `\
@@ -27,40 +27,18 @@ LSP is unavailable.
 Use after shazam_symbol to get detailed type info before making edits.
 Scenario: understanding a symbol's type signature. Checking parameter
 types before calling a function. Getting documentation for an API.`,
-		parameters: Type.Object({
+		params: Type.Object({
 			name: Type.String(),
 			file: Type.Optional(Type.String()),
-			json: Type.Optional(Type.Boolean()),
-			maxTokens: Type.Optional(Type.Number()),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		async execute(graph, params) {
 			const json = params.json ?? false;
-			const maxTokens = params.maxTokens;
-			const graph = scanProject(".");
-			const result = await executeHover(graph, params.name, params.file);
-			let text = json
-				? JSON.stringify(
-						{
-							schema_version: "1.0",
-							command: "hover",
-							status: "ok",
-							result,
-						},
-						null,
-						2,
-					)
-				: formatHoverResult(result, params.name);
-			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
-			}
-			return {
-				content: [
-					{
-						type: "text",
-						text,
-					},
-				],
-			};
+			const name = params.name as string;
+			const file = params.file as string | undefined;
+			const result = await executeHover(graph, name, file);
+			return json
+				? JSON.stringify({ schema_version: "1.0", command: "hover", status: "ok", result }, null, 2)
+				: formatHoverResult(result, name);
 		},
 	});
 }

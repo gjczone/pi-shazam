@@ -7,11 +7,11 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
-import { scanProject } from "../core/scanner.js";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { createTool } from "./_factory.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerRoutes(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_routes",
 		label: "HTTP Route Inventory",
 		description: `\
@@ -31,34 +31,13 @@ For CLI tools, libraries, or non-web projects, this will return empty.
 Scenario: adding a new API endpoint. Changing a route path or parameter
 pattern. Refactoring middleware. Auditing auth coverage across
 endpoints. Before deleting a handler function.`,
-		parameters: Type.Object({
-			json: Type.Optional(Type.Boolean()),
-			maxTokens: Type.Optional(Type.Number()),
-		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			const json = params.json ?? false;
-			const maxTokens = params.maxTokens;
-			const graph = scanProject(".");
+		params: Type.Object({}),
+		execute(graph, _params) {
+			const json = _params.json ?? false;
 			const result = executeRoutes(graph, ".");
-			let text = json
-				? JSON.stringify({
-						schema_version: "1.0",
-						command: "routes",
-						status: "ok",
-						result: { routeCount: 0 },
-					})
+			return json
+				? JSON.stringify({ schema_version: "1.0", command: "routes", status: "ok", result: { routeCount: 0 } })
 				: result;
-			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
-			}
-			return {
-				content: [
-					{
-						type: "text",
-						text,
-					},
-				],
-			};
 		},
 	});
 }

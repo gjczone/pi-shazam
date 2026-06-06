@@ -4,11 +4,11 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
-import { scanProject } from "../core/scanner.js";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
+import { createTool } from "./_factory.js";
 
 export function registerCallChain(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_call_chain",
 		label: "Call Chain Analysis",
 		description: `\
@@ -24,52 +24,23 @@ depth (default 2). Pass --flat for a simple flat list of all references
 
 Scenario: changing parameter order. Removing a function. Renaming an
 exported symbol. Changing return type. Adding required parameters.`,
-		parameters: Type.Object({
+		params: Type.Object({
 			symbol: Type.String(),
 			depth: Type.Optional(Type.Number()),
 			flat: Type.Optional(Type.Boolean()),
-			json: Type.Optional(Type.Boolean()),
-			maxTokens: Type.Optional(Type.Number()),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		execute(graph, params) {
 			const json = params.json ?? false;
-			const flat = params.flat ?? false;
-			const maxTokens = params.maxTokens;
-			const graph = scanProject(".");
-			const depth = params.depth ?? 2;
-
+			const flat = (params.flat as boolean) ?? false;
+			const depth = (params.depth as number) ?? 2;
+			const symbolName = params.symbol as string;
 			if (flat) {
-				const refs = getFlatReferences(graph, params.symbol);
-				let text = json
-					? JSON.stringify(refs, null, 2)
-					: formatFlatReferences(refs, params.symbol);
-				if (maxTokens && !json) {
-					text = truncateOutput(text.split("\n"), maxTokens);
-				}
-				return {
-					content: [
-						{
-							type: "text",
-							text,
-						},
-					],
-				};
+				const refs = getFlatReferences(graph, symbolName);
+				return json ? JSON.stringify(refs, null, 2) : formatFlatReferences(refs, symbolName);
 			}
-
-			let text = json
-				? executeCallChainJson(graph, params.symbol, depth)
-				: executeCallChain(graph, params.symbol, depth);
-			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
-			}
-			return {
-				content: [
-					{
-						type: "text",
-						text,
-					},
-				],
-			};
+			return json
+				? executeCallChainJson(graph, symbolName, depth)
+				: executeCallChain(graph, symbolName, depth);
 		},
 	});
 }

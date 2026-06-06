@@ -5,7 +5,7 @@
  * parent-child hierarchy section from documentSymbol. Falls back to
  * flat list with "(tree-sitter only)" annotation when LSP unavailable.
  */
-import type { ExtensionAPI } from "../types/pi-extension.js";
+import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
@@ -13,9 +13,10 @@ import { getNextForTool, formatNextSection, truncateOutput } from "../core/outpu
 import { getLspManager } from "./_context.js";
 import { lspDocumentSymbols } from "./lsp_enrich.js";
 import type { DocumentSymbol } from "vscode-languageserver-protocol";
+import { createTool } from "./_factory.js";
 
 export function registerFileDetail(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_file_detail",
 		label: "File Deep Analysis",
 		description: `\
@@ -32,12 +33,10 @@ Scenario: before editing a file for the first time. Before refactoring
 a large file. When deciding where to add a new function (PageRank shows
 you the file's "gravity"). After someone else's PR to understand what
 changed structurally.`,
-		parameters: Type.Object({
+		params: Type.Object({
 			file: Type.String(),
-			json: Type.Optional(Type.Boolean()),
-			maxTokens: Type.Optional(Type.Number()),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
 			const maxTokens = params.maxTokens;
 			const graph = scanProject(".");
@@ -45,11 +44,11 @@ changed structurally.`,
 			// Fetch LSP hierarchy in parallel with graph-based detail
 			const detailPromise = Promise.resolve(
 				json
-					? executeFileDetailJson(graph, params.file)
-					: executeFileDetail(graph, params.file),
+					? executeFileDetailJson(graph, params.file as string)
+					: executeFileDetail(graph, params.file as string),
 			);
 			const lspManager = getLspManager();
-			const hierarchyPromise = lspDocumentSymbols(lspManager, params.file, 5000);
+			const hierarchyPromise = lspDocumentSymbols(lspManager, params.file as string, 5000);
 
 			const [detailText, lspSymbols] = await Promise.all([
 				detailPromise,
@@ -75,7 +74,7 @@ changed structurally.`,
 			}
 
 			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
+				text = truncateOutput(text.split("\n"), maxTokens as number);
 			}
 			return {
 				content: [

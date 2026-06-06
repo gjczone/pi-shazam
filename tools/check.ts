@@ -8,16 +8,16 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
-import { scanProject } from "../core/scanner.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { getLspManager } from "./_context.js";
 import { execSync } from "child_process";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
+import { createTool } from "./_factory.js";
 
 export function registerCheck(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_check",
 		label: "Parse & LSP Diagnostics",
 		description: `\
@@ -33,42 +33,24 @@ LSP mode has a 3-level fallback chain:
 
 Scenario: after any edit. Before CI push. Mid-refactor to catch type
 errors fast. When shazam_verify reports high risk.`,
-		parameters: Type.Object({
+		params: Type.Object({
 			file: Type.Optional(Type.String()),
-			json: Type.Optional(Type.Boolean()),
 			diagnostics: Type.Optional(
 				Type.Union([Type.Literal("lsp"), Type.Literal("parse")]),
 			),
-			maxTokens: Type.Optional(Type.Number()),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		execute(graph, params) {
 			const json = params.json ?? false;
-			const diagnostics = params.diagnostics ?? "parse";
-			const maxTokens = params.maxTokens;
-			const graph = scanProject(".");
-
-			let text: string;
+			const diagnostics = (params.diagnostics as string) ?? "parse";
+			const file = params.file as string | undefined;
 			if (diagnostics === "lsp") {
-				text = json
-					? executeLspDiagnosticsJson(graph, ".", params.file)
-					: executeLspDiagnostics(graph, ".", params.file);
-			} else if (json) {
-				text = executeCheckJson(graph, ".", params.file);
-			} else {
-				text = executeCheck(graph, ".", params.file);
+				return json
+					? executeLspDiagnosticsJson(graph, ".", file)
+					: executeLspDiagnostics(graph, ".", file);
 			}
-
-			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
-			}
-			return {
-				content: [
-					{
-						type: "text",
-						text,
-					},
-				],
-			};
+			return json
+				? executeCheckJson(graph, ".", file)
+				: executeCheck(graph, ".", file);
 		},
 	});
 }

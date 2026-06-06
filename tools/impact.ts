@@ -4,11 +4,11 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
-import { scanProject } from "../core/scanner.js";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
+import { createTool } from "./_factory.js";
 
 export function registerImpact(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_impact",
 		label: "Change Impact Analysis",
 		description: `\
@@ -23,34 +23,20 @@ Changing a type definition. Before any PR that touches >1 file.
 
 Pass --with-symbols for per-symbol risk breakdown. Pass --compact for
 concise output (file names only). Supports multiple --files.`,
-		parameters: Type.Object({
+		params: Type.Object({
 			files: Type.Array(Type.String()),
 			withSymbols: Type.Optional(Type.Boolean()),
 			compact: Type.Optional(Type.Boolean()),
-			json: Type.Optional(Type.Boolean()),
-			maxTokens: Type.Optional(Type.Number()),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		execute(graph, params) {
 			const json = params.json ?? false;
-			const maxTokens = params.maxTokens;
-			const graph = scanProject(".");
-			let text = json
-				? executeImpactJson(graph, params.files)
-				: executeImpact(graph, params.files, {
-					withSymbols: params.withSymbols ?? false,
-					compact: params.compact ?? false,
+			const files = params.files as string[];
+			return json
+				? executeImpactJson(graph, files)
+				: executeImpact(graph, files, {
+					withSymbols: (params.withSymbols as boolean) ?? false,
+					compact: (params.compact as boolean) ?? false,
 				});
-			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
-			}
-			return {
-				content: [
-					{
-						type: "text",
-						text,
-					},
-				],
-			};
 		},
 	});
 }

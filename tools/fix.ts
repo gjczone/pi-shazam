@@ -8,14 +8,14 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
-import { scanProject } from "../core/scanner.js";
+import { createTool } from "./_factory.js";
 import { readFileAdaptive } from "../core/encoding.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerFix(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_fix",
 		label: "Auto-Fix Format & Lint",
 		description: `\
@@ -30,32 +30,17 @@ code with format issues — they WILL fail CI.
 Scenario: trailing whitespace after an edit. Import sorting. Indentation
 mismatches. Line length violations. Mixed tabs/spaces. Missing newlines
 at end of file.`,
-		parameters: Type.Object({
+		params: Type.Object({
 			dryRun: Type.Optional(Type.Boolean()),
 			file: Type.Optional(Type.String()),
-			json: Type.Optional(Type.Boolean()),
-			maxTokens: Type.Optional(Type.Number()),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		execute(graph, params) {
 			const json = params.json ?? false;
-			const dryRun = params.dryRun ?? true;
-			const maxTokens = params.maxTokens;
-			const graph = scanProject(".");
-
-			let text = json
-				? executeFixJson(graph, ".", { dryRun, file: params.file })
-				: executeFix(graph, ".", { dryRun, file: params.file });
-			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
-			}
-			return {
-				content: [
-					{
-						type: "text",
-						text,
-					},
-				],
-			};
+			const dryRun = (params.dryRun as boolean) ?? true;
+			const file = params.file as string | undefined;
+			return json
+				? executeFixJson(graph, ".", { dryRun, file })
+				: executeFix(graph, ".", { dryRun, file });
 		},
 	});
 }

@@ -7,14 +7,14 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
-import { scanProject } from "../core/scanner.js";
 import { diffBaseline, loadBaseline } from "../core/cache.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { execSync } from "node:child_process";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
+import { createTool } from "./_factory.js";
 
 export function registerVerify(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_verify",
 		label: "Verify Changes",
 		description: `\
@@ -28,31 +28,15 @@ Use --quick for a 2s risk-only check after each edit. Use full verify
 
 Scenario: after every edit. Before git commit. Before calling
 goal_complete. When CI is red and you need local diagnostics.`,
-		parameters: Type.Object({
+		params: Type.Object({
 			quick: Type.Optional(Type.Boolean()),
-			json: Type.Optional(Type.Boolean()),
-			maxTokens: Type.Optional(Type.Number()),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		execute(graph, params) {
 			const json = params.json ?? false;
-			const quick = params.quick ?? false;
-			const maxTokens = params.maxTokens;
-			const graph = scanProject(".");
-
-			let text = json
+			const quick = (params.quick as boolean) ?? false;
+			return json
 				? executeVerifyJson(graph, ".", { quick })
 				: executeVerify(graph, ".", { quick });
-			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
-			}
-			return {
-				content: [
-					{
-						type: "text",
-						text,
-					},
-				],
-			};
 		},
 	});
 }

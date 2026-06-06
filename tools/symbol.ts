@@ -5,7 +5,7 @@
  * output is annotated with container (parent symbol) and accurate
  * endLine from LSP range. Falls back to graph data when LSP unavailable.
  */
-import type { ExtensionAPI } from "../types/pi-extension.js";
+import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
@@ -13,9 +13,10 @@ import { getNextForTool, formatNextSection, truncateOutput } from "../core/outpu
 import { getLspManager } from "./_context.js";
 import { lspDocumentSymbols } from "./lsp_enrich.js";
 import type { DocumentSymbol } from "vscode-languageserver-protocol";
+import { createTool } from "./_factory.js";
 
 export function registerSymbol(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_symbol",
 		label: "Symbol Lookup",
 		description: `\
@@ -30,18 +31,16 @@ exists AND understand its signature, not just its file location.
 Scenario: before importing a module. Before calling a function. When
 you see an unfamiliar symbol name and need its definition. Checking
 a symbol's visibility (public/private/exported).`,
-		parameters: Type.Object({
+		params: Type.Object({
 			name: Type.String(),
 			file: Type.Optional(Type.String()),
-			json: Type.Optional(Type.Boolean()),
-			maxTokens: Type.Optional(Type.Number()),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
 			const maxTokens = params.maxTokens;
 			const graph = scanProject(".");
 
-			const matches = findSymbols(graph, params.name, params.file);
+			const matches = findSymbols(graph, params.name as string, params.file as string | undefined);
 			const uniqueFiles = [...new Set(matches.map((m) => m.file))];
 
 			// Fetch LSP documentSymbols for each file in parallel
@@ -91,10 +90,10 @@ a symbol's visibility (public/private/exported).`,
 							source: e.source,
 						})),
 					})
-				: formatSymbolResult(enriched, params.name);
+				: formatSymbolResult(enriched, params.name as string);
 
 			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
+				text = truncateOutput(text.split("\n"), maxTokens as number);
 			}
 			return {
 				content: [

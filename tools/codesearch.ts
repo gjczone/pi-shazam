@@ -9,7 +9,7 @@
 import { execSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import type { ExtensionAPI } from "../types/pi-extension.js";
+import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
@@ -17,11 +17,12 @@ import { isNonSourceFile } from "../core/filter.js";
 import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 import { getLspManager } from "./_context.js";
 import { lspWorkspaceSearch, type EnrichedSymbolHit } from "./lsp_enrich.js";
+import { createTool } from "./_factory.js";
 
 const LSP_BOOST = 50;
 
 export function registerCodesearch(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_codesearch",
 		label: "Code Search (BM25)",
 		description: `\
@@ -33,21 +34,19 @@ search via ripgrep with context snippets.
 Scenario: finding all error handling patterns. Locating all callers of
 a function by name. Searching for literal text across the codebase.
 Finding TODO/FIXME comments. Exploring code before making edits.`,
-		parameters: Type.Object({
+		params: Type.Object({
 			query: Type.String(),
 			target: Type.Optional(Type.Union([Type.Literal("symbol"), Type.Literal("code")])),
 			topN: Type.Optional(Type.Number()),
-			json: Type.Optional(Type.Boolean()),
-			maxTokens: Type.Optional(Type.Number()),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
 			const target = params.target ?? "symbol";
 			const maxTokens = params.maxTokens;
 			const graph = scanProject(".");
 
 			if (target === "code") {
-				const result = executeFulltextSearch(params.query, params.topN);
+				const result = executeFulltextSearch(params.query as string, params.topN as number | undefined);
 				let text = json
 					? JSON.stringify({
 							schema_version: "1.0",
@@ -55,9 +54,9 @@ Finding TODO/FIXME comments. Exploring code before making edits.`,
 							status: "ok",
 							result: { query: params.query, target: "code", results: result.length },
 						})
-					: formatFulltextResult(result, params.query);
+					: formatFulltextResult(result, params.query as string);
 				if (maxTokens && !json) {
-					text = truncateOutput(text.split("\n"), maxTokens);
+					text = truncateOutput(text.split("\n"), maxTokens as number);
 				}
 				return {
 					content: [
@@ -70,10 +69,10 @@ Finding TODO/FIXME comments. Exploring code before making edits.`,
 			}
 
 			// BM25 + LSP workspace/symbol in parallel
-			const bm25Results = executeCodesearch(graph, params.query, params.topN);
+			const bm25Results = executeCodesearch(graph, params.query as string, params.topN as number | undefined);
 			const lspManager = getLspManager();
-			const lspResults = await lspWorkspaceSearch(lspManager, params.query, 5000);
-			const merged = mergeResults(graph, bm25Results, lspResults, params.topN);
+			const lspResults = await lspWorkspaceSearch(lspManager, params.query as string, 5000);
+			const merged = mergeResults(graph, bm25Results, lspResults, params.topN as number | undefined);
 			const source = lspResults.length > 0 ? "lsp+bm25" : "bm25";
 
 			let text = json
@@ -88,9 +87,9 @@ Finding TODO/FIXME comments. Exploring code before making edits.`,
 							source,
 						},
 					})
-				: formatCodesearchResult(merged, params.query, source);
+				: formatCodesearchResult(merged, params.query as string, source);
 			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
+				text = truncateOutput(text.split("\n"), maxTokens as number);
 			}
 			return {
 				content: [

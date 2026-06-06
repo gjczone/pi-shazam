@@ -10,14 +10,14 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
-import { scanProject } from "../core/scanner.js";
+import { createTool } from "./_factory.js";
 import { getLspManager } from "./_context.js";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 export function registerTypeHierarchy(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_type_hierarchy",
 		label: "Type Hierarchy",
 		description: `\
@@ -30,44 +30,18 @@ Combines class hierarchy + interface implementations in one tool.
 Scenario: understanding class inheritance before refactoring.
 Finding all implementations of an interface. Checking subtype
 relationships before adding a new method.`,
-		parameters: Type.Object({
+		params: Type.Object({
 			name: Type.String(),
-			direction: Type.Optional(
-				Type.Union([Type.Literal("both"), Type.Literal("supertypes"), Type.Literal("subtypes")]),
-			),
-			json: Type.Optional(Type.Boolean()),
-			maxTokens: Type.Optional(Type.Number()),
+			direction: Type.Optional(Type.Union([Type.Literal("both"), Type.Literal("supertypes"), Type.Literal("subtypes")])),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		execute(graph, params) {
 			const json = params.json ?? false;
-			const direction = params.direction ?? "both";
-			const maxTokens = params.maxTokens;
-			const graph = scanProject(".");
-
-			const result = executeTypeHierarchy(graph, params.name, direction);
-			let text = json
-				? JSON.stringify(
-						{
-							schema_version: "1.0",
-							command: "type_hierarchy",
-							status: "ok",
-							result,
-						},
-						null,
-						2,
-					)
-				: formatTypeHierarchy(result, params.name);
-			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
-			}
-			return {
-				content: [
-					{
-						type: "text",
-						text,
-					},
-				],
-			};
+			const name = params.name as string;
+			const direction = (params.direction as string) ?? "both";
+			const result = executeTypeHierarchy(graph, name, direction as any);
+			return json
+				? JSON.stringify({ schema_version: "1.0", command: "type_hierarchy", status: "ok", result }, null, 2)
+				: formatTypeHierarchy(result, name);
 		},
 	});
 }

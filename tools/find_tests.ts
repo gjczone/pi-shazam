@@ -9,12 +9,12 @@ import { join, basename, dirname } from "node:path";
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
-import { scanProject } from "../core/scanner.js";
+import { createTool } from "./_factory.js";
 import { isNonSourceFile } from "../core/filter.js";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerFindTests(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_find_tests",
 		label: "Find Test Files",
 		description: `\
@@ -25,47 +25,18 @@ Uses common test naming conventions (*.test.ts, *.spec.ts, __tests__/).
 Scenario: before adding tests to verify you found the right file.
 Before refactoring a module to know what test coverage exists.
 After changing code to locate tests that need updating.`,
-		parameters: Type.Object({
+		params: Type.Object({
 			sourceFile: Type.Optional(Type.String()),
 			module: Type.Optional(Type.String()),
-			json: Type.Optional(Type.Boolean()),
-			maxTokens: Type.Optional(Type.Number()),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			const sourceFile = params.sourceFile;
-			const module = params.module;
+		execute(graph, params) {
 			const json = params.json ?? false;
-			const maxTokens = params.maxTokens;
-			const graph = scanProject(".");
-
-			const result = executeFindTests(graph, ".", {
-				sourceFile,
-				module,
-			});
-
-			let text = json
-				? JSON.stringify(
-						{
-							schema_version: "1.0",
-							command: "find_tests",
-							status: "ok",
-							result,
-						},
-						null,
-						2,
-					)
+			const sourceFile = params.sourceFile as string | undefined;
+			const module = params.module as string | undefined;
+			const result = executeFindTests(graph, ".", { sourceFile, module });
+			return json
+				? JSON.stringify({ schema_version: "1.0", command: "find_tests", status: "ok", result }, null, 2)
 				: formatFindTestsResult(result, sourceFile, module);
-			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
-			}
-			return {
-				content: [
-					{
-						type: "text",
-						text,
-					},
-				],
-			};
 		},
 	});
 }

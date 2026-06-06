@@ -7,11 +7,11 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
-import { scanProject } from "../core/scanner.js";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
+import { createTool } from "./_factory.js";
 
 export function registerSafeDelete(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_safe_delete",
 		label: "Safe Delete",
 		description: `\
@@ -28,42 +28,18 @@ Safety workflow:
 Scenario: removing dead code after confirming it's unused.
 Cleaning up deprecated functions or modules.
 Removing a utility that was replaced by a library.`,
-		parameters: Type.Object({
+		params: Type.Object({
 			symbol: Type.String(),
 			dryRun: Type.Optional(Type.Boolean()),
-			json: Type.Optional(Type.Boolean()),
-			maxTokens: Type.Optional(Type.Number()),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		execute(graph, params) {
 			const json = params.json ?? false;
-			const dryRun = params.dryRun ?? true;
-			const maxTokens = params.maxTokens;
-			const graph = scanProject(".");
-
-			const result = executeSafeDelete(graph, params.symbol, dryRun);
-			let text = json
-				? JSON.stringify(
-						{
-							schema_version: "1.0",
-							command: "safe_delete",
-							status: "ok",
-							result,
-						},
-						null,
-						2,
-					)
-				: formatSafeDeleteResult(result, params.symbol);
-			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
-			}
-			return {
-				content: [
-					{
-						type: "text",
-						text,
-					},
-				],
-			};
+			const symbolName = params.symbol as string;
+			const dryRun = (params.dryRun as boolean) ?? true;
+			const result = executeSafeDelete(graph, symbolName, dryRun);
+			return json
+				? JSON.stringify({ schema_version: "1.0", command: "safe_delete", status: "ok", result }, null, 2)
+				: formatSafeDeleteResult(result, symbolName);
 		},
 	});
 }

@@ -4,12 +4,12 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
-import { scanProject } from "../core/scanner.js";
 import { isNonSourceFile } from "../core/filter.js";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { getNextForTool, formatNextSection } from "../core/output.js";
+import { createTool } from "./_factory.js";
 
 export function registerOverview(pi: ExtensionAPI): void {
-	pi.registerTool({
+	createTool(pi, {
 		name: "shazam_overview",
 		label: "Project Overview",
 		description: `\
@@ -26,30 +26,15 @@ specific files (replaces separate find_file tool).
 
 Output: plain text summary by default. Pass { json: true } for
 structured output with file lists and PageRank scores.`,
-		parameters: Type.Object({
-			json: Type.Optional(Type.Boolean()),
+		params: Type.Object({
 			filter: Type.Optional(Type.String()),
-			maxTokens: Type.Optional(Type.Number()),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		execute(graph, params) {
+			const filter = (params.filter as string) ?? "";
 			const json = params.json ?? false;
-			const filter = params.filter ?? "";
-			const maxTokens = params.maxTokens;
-			const graph = scanProject(".");
-			let text = json
+			return json
 				? executeOverviewJson(graph, ".", filter)
 				: executeOverview(graph, ".", filter);
-			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens);
-			}
-			return {
-				content: [
-					{
-						type: "text",
-						text,
-					},
-				],
-			};
 		},
 	});
 }
