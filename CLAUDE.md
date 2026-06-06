@@ -71,12 +71,13 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 │   └── setup.ts            ← /shazam-setup command: detect + install guidance
 ├── tools/                  ← One file per registerTool call
 │   ├── _context.ts         ← Tool-level shared LspManager holder (replaces core/lsp-global.ts)
+│   ├── lsp_enrich.ts       ← Tool-layer LSP enrichment wrappers (workspace/symbol, documentSymbol, semanticTokens, foldingRange) with 5s timeout + null fallback
 │   ├── overview.ts         ← Project structure summary
 │   ├── impact.ts           ← File-level change impact
-│   ├── codesearch.ts       ← BM25 symbol search
-│   ├── file_detail.ts      ← Single file deep analysis
+│   ├── codesearch.ts       ← BM25 symbol search + LSP workspace/symbol enrichment
+│   ├── file_detail.ts      ← Single file deep analysis + LSP documentSymbol hierarchy
 │   ├── call_chain.ts       ← Call graph traversal
-│   ├── symbol.ts           ← Symbol lookup
+│   ├── symbol.ts           ← Symbol lookup + LSP container/endLine enrichment
 │   ├── routes.ts           ← HTTP route inventory
 │   ├── state_map.ts        ← State definition discovery
 │   ├── verify.ts           ← Post-edit diagnostics gate
@@ -101,11 +102,25 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 ## Core Flows
 
 - **Overview injection**: `before_agent_start` event → `core/treesitter` scan (with persistent disk cache) → `core/pagerank` → format summary → inject into `systemPrompt` array
-- **Tool call**: LLM calls tool → `tools/*.execute()` → `core/scanner` (disk cache → in-memory cache → incremental/full scan) → `core/` analysis → optional LSP enrichment → return `AgentToolResult`
+- **Tool call**: LLM calls tool → `tools/*.execute()` → `core/scanner` (disk cache → in-memory cache → incremental/full scan) → `core/` analysis → optional LSP enrichment via `tools/lsp_enrich.ts` (5s timeout, tree-sitter fallback) → return `AgentToolResult`
 - **Auto-verify**: `tool_call` event (write/edit) → `hooks/after-write` → `core/` diagnostics + LSP `textDocument/publishDiagnostics` → `pi.sendMessage()` with findings
 - **LSP lifecycle**: extension load → `lsp/manager` detects project languages (6 supported: Python, TypeScript, Go, JSON, YAML, Rust) → spawns servers on demand → `lsp/client` handles JSON-RPC via vscode-jsonrpc over stdio → `session_shutdown` kills all
 
 ## API Surface
+
+### LSP Methods on LspClient
+
+`lsp/client.ts` exposes the following LSP protocol methods. Each returns `null` when the server is unavailable, the file is not opened, the server capability is missing, or the call times out (5s). Tools compose these via `tools/lsp_enrich.ts`.
+
+| Method | LSP request | Consumer |
+|--------|-------------|----------|
+| `definition` | `textDocument/definition` | tools/symbol.ts (future), tools/type_hierarchy.ts |
+| `references` | `textDocument/references` | tools/call_chain.ts, tools/verify.ts |
+| `hover` | `textDocument/hover` | tools/hover.ts |
+| `documentSymbols` | `textDocument/documentSymbol` | tools/symbol.ts, tools/file_detail.ts (via `lspDocumentSymbols`) |
+| `workspaceSymbol` | `workspace/symbol` | tools/codesearch.ts (via `lspWorkspaceSearch`) |
+| `semanticTokens` | `textDocument/semanticTokens/full` | (wired via `lspSemanticTokens`, not yet consumed by tools) |
+| `foldingRange` | `textDocument/foldingRange` | (wired via `lspFoldingRanges`, not yet consumed by tools) |
 
 > ⚠️ 契约文档：`CONTRACT.md` 为 Pi ExtensionAPI 真实契约的权威来源，提取自 `pi-coding-agent@0.78.1` 运行时源码。
 

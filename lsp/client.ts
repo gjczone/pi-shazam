@@ -41,6 +41,12 @@ import type {
 	Hover,
 	SymbolInformation,
 	DocumentSymbol,
+	WorkspaceSymbolParams,
+	WorkspaceSymbol,
+	SemanticTokensParams,
+	SemanticTokens,
+	FoldingRangeParams,
+	FoldingRange,
 } from "vscode-languageserver-protocol";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -227,6 +233,26 @@ export class LspClient {
 					documentSymbol: {
 						hierarchicalDocumentSymbolSupport: true,
 					},
+					foldingRange: {},
+					semanticTokens: {
+						requests: { full: true },
+						tokenTypes: [
+							"namespace", "type", "class", "enum", "interface",
+							"struct", "typeParameter", "parameter", "variable",
+							"property", "enumMember", "event", "function",
+							"method", "macro", "keyword", "modifier", "comment",
+							"string", "number", "regexp", "operator",
+						],
+						tokenModifiers: [
+							"declaration", "definition", "readonly", "static",
+							"deprecated", "abstract", "async", "modification",
+							"documentation", "defaultLibrary",
+						],
+						formats: ["relative"],
+					},
+				},
+				workspace: {
+					symbol: {},
 				},
 			},
 			workspaceFolders: null,
@@ -370,6 +396,98 @@ export class LspClient {
 		} catch {
 			return null;
 		}
+	}
+
+	async workspaceSymbol(
+		query: string,
+	): Promise<SymbolInformation[] | WorkspaceSymbol[] | null> {
+		if (!this.connection) return null;
+		const cap = this._serverCapabilities;
+		if (!cap || !(cap as Record<string, unknown>).workspaceSymbolProvider) {
+			return null;
+		}
+
+		const params: WorkspaceSymbolParams = { query };
+
+		try {
+			const result = await this.withTimeout(
+				this.connection.sendRequest<
+					SymbolInformation[] | WorkspaceSymbol[] | null
+				>("workspace/symbol", params),
+			);
+			return result ?? null;
+		} catch {
+			return null;
+		}
+	}
+
+	async semanticTokens(filePath: string): Promise<SemanticTokens | null> {
+		if (!this.isFileOpened(filePath)) return null;
+		const cap = this._serverCapabilities;
+		const stProvider = (cap as Record<string, unknown> | undefined)
+			?.semanticTokensProvider;
+		if (!stProvider) return null;
+
+		const params: SemanticTokensParams = {
+			textDocument: { uri: pathToUri(filePath) },
+		};
+
+		try {
+			const result = await this.withTimeout(
+				this.connection!.sendRequest<SemanticTokens | null>(
+					"textDocument/semanticTokens/full",
+					params,
+				),
+			);
+			return result ?? null;
+		} catch {
+			return null;
+		}
+	}
+
+	async foldingRange(filePath: string): Promise<FoldingRange[] | null> {
+		if (!this.isFileOpened(filePath)) return null;
+		const cap = this._serverCapabilities;
+		if (!cap || !(cap as Record<string, unknown>).foldingRangeProvider) {
+			return null;
+		}
+
+		const params: FoldingRangeParams = {
+			textDocument: { uri: pathToUri(filePath) },
+		};
+
+		try {
+			const result = await this.withTimeout(
+				this.connection!.sendRequest<FoldingRange[] | null>(
+					"textDocument/foldingRange",
+					params,
+				),
+			);
+			return result ?? null;
+		} catch {
+			return null;
+		}
+	}
+
+	/**
+	 * Race a request against the configured per-request timeout.
+	 * Returns null (via rejection caught by caller) when timeout fires first.
+	 */
+	private withTimeout<T>(promise: Promise<T>): Promise<T> {
+		return new Promise<T>((resolve, reject) => {
+			const timer = setTimeout(() => {
+				reject(new Error(`LSP request timed out after ${this.timeout}ms`));
+			}, this.timeout);
+			promise
+				.then((v) => {
+					clearTimeout(timer);
+					resolve(v);
+				})
+				.catch((err) => {
+					clearTimeout(timer);
+					reject(err);
+				});
+		});
 	}
 
 	// ── Diagnostics ────────────────────────────────────────────────────────────
