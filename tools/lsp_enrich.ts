@@ -12,6 +12,7 @@
  * These helpers live here to preserve that boundary.
  */
 import type { LspClient } from "../lsp/client.js";
+import { readFileAdaptive } from "../core/encoding.js";
 import type {
 	SymbolInformation,
 	WorkspaceSymbol,
@@ -164,10 +165,9 @@ async function ensureFileOpened(
 	if (!info.client.isRunning()) return null;
 	try {
 		if (!info.client.isFileOpened(filePath)) {
-			const { readFileSync } = await import("node:fs");
 			const { resolve } = await import("node:path");
 			const absPath = resolve(info.workspaceRoot, filePath);
-			const content = readFileSync(absPath, "utf-8");
+			const content = readFileAdaptive(absPath);
 			await info.client.didOpen(filePath, content);
 		}
 	} catch {

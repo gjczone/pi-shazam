@@ -57,11 +57,11 @@ errors fast. When shazam_verify reports high risk.`,
 
 // ── LSP diagnostics mode ────────────────────────────────────────────────────
 
-function executeLspDiagnostics(
+async function executeLspDiagnostics(
 	graph: RepoGraph,
 	projectRoot: string,
 	file?: string,
-): string {
+): Promise<string> {
 	const lines: string[] = [];
 	lines.push("## LSP Diagnostics");
 	lines.push("");
@@ -101,7 +101,7 @@ function executeLspDiagnostics(
 		// Open the file in LSP
 		try {
 			const content = readFileSync(resolve(projectRoot, filePath), "utf-8");
-			client.didOpen(filePath, content);
+			await client.didOpen(filePath, content);
 		} catch {
 			failedFiles.push(filePath);
 			continue;
@@ -171,11 +171,11 @@ function executeLspDiagnostics(
 	return lines.join("\n");
 }
 
-function executeLspDiagnosticsJson(
+async function executeLspDiagnosticsJson(
 	graph: RepoGraph,
 	projectRoot: string,
 	file?: string,
-): string {
+): Promise<string> {
 	const targetFiles = file
 		? [file]
 		: [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
@@ -208,7 +208,7 @@ function executeLspDiagnosticsJson(
 
 		try {
 			const content = readFileSync(resolve(projectRoot, filePath), "utf-8");
-			client.didOpen(filePath, content);
+			await client.didOpen(filePath, content);
 		} catch {
 			continue;
 		}

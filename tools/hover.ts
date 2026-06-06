@@ -114,7 +114,7 @@ export async function executeHover(
 						resolve(serverInfo.workspaceRoot, symbol.file),
 						"utf-8",
 					);
-					client.didOpen(symbol.file, content);
+					await client.didOpen(symbol.file, content);
 				}
 				const hoverData = await client.hover(
 					symbol.file,
