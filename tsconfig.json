@@ -27,7 +27,8 @@
     "tools/**/*.ts",
     "hooks/**/*.ts",
     "lsp/**/*.ts",
-    "core/**/*.ts"
+    "core/**/*.ts",
+    "mcp/**/*.ts"
   ],
   "exclude": [
     "node_modules",

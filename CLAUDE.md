@@ -97,6 +97,10 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 └── hooks/                  ← Automatic (not LLM-visible)
     ├── before-start.ts     ← Inject overview into system prompt
     └── after-write.ts      ← Auto verify + fix after write/edit
+mcp/                        ← MCP server for non-Pi clients
+├── entry.ts                ← McpServer + StdioServerTransport init
+├── tools.ts                ← 13 MCP tool registrations wrapping core
+└── README.md               ← Client setup guide (Cursor, Claude Desktop, etc.)
 ```
 
 ### Layer dependency direction
@@ -178,6 +182,7 @@ All tools follow the same pattern:
 - **Changing graph algorithm**: Modify `core/pagerank.ts` or `core/graph.ts` → verify all tools that consume `RepoGraph` still produce correct output
 - **Changing LSP protocol**: Modify `lsp/client.ts` → verify `lsp/manager.ts` lifecycle still works → test with at least 2 different language servers
 - **Changing tool output format**: Update the specific `tools/*.ts` formatter → verify JSON envelope schema
+- **Adding a tool (MCP sync)**: After adding/changing/deleting a Pi tool → add/update/remove the matching `registerTool` in `mcp/tools.ts` → update `mcp/README.md` tool table → sync Pi tool description changes to MCP tool descriptions. MCP tools must stay in sync with Pi tools in the same PR.
 
 ## Release & Publish 流程
 
