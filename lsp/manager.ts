@@ -372,7 +372,11 @@ export class LspManager {
 	): LspServerInfo | null {
 		// Return existing server if already running
 		const existing = this.servers.get(language);
-		if (existing) return existing;
+		if (existing && existing.client.isRunning()) return existing;
+		// Remove dead client so re-detection can happen
+		if (existing) {
+			this.servers.delete(language);
+		}
 
 		// Detect and spawn
 		const detection = detectLspServer(
