@@ -102,11 +102,7 @@ export function registerCodesearch(pi: ExtensionAPI): void {
 	});
 }
 
-export function executeCodesearch(
-	graph: RepoGraph,
-	query: string,
-	topN?: number,
-): Symbol[] {
+export function executeCodesearch(graph: RepoGraph, query: string, topN?: number): Symbol[] {
 	const limit = topN ?? 20;
 	const lower = query.toLowerCase();
 	const tokens = tokenize(query);
@@ -236,12 +232,7 @@ export function mergeResults(
 	return out.slice(0, limit);
 }
 
-function findGraphSymbol(
-	graph: RepoGraph,
-	name: string,
-	file: string,
-	line: number,
-): Symbol | undefined {
+function findGraphSymbol(graph: RepoGraph, name: string, file: string, line: number): Symbol | undefined {
 	const ids = graph.fileSymbols.get(file);
 	if (!ids) return undefined;
 	for (const id of ids) {
@@ -253,29 +244,16 @@ function findGraphSymbol(
 	return undefined;
 }
 
-function formatCodesearchResult(
-	results: CodesearchHit[],
-	query: string,
-	source: string,
-): string {
+function formatCodesearchResult(results: CodesearchHit[], query: string, source: string): string {
 	if (results.length === 0) {
 		return `No symbols found for query: "${query}"`;
 	}
 
-	const sourceLabel =
-		source === "lsp+bm25" ? " (LSP enriched)" : " (tree-sitter only)";
-	const lines: string[] = [
-		`## Code Search: "${query}" (${results.length} results)${sourceLabel}`,
-		"",
-	];
+	const sourceLabel = source === "lsp+bm25" ? " (LSP enriched)" : " (tree-sitter only)";
+	const lines: string[] = [`## Code Search: "${query}" (${results.length} results)${sourceLabel}`, ""];
 	for (let i = 0; i < results.length; i++) {
 		const hit = results[i]!;
-		const srcTag =
-			hit.source === "lsp"
-				? " [LSP]"
-				: hit.source === "lsp+bm25"
-					? " [LSP+BM25]"
-					: "";
+		const srcTag = hit.source === "lsp" ? " [LSP]" : hit.source === "lsp+bm25" ? " [LSP+BM25]" : "";
 		lines.push(
 			`${i + 1}. ${hit.sym.kind} \`${hit.sym.name}\`${srcTag} — ${hit.sym.file}:${hit.sym.line} (PR ${hit.sym.pagerank.toFixed(3)})`,
 		);
@@ -305,7 +283,11 @@ function executeFulltextSearch(query: string, topN?: number): FulltextMatch[] {
 	const limit = topN ?? 20;
 
 	// Try ripgrep first (fastest, respects .gitignore)
-	if (existsSync("/usr/bin/rg") || existsSync("/usr/local/bin/rg") || execSync("which rg 2>/dev/null || true").toString().trim()) {
+	if (
+		existsSync("/usr/bin/rg") ||
+		existsSync("/usr/local/bin/rg") ||
+		execSync("which rg 2>/dev/null || true").toString().trim()
+	) {
 		try {
 			const output = execSync(
 				`rg --no-heading -n --max-count 20 --context 1 -i -g '!.git' -g '!node_modules' -g '!dist' -g '!*.lock' -g '!package-lock.json' -g '!yarn.lock' -g '!pnpm-lock.yaml' ${JSON.stringify(query)} 2>/dev/null | head -${limit * 3}`,
@@ -378,7 +360,42 @@ function builtinFulltextSearch(query: string, limit: number): FulltextMatch[] {
 				} else {
 					// Check if it's a text file by extension
 					const ext = entry.split(".").pop()?.toLowerCase();
-					const textExts = new Set(["ts", "tsx", "js", "jsx", "py", "rs", "go", "java", "kt", "swift", "c", "cpp", "h", "hpp", "css", "scss", "less", "html", "vue", "svelte", "json", "yaml", "yml", "toml", "md", "txt", "xml", "svg", "sh", "bash", "zsh", "sql", "graphql", "prisma"]);
+					const textExts = new Set([
+						"ts",
+						"tsx",
+						"js",
+						"jsx",
+						"py",
+						"rs",
+						"go",
+						"java",
+						"kt",
+						"swift",
+						"c",
+						"cpp",
+						"h",
+						"hpp",
+						"css",
+						"scss",
+						"less",
+						"html",
+						"vue",
+						"svelte",
+						"json",
+						"yaml",
+						"yml",
+						"toml",
+						"md",
+						"txt",
+						"xml",
+						"svg",
+						"sh",
+						"bash",
+						"zsh",
+						"sql",
+						"graphql",
+						"prisma",
+					]);
 					if (ext && !textExts.has(ext)) continue;
 
 					const content = readFileSync(fullPath, "utf-8");
@@ -409,10 +426,7 @@ function formatFulltextResult(results: FulltextMatch[], query: string): string {
 		return `No results found for query: "${query}"`;
 	}
 
-	const lines: string[] = [
-		`## Full-Text Search: "${query}" (${results.length} results)`,
-		"",
-	];
+	const lines: string[] = [`## Full-Text Search: "${query}" (${results.length} results)`, ""];
 	for (let i = 0; i < results.length; i++) {
 		const r = results[i]!;
 		lines.push(

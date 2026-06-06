@@ -47,11 +47,7 @@ interface RenameResult {
 	changes?: number;
 }
 
-export function executeRenameSymbol(
-	graph: RepoGraph,
-	symbolName: string,
-	newName: string,
-): RenameResult {
+export function executeRenameSymbol(graph: RepoGraph, symbolName: string, newName: string): RenameResult {
 	// Find the symbol
 	let symbol: Symbol | undefined;
 	for (const sym of graph.symbols.values()) {

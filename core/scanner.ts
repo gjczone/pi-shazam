@@ -10,10 +10,7 @@
 import { readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, dirname } from "node:path";
 import { TreeSitterAdapter, EXT_TO_LANG } from "./treesitter.js";
-import {
-	createRepoGraph,
-	createEdge,
-} from "./graph.js";
+import { createRepoGraph, createEdge } from "./graph.js";
 import type { RepoGraph, Symbol, Edge } from "./graph.js";
 import { calculatePageRank } from "./pagerank.js";
 import { readFileAdaptive } from "./encoding.js";
@@ -114,12 +111,7 @@ function removeFileData(graph: RepoGraph, relPath: string): void {
  * Parse a single file and extract symbols, imports, calls, and JS/TS import bindings.
  * Returns a FileCacheEntry with all extracted data.
  */
-function parseFile(
-	adapter: TreeSitterAdapter,
-	root: string,
-	relPath: string,
-	mtime: number,
-): FileCacheEntry | null {
+function parseFile(adapter: TreeSitterAdapter, root: string, relPath: string, mtime: number): FileCacheEntry | null {
 	const absPath = join(root, relPath);
 	const ext = relPath.slice(relPath.lastIndexOf(".")).toLowerCase();
 	const lang = EXT_TO_LANG[ext];
@@ -144,16 +136,15 @@ function parseFile(
 /**
  * Build edges for a single file using its cached parse data and the current graph state.
  */
-function buildEdgesForFile(
-	graph: RepoGraph,
-	relPath: string,
-	entry: FileCacheEntry,
-): void {
+function buildEdgesForFile(graph: RepoGraph, relPath: string, entry: FileCacheEntry): void {
 	const thisFileSymIds = graph.fileSymbols.get(relPath) || [];
 
 	// Import edges
 	if (entry.imports.length > 0) {
-		graph.fileImports.set(relPath, entry.imports.map(([m]) => m));
+		graph.fileImports.set(
+			relPath,
+			entry.imports.map(([m]) => m),
+		);
 		for (const [importedModule] of entry.imports) {
 			const resolvedImport = resolveImport(importedModule, relPath, graph);
 			const targetFileSyms = graph.fileSymbols.get(resolvedImport) || [];
@@ -216,10 +207,7 @@ function getGraphCachePath(projectRoot: string): string {
  * @param log - Optional logger
  * @returns The fully built RepoGraph with PageRank scores set
  */
-export function scanProject(
-	projectPath: string,
-	log?: (msg: string) => void,
-): RepoGraph {
+export function scanProject(projectPath: string, log?: (msg: string) => void): RepoGraph {
 	const root = resolve(projectPath);
 	const logger = log ?? (() => {});
 
@@ -311,10 +299,7 @@ export function scanProject(
  * Symbols are resolved from graph.symbols by ID; imports/calls/bindings are
  * restored from the graph's file-level maps.
  */
-function reconstructFileCache(
-	graph: RepoGraph,
-	fileMtimes: Map<string, number>,
-): Map<string, FileCacheEntry> {
+function reconstructFileCache(graph: RepoGraph, fileMtimes: Map<string, number>): Map<string, FileCacheEntry> {
 	const entries = new Map<string, FileCacheEntry>();
 
 	for (const [relPath, mtime] of fileMtimes) {
@@ -340,12 +325,7 @@ function reconstructFileCache(
 /**
  * Full scan: parse all files from scratch.
  */
-function scanFull(
-	root: string,
-	files: string[],
-	adapter: TreeSitterAdapter,
-	logger: (msg: string) => void,
-): RepoGraph {
+function scanFull(root: string, files: string[], adapter: TreeSitterAdapter, logger: (msg: string) => void): RepoGraph {
 	const graph = createRepoGraph();
 	const newFileCache = new Map<string, FileCacheEntry>();
 
@@ -418,7 +398,7 @@ function scanIncremental(
 	}
 
 	if (changedFiles.length === 0 && deletedFiles.length === 0) {
-			return graph;
+		return graph;
 	}
 
 	logger(`Incremental: ${changedFiles.length} changed, ${deletedFiles.length} deleted`);
@@ -432,10 +412,14 @@ function scanIncremental(
 	// Remove and re-parse changed files
 	for (const relPath of changedFiles) {
 		// Snapshot old data for rollback if re-parse fails
-		const oldSymbols = graph.fileSymbols.get(relPath)?.map((id) => {
-			const sym = graph.symbols.get(id);
-			return sym ? { ...sym } : null;
-		}).filter(Boolean) ?? [];
+		const oldSymbols =
+			graph.fileSymbols
+				.get(relPath)
+				?.map((id) => {
+					const sym = graph.symbols.get(id);
+					return sym ? { ...sym } : null;
+				})
+				.filter(Boolean) ?? [];
 		const oldEntry = cachedFiles.get(relPath) ?? null;
 
 		removeFileData(graph, relPath);
@@ -543,11 +527,7 @@ function addEdge(graph: RepoGraph, edge: Edge): void {
  * Resolve a relative import path to a file path that matches the fileSymbols keys.
  * Handles extensionless imports (e.g., "./foo" → "./foo.ts" or "./foo/index.ts").
  */
-function resolveImport(
-	importPath: string,
-	fromFile: string,
-	graph?: RepoGraph,
-): string {
+function resolveImport(importPath: string, fromFile: string, graph?: RepoGraph): string {
 	if (importPath.startsWith(".")) {
 		const fromDir = dirname(fromFile);
 		let resolved = join(fromDir, importPath);
@@ -576,11 +556,7 @@ function resolveImport(
 
 // ── Symbol lookup helpers ────────────────────────────────────────────────────
 
-function findCallerSymbols(
-	fileSymIds: string[],
-	symbols: Map<string, Symbol>,
-	callLine: number,
-): Symbol[] {
+function findCallerSymbols(fileSymIds: string[], symbols: Map<string, Symbol>, callLine: number): Symbol[] {
 	// Find symbols in the file that contain this call line within their range
 	const candidates: Symbol[] = [];
 	for (const id of fileSymIds) {
@@ -600,10 +576,7 @@ function findCallerSymbols(
 	return candidates.length > 0 ? [candidates[0]!] : [];
 }
 
-function findCalleeSymbols(
-	name: string,
-	symbols: Map<string, Symbol>,
-): Symbol[] {
+function findCalleeSymbols(name: string, symbols: Map<string, Symbol>): Symbol[] {
 	const results: Symbol[] = [];
 	for (const sym of symbols.values()) {
 		if (sym.name === name) {
@@ -613,11 +586,7 @@ function findCalleeSymbols(
 	return results;
 }
 
-function findSymbolByNameInFile(
-	name: string,
-	file: string,
-	symbols: Map<string, Symbol>,
-): Symbol | undefined {
+function findSymbolByNameInFile(name: string, file: string, symbols: Map<string, Symbol>): Symbol | undefined {
 	for (const sym of symbols.values()) {
 		if (sym.file === file && sym.name === name) {
 			return sym;

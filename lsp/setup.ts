@@ -30,18 +30,13 @@ const INSTALL_INSTRUCTIONS: InstallInstruction[] = [
 		language: "python",
 		serverName: "pylsp",
 		packages: ["python-lsp-server"],
-		commands: [
-			"pip install python-lsp-server",
-			"pipx install python-lsp-server",
-		],
+		commands: ["pip install python-lsp-server", "pipx install python-lsp-server"],
 	},
 	{
 		language: "typescript",
 		serverName: "typescript-language-server",
 		packages: ["typescript-language-server", "typescript"],
-		commands: [
-			"npm install -g typescript-language-server typescript",
-		],
+		commands: ["npm install -g typescript-language-server typescript"],
 	},
 	{
 		language: "go",
@@ -59,18 +54,13 @@ const INSTALL_INSTRUCTIONS: InstallInstruction[] = [
 		language: "yaml",
 		serverName: "yaml-language-server",
 		packages: ["yaml-language-server"],
-		commands: [
-			"npm install -g yaml-language-server",
-		],
+		commands: ["npm install -g yaml-language-server"],
 	},
 	{
 		language: "rust",
 		serverName: "rust-analyzer",
 		packages: ["rust-analyzer"],
-		commands: [
-			"rustup component add rust-analyzer",
-			"brew install rust-analyzer",
-		],
+		commands: ["rustup component add rust-analyzer", "brew install rust-analyzer"],
 	},
 ];
 
@@ -83,10 +73,7 @@ export type { LspServerDetection };
 /**
  * Detect LSP servers for specified languages or auto-detect from project.
  */
-export function detectLspServers(
-	projectRoot: string,
-	languages?: string[],
-): LspServerDetection[] {
+export function detectLspServers(projectRoot: string, languages?: string[]): LspServerDetection[] {
 	const detected = languages ?? detectProjectLanguages(projectRoot);
 	return detected.map((lang) => detectLspServer(projectRoot, lang));
 }
@@ -96,10 +83,7 @@ export function detectLspServers(
 /**
  * Generate the /shazam-setup output as a formatted string.
  */
-export function generateSetupReport(
-	projectRoot: string,
-	languages?: string[],
-): string {
+export function generateSetupReport(projectRoot: string, languages?: string[]): string {
 	const detections = detectLspServers(projectRoot, languages);
 	const available: LspServerDetection[] = [];
 	const missing: LspServerDetection[] = [];
@@ -125,9 +109,7 @@ export function generateSetupReport(
 		lines.push("### [PASS] Available LSP Servers");
 		lines.push("");
 		for (const d of available) {
-			lines.push(
-				`- **${d.language}**: \`${d.serverName}\` (${d.source}: \`${d.command.join(" ")}\`)`,
-			);
+			lines.push(`- **${d.language}**: \`${d.serverName}\` (${d.source}: \`${d.command.join(" ")}\`)`);
 		}
 		lines.push("");
 	}
@@ -137,11 +119,7 @@ export function generateSetupReport(
 		lines.push("### [FAIL] Missing LSP Servers");
 		lines.push("");
 		for (const d of missing) {
-			const instruction = INSTALL_INSTRUCTIONS.find(
-				(i) =>
-					i.language === d.language &&
-					i.serverName === d.serverName,
-			);
+			const instruction = INSTALL_INSTRUCTIONS.find((i) => i.language === d.language && i.serverName === d.serverName);
 
 			lines.push(`#### ${d.language} — ${d.serverName}`);
 			if (d.reason) {
@@ -158,9 +136,7 @@ export function generateSetupReport(
 	}
 
 	if (detections.length === 0) {
-		lines.push(
-			"No supported languages detected in this project. LSP features will be unavailable.",
-		);
+		lines.push("No supported languages detected in this project. LSP features will be unavailable.");
 	}
 
 	return lines.join("\n");

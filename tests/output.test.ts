@@ -51,12 +51,7 @@ describe("truncateOutput", () => {
 	});
 
 	it("should preserve header lines (## and ###)", () => {
-		const lines = [
-			"## Result Summary",
-			"",
-			"### Details",
-			"",
-		];
+		const lines = ["## Result Summary", "", "### Details", ""];
 		for (let i = 0; i < 100; i++) {
 			lines.push(`- detail item ${i} with padding text here`);
 		}
@@ -92,7 +87,9 @@ describe("truncateOutput", () => {
 	it("should prioritize top items over later items", () => {
 		const lines = ["## Top Files", ""];
 		for (let i = 0; i < 50; i++) {
-			lines.push(`${i + 1}. \`module_${i}/deep/path/file.ts\` — ${100 - i} symbols, PageRank ${(1 - i * 0.01).toFixed(2)}`);
+			lines.push(
+				`${i + 1}. \`module_${i}/deep/path/file.ts\` — ${100 - i} symbols, PageRank ${(1 - i * 0.01).toFixed(2)}`,
+			);
 		}
 		const result = truncateOutput(lines, 40);
 		expect(result).toContain("module_0");

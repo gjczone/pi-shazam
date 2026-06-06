@@ -20,10 +20,7 @@ const WRITE_TOOLS = new Set(["write", "edit"]);
  * @param isError - Whether the tool execution resulted in an error
  * @returns true if verification should run
  */
-export function shouldTriggerVerify(
-	toolName: string,
-	isError: boolean,
-): boolean {
+export function shouldTriggerVerify(toolName: string, isError: boolean): boolean {
 	return WRITE_TOOLS.has(toolName) && !isError;
 }
 
@@ -34,10 +31,7 @@ export function shouldTriggerVerify(
  * @param projectRoot - Project root directory
  * @returns Diagnostic findings as a formatted text string
  */
-export function handleWriteResult(
-	toolName: string,
-	projectRoot: string,
-): string {
+export function handleWriteResult(toolName: string, projectRoot: string): string {
 	try {
 		// Re-scan project to detect changes
 		const graph = scanProject(projectRoot, () => {});
@@ -47,9 +41,7 @@ export function handleWriteResult(
 		lines.push("");
 
 		// Summary stats
-		lines.push(
-			`- Project has ${graph.symbols.size} symbols across ${graph.fileSymbols.size} files`,
-		);
+		lines.push(`- Project has ${graph.symbols.size} symbols across ${graph.fileSymbols.size} files`);
 
 		// Baseline diff (if available)
 		const diff = diffBaseline(graph, projectRoot);
@@ -59,9 +51,7 @@ export function handleWriteResult(
 			const modified = diff.modifiedSymbols?.length ?? 0;
 			const totalChanges = added + removed + modified;
 			if (totalChanges > 0) {
-				lines.push(
-					`- Graph changes: +${added} added, -${removed} removed, ~${modified} modified`,
-				);
+				lines.push(`- Graph changes: +${added} added, -${removed} removed, ~${modified} modified`);
 			}
 		}
 
@@ -70,16 +60,13 @@ export function handleWriteResult(
 			// Skip exported entry points and test files
 			if (sym.visibility === "exported" && sym.pagerank > 0.01) return false;
 			if (sym.kind === "anonymous_function") return false;
-			if (sym.file.includes("tests/") || sym.file.includes(".test."))
-				return false;
+			if (sym.file.includes("tests/") || sym.file.includes(".test.")) return false;
 			const incoming = graph.incoming.get(sym.id);
 			return !incoming || incoming.length === 0;
 		}).length;
 
 		if (orphanCount > 0) {
-			lines.push(
-				`- [WARN] Found ${orphanCount} symbols with no incoming references (potential orphans)`,
-			);
+			lines.push(`- [WARN] Found ${orphanCount} symbols with no incoming references (potential orphans)`);
 		} else {
 			lines.push("- [PASS] No orphan symbols detected");
 		}
@@ -97,9 +84,7 @@ export function handleWriteResult(
 		lines.push(`- Total edges in graph: ${edgeCount}`);
 
 		lines.push("");
-		lines.push(
-			"Run `shazam_verify` for full diagnostics including LSP checks and risk assessment.",
-		);
+		lines.push("Run `shazam_verify` for full diagnostics including LSP checks and risk assessment.");
 
 		return lines.join("\n");
 	} catch (err) {

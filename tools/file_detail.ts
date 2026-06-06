@@ -35,17 +35,12 @@ export function registerFileDetail(pi: ExtensionAPI): void {
 
 			// Fetch LSP hierarchy in parallel with graph-based detail
 			const detailPromise = Promise.resolve(
-				json
-					? executeFileDetailJson(graph, params.file as string)
-					: executeFileDetail(graph, params.file as string),
+				json ? executeFileDetailJson(graph, params.file as string) : executeFileDetail(graph, params.file as string),
 			);
 			const lspManager = getLspManager();
 			const hierarchyPromise = lspDocumentSymbols(lspManager, params.file as string, 5000);
 
-			const [detailText, lspSymbols] = await Promise.all([
-				detailPromise,
-				hierarchyPromise,
-			]);
+			const [detailText, lspSymbols] = await Promise.all([detailPromise, hierarchyPromise]);
 
 			let text = detailText;
 			if (!json && Array.isArray(lspSymbols) && lspSymbols.length > 0 && isDocumentSymbols(lspSymbols)) {
@@ -134,12 +129,7 @@ export function executeFileDetail(graph: RepoGraph, file: string): string {
 	lines.push(`Incoming refs: ${totalIncoming}`);
 	lines.push(`Outgoing refs: ${totalOutgoing}`);
 	lines.push("");
-	lines.push(
-		"Kinds: " +
-			[...byKind.entries()]
-				.map(([k, v]) => `${v} ${k}`)
-				.join(", "),
-	);
+	lines.push("Kinds: " + [...byKind.entries()].map(([k, v]) => `${v} ${k}`).join(", "));
 	lines.push("");
 
 	// Symbol list
@@ -176,14 +166,9 @@ export function executeFileDetail(graph: RepoGraph, file: string): string {
 	return lines.join("\n");
 }
 
-export function executeFileDetailJson(
-	graph: RepoGraph,
-	file: string,
-): string {
+export function executeFileDetailJson(graph: RepoGraph, file: string): string {
 	const symIds = graph.fileSymbols.get(file) || [];
-	const symbols = symIds
-		.map((id) => graph.symbols.get(id))
-		.filter((s): s is NonNullable<typeof s> => s !== undefined);
+	const symbols = symIds.map((id) => graph.symbols.get(id)).filter((s): s is NonNullable<typeof s> => s !== undefined);
 
 	return JSON.stringify({
 		schema_version: "1.0",

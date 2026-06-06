@@ -55,13 +55,7 @@ describe("createTool factory", () => {
 			execute: domainFn,
 		});
 
-		const result = await registered[0]!.execute(
-			"call-1",
-			{ query: "hello" },
-			undefined,
-			undefined,
-			{} as never,
-		);
+		const result = await registered[0]!.execute("call-1", { query: "hello" }, undefined, undefined, {} as never);
 
 		expect(domainFn).toHaveBeenCalledOnce();
 		expect(result.content).toHaveLength(1);
@@ -79,13 +73,7 @@ describe("createTool factory", () => {
 			execute: () => '{"status":"ok","count":5}',
 		});
 
-		const result = await registered[0]!.execute(
-			"call-2",
-			{ json: true },
-			undefined,
-			undefined,
-			{} as never,
-		);
+		const result = await registered[0]!.execute("call-2", { json: true }, undefined, undefined, {} as never);
 
 		const text = (result.content[0] as { text: string }).text;
 		const parsed = JSON.parse(text);
@@ -103,13 +91,7 @@ describe("createTool factory", () => {
 			execute: () => "plain text output",
 		});
 
-		const result = await registered[0]!.execute(
-			"call-3",
-			{ json: true },
-			undefined,
-			undefined,
-			{} as never,
-		);
+		const result = await registered[0]!.execute("call-3", { json: true }, undefined, undefined, {} as never);
 
 		const text = (result.content[0] as { text: string }).text;
 		const parsed = JSON.parse(text);
@@ -131,13 +113,7 @@ describe("createTool factory", () => {
 			execute: () => longText,
 		});
 
-		const result = await registered[0]!.execute(
-			"call-4",
-			{ maxTokens: 50 },
-			undefined,
-			undefined,
-			{} as never,
-		);
+		const result = await registered[0]!.execute("call-4", { maxTokens: 50 }, undefined, undefined, {} as never);
 
 		const text = (result.content[0] as { text: string }).text;
 		// Truncated output should be shorter than original
@@ -182,13 +158,7 @@ describe("createTool factory", () => {
 		});
 
 		expect(registered).toHaveLength(1);
-		const result = await registered[0]!.execute(
-			"call-6",
-			{ name: "test" },
-			undefined,
-			undefined,
-			{} as never,
-		);
+		const result = await registered[0]!.execute("call-6", { name: "test" }, undefined, undefined, {} as never);
 
 		expect(result).toBe(customResult);
 	});
@@ -217,13 +187,7 @@ describe("createTool factory", () => {
 			},
 		});
 
-		const result = await registered[0]!.execute(
-			"call-7",
-			{},
-			undefined,
-			undefined,
-			{} as never,
-		);
+		const result = await registered[0]!.execute("call-7", {}, undefined, undefined, {} as never);
 
 		const text = (result.content[0] as { text: string }).text;
 		expect(text).toBe("async result");

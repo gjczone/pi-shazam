@@ -3,14 +3,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { scanProject, getProjectGraph, resetCache } from "../core/scanner.js";
-import {
-	mkdtempSync,
-	writeFileSync,
-	rmSync,
-	mkdirSync,
-	statSync,
-	utimesSync,
-} from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, statSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -122,17 +115,13 @@ export function subtract(a: number, b: number): number {
 
 	it("should remove symbols when a file is deleted", () => {
 		const graph1 = scanProject(tmpDir);
-		const formatNum = [...graph1.symbols.values()].find(
-			(s) => s.name === "formatNumber",
-		);
+		const formatNum = [...graph1.symbols.values()].find((s) => s.name === "formatNumber");
 		expect(formatNum).toBeDefined();
 
 		rmSync(join(tmpDir, "utils.ts"));
 
 		const graph2 = scanProject(tmpDir);
-		const formatNum2 = [...graph2.symbols.values()].find(
-			(s) => s.name === "formatNumber",
-		);
+		const formatNum2 = [...graph2.symbols.values()].find((s) => s.name === "formatNumber");
 		expect(formatNum2).toBeUndefined();
 	});
 
@@ -167,12 +156,8 @@ export function subtract(a: number, b: number): number {
 		const fullGraph = scanProject(tmpDir);
 
 		// Compare symbol names and counts
-		const incrementalNames = [...incrementalGraph.symbols.values()]
-			.map((s) => s.name)
-			.sort();
-		const fullNames = [...fullGraph.symbols.values()]
-			.map((s) => s.name)
-			.sort();
+		const incrementalNames = [...incrementalGraph.symbols.values()].map((s) => s.name).sort();
+		const fullNames = [...fullGraph.symbols.values()].map((s) => s.name).sort();
 
 		expect(incrementalNames).toEqual(fullNames);
 		expect(incrementalGraph.fileSymbols.size).toBe(fullGraph.fileSymbols.size);
@@ -194,9 +179,7 @@ export function logMessage(msg: string): void {
 		const graph2 = scanProject(tmpDir);
 		expect(graph2.symbols.size).toBeGreaterThan(initialCount);
 
-		const logMsg = [...graph2.symbols.values()].find(
-			(s) => s.name === "logMessage",
-		);
+		const logMsg = [...graph2.symbols.values()].find((s) => s.name === "logMessage");
 		expect(logMsg).toBeDefined();
 	});
 

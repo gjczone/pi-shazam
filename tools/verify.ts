@@ -126,11 +126,13 @@ async function executeVerifyJsonAsync(projectRoot: string, options: VerifyOption
 		orphanCount: orphans.length,
 		orphans: orphans.slice(0, 20).map((s) => ({ name: s.name, kind: s.kind, file: s.file, line: s.line })),
 		gitChangedFiles: gitChangedFiles.slice(0, 50),
-		baselineDiff: diff ? {
-			addedSymbols: diff.addedSymbols?.length ?? 0,
-			removedSymbols: diff.removedSymbols?.length ?? 0,
-			modifiedSymbols: diff.modifiedSymbols?.length ?? 0,
-		} : null,
+		baselineDiff: diff
+			? {
+					addedSymbols: diff.addedSymbols?.length ?? 0,
+					removedSymbols: diff.removedSymbols?.length ?? 0,
+					modifiedSymbols: diff.modifiedSymbols?.length ?? 0,
+				}
+			: null,
 		lspDiagnostics,
 		lspAvailable,
 		verdict,
@@ -208,11 +210,14 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 	const baseline = loadBaseline(projectRoot);
 	const diff = diffBaseline(graph, projectRoot);
 	if (baseline && diff) {
-		const totalChanges = (diff.addedSymbols?.length ?? 0) + (diff.removedSymbols?.length ?? 0) + (diff.modifiedSymbols?.length ?? 0);
+		const totalChanges =
+			(diff.addedSymbols?.length ?? 0) + (diff.removedSymbols?.length ?? 0) + (diff.modifiedSymbols?.length ?? 0);
 		lines.push("### Baseline Diff");
-		lines.push(totalChanges > 0
-			? `Changes since baseline: +${diff.addedSymbols?.length ?? 0} added, -${diff.removedSymbols?.length ?? 0} removed, ~${diff.modifiedSymbols?.length ?? 0} modified`
-			: "No changes since baseline snapshot.");
+		lines.push(
+			totalChanges > 0
+				? `Changes since baseline: +${diff.addedSymbols?.length ?? 0} added, -${diff.removedSymbols?.length ?? 0} removed, ~${diff.modifiedSymbols?.length ?? 0} modified`
+				: "No changes since baseline snapshot.",
+		);
 		lines.push("");
 	}
 
@@ -237,7 +242,9 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 	if (quick) lines.push("[Quick mode — skipped deep analysis]\n");
 
 	if (preCommit) {
-		const hasLspErrors = (await runLspDiagnostics(graph, projectRoot, options)).diagnostics.some((d) => d.severity === "error");
+		const hasLspErrors = (await runLspDiagnostics(graph, projectRoot, options)).diagnostics.some(
+			(d) => d.severity === "error",
+		);
 		const isReady = !hasLspErrors && risk.level === "low" && orphans.length === 0;
 		lines.push("### Pre-Commit Verdict");
 		lines.push(`**Status:** ${isReady ? "[PASS] READY" : "[FAIL] NOT READY"}`);
@@ -283,9 +290,7 @@ async function runLspDiagnostics(
 	options: VerifyOptions,
 ): Promise<LspDiagResult> {
 	const maxFiles = options.maxFiles ?? 100;
-	const targetFiles = [...graph.fileSymbols.keys()]
-		.filter((f) => !isNonSourceFile(f))
-		.slice(0, maxFiles);
+	const targetFiles = [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f)).slice(0, maxFiles);
 
 	if (targetFiles.length === 0) return { diagnostics: [], available: false };
 
@@ -302,7 +307,9 @@ async function runLspDiagnostics(
 		try {
 			const content = readFileSync(resolve(projectRoot, filePath), "utf-8");
 			await serverInfo.client.didOpen(filePath, content);
-		} catch { /* skip failed opens */ }
+		} catch {
+			/* skip failed opens */
+		}
 	}
 
 	for (const filePath of targetFiles) {
@@ -318,9 +325,7 @@ async function runLspDiagnostics(
 					col: diag.range.start.character + 1,
 					severity: sev === 1 ? "error" : sev === 2 ? "warning" : "info",
 					code: String(diag.code ?? ""),
-					message: typeof diag.message === "object"
-						? (diag.message as { value: string }).value || ""
-						: diag.message,
+					message: typeof diag.message === "object" ? (diag.message as { value: string }).value || "" : diag.message,
 				});
 			}
 		}
@@ -348,32 +353,58 @@ async function runSubprocessDiagnostics(projectRoot: string): Promise<LspDiagRes
 
 	let command: string;
 	switch (projectType) {
-		case "typescript": command = "npx tsc --noEmit 2>&1 || true"; break;
-		case "rust": command = "cargo check 2>&1 || true"; break;
-		case "go": command = "go vet ./... 2>&1 || true"; break;
-		case "python": command = "pyright . 2>&1 || true"; break;
+		case "typescript":
+			command = "npx tsc --noEmit 2>&1 || true";
+			break;
+		case "rust":
+			command = "cargo check 2>&1 || true";
+			break;
+		case "go":
+			command = "go vet ./... 2>&1 || true";
+			break;
+		case "python":
+			command = "pyright . 2>&1 || true";
+			break;
 		case "node":
 			command = existsSync(resolve(projectRoot, "biome.json"))
 				? "npx biome check . 2>&1 || true"
 				: "npx eslint . 2>&1 || true";
 			break;
-		default: return { diagnostics, available: false };
+		default:
+			return { diagnostics, available: false };
 	}
 
 	try {
 		const output = execSync(command, {
-			cwd: projectRoot, encoding: "utf-8", timeout: 30000, maxBuffer: 1024 * 1024,
+			cwd: projectRoot,
+			encoding: "utf-8",
+			timeout: 30000,
+			maxBuffer: 1024 * 1024,
 		}).trim();
 		if (output) {
 			for (const line of output.split("\n").slice(0, 100)) {
 				if (line.trim()) {
-					diagnostics.push({ file: "", line: 0, col: 0, severity: "info", code: "", message: line.trim().slice(0, 200) });
+					diagnostics.push({
+						file: "",
+						line: 0,
+						col: 0,
+						severity: "info",
+						code: "",
+						message: line.trim().slice(0, 200),
+					});
 				}
 			}
 		}
 	} catch (e) {
 		const errMsg = e instanceof Error ? e.message : String(e);
-		diagnostics.push({ file: "", line: 0, col: 0, severity: "warning", code: "", message: `Subprocess diagnostics failed: ${errMsg.slice(0, 200)}` });
+		diagnostics.push({
+			file: "",
+			line: 0,
+			col: 0,
+			severity: "warning",
+			code: "",
+			message: `Subprocess diagnostics failed: ${errMsg.slice(0, 200)}`,
+		});
 	}
 
 	return { diagnostics, available: true };
@@ -394,7 +425,9 @@ function getGitChangedFiles(projectRoot: string): string[] {
 		).trim();
 		if (!output) return [];
 		return [...new Set(output.split("\n").filter(Boolean))];
-	} catch { return []; }
+	} catch {
+		return [];
+	}
 }
 
 function assessRisk(
@@ -404,7 +437,8 @@ function assessRisk(
 	gitChangedFiles?: string[],
 	preCommit?: boolean,
 ): RiskResult {
-	const baselineChanges = (diff?.addedSymbols?.length ?? 0) + (diff?.removedSymbols?.length ?? 0) + (diff?.modifiedSymbols?.length ?? 0);
+	const baselineChanges =
+		(diff?.addedSymbols?.length ?? 0) + (diff?.removedSymbols?.length ?? 0) + (diff?.modifiedSymbols?.length ?? 0);
 	const gitFileCount = gitChangedFiles?.length ?? 0;
 	const totalImpact = baselineChanges + gitFileCount + orphans.length;
 
@@ -414,12 +448,21 @@ function assessRisk(
 	const mediumThreshold = preCommit ? 10 : 20;
 
 	if (orphans.length > 10 || totalImpact > highThreshold) {
-		return { level: "high", reason: `${orphans.length} orphans, ${baselineChanges} graph changes, ${gitFileCount} git-modified files.` };
+		return {
+			level: "high",
+			reason: `${orphans.length} orphans, ${baselineChanges} graph changes, ${gitFileCount} git-modified files.`,
+		};
 	}
 	if (orphans.length > 0 || totalImpact > mediumThreshold) {
-		return { level: "medium", reason: `${orphans.length} orphans, ${baselineChanges} graph changes, ${gitFileCount} modified files — review recommended.` };
+		return {
+			level: "medium",
+			reason: `${orphans.length} orphans, ${baselineChanges} graph changes, ${gitFileCount} modified files — review recommended.`,
+		};
 	}
-	return { level: "low", reason: `${orphans.length} orphans, ${baselineChanges} changes, ${gitFileCount} modified files — acceptable.` };
+	return {
+		level: "low",
+		reason: `${orphans.length} orphans, ${baselineChanges} changes, ${gitFileCount} modified files — acceptable.`,
+	};
 }
 
 function findOrphanSymbols(graph: RepoGraph): { name: string; kind: string; file: string; line: number }[] {
@@ -442,11 +485,7 @@ function findOrphanSymbols(graph: RepoGraph): { name: string; kind: string; file
 /**
  * Synchronous verify (no LSP, graph-only).
  */
-export function executeVerify(
-	graph: RepoGraph,
-	_projectRoot: string,
-	options: VerifyOptions = {},
-): string {
+export function executeVerify(graph: RepoGraph, _projectRoot: string, options: VerifyOptions = {}): string {
 	const lines: string[] = [];
 	const quick = options.quick ?? false;
 	const lspOnly = options.lspOnly ?? false;
@@ -484,11 +523,14 @@ export function executeVerify(
 	const baseline = loadBaseline(".");
 	const diff = diffBaseline(graph, ".");
 	if (baseline && diff) {
-		const totalChanges = (diff.addedSymbols?.length ?? 0) + (diff.removedSymbols?.length ?? 0) + (diff.modifiedSymbols?.length ?? 0);
+		const totalChanges =
+			(diff.addedSymbols?.length ?? 0) + (diff.removedSymbols?.length ?? 0) + (diff.modifiedSymbols?.length ?? 0);
 		lines.push("### Baseline Diff");
-		lines.push(totalChanges > 0
-			? `Changes since baseline: +${diff.addedSymbols?.length ?? 0} added, -${diff.removedSymbols?.length ?? 0} removed, ~${diff.modifiedSymbols?.length ?? 0} modified`
-			: "No changes since baseline snapshot.");
+		lines.push(
+			totalChanges > 0
+				? `Changes since baseline: +${diff.addedSymbols?.length ?? 0} added, -${diff.removedSymbols?.length ?? 0} removed, ~${diff.modifiedSymbols?.length ?? 0} modified`
+				: "No changes since baseline snapshot.",
+		);
 		lines.push("");
 	}
 
@@ -520,11 +562,7 @@ export function executeVerify(
 	return lines.join("\n");
 }
 
-export function executeVerifyJson(
-	graph: RepoGraph,
-	projectRoot: string,
-	options: VerifyOptions = {},
-): string {
+export function executeVerifyJson(graph: RepoGraph, projectRoot: string, options: VerifyOptions = {}): string {
 	const orphans = findOrphanSymbols(graph);
 	const diff = diffBaseline(graph, projectRoot);
 	const gitChangedFiles = getGitChangedFiles(projectRoot);
@@ -546,11 +584,13 @@ export function executeVerifyJson(
 			riskReason: risk.reason,
 			orphanCount: orphans.length,
 			orphans: orphans.slice(0, 20).map((s) => ({ name: s.name, kind: s.kind, file: s.file, line: s.line })),
-			baselineDiff: diff ? {
-				addedSymbols: diff.addedSymbols?.length ?? 0,
-				removedSymbols: diff.removedSymbols?.length ?? 0,
-				modifiedSymbols: diff.modifiedSymbols?.length ?? 0,
-			} : null,
+			baselineDiff: diff
+				? {
+						addedSymbols: diff.addedSymbols?.length ?? 0,
+						removedSymbols: diff.removedSymbols?.length ?? 0,
+						modifiedSymbols: diff.modifiedSymbols?.length ?? 0,
+					}
+				: null,
 			gitChangedFiles: gitChangedFiles.slice(0, 50),
 			lspDiagnostics: [],
 			lspAvailable: false,
@@ -567,18 +607,12 @@ export function executeVerifyJson(
 /**
  * Synchronous tree-sitter parse diagnostics (from check.ts).
  */
-export function executeCheck(
-	graph: RepoGraph,
-	_projectRoot: string,
-	file?: string,
-): string {
+export function executeCheck(graph: RepoGraph, _projectRoot: string, file?: string): string {
 	const lines: string[] = [];
 	lines.push("## Parse & Symbol Diagnostics");
 	lines.push("");
 
-	const targetFiles = file
-		? [file]
-		: [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
+	const targetFiles = file ? [file] : [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
 
 	if (targetFiles.length === 0) {
 		lines.push("No files to check.");
@@ -626,14 +660,8 @@ export function executeCheck(
 	return lines.join("\n");
 }
 
-export function executeCheckJson(
-	graph: RepoGraph,
-	_projectRoot: string,
-	file?: string,
-): string {
-	const targetFiles = file
-		? [file]
-		: [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
+export function executeCheckJson(graph: RepoGraph, _projectRoot: string, file?: string): string {
+	const targetFiles = file ? [file] : [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
 	const successfulFiles: string[] = [];
 	const failedFiles: string[] = [];
 	for (const filePath of targetFiles) {
@@ -664,11 +692,20 @@ export function executeReady(graph: RepoGraph, projectRoot: string): string {
 	const verifyJsonRaw = executeVerifyJson(graph, projectRoot);
 	const checkJsonRaw = executeCheckJson(graph, projectRoot);
 
-	let verifyData: { result?: { riskLevel?: string; orphanCount?: number; symbolCount?: number; fileCount?: number } } = {};
+	let verifyData: { result?: { riskLevel?: string; orphanCount?: number; symbolCount?: number; fileCount?: number } } =
+		{};
 	let checkData: { result?: { parsedFiles?: number; failedFiles?: number; symbolCount?: number } } = {};
 
-	try { verifyData = JSON.parse(verifyJsonRaw); } catch { /* use defaults */ }
-	try { checkData = JSON.parse(checkJsonRaw); } catch { /* use defaults */ }
+	try {
+		verifyData = JSON.parse(verifyJsonRaw);
+	} catch {
+		/* use defaults */
+	}
+	try {
+		checkData = JSON.parse(checkJsonRaw);
+	} catch {
+		/* use defaults */
+	}
 
 	const riskLevel = verifyData.result?.riskLevel ?? "unknown";
 	const orphanCount = verifyData.result?.orphanCount ?? 0;
@@ -710,11 +747,20 @@ export function executeReadyJson(graph: RepoGraph, projectRoot: string): string 
 	const verifyJsonRaw = executeVerifyJson(graph, projectRoot);
 	const checkJsonRaw = executeCheckJson(graph, projectRoot);
 
-	let verifyData: { result?: { riskLevel?: string; orphanCount?: number; symbolCount?: number; fileCount?: number } } = {};
+	let verifyData: { result?: { riskLevel?: string; orphanCount?: number; symbolCount?: number; fileCount?: number } } =
+		{};
 	let checkData: { result?: { parsedFiles?: number; failedFiles?: number; symbolCount?: number } } = {};
 
-	try { verifyData = JSON.parse(verifyJsonRaw); } catch { /* use defaults */ }
-	try { checkData = JSON.parse(checkJsonRaw); } catch { /* use defaults */ }
+	try {
+		verifyData = JSON.parse(verifyJsonRaw);
+	} catch {
+		/* use defaults */
+	}
+	try {
+		checkData = JSON.parse(checkJsonRaw);
+	} catch {
+		/* use defaults */
+	}
 
 	const riskLevel = verifyData.result?.riskLevel ?? "unknown";
 	const orphanCount = verifyData.result?.orphanCount ?? 0;
@@ -728,8 +774,17 @@ export function executeReadyJson(graph: RepoGraph, projectRoot: string): string 
 		status: "ok",
 		result: {
 			ready: isReady,
-			verify: { riskLevel, orphanCount, symbolCount: verifyData.result?.symbolCount ?? 0, fileCount: verifyData.result?.fileCount ?? 0 },
-			check: { parsedFiles: checkData.result?.parsedFiles ?? 0, failedFiles, symbolCount: checkData.result?.symbolCount ?? 0 },
+			verify: {
+				riskLevel,
+				orphanCount,
+				symbolCount: verifyData.result?.symbolCount ?? 0,
+				fileCount: verifyData.result?.fileCount ?? 0,
+			},
+			check: {
+				parsedFiles: checkData.result?.parsedFiles ?? 0,
+				failedFiles,
+				symbolCount: checkData.result?.symbolCount ?? 0,
+			},
 		},
 	});
 }

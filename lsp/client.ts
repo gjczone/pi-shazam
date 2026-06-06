@@ -15,12 +15,8 @@ const _require = createRequire(import.meta.url);
 
 // vscode-jsonrpc/node exports for LSP client over stdio
 const rpc: {
-	StreamMessageReader: new (
-		stream: NodeJS.ReadableStream,
-	) => import("vscode-jsonrpc").MessageReader;
-	StreamMessageWriter: new (
-		stream: NodeJS.WritableStream,
-	) => import("vscode-jsonrpc").MessageWriter;
+	StreamMessageReader: new (stream: NodeJS.ReadableStream) => import("vscode-jsonrpc").MessageReader;
+	StreamMessageWriter: new (stream: NodeJS.WritableStream) => import("vscode-jsonrpc").MessageWriter;
 	createMessageConnection: (
 		reader: import("vscode-jsonrpc").MessageReader,
 		writer: import("vscode-jsonrpc").MessageWriter,
@@ -102,9 +98,7 @@ export function uriToPath(uri: string): string {
 	return uri;
 }
 
-function severityName(
-	value: number | undefined | null,
-): LspDiagnostic["severity"] {
+function severityName(value: number | undefined | null): LspDiagnostic["severity"] {
 	if (value === 1) return "error";
 	if (value === 2) return "warning";
 	if (value === 3) return "info";
@@ -144,12 +138,7 @@ export class LspClient {
 	// can cancel all pending requests.
 	private _inFlightRequests = new Map<Promise<unknown>, (err: Error) => void>();
 
-	constructor(
-		command: readonly string[],
-		workspaceRoot: string,
-		timeout: number = 8000,
-		log?: (msg: string) => void,
-	) {
+	constructor(command: readonly string[], workspaceRoot: string, timeout: number = 8000, log?: (msg: string) => void) {
 		this.command = command;
 		this.workspaceRoot = workspaceRoot;
 		this.timeout = timeout;
@@ -175,9 +164,7 @@ export class LspClient {
 	start(): void {
 		if (this._running) return;
 
-		this._log(
-			`Starting LSP: ${this.command[0]} (workspace: ${this.workspaceRoot})`,
-		);
+		this._log(`Starting LSP: ${this.command[0]} (workspace: ${this.workspaceRoot})`);
 
 		const [cmd, ...args] = this.command;
 		this.process = spawn(cmd!, args, {
@@ -206,9 +193,7 @@ export class LspClient {
 		// Drain stderr to prevent deadlock
 		if (this.process.stderr) {
 			this.process.stderr.on("data", (chunk: Buffer) => {
-				this._log(
-					`LSP stderr: ${chunk.toString("utf-8", 0, Math.min(chunk.length, 500))}`,
-				);
+				this._log(`LSP stderr: ${chunk.toString("utf-8", 0, Math.min(chunk.length, 500))}`);
 			});
 		}
 
@@ -218,12 +203,9 @@ export class LspClient {
 		this.connection = rpc.createMessageConnection(reader, writer);
 
 		// Listen for notifications (diagnostics etc.)
-		this.connection.onNotification(
-			"textDocument/publishDiagnostics",
-			(params: PublishDiagnosticsParams) => {
-				this._notifications.push(params);
-			},
-		);
+		this.connection.onNotification("textDocument/publishDiagnostics", (params: PublishDiagnosticsParams) => {
+			this._notifications.push(params);
+		});
 
 		this.connection.listen();
 		this._running = true;
@@ -251,16 +233,40 @@ export class LspClient {
 					semanticTokens: {
 						requests: { full: true },
 						tokenTypes: [
-							"namespace", "type", "class", "enum", "interface",
-							"struct", "typeParameter", "parameter", "variable",
-							"property", "enumMember", "event", "function",
-							"method", "macro", "keyword", "modifier", "comment",
-							"string", "number", "regexp", "operator",
+							"namespace",
+							"type",
+							"class",
+							"enum",
+							"interface",
+							"struct",
+							"typeParameter",
+							"parameter",
+							"variable",
+							"property",
+							"enumMember",
+							"event",
+							"function",
+							"method",
+							"macro",
+							"keyword",
+							"modifier",
+							"comment",
+							"string",
+							"number",
+							"regexp",
+							"operator",
 						],
 						tokenModifiers: [
-							"declaration", "definition", "readonly", "static",
-							"deprecated", "abstract", "async", "modification",
-							"documentation", "defaultLibrary",
+							"declaration",
+							"definition",
+							"readonly",
+							"static",
+							"deprecated",
+							"abstract",
+							"async",
+							"modification",
+							"documentation",
+							"defaultLibrary",
 						],
 						formats: ["relative"],
 					},
@@ -272,14 +278,9 @@ export class LspClient {
 			workspaceFolders: null,
 		};
 
-		const result = await this.connection.sendRequest<InitializeResult>(
-			"initialize",
-			initParams,
-		);
+		const result = await this.connection.sendRequest<InitializeResult>("initialize", initParams);
 
-		this._serverCapabilities =
-			((result as InitializeResult).capabilities as Record<string, unknown>) ??
-			{};
+		this._serverCapabilities = ((result as InitializeResult).capabilities as Record<string, unknown>) ?? {};
 
 		await this.connection.sendNotification("initialized", {});
 		this._log(`LSP initialized: ${this.command[0]}`);
@@ -293,9 +294,7 @@ export class LspClient {
 		// Skip large files
 		const byteLength = Buffer.byteLength(text, "utf-8");
 		if (byteLength > MAX_LSP_FILE_SIZE) {
-			this._log(
-				`Skipping LSP for large file ${filePath} (${byteLength} bytes)`,
-			);
+			this._log(`Skipping LSP for large file ${filePath} (${byteLength} bytes)`);
 			return;
 		}
 
@@ -324,11 +323,7 @@ export class LspClient {
 
 	// ── Protocol methods ───────────────────────────────────────────────────────
 
-	async definition(
-		filePath: string,
-		line: number,
-		character: number,
-	): Promise<Location | Location[] | null> {
+	async definition(filePath: string, line: number, character: number): Promise<Location | Location[] | null> {
 		if (!this.isFileOpened(filePath)) return null;
 
 		const params: DefinitionParams = {
@@ -338,9 +333,7 @@ export class LspClient {
 
 		try {
 			const result = await this.withTimeout(
-				this.connection!.sendRequest<Location | Location[] | null>(
-					"textDocument/definition", params,
-				),
+				this.connection!.sendRequest<Location | Location[] | null>("textDocument/definition", params),
 			);
 			return result ?? null;
 		} catch (err) {
@@ -349,11 +342,7 @@ export class LspClient {
 		}
 	}
 
-	async references(
-		filePath: string,
-		line: number,
-		character: number,
-	): Promise<Location[] | null> {
+	async references(filePath: string, line: number, character: number): Promise<Location[] | null> {
 		if (!this.isFileOpened(filePath)) return null;
 
 		const params: ReferenceParams = {
@@ -364,9 +353,7 @@ export class LspClient {
 
 		try {
 			const result = await this.withTimeout(
-				this.connection!.sendRequest<Location[] | null>(
-					"textDocument/references", params,
-				),
+				this.connection!.sendRequest<Location[] | null>("textDocument/references", params),
 			);
 			return result ?? null;
 		} catch (err) {
@@ -375,11 +362,7 @@ export class LspClient {
 		}
 	}
 
-	async hover(
-		filePath: string,
-		line: number,
-		character: number,
-	): Promise<Hover | null> {
+	async hover(filePath: string, line: number, character: number): Promise<Hover | null> {
 		if (!this.isFileOpened(filePath)) return null;
 
 		const params: HoverParams = {
@@ -388,11 +371,7 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.withTimeout(
-				this.connection!.sendRequest<Hover | null>(
-					"textDocument/hover", params,
-				),
-			);
+			const result = await this.withTimeout(this.connection!.sendRequest<Hover | null>("textDocument/hover", params));
 			return result ?? null;
 		} catch (err) {
 			console.warn("[lsp] hover failed:", err);
@@ -400,9 +379,7 @@ export class LspClient {
 		}
 	}
 
-	async documentSymbols(
-		filePath: string,
-	): Promise<DocumentSymbol[] | SymbolInformation[] | null> {
+	async documentSymbols(filePath: string): Promise<DocumentSymbol[] | SymbolInformation[] | null> {
 		if (!this.isFileOpened(filePath)) return null;
 
 		const params: DocumentSymbolParams = {
@@ -412,7 +389,8 @@ export class LspClient {
 		try {
 			const result = await this.withTimeout(
 				this.connection!.sendRequest<DocumentSymbol[] | SymbolInformation[] | null>(
-					"textDocument/documentSymbol", params,
+					"textDocument/documentSymbol",
+					params,
 				),
 			);
 			return result ?? null;
@@ -422,9 +400,7 @@ export class LspClient {
 		}
 	}
 
-	async workspaceSymbol(
-		query: string,
-	): Promise<SymbolInformation[] | WorkspaceSymbol[] | null> {
+	async workspaceSymbol(query: string): Promise<SymbolInformation[] | WorkspaceSymbol[] | null> {
 		if (!this.connection) return null;
 		const cap = this._serverCapabilities;
 		if (!cap || !(cap as Record<string, unknown>).workspaceSymbolProvider) {
@@ -435,9 +411,7 @@ export class LspClient {
 
 		try {
 			const result = await this.withTimeout(
-				this.connection.sendRequest<
-					SymbolInformation[] | WorkspaceSymbol[] | null
-				>("workspace/symbol", params),
+				this.connection.sendRequest<SymbolInformation[] | WorkspaceSymbol[] | null>("workspace/symbol", params),
 			);
 			return result ?? null;
 		} catch (err) {
@@ -449,8 +423,7 @@ export class LspClient {
 	async semanticTokens(filePath: string): Promise<SemanticTokens | null> {
 		if (!this.isFileOpened(filePath)) return null;
 		const cap = this._serverCapabilities;
-		const stProvider = (cap as Record<string, unknown> | undefined)
-			?.semanticTokensProvider;
+		const stProvider = (cap as Record<string, unknown> | undefined)?.semanticTokensProvider;
 		if (!stProvider) return null;
 
 		const params: SemanticTokensParams = {
@@ -459,10 +432,7 @@ export class LspClient {
 
 		try {
 			const result = await this.withTimeout(
-				this.connection!.sendRequest<SemanticTokens | null>(
-					"textDocument/semanticTokens/full",
-					params,
-				),
+				this.connection!.sendRequest<SemanticTokens | null>("textDocument/semanticTokens/full", params),
 			);
 			return result ?? null;
 		} catch (err) {
@@ -484,10 +454,7 @@ export class LspClient {
 
 		try {
 			const result = await this.withTimeout(
-				this.connection!.sendRequest<FoldingRange[] | null>(
-					"textDocument/foldingRange",
-					params,
-				),
+				this.connection!.sendRequest<FoldingRange[] | null>("textDocument/foldingRange", params),
 			);
 			return result ?? null;
 		} catch (err) {
@@ -530,9 +497,7 @@ export class LspClient {
 	 * Checks accumulated notifications first, then polls briefly for more.
 	 */
 	collectDiagnostics(filePaths: string[]): PublishDiagnosticsParams[] {
-		const expectedUris = new Set(
-			filePaths.filter((f) => this.isFileOpened(f)).map((f) => pathToUri(f)),
-		);
+		const expectedUris = new Set(filePaths.filter((f) => this.isFileOpened(f)).map((f) => pathToUri(f)));
 
 		if (expectedUris.size === 0) return [];
 
@@ -676,10 +641,7 @@ export function convertDiagnostics(
 	}));
 }
 
-export function convertLocation(
-	projectRoot: string,
-	loc: Location,
-): LspLocation {
+export function convertLocation(projectRoot: string, loc: Location): LspLocation {
 	const filePath = uriToPath(loc.uri);
 	const relFile = path.relative(projectRoot, filePath) || filePath;
 

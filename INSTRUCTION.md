@@ -31,71 +31,76 @@ The complete `ExtensionAPI` interface (from `types/pi-extension.d.ts`):
 
 #### 1.2.1 Event Subscription — `pi.on(event, handler)`
 
-| Event | Handler Signature | Return Value |
-|-------|------------------|--------------|
-| `resources_discover` | `(e: ResourcesDiscoverEvent, ctx) => ResourcesDiscoverResult \| void` | `{ skillPaths?, promptPaths?, themePaths? }` |
-| `session_start` | `(e: SessionStartEvent, ctx) => void` | none |
-| `session_before_switch` | `(e: SessionBeforeSwitchEvent, ctx) => SessionBeforeSwitchResult \| void` | `{ cancel? }` |
-| `session_switch` | `(e: SessionSwitchEvent, ctx) => void` | none |
-| `session_before_branch` | `(e: SessionBeforeBranchEvent, ctx) => SessionBeforeBranchResult \| void` | `{ cancel?, skipConversationRestore? }` |
-| `session_branch` | `(e: SessionBranchEvent, ctx) => void` | none |
-| `session_before_compact` | `(e: SessionBeforeCompactEvent, ctx) => SessionBeforeCompactResult \| void` | `{ cancel?, compaction? }` |
-| `session.compacting` | `(e: SessionCompactingEvent, ctx) => SessionCompactingResult \| void` | `{ context?, prompt?, preserveData? }` |
-| `session_compact` | `(e: SessionCompactEvent, ctx) => void` | none |
-| `session_shutdown` | `(e: SessionShutdownEvent, ctx) => void` | none |
-| `session_before_tree` | `(e: SessionBeforeTreeEvent, ctx) => SessionBeforeTreeResult \| void` | `{ cancel?, summary? }` |
-| `session_tree` | `(e: SessionTreeEvent, ctx) => void` | none |
-| `context` | `(e: ContextEvent, ctx) => ContextEventResult \| void` | `{ messages? }` |
-| `before_provider_request` | `(e: BeforeProviderRequestEvent, ctx) => BeforeProviderRequestEventResult \| void` | any |
-| `after_provider_response` | `(e: AfterProviderResponseEvent, ctx) => void` | none |
-| `before_agent_start` | `(e: BeforeAgentStartEvent, ctx) => BeforeAgentStartEventResult \| void` | `{ message?, systemPrompt? }` |
-| `agent_start` | `(e: AgentStartEvent, ctx) => void` | none |
-| `agent_end` | `(e: AgentEndEvent, ctx) => void` | none |
-| `turn_start` | `(e: TurnStartEvent, ctx) => void` | none |
-| `turn_end` | `(e: TurnEndEvent, ctx) => void` | none |
-| `message_start` | `(e: MessageStartEvent, ctx) => void` | none |
-| `message_update` | `(e: MessageUpdateEvent, ctx) => void` | none |
-| `message_end` | `(e: MessageEndEvent, ctx) => void` | none |
-| `tool_execution_start` | `(e: ToolExecutionStartEvent, ctx) => void` | none |
-| `tool_execution_update` | `(e: ToolExecutionUpdateEvent, ctx) => void` | none |
-| `tool_execution_end` | `(e: ToolExecutionEndEvent, ctx) => void` | none |
-| `auto_compaction_start` | `(e: AutoCompactionStartEvent, ctx) => void` | none |
-| `auto_compaction_end` | `(e: AutoCompactionEndEvent, ctx) => void` | none |
-| `auto_retry_start` | `(e: AutoRetryStartEvent, ctx) => void` | none |
-| `auto_retry_end` | `(e: AutoRetryEndEvent, ctx) => void` | none |
-| `ttsr_triggered` | `(e: TtsrTriggeredEvent, ctx) => void` | none |
-| `todo_reminder` | `(e: TodoReminderEvent, ctx) => void` | none |
-| `goal_updated` | `(e: GoalUpdatedEvent, ctx) => void` | none |
-| `credential_disabled` | `(e: CredentialDisabledEvent, ctx) => void` | none |
-| `input` | `(e: InputEvent, ctx) => InputEventResult \| void` | `{ handled?, text?, images? }` |
-| `tool_call` | `(e: ToolCallEvent, ctx) => ToolCallEventResult \| void` | `{ block?, reason? }` |
-| `tool_result` | `(e: ToolResultEvent, ctx) => ToolResultEventResult \| void` | `{ content?, details?, isError? }` |
-| `user_bash` | `(e: UserBashEvent, ctx) => UserBashEventResult \| void` | `{ result? }` |
-| `user_python` | `(e: UserPythonEvent, ctx) => UserPythonEventResult \| void` | `{ result? }` |
+| Event                     | Handler Signature                                                                  | Return Value                                 |
+| ------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------- |
+| `resources_discover`      | `(e: ResourcesDiscoverEvent, ctx) => ResourcesDiscoverResult \| void`              | `{ skillPaths?, promptPaths?, themePaths? }` |
+| `session_start`           | `(e: SessionStartEvent, ctx) => void`                                              | none                                         |
+| `session_before_switch`   | `(e: SessionBeforeSwitchEvent, ctx) => SessionBeforeSwitchResult \| void`          | `{ cancel? }`                                |
+| `session_switch`          | `(e: SessionSwitchEvent, ctx) => void`                                             | none                                         |
+| `session_before_branch`   | `(e: SessionBeforeBranchEvent, ctx) => SessionBeforeBranchResult \| void`          | `{ cancel?, skipConversationRestore? }`      |
+| `session_branch`          | `(e: SessionBranchEvent, ctx) => void`                                             | none                                         |
+| `session_before_compact`  | `(e: SessionBeforeCompactEvent, ctx) => SessionBeforeCompactResult \| void`        | `{ cancel?, compaction? }`                   |
+| `session.compacting`      | `(e: SessionCompactingEvent, ctx) => SessionCompactingResult \| void`              | `{ context?, prompt?, preserveData? }`       |
+| `session_compact`         | `(e: SessionCompactEvent, ctx) => void`                                            | none                                         |
+| `session_shutdown`        | `(e: SessionShutdownEvent, ctx) => void`                                           | none                                         |
+| `session_before_tree`     | `(e: SessionBeforeTreeEvent, ctx) => SessionBeforeTreeResult \| void`              | `{ cancel?, summary? }`                      |
+| `session_tree`            | `(e: SessionTreeEvent, ctx) => void`                                               | none                                         |
+| `context`                 | `(e: ContextEvent, ctx) => ContextEventResult \| void`                             | `{ messages? }`                              |
+| `before_provider_request` | `(e: BeforeProviderRequestEvent, ctx) => BeforeProviderRequestEventResult \| void` | any                                          |
+| `after_provider_response` | `(e: AfterProviderResponseEvent, ctx) => void`                                     | none                                         |
+| `before_agent_start`      | `(e: BeforeAgentStartEvent, ctx) => BeforeAgentStartEventResult \| void`           | `{ message?, systemPrompt? }`                |
+| `agent_start`             | `(e: AgentStartEvent, ctx) => void`                                                | none                                         |
+| `agent_end`               | `(e: AgentEndEvent, ctx) => void`                                                  | none                                         |
+| `turn_start`              | `(e: TurnStartEvent, ctx) => void`                                                 | none                                         |
+| `turn_end`                | `(e: TurnEndEvent, ctx) => void`                                                   | none                                         |
+| `message_start`           | `(e: MessageStartEvent, ctx) => void`                                              | none                                         |
+| `message_update`          | `(e: MessageUpdateEvent, ctx) => void`                                             | none                                         |
+| `message_end`             | `(e: MessageEndEvent, ctx) => void`                                                | none                                         |
+| `tool_execution_start`    | `(e: ToolExecutionStartEvent, ctx) => void`                                        | none                                         |
+| `tool_execution_update`   | `(e: ToolExecutionUpdateEvent, ctx) => void`                                       | none                                         |
+| `tool_execution_end`      | `(e: ToolExecutionEndEvent, ctx) => void`                                          | none                                         |
+| `auto_compaction_start`   | `(e: AutoCompactionStartEvent, ctx) => void`                                       | none                                         |
+| `auto_compaction_end`     | `(e: AutoCompactionEndEvent, ctx) => void`                                         | none                                         |
+| `auto_retry_start`        | `(e: AutoRetryStartEvent, ctx) => void`                                            | none                                         |
+| `auto_retry_end`          | `(e: AutoRetryEndEvent, ctx) => void`                                              | none                                         |
+| `ttsr_triggered`          | `(e: TtsrTriggeredEvent, ctx) => void`                                             | none                                         |
+| `todo_reminder`           | `(e: TodoReminderEvent, ctx) => void`                                              | none                                         |
+| `goal_updated`            | `(e: GoalUpdatedEvent, ctx) => void`                                               | none                                         |
+| `credential_disabled`     | `(e: CredentialDisabledEvent, ctx) => void`                                        | none                                         |
+| `input`                   | `(e: InputEvent, ctx) => InputEventResult \| void`                                 | `{ handled?, text?, images? }`               |
+| `tool_call`               | `(e: ToolCallEvent, ctx) => ToolCallEventResult \| void`                           | `{ block?, reason? }`                        |
+| `tool_result`             | `(e: ToolResultEvent, ctx) => ToolResultEventResult \| void`                       | `{ content?, details?, isError? }`           |
+| `user_bash`               | `(e: UserBashEvent, ctx) => UserBashEventResult \| void`                           | `{ result? }`                                |
+| `user_python`             | `(e: UserPythonEvent, ctx) => UserPythonEventResult \| void`                       | `{ result? }`                                |
 
 #### 1.2.2 Tool Registration — `pi.registerTool(tool)`
 
 ```ts
 interface ToolDefinition<TParams extends TSchema, TDetails = unknown> {
-  name: string;                   // Tool name used in LLM tool calls
-  label: string;                  // Human-readable UI label
-  description: string;            // Description for LLM (decides when to call)
-  parameters: TParams;            // TypeBox schema (import from "typebox" directly)
-  hidden?: boolean;               // Hide unless explicitly listed in --tools
-  defaultInactive?: boolean;      // Registered but not active by default
-  deferrable?: boolean;           // Supports deferred changes (resolve/discard)
-  mcpServerName?: string;         // MCP server name for discovery metadata
-  mcpToolName?: string;           // Original MCP tool name
-  execute(
-    toolCallId: string,
-    params: Static<TParams>,
-    signal: AbortSignal | undefined,
-    onUpdate: AgentToolUpdateCallback<TDetails> | undefined,
-    ctx: ExtensionContext         // 5th parameter
-  ): Promise<AgentToolResult<TDetails>>;
-  onSession?: (event: ToolSessionEvent, ctx: ExtensionContext) => void | Promise<void>;
-  renderCall?: (args: Static<TParams>, options: ToolRenderResultOptions, theme: Theme) => Component;
-  renderResult?: (result: AgentToolResult<TDetails>, options: ToolRenderResultOptions, theme: Theme, args?: Static<TParams>) => Component;
+	name: string; // Tool name used in LLM tool calls
+	label: string; // Human-readable UI label
+	description: string; // Description for LLM (decides when to call)
+	parameters: TParams; // TypeBox schema (import from "typebox" directly)
+	hidden?: boolean; // Hide unless explicitly listed in --tools
+	defaultInactive?: boolean; // Registered but not active by default
+	deferrable?: boolean; // Supports deferred changes (resolve/discard)
+	mcpServerName?: string; // MCP server name for discovery metadata
+	mcpToolName?: string; // Original MCP tool name
+	execute(
+		toolCallId: string,
+		params: Static<TParams>,
+		signal: AbortSignal | undefined,
+		onUpdate: AgentToolUpdateCallback<TDetails> | undefined,
+		ctx: ExtensionContext, // 5th parameter
+	): Promise<AgentToolResult<TDetails>>;
+	onSession?: (event: ToolSessionEvent, ctx: ExtensionContext) => void | Promise<void>;
+	renderCall?: (args: Static<TParams>, options: ToolRenderResultOptions, theme: Theme) => Component;
+	renderResult?: (
+		result: AgentToolResult<TDetails>,
+		options: ToolRenderResultOptions,
+		theme: Theme,
+		args?: Static<TParams>,
+	) => Component;
 }
 ```
 
@@ -103,9 +108,9 @@ interface ToolDefinition<TParams extends TSchema, TDetails = unknown> {
 
 ```ts
 interface AgentToolResult<T> {
-  content: (TextContent | ImageContent)[];  // ALWAYS an array
-  details?: T;
-  isError?: boolean;
+	content: (TextContent | ImageContent)[]; // ALWAYS an array
+	details?: T;
+	isError?: boolean;
 }
 ```
 
@@ -140,46 +145,46 @@ sendMessage(message: {
 
 #### 1.2.5 Other API Methods
 
-| Method | Purpose |
-|--------|---------|
-| `registerShortcut(key, opts)` | Register keyboard shortcut |
-| `registerFlag(name, opts)` | Register CLI flag (boolean/string) |
-| `setLabel(entryIdOrLabel, label?)` | Set extension display label |
-| `getFlag(name)` | Get registered CLI flag value |
-| `registerMessageRenderer(customType, renderer)` | Register custom message renderer |
-| `registerAssistantThinkingRenderer(renderer)` | Register assistant thinking renderer |
-| `sendUserMessage(content, opts?)` | Send user message to agent |
-| `appendEntry(customType, data?)` | Append custom entry for state persistence |
-| `exec(command, args[], opts?)` | Execute shell command |
-| `getActiveTools()` | Get active tool name list |
-| `getAllTools()` | Get all configured tool names |
-| `setActiveTools(toolNames)` | Set active tools |
-| `getCommands()` | Get available slash commands |
-| `setModel(model)` | Set current model |
-| `getThinkingLevel()` | Get current thinking level |
-| `setThinkingLevel(level)` | Set thinking level |
-| `getSessionName()` | Get current session name |
-| `setSessionName(name)` | Set session name |
-| `registerProvider(name, config)` | Register or override model provider |
-| `events` | Shared EventBus for inter-extension communication |
+| Method                                          | Purpose                                           |
+| ----------------------------------------------- | ------------------------------------------------- |
+| `registerShortcut(key, opts)`                   | Register keyboard shortcut                        |
+| `registerFlag(name, opts)`                      | Register CLI flag (boolean/string)                |
+| `setLabel(entryIdOrLabel, label?)`              | Set extension display label                       |
+| `getFlag(name)`                                 | Get registered CLI flag value                     |
+| `registerMessageRenderer(customType, renderer)` | Register custom message renderer                  |
+| `registerAssistantThinkingRenderer(renderer)`   | Register assistant thinking renderer              |
+| `sendUserMessage(content, opts?)`               | Send user message to agent                        |
+| `appendEntry(customType, data?)`                | Append custom entry for state persistence         |
+| `exec(command, args[], opts?)`                  | Execute shell command                             |
+| `getActiveTools()`                              | Get active tool name list                         |
+| `getAllTools()`                                 | Get all configured tool names                     |
+| `setActiveTools(toolNames)`                     | Set active tools                                  |
+| `getCommands()`                                 | Get available slash commands                      |
+| `setModel(model)`                               | Set current model                                 |
+| `getThinkingLevel()`                            | Get current thinking level                        |
+| `setThinkingLevel(level)`                       | Set thinking level                                |
+| `getSessionName()`                              | Get current session name                          |
+| `setSessionName(name)`                          | Set session name                                  |
+| `registerProvider(name, config)`                | Register or override model provider               |
+| `events`                                        | Shared EventBus for inter-extension communication |
 
 #### 1.2.6 ExtensionContext
 
 ```ts
 interface ExtensionContext {
-  ui: ExtensionUIContext;           // Interactive UI methods
-  getContextUsage(): ContextUsage | undefined;
-  compact(instructions?): Promise<void>;
-  hasUI: boolean;
-  cwd: string;
-  sessionManager: ReadonlySessionManager;
-  modelRegistry: ModelRegistry;
-  model: Model | undefined;
-  isIdle(): boolean;
-  abort(): void;
-  hasPendingMessages(): boolean;
-  shutdown(): void;
-  getSystemPrompt(): string[];
+	ui: ExtensionUIContext; // Interactive UI methods
+	getContextUsage(): ContextUsage | undefined;
+	compact(instructions?): Promise<void>;
+	hasUI: boolean;
+	cwd: string;
+	sessionManager: ReadonlySessionManager;
+	modelRegistry: ModelRegistry;
+	model: Model | undefined;
+	isIdle(): boolean;
+	abort(): void;
+	hasPendingMessages(): boolean;
+	shutdown(): void;
+	getSystemPrompt(): string[];
 }
 ```
 
@@ -187,13 +192,13 @@ interface ExtensionContext {
 
 These are verified by the publish-time contract check. Violations cause runtime errors.
 
-| Contract | Rule |
-|----------|------|
-| `sendMessage` content | Use `string` (not array) for pi-shazam |
-| `before_agent_start` systemPrompt | Return `string` (not `string[]`) |
-| `registerTool` execute return | `{ content: [{ type: "text", text: string }] }` — always array |
-| TypeBox import | `import { Type } from "typebox"` — never `pi.typebox` |
-| Logger access | Use `pi.logger?.info()` — never direct `pi.logger.info()` |
+| Contract                          | Rule                                                           |
+| --------------------------------- | -------------------------------------------------------------- |
+| `sendMessage` content             | Use `string` (not array) for pi-shazam                         |
+| `before_agent_start` systemPrompt | Return `string` (not `string[]`)                               |
+| `registerTool` execute return     | `{ content: [{ type: "text", text: string }] }` — always array |
+| TypeBox import                    | `import { Type } from "typebox"` — never `pi.typebox`          |
+| Logger access                     | Use `pi.logger?.info()` — never direct `pi.logger.info()`      |
 
 ### 1.4 Parameter Schema
 
@@ -204,8 +209,8 @@ import { Type } from "typebox";
 
 // pi-shazam depends on typebox@^1.1.39 (sinclairzx81's package)
 const MyParams = Type.Object({
-  path: Type.String(),
-  limit: Type.Optional(Type.Number()),
+	path: Type.String(),
+	limit: Type.Optional(Type.Number()),
 });
 ```
 
@@ -291,12 +296,12 @@ index.ts                    <- Pi extension entry, default export(pi: ExtensionA
 
 ### 3.2 Daily Development Commands
 
-| Command | Purpose |
-|---------|---------|
+| Command             | Purpose                                       |
+| ------------------- | --------------------------------------------- |
 | `npm run typecheck` | Type validation without emit (`tsc --noEmit`) |
-| `npm test` | Run all tests (Vitest) |
-| `npm run build` | Compile TS -> `dist/` |
-| `npm run dev` | Watch mode incremental compilation |
+| `npm test`          | Run all tests (Vitest)                        |
+| `npm run build`     | Compile TS -> `dist/`                         |
+| `npm run dev`       | Watch mode incremental compilation            |
 
 ### 3.3 Change Workflow (MANDATORY)
 
@@ -388,34 +393,34 @@ grep "systemPrompt:" dist/hooks/   # Returns string, not string[]
 
 ### 5.1 Current Dependencies
 
-| Package | Version | Latest | Status |
-|---------|---------|--------|--------|
-| typescript | ^6.0.3 (6.0.3) | 6.0.3 | Current |
-| vitest | ^4.1.8 (4.1.8) | 4.1.8 | Current |
-| tree-sitter | ^0.22.4 (0.22.4) | 0.25.0 | Pinned |
-| vscode-languageserver-protocol | ^3.18.0 (3.18.0) | 3.18.0 | Current |
-| vscode-jsonrpc | ^9.0.0 (9.0.0) | 9.0.0 | Current |
-| typebox | ^1.2.1 (1.2.1) | 1.2.1 | Current |
-| iconv-lite | ^0.7.2 (0.7.2) | 0.7.2 | Current |
-| @types/node | ^22.0.0 (22.x) | 25.9.2 | Behind major |
+| Package                        | Version          | Latest | Status       |
+| ------------------------------ | ---------------- | ------ | ------------ |
+| typescript                     | ^6.0.3 (6.0.3)   | 6.0.3  | Current      |
+| vitest                         | ^4.1.8 (4.1.8)   | 4.1.8  | Current      |
+| tree-sitter                    | ^0.22.4 (0.22.4) | 0.25.0 | Pinned       |
+| vscode-languageserver-protocol | ^3.18.0 (3.18.0) | 3.18.0 | Current      |
+| vscode-jsonrpc                 | ^9.0.0 (9.0.0)   | 9.0.0  | Current      |
+| typebox                        | ^1.2.1 (1.2.1)   | 1.2.1  | Current      |
+| iconv-lite                     | ^0.7.2 (0.7.2)   | 0.7.2  | Current      |
+| @types/node                    | ^22.0.0 (22.x)   | 25.9.2 | Behind major |
 
 ### 5.2 Tree-Sitter Grammars
 
-| Grammar | Current | Latest | Status |
-|---------|---------|--------|--------|
-| tree-sitter-c | 0.23.4 | 0.24.1 | Behind minor |
-| tree-sitter-c-sharp | 0.23.1 | 0.23.5 | Behind patch |
-| tree-sitter-cpp | 0.23.4 | 0.23.4 | Current |
-| tree-sitter-css | 0.23.1 | 0.25.0 | Behind major |
-| tree-sitter-go | 0.23.4 | 0.25.0 | Behind major |
-| tree-sitter-html | 0.23.2 | 0.23.2 | Current |
-| tree-sitter-java | 0.23.5 | 0.23.5 | Current |
-| tree-sitter-javascript | 0.23.1 | 0.25.0 | Behind major |
-| tree-sitter-json | 0.24.8 | 0.24.8 | Current |
-| tree-sitter-python | 0.23.6 | 0.25.0 | Behind major |
-| tree-sitter-ruby | 0.23.1 | 0.23.1 | Current |
-| tree-sitter-rust | 0.23.2 | 0.24.0 | Behind minor |
-| tree-sitter-typescript | 0.23.2 | 0.23.2 | Current |
+| Grammar                | Current | Latest | Status       |
+| ---------------------- | ------- | ------ | ------------ |
+| tree-sitter-c          | 0.23.4  | 0.24.1 | Behind minor |
+| tree-sitter-c-sharp    | 0.23.1  | 0.23.5 | Behind patch |
+| tree-sitter-cpp        | 0.23.4  | 0.23.4 | Current      |
+| tree-sitter-css        | 0.23.1  | 0.25.0 | Behind major |
+| tree-sitter-go         | 0.23.4  | 0.25.0 | Behind major |
+| tree-sitter-html       | 0.23.2  | 0.23.2 | Current      |
+| tree-sitter-java       | 0.23.5  | 0.23.5 | Current      |
+| tree-sitter-javascript | 0.23.1  | 0.25.0 | Behind major |
+| tree-sitter-json       | 0.24.8  | 0.24.8 | Current      |
+| tree-sitter-python     | 0.23.6  | 0.25.0 | Behind major |
+| tree-sitter-ruby       | 0.23.1  | 0.23.1 | Current      |
+| tree-sitter-rust       | 0.23.2  | 0.24.0 | Behind minor |
+| tree-sitter-typescript | 0.23.2  | 0.23.2 | Current      |
 
 ### 5.3 Upgrade Policy
 
@@ -437,11 +442,11 @@ grep "systemPrompt:" dist/hooks/   # Returns string, not string[]
 
 ### 6.1 After Every Change (MANDATORY)
 
-| Step | Command | What It Checks |
-|------|---------|---------------|
-| 1 | `npm run typecheck` | Type safety |
-| 2 | `npm test` | All unit tests |
-| 3 | `npm run build` | Compile output |
+| Step | Command             | What It Checks |
+| ---- | ------------------- | -------------- |
+| 1    | `npm run typecheck` | Type safety    |
+| 2    | `npm test`          | All unit tests |
+| 3    | `npm run build`     | Compile output |
 
 ### 6.2 Before Commit
 
@@ -450,14 +455,14 @@ LSP diagnostics, graph diff (when baseline exists).
 
 ### 6.3 Debugging Guide
 
-| Symptom | Check |
-|---------|-------|
-| Extension fails to load | Compare against CONTRACT.md, verify API version |
-| `text.replace is not a function` | Check sendMessage content is string, not array |
-| `Cannot read properties of undefined` | Check pi.logger/pi.typebox/ctx.ui access |
-| Tool not appearing | Verify register* is called in index.ts |
-| Tree-sitter parse failure | Check grammar version compatibility |
-| LSP communication error | Check lsp/client.ts JSON-RPC framing |
+| Symptom                               | Check                                           |
+| ------------------------------------- | ----------------------------------------------- |
+| Extension fails to load               | Compare against CONTRACT.md, verify API version |
+| `text.replace is not a function`      | Check sendMessage content is string, not array  |
+| `Cannot read properties of undefined` | Check pi.logger/pi.typebox/ctx.ui access        |
+| Tool not appearing                    | Verify register\* is called in index.ts         |
+| Tree-sitter parse failure             | Check grammar version compatibility             |
+| LSP communication error               | Check lsp/client.ts JSON-RPC framing            |
 
 ### 6.4 Integration Testing
 
@@ -468,28 +473,28 @@ in a live Pi session. Use `~/.A1/repomap` as test target (Python + tree-sitter +
 
 ## 7. Key Files Reference
 
-| File | Role |
-|------|------|
-| `index.ts` | Extension entry, all registrations |
-| `CONTRACT.md` | Pi ExtensionAPI authoritative contract |
-| `types/pi-extension.d.ts` | Self-contained ExtensionAPI type stub |
-| `AGENTS.md` | Agent context and project rules |
-| `SKILL.md` | Pi agent skill file for LLM discovery |
-| `package.json` | npm manifest, dependencies, scripts |
-| `tsconfig.json` | TypeScript compiler configuration |
-| `core/treesitter.ts` | Language support, symbol extraction |
-| `core/graph.ts` | Symbol dependency graph |
-| `core/scanner.ts` | Project scanning + graph building |
-| `lsp/client.ts` | LSP JSON-RPC implementation |
-| `tools/_factory.ts` | Tool registration factory |
-| `hooks/before-start.ts` | System prompt injection |
-| `hooks/after-write.ts` | Auto verification after edits |
+| File                      | Role                                   |
+| ------------------------- | -------------------------------------- |
+| `index.ts`                | Extension entry, all registrations     |
+| `CONTRACT.md`             | Pi ExtensionAPI authoritative contract |
+| `types/pi-extension.d.ts` | Self-contained ExtensionAPI type stub  |
+| `AGENTS.md`               | Agent context and project rules        |
+| `SKILL.md`                | Pi agent skill file for LLM discovery  |
+| `package.json`            | npm manifest, dependencies, scripts    |
+| `tsconfig.json`           | TypeScript compiler configuration      |
+| `core/treesitter.ts`      | Language support, symbol extraction    |
+| `core/graph.ts`           | Symbol dependency graph                |
+| `core/scanner.ts`         | Project scanning + graph building      |
+| `lsp/client.ts`           | LSP JSON-RPC implementation            |
+| `tools/_factory.ts`       | Tool registration factory              |
+| `hooks/before-start.ts`   | System prompt injection                |
+| `hooks/after-write.ts`    | Auto verification after edits          |
 
 ---
 
 ## 8. Modification Log
 
-| Date | Version | Change |
-|------|---------|--------|
-| 2026-06-06 | 1.0 | Initial version. Merged Pi ExtensionAPI contract (CONTRACT.md, types/pi-extension.d.ts, pi-coding-agent@15.9.5), project architecture, dev workflow, release process, tech stack baseline. |
-| 2026-06-06 | 1.1 | Upgraded iconv-lite (0.6.3 -> 0.7.2), typebox (1.1.39 -> 1.2.1), vscode-languageserver-protocol (3.17.0 -> 3.18.0). All 178 tests pass. |
+| Date       | Version | Change                                                                                                                                                                                     |
+| ---------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-06-06 | 1.0     | Initial version. Merged Pi ExtensionAPI contract (CONTRACT.md, types/pi-extension.d.ts, pi-coding-agent@15.9.5), project architecture, dev workflow, release process, tech stack baseline. |
+| 2026-06-06 | 1.1     | Upgraded iconv-lite (0.6.3 -> 0.7.2), typebox (1.1.39 -> 1.2.1), vscode-languageserver-protocol (3.17.0 -> 3.18.0). All 178 tests pass.                                                    |

@@ -8,13 +8,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import {
-	createRepoGraph,
-	createSymbol,
-	createEdge,
-	serializeGraphV2,
-	deserializeGraphV2,
-} from "../core/graph.js";
+import { createRepoGraph, createSymbol, createEdge, serializeGraphV2, deserializeGraphV2 } from "../core/graph.js";
 import { saveGraphCache, loadGraphCache } from "../core/cache.js";
 import type { RepoGraph } from "../core/graph.js";
 
@@ -119,10 +113,7 @@ describe("Graph serialization V2 round-trip", () => {
 		expect(outgoing![0].kind).toBe("call");
 
 		// Verify file-level data preserved
-		expect(restored.fileSymbols.get("a.ts")).toEqual([
-			"a.ts::foo::1",
-			"a.ts::MyClass::12",
-		]);
+		expect(restored.fileSymbols.get("a.ts")).toEqual(["a.ts::foo::1", "a.ts::MyClass::12"]);
 		expect(restored.fileImports.get("a.ts")).toEqual(["./b"]);
 		expect(restored.fileCalls.get("a.ts")).toEqual([["bar", 3, "b.ts"]]);
 	});
@@ -174,11 +165,7 @@ describe("Graph cache save/load", () => {
 
 	it("loadGraphCache returns null for wrong schema version", () => {
 		const cachePath = join(tmpDir, "old-version.json");
-		writeFileSync(
-			cachePath,
-			JSON.stringify({ version: 1, symbols: [], edges: [] }),
-			"utf-8",
-		);
+		writeFileSync(cachePath, JSON.stringify({ version: 1, symbols: [], edges: [] }), "utf-8");
 		const loaded = loadGraphCache(cachePath);
 		expect(loaded).toBeNull();
 	});

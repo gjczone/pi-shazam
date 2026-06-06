@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-	LSP_SERVER_SPECS,
-	suffixToLanguage,
-	languageForSuffix,
-} from "../lsp/servers.js";
+import { LSP_SERVER_SPECS, suffixToLanguage, languageForSuffix } from "../lsp/servers.js";
 
 describe("lsp/servers", () => {
 	describe("LSP_SERVER_SPECS", () => {
@@ -15,9 +11,7 @@ describe("lsp/servers", () => {
 		});
 
 		it("should have python specs (pyright + pylsp)", () => {
-			const pythonSpecs = LSP_SERVER_SPECS.filter(
-				(s) => s.language === "python",
-			);
+			const pythonSpecs = LSP_SERVER_SPECS.filter((s) => s.language === "python");
 			expect(pythonSpecs.length).toBeGreaterThanOrEqual(2);
 			const serverNames = pythonSpecs.map((s) => s.serverName);
 			expect(serverNames).toContain("pyright-langserver");

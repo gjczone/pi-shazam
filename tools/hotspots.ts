@@ -22,9 +22,7 @@ export function registerHotspots(pi: ExtensionAPI): void {
 		execute(graph, params) {
 			const json = params.json ?? false;
 			const topN = (params.topN as number) ?? 10;
-			return json
-				? executeHotspotsJson(graph, topN)
-				: executeHotspots(graph, topN);
+			return json ? executeHotspotsJson(graph, topN) : executeHotspots(graph, topN);
 		},
 	});
 }
@@ -38,10 +36,7 @@ interface FileHotspot {
 	hotspotScore: number;
 }
 
-export function executeHotspots(
-	graph: RepoGraph,
-	topN: number = 10,
-): string {
+export function executeHotspots(graph: RepoGraph, topN: number = 10): string {
 	const hotspots = computeHotspots(graph, topN);
 
 	const lines: string[] = [];
@@ -49,14 +44,14 @@ export function executeHotspots(
 	lines.push("");
 	lines.push("Ranked by symbol density × PageRank score.");
 	lines.push("");
-	lines.push("Config and generated files (package-lock.json, package.json, tsconfig.json, dist/, node_modules/) are excluded.");
+	lines.push(
+		"Config and generated files (package-lock.json, package.json, tsconfig.json, dist/, node_modules/) are excluded.",
+	);
 	lines.push("");
 
 	for (let i = 0; i < hotspots.length; i++) {
 		const h = hotspots[i]!;
-		lines.push(
-			`${i + 1}. \`${h.file}\` — score: ${h.hotspotScore.toFixed(2)}`,
-		);
+		lines.push(`${i + 1}. \`${h.file}\` — score: ${h.hotspotScore.toFixed(2)}`);
 		lines.push(
 			`   ${h.symbolCount} symbols | PageRank: ${h.totalPagerank.toFixed(2)} | in:${h.incomingRefs} out:${h.outgoingRefs}`,
 		);
@@ -73,10 +68,7 @@ export function executeHotspots(
 	return lines.join("\n");
 }
 
-export function executeHotspotsJson(
-	graph: RepoGraph,
-	topN: number,
-): string {
+export function executeHotspotsJson(graph: RepoGraph, topN: number): string {
 	const hotspots = computeHotspots(graph, topN);
 	return JSON.stringify({
 		schema_version: "1.0",
@@ -133,7 +125,5 @@ function computeHotspots(graph: RepoGraph, topN: number): FileHotspot[] {
 		});
 	}
 
-	return [...fileStats.values()]
-		.sort((a, b) => b.hotspotScore - a.hotspotScore)
-		.slice(0, topN);
+	return [...fileStats.values()].sort((a, b) => b.hotspotScore - a.hotspotScore).slice(0, topN);
 }

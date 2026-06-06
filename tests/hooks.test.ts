@@ -31,7 +31,6 @@ describe("Hook: before-start (overview injection)", () => {
 		expect(promptSection).toContain("[pi-shazam]");
 	});
 
-
 	it("should generate overview text from project graph", () => {
 		const graph = getGraph();
 		const overview = executeOverview(graph, ".");
@@ -81,7 +80,6 @@ describe("Hook: after-write (auto-verify)", () => {
 		expect(handleWriteResult).toBeDefined();
 		expect(typeof handleWriteResult).toBe("function");
 	});
-
 
 	it("should detect write tool events", () => {
 		// Test that we can identify write/edit tool names

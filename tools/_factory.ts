@@ -34,10 +34,7 @@ export interface ToolSpec<T extends TProperties> {
 	 * Standard domain function: receives pre-scanned graph and merged params,
 	 * returns text output. Factory handles envelope, json toggle, truncation.
 	 */
-	execute?: (
-		graph: RepoGraph,
-		params: Record<string, unknown>,
-	) => string | Promise<string>;
+	execute?: (graph: RepoGraph, params: Record<string, unknown>) => string | Promise<string>;
 	/**
 	 * Custom execute for tools with complex logic (async LSP, multi-branch).
 	 * Receives the full execute context. Factory only merges params.
@@ -62,10 +59,7 @@ export interface ToolSpec<T extends TProperties> {
  * - If `customExecute` is provided: tool handles everything; factory only
  *   merges json/maxTokens into the parameter schema.
  */
-export function createTool<T extends TProperties>(
-	pi: ExtensionAPI,
-	spec: ToolSpec<T>,
-): void {
+export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSpec<T>): void {
 	const mergedSchema = Type.Object({
 		...spec.params.properties,
 		json: Type.Optional(Type.Boolean()),
@@ -94,10 +88,7 @@ export function createTool<T extends TProperties>(
 		label: spec.label,
 		description: spec.description,
 		parameters: mergedSchema,
-		async execute(
-			_toolCallId: string,
-			params: Record<string, unknown>,
-		): Promise<AgentToolResult> {
+		async execute(_toolCallId: string, params: Record<string, unknown>): Promise<AgentToolResult> {
 			const json = (params.json as boolean) ?? false;
 			const maxTokens = params.maxTokens as number | undefined;
 			const graph = scanProject(".");

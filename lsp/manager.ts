@@ -12,11 +12,7 @@ import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { LspClient } from "./client.js";
 import type { LspDiagnostic, LspLocation } from "./client.js";
-import {
-	LSP_SERVER_SPECS,
-	languageForSuffix,
-	lspTimeoutFor,
-} from "./servers.js";
+import { LSP_SERVER_SPECS, languageForSuffix, lspTimeoutFor } from "./servers.js";
 import { SKIP_DIRS } from "../core/filter.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -55,7 +51,6 @@ export interface LspRunResult {
 
 // ── Project language detection ───────────────────────────────────────────────
 
-
 /**
  * Check if a path contains any skip directory segment.
  * Used to avoid feeding vendored/generated files to LSP.
@@ -71,10 +66,7 @@ export function shouldSkipPath(filePath: string): boolean {
 /**
  * Walk project root and detect languages from file extensions.
  */
-export function detectProjectLanguages(
-	projectRoot: string,
-	maxFiles: number = 2000,
-): string[] {
+export function detectProjectLanguages(projectRoot: string, maxFiles: number = 2000): string[] {
 	const langs = new Set<string>();
 	let seen = 0;
 
@@ -117,11 +109,7 @@ export function detectProjectLanguages(
  * Find the LSP workspace root by walking up from a file path
  * looking for root markers.
  */
-function detectWorkspaceRoot(
-	projectRoot: string,
-	filePath: string | null,
-	language: string,
-): string {
+function detectWorkspaceRoot(projectRoot: string, filePath: string | null, language: string): string {
 	const root = resolve(projectRoot);
 	const specs = LSP_SERVER_SPECS.filter((s) => s.language === language);
 	const markers = new Set<string>();
@@ -199,15 +187,7 @@ function trustedUserCandidates(commandName: string): string[] {
 		join(home, "go", "bin", commandName),
 		join(home, ".bun", "bin", commandName),
 		join(home, ".yarn", "bin", commandName),
-		join(
-			home,
-			".config",
-			"yarn",
-			"global",
-			"node_modules",
-			".bin",
-			commandName,
-		),
+		join(home, ".config", "yarn", "global", "node_modules", ".bin", commandName),
 		join(home, ".local", "share", "pnpm", commandName),
 		join(home, ".local", "share", "nvim", "mason", "bin", commandName),
 	];
@@ -216,11 +196,7 @@ function trustedUserCandidates(commandName: string): string[] {
 
 // ── Detection ────────────────────────────────────────────────────────────────
 
-export function detectLspServer(
-	projectRoot: string,
-	language: string,
-	filePath?: string | null,
-): LspServerDetection {
+export function detectLspServer(projectRoot: string, language: string, filePath?: string | null): LspServerDetection {
 	const root = resolve(projectRoot);
 	const workspaceRoot = detectWorkspaceRoot(root, filePath ?? null, language);
 	const specs = LSP_SERVER_SPECS.filter((s) => s.language === language);
@@ -342,10 +318,7 @@ export class LspManager {
 	/**
 	 * Get or create an LSP client for a language.
 	 */
-	getServerForLanguage(
-		language: string,
-		filePath?: string,
-	): LspServerInfo | null {
+	getServerForLanguage(language: string, filePath?: string): LspServerInfo | null {
 		// Return existing server if already running
 		const existing = this.servers.get(language);
 		if (existing && existing.client.isRunning()) return existing;
@@ -355,26 +328,15 @@ export class LspManager {
 		}
 
 		// Detect and spawn
-		const detection = detectLspServer(
-			this.projectRoot,
-			language,
-			filePath ?? null,
-		);
+		const detection = detectLspServer(this.projectRoot, language, filePath ?? null);
 
 		if (detection.status !== "available" || detection.command.length === 0) {
-			this.log(
-				`LSP server not available for ${language}: ${detection.reason ?? "not found"}`,
-			);
+			this.log(`LSP server not available for ${language}: ${detection.reason ?? "not found"}`);
 			return null;
 		}
 
 		const timeout = lspTimeoutFor(language);
-		const client = new LspClient(
-			detection.command,
-			detection.workspaceRoot,
-			timeout,
-			this.log,
-		);
+		const client = new LspClient(detection.command, detection.workspaceRoot, timeout, this.log);
 
 		try {
 			client.start();

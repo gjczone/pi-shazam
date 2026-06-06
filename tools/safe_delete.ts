@@ -49,11 +49,7 @@ interface SafeDeleteResult {
 	message: string;
 }
 
-export function executeSafeDelete(
-	graph: RepoGraph,
-	symbolName: string,
-	dryRun: boolean = true,
-): SafeDeleteResult {
+export function executeSafeDelete(graph: RepoGraph, symbolName: string, dryRun: boolean = true): SafeDeleteResult {
 	// Find the symbol
 	let symbol: Symbol | undefined;
 	for (const sym of graph.symbols.values()) {

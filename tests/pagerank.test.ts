@@ -65,9 +65,7 @@ describe("pagerank", () => {
 
 		// Create a chain: s0 -> s1 -> s2 -> ... -> s9
 		for (let i = 0; i < 9; i++) {
-			graph.outgoing.set(`s${i}`, [
-				createEdge(`s${i}`, `s${i + 1}`, 0.5, "call"),
-			]);
+			graph.outgoing.set(`s${i}`, [createEdge(`s${i}`, `s${i + 1}`, 0.5, "call")]);
 		}
 
 		calculatePageRank(graph);

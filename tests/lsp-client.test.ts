@@ -80,18 +80,15 @@ import { LspClient } from "../lsp/client.js";
  * Create a client with internal state set directly (bypasses start()).
  * Used for testing close() logic without needing a real LSP handshake.
  */
-function createRunningClient(opts?: {
-	process?: MockProcess;
-	connection?: MockConnection;
-}): { client: LspClient; process: MockProcess; conn: MockConnection } {
+function createRunningClient(opts?: { process?: MockProcess; connection?: MockConnection }): {
+	client: LspClient;
+	process: MockProcess;
+	conn: MockConnection;
+} {
 	const proc = opts?.process ?? new MockProcess();
 	const conn = opts?.connection ?? createMockConnection();
 
-	const client = new LspClient(
-		["mock-server", "--stdio"],
-		"/test/workspace",
-		5000,
-	);
+	const client = new LspClient(["mock-server", "--stdio"], "/test/workspace", 5000);
 
 	(client as any).process = proc;
 	(client as any).connection = conn;
@@ -116,11 +113,7 @@ function createStartedClient(conn?: MockConnection): {
 	const c = conn ?? createMockConnection();
 	mockConnForStart = c;
 
-	const client = new LspClient(
-		["mock-server", "--stdio"],
-		"/test/workspace",
-		5000,
-	);
+	const client = new LspClient(["mock-server", "--stdio"], "/test/workspace", 5000);
 	client.start();
 
 	return { client, process: proc, conn: c };
@@ -131,11 +124,7 @@ function createStartedClient(conn?: MockConnection): {
 describe("lsp/client", () => {
 	describe("LspClient constructor", () => {
 		it("should create an LspClient instance", () => {
-			const client = new LspClient(
-				["mock-server", "--stdio"],
-				"/test/workspace",
-				5000,
-			);
+			const client = new LspClient(["mock-server", "--stdio"], "/test/workspace", 5000);
 			expect(client).toBeDefined();
 			expect(client.command).toEqual(["mock-server", "--stdio"]);
 			expect(client.workspaceRoot).toBe("/test/workspace");
@@ -238,12 +227,8 @@ describe("LspClient close()", () => {
 			expect(closeResult).toBeInstanceOf(Promise);
 			await closeResult;
 
-			const shutdownCalls = conn.sendRequest.mock.calls.filter(
-				(c: any[]) => c[0] === "shutdown",
-			);
-			const exitCalls = conn.sendNotification.mock.calls.filter(
-				(c: any[]) => c[0] === "exit",
-			);
+			const shutdownCalls = conn.sendRequest.mock.calls.filter((c: any[]) => c[0] === "shutdown");
+			const exitCalls = conn.sendNotification.mock.calls.filter((c: any[]) => c[0] === "exit");
 
 			expect(shutdownCalls.length).toBeGreaterThanOrEqual(1);
 			expect(exitCalls.length).toBeGreaterThanOrEqual(1);

@@ -210,10 +210,7 @@ export interface SerializedGraphV2 {
 	fileMtimes: Record<string, number>;
 }
 
-export function serializeGraphV2(
-	graph: RepoGraph,
-	fileMtimes: Map<string, number>,
-): SerializedGraphV2 {
+export function serializeGraphV2(graph: RepoGraph, fileMtimes: Map<string, number>): SerializedGraphV2 {
 	const symbols: SerializedSymbol[] = [];
 	for (const sym of graph.symbols.values()) {
 		symbols.push(serializeSymbol(sym));
@@ -412,10 +409,7 @@ export function compareGraphSnapshots(
 		const cur = currentSymMap.get(id)!;
 		const prev = prevSymMap.get(id)!;
 		const sigChanged = cur.signature !== prev.signature;
-		const locChanged =
-			cur.line !== prev.line ||
-			cur.endLine !== prev.endLine ||
-			cur.file !== prev.file;
+		const locChanged = cur.line !== prev.line || cur.endLine !== prev.endLine || cur.file !== prev.file;
 		if (sigChanged || locChanged) {
 			modifiedSymbols.push({
 				id: cur.id,
@@ -487,4 +481,3 @@ export function compareGraphSnapshots(
 		},
 	};
 }
-

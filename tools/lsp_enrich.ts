@@ -199,10 +199,7 @@ export async function lspWorkspaceSearch(
 			return [];
 		}
 		try {
-			const raw = await withEnrichTimeout(
-				srv.client.workspaceSymbol(query),
-				timeoutMs,
-			);
+			const raw = await withEnrichTimeout(srv.client.workspaceSymbol(query), timeoutMs);
 			if (!raw) return [];
 			return raw.map((s) => toEnrichedHit(s)).filter(Boolean) as EnrichedSymbolHit[];
 		} catch {
@@ -220,9 +217,7 @@ export async function lspWorkspaceSearch(
 	return out;
 }
 
-function toEnrichedHit(
-	s: SymbolInformation | WorkspaceSymbol,
-): EnrichedSymbolHit | null {
+function toEnrichedHit(s: SymbolInformation | WorkspaceSymbol): EnrichedSymbolHit | null {
 	const kind = mapSymbolKindNumber(s.kind);
 	if ("location" in s && s.location) {
 		const loc = s.location as Location;
@@ -243,7 +238,6 @@ function toEnrichedHit(
 	return null;
 }
 
-
 // ── documentSymbol enrichment ────────────────────────────────────────────────
 
 /**
@@ -262,10 +256,7 @@ export async function lspDocumentSymbols(
 	if (!cap || !(cap as Record<string, unknown>).documentSymbolProvider) {
 		return null;
 	}
-	return withEnrichTimeout(
-		opened.client.documentSymbols(filePath),
-		timeoutMs,
-	);
+	return withEnrichTimeout(opened.client.documentSymbols(filePath), timeoutMs);
 }
 
 // ── semanticTokens ───────────────────────────────────────────────────────────
@@ -285,10 +276,7 @@ export async function lspSemanticTokens(
 	const cap = opened.client.serverCapabilities;
 	const stProvider = (cap as Record<string, unknown> | undefined)?.semanticTokensProvider;
 	if (!stProvider) return null;
-	return withEnrichTimeout(
-		opened.client.semanticTokens(filePath),
-		timeoutMs,
-	);
+	return withEnrichTimeout(opened.client.semanticTokens(filePath), timeoutMs);
 }
 
 // ── foldingRange ─────────────────────────────────────────────────────────────
@@ -309,8 +297,5 @@ export async function lspFoldingRanges(
 	if (!cap || !(cap as Record<string, unknown>).foldingRangeProvider) {
 		return null;
 	}
-	return withEnrichTimeout(
-		opened.client.foldingRange(filePath),
-		timeoutMs,
-	);
+	return withEnrichTimeout(opened.client.foldingRange(filePath), timeoutMs);
 }

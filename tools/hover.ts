@@ -49,11 +49,7 @@ interface HoverResult {
 	lspHover?: string;
 }
 
-export async function executeHover(
-	graph: RepoGraph,
-	name: string,
-	file?: string,
-): Promise<HoverResult> {
+export async function executeHover(graph: RepoGraph, name: string, file?: string): Promise<HoverResult> {
 	// Find the symbol in the graph
 	let symbol: Symbol | undefined;
 	if (file) {
@@ -106,17 +102,10 @@ export async function executeHover(
 			const client = serverInfo.client;
 			try {
 				if (!client.isFileOpened(symbol.file)) {
-					const content = readFileSync(
-						resolve(serverInfo.workspaceRoot, symbol.file),
-						"utf-8",
-					);
+					const content = readFileSync(resolve(serverInfo.workspaceRoot, symbol.file), "utf-8");
 					await client.didOpen(symbol.file, content);
 				}
-				const hoverData = await client.hover(
-					symbol.file,
-					symbol.line - 1,
-					0,
-				);
+				const hoverData = await client.hover(symbol.file, symbol.line - 1, 0);
 				if (hoverData?.contents) {
 					const contents = hoverData.contents;
 					if (typeof contents === "string") {
@@ -125,26 +114,14 @@ export async function executeHover(
 						result.lspHover = contents
 							.map((c: unknown) => {
 								if (typeof c === "string") return c;
-								if (
-									c &&
-									typeof c === "object" &&
-									"value" in (c as Record<string, unknown>)
-								) {
-									return String(
-										(c as Record<string, string>).value,
-									);
+								if (c && typeof c === "object" && "value" in (c as Record<string, unknown>)) {
+									return String((c as Record<string, string>).value);
 								}
 								return String(c);
 							})
 							.join("\n\n");
-					} else if (
-						contents &&
-						typeof contents === "object" &&
-						"value" in (contents as Record<string, unknown>)
-					) {
-						result.lspHover = String(
-							(contents as Record<string, string>).value,
-						);
+					} else if (contents && typeof contents === "object" && "value" in (contents as Record<string, unknown>)) {
+						result.lspHover = String((contents as Record<string, string>).value);
 					} else {
 						result.lspHover = String(contents);
 					}
@@ -159,22 +136,19 @@ export async function executeHover(
 }
 
 function formatHoverResult(result: HoverResult, name: string): string {
-	const lines: string[] = [
-		`## Hover: \`${name}\``,
-		"",
-	];
+	const lines: string[] = [`## Hover: \`${name}\``, ""];
 
 	if (!result.file) {
 		lines.push(`Symbol "${name}" not found in the project.`);
-	
-	// Add Next recommendations
-	const nextItems = getNextForTool("hover", { topSymbol: result.name });
-	if (nextItems.length > 0) {
-		lines.push("");
-		lines.push(formatNextSection(nextItems));
-	}
 
-	return lines.join("\n");
+		// Add Next recommendations
+		const nextItems = getNextForTool("hover", { topSymbol: result.name });
+		if (nextItems.length > 0) {
+			lines.push("");
+			lines.push(formatNextSection(nextItems));
+		}
+
+		return lines.join("\n");
 	}
 
 	lines.push(`**Kind:** ${result.kind}`);
@@ -196,9 +170,7 @@ function formatHoverResult(result: HoverResult, name: string): string {
 	} else {
 		lines.push("*No LSP hover info available.*");
 		lines.push("");
-		lines.push(
-			"Run with diagnostics=\"lsp\" in shazam_check to ensure LSP servers are initialized.",
-		);
+		lines.push('Run with diagnostics="lsp" in shazam_check to ensure LSP servers are initialized.');
 	}
 
 	return lines.join("\n");

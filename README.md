@@ -36,12 +36,12 @@ Supported clients: Cursor, Claude Desktop, Windsurf, Qoder, Kimi Code, and any t
 
 ```json
 {
-  "mcpServers": {
-    "pi-shazam": {
-      "command": "npx",
-      "args": ["pi-shazam-mcp"]
-    }
-  }
+	"mcpServers": {
+		"pi-shazam": {
+			"command": "npx",
+			"args": ["pi-shazam-mcp"]
+		}
+	}
 }
 ```
 
@@ -51,38 +51,38 @@ The same 13 tools, the same analysis engine, the same output format. MCP tools s
 
 ### Query (read-only)
 
-| Tool | What it tells the agent |
-|------|------------------------|
-| `shazam_overview` | Project structure, top-10 files by PageRank, key dependencies, recent commits, HTTP routes |
-| `shazam_impact` | Every file, symbol, and test affected by your planned changes |
-| `shazam_codesearch` | BM25-ranked symbol search — use instead of grep |
-| `shazam_symbol` | Definition, kind, signature, callers, callees for any symbol. `mode: "state"` for enums |
-| `shazam_hover` | Type signatures and JSDoc via LSP — content raw reads miss |
-| `shazam_file_detail` | All symbols in a file with signatures, PageRank, call counts, LSP hierarchy |
-| `shazam_call_chain` | Full upstream/downstream call graph. `flat: true` for reference list |
-| `shazam_find_tests` | Which test files cover a given module |
-| `shazam_hotspots` | Files ranked by complexity — where bugs hurt most |
-| `shazam_type_hierarchy` | Class/interface inheritance chain |
+| Tool                    | What it tells the agent                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------ |
+| `shazam_overview`       | Project structure, top-10 files by PageRank, key dependencies, recent commits, HTTP routes |
+| `shazam_impact`         | Every file, symbol, and test affected by your planned changes                              |
+| `shazam_codesearch`     | BM25-ranked symbol search — use instead of grep                                            |
+| `shazam_symbol`         | Definition, kind, signature, callers, callees for any symbol. `mode: "state"` for enums    |
+| `shazam_hover`          | Type signatures and JSDoc via LSP — content raw reads miss                                 |
+| `shazam_file_detail`    | All symbols in a file with signatures, PageRank, call counts, LSP hierarchy                |
+| `shazam_call_chain`     | Full upstream/downstream call graph. `flat: true` for reference list                       |
+| `shazam_find_tests`     | Which test files cover a given module                                                      |
+| `shazam_hotspots`       | Files ranked by complexity — where bugs hurt most                                          |
+| `shazam_type_hierarchy` | Class/interface inheritance chain                                                          |
 
 ### Write & Verify
 
-| Tool | What it tells the agent |
-|------|------------------------|
-| `shazam_verify` | Post-edit gate: LSP diagnostics + risk + orphans + graph diff. PASS/WARN/FAIL |
-| `shazam_fix` | Auto-fix format issues (prettier, biome, eslint, ruff, gofmt) |
-| `shazam_rename_symbol` | Safe project-wide rename via LSP — verifies references first |
-| `shazam_safe_delete` | Confirms zero incoming references before removing a symbol |
+| Tool                   | What it tells the agent                                                       |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| `shazam_verify`        | Post-edit gate: LSP diagnostics + risk + orphans + graph diff. PASS/WARN/FAIL |
+| `shazam_fix`           | Auto-fix format issues (prettier, biome, eslint, ruff, gofmt)                 |
+| `shazam_rename_symbol` | Safe project-wide rename via LSP — verifies references first                  |
+| `shazam_safe_delete`   | Confirms zero incoming references before removing a symbol                    |
 
 ## Pi-Only Features
 
 These run automatically when installed as a Pi package:
 
-| Hook | When | What it does |
-|------|------|-------------|
-| `before_agent_start` | Agent starts | Injects project structure overview into system prompt |
-| `after_write/edit` | Agent writes/edits | Auto-verifies changes, reports structural impact |
-| `shazam-guide` | Key lifecycle events | Nudges agent to use shazam tools at the right moments |
-| `tool-logger` | Every shazam call | Logs usage to `~/.pi/hooks/audit/shazam-calls.log` for optimization |
+| Hook                 | When                 | What it does                                                        |
+| -------------------- | -------------------- | ------------------------------------------------------------------- |
+| `before_agent_start` | Agent starts         | Injects project structure overview into system prompt               |
+| `after_write/edit`   | Agent writes/edits   | Auto-verifies changes, reports structural impact                    |
+| `shazam-guide`       | Key lifecycle events | Nudges agent to use shazam tools at the right moments               |
+| `tool-logger`        | Every shazam call    | Logs usage to `~/.pi/hooks/audit/shazam-calls.log` for optimization |
 
 Plus two commands: `/shazam-setup` (LSP server detection) and `/shazam-doctor` (health check).
 
@@ -117,12 +117,12 @@ pi-shazam (npm package)
 
 Pi and MCP tools ship in the same package, from the same codebase. When Pi tools change, MCP tools must update in the same PR:
 
-| Pi change | MCP action |
-|-----------|------------|
-| New tool | Add `registerTool` in `mcp/tools.ts` |
-| Tool deleted | Remove from `mcp/tools.ts` |
-| Schema changed | Update Zod schema |
-| Description updated | Sync to MCP tool description |
+| Pi change           | MCP action                           |
+| ------------------- | ------------------------------------ |
+| New tool            | Add `registerTool` in `mcp/tools.ts` |
+| Tool deleted        | Remove from `mcp/tools.ts`           |
+| Schema changed      | Update Zod schema                    |
+| Description updated | Sync to MCP tool description         |
 
 ## Development
 

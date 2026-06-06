@@ -15,13 +15,13 @@ type ExtensionFactory = (pi: ExtensionAPI) => void | Promise<void>;
 
 ## ExtensionAPI 属性（扩展可用）
 
-| 属性 | 类型 | 说明 |
-|------|------|------|
-| `on(event, handler)` | 事件注册 | 订阅生命周期事件 |
-| `registerTool(tool)` | 工具注册 | 注册 LLM 可见工具 |
-| `registerCommand(name, opts)` | 命令注册 | 注册 `/command` |
-| `sendMessage(msg, opts?)` | 发消息 | 发送自定义消息 |
-| `events` | EventBus | 扩展间通信 |
+| 属性                          | 类型     | 说明              |
+| ----------------------------- | -------- | ----------------- |
+| `on(event, handler)`          | 事件注册 | 订阅生命周期事件  |
+| `registerTool(tool)`          | 工具注册 | 注册 LLM 可见工具 |
+| `registerCommand(name, opts)` | 命令注册 | 注册 `/command`   |
+| `sendMessage(msg, opts?)`     | 发消息   | 发送自定义消息    |
+| `events`                      | EventBus | 扩展间通信        |
 
 （完整列表见 loader.js `createExtensionAPI()`，以上是 pi-shazam 使用的）
 
@@ -42,6 +42,7 @@ sendMessage(message: {
 ```
 
 **内部处理**：
+
 - 构造 `{ role: "custom", customType, content, display, details, timestamp }` 消息
 - 不修改 content，原样传递
 - 转为 LLM 消息时：string → `[{type:"text", text}]`；数组 → 原样使用
@@ -54,13 +55,13 @@ sendMessage(message: {
 
 ```ts
 interface BeforeAgentStartEventResult {
-  message?: {
-    customType: string;
-    content: string | (TextContent | ImageContent)[];
-    display: boolean;
-    details?: unknown;
-  };
-  systemPrompt?: string;  // ← 单个 string，非 string[]
+	message?: {
+		customType: string;
+		content: string | (TextContent | ImageContent)[];
+		display: boolean;
+		details?: unknown;
+	};
+	systemPrompt?: string; // ← 单个 string，非 string[]
 }
 ```
 
@@ -74,9 +75,9 @@ interface BeforeAgentStartEventResult {
 
 ```ts
 interface ToolResultEventResult {
-  content?: (TextContent | ImageContent)[];  // 数组
-  details?: unknown;
-  isError?: boolean;
+	content?: (TextContent | ImageContent)[]; // 数组
+	details?: unknown;
+	isError?: boolean;
 }
 ```
 
@@ -88,26 +89,27 @@ interface ToolResultEventResult {
 
 ```ts
 interface ToolDefinition<TParams, TDetails> {
-  name: string;
-  label: string;
-  description: string;
-  parameters: TParams;  // TypeBox schema（直接从 typebox 包 import）
-  execute(
-    toolCallId: string,
-    params: Static<TParams>,
-    signal: AbortSignal | undefined,
-    onUpdate: AgentToolUpdateCallback<TDetails> | undefined,
-    ctx: ExtensionContext           // ← 第 5 个参数
-  ): Promise<AgentToolResult<TDetails>>;
+	name: string;
+	label: string;
+	description: string;
+	parameters: TParams; // TypeBox schema（直接从 typebox 包 import）
+	execute(
+		toolCallId: string,
+		params: Static<TParams>,
+		signal: AbortSignal | undefined,
+		onUpdate: AgentToolUpdateCallback<TDetails> | undefined,
+		ctx: ExtensionContext, // ← 第 5 个参数
+	): Promise<AgentToolResult<TDetails>>;
 }
 ```
 
 **`AgentToolResult`**：
+
 ```ts
 interface AgentToolResult<T> {
-  content: (TextContent | ImageContent)[];  // 始终是数组
-  details?: T;
-  isError?: boolean;
+	content: (TextContent | ImageContent)[]; // 始终是数组
+	details?: T;
+	isError?: boolean;
 }
 ```
 
@@ -120,7 +122,7 @@ interface AgentToolResult<T> {
 **TypeBox 必须直接从 `typebox` 包 import**，不使用 `pi.typebox`（运行时不存在）。
 
 ```ts
-import { Type } from "typebox";  // 扩展可用 jiti 解析此模块
+import { Type } from "typebox"; // 扩展可用 jiti 解析此模块
 ```
 
 **pi-shazam 用法**：全部使用 `import { Type } from "typebox"` ✅
@@ -129,12 +131,12 @@ import { Type } from "typebox";  // 扩展可用 jiti 解析此模块
 
 ## pi-shazam 不得依赖的属性（运行时不存在）
 
-| 属性 | 状态 |
-|------|------|
-| `pi.logger` | ❌ 不存在（已用 `?.` 防御） |
+| 属性         | 状态                         |
+| ------------ | ---------------------------- |
+| `pi.logger`  | ❌ 不存在（已用 `?.` 防御）  |
 | `pi.typebox` | ❌ 不存在（已用直接 import） |
-| `pi.zod` | ❌ 不存在（不使用） |
-| `pi.pi` | ❌ 不存在（不使用） |
+| `pi.zod`     | ❌ 不存在（不使用）          |
+| `pi.pi`      | ❌ 不存在（不使用）          |
 
 ---
 
@@ -157,6 +159,6 @@ import { Type } from "typebox";  // 扩展可用 jiti 解析此模块
 
 ## 修改记录
 
-| 版本 | 日期 | 变更 |
-|------|------|------|
-| 1.0 | 2026-06-05 | 初始版本，提取自 pi-coding-agent@0.78.1 |
+| 版本 | 日期       | 变更                                    |
+| ---- | ---------- | --------------------------------------- |
+| 1.0  | 2026-06-05 | 初始版本，提取自 pi-coding-agent@0.78.1 |

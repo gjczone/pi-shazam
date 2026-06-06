@@ -20,13 +20,7 @@ import {
 	deserializeGraphV2,
 	compareGraphSnapshots,
 } from "./graph.js";
-import type {
-	RepoGraph,
-	SerializedGraph,
-	GraphDiff,
-	Symbol,
-	Edge,
-} from "./graph.js";
+import type { RepoGraph, SerializedGraph, GraphDiff, Symbol, Edge } from "./graph.js";
 
 // ── Cache directory management ───────────────────────────────────────────────
 
@@ -95,10 +89,7 @@ export function loadBaseline(projectPath: string): SerializedGraph | null {
 /**
  * Save the last snapshot (timestamp + metadata only, not full graph).
  */
-export function saveLastSnapshot(
-	projectPath: string,
-	metadata: Record<string, unknown>,
-): string {
+export function saveLastSnapshot(projectPath: string, metadata: Record<string, unknown>): string {
 	const { lastSnapshot } = getCachePaths(projectPath);
 	const data = {
 		timestamp: Date.now(),
@@ -112,9 +103,7 @@ export function saveLastSnapshot(
 /**
  * Load the last snapshot metadata.
  */
-export function loadLastSnapshot(
-	projectPath: string,
-): Record<string, unknown> | null {
+export function loadLastSnapshot(projectPath: string): Record<string, unknown> | null {
 	const { lastSnapshot } = getCachePaths(projectPath);
 	if (!existsSync(lastSnapshot)) return null;
 	try {
@@ -131,10 +120,7 @@ export function loadLastSnapshot(
  * Compute the difference between the current graph and a saved baseline.
  * Returns a structured diff with added/removed/modified symbols and edges.
  */
-export function diffBaseline(
-	graph: RepoGraph,
-	projectPath: string,
-): GraphDiff | null {
+export function diffBaseline(graph: RepoGraph, projectPath: string): GraphDiff | null {
 	const baseline = loadBaseline(projectPath);
 	if (!baseline) return null;
 
@@ -146,12 +132,7 @@ export function diffBaseline(
 		}
 	}
 
-	return compareGraphSnapshots(
-		currentSymbols,
-		currentEdges,
-		baseline.symbols,
-		baseline.edges,
-	);
+	return compareGraphSnapshots(currentSymbols, currentEdges, baseline.symbols, baseline.edges);
 }
 
 // ── Persistent graph cache (V2) ──────────────────────────────────────────────
@@ -161,11 +142,7 @@ const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 /**
  * Save the full graph + file mtimes to a persistent cache file.
  */
-export function saveGraphCache(
-	graph: RepoGraph,
-	fileMtimes: Map<string, number>,
-	cachePath: string,
-): void {
+export function saveGraphCache(graph: RepoGraph, fileMtimes: Map<string, number>, cachePath: string): void {
 	const serialized = serializeGraphV2(graph, fileMtimes);
 	mkdirSync(dirname(cachePath), { recursive: true });
 	writeFileSync(cachePath, JSON.stringify(serialized), "utf-8");
@@ -204,9 +181,4 @@ export function loadGraphCache(cachePath: string): GraphCacheData | null {
 /**
  * Re-export serialization helpers for convenience.
  */
-export {
-	serializeGraph,
-	serializeSymbol,
-	serializeEdge,
-	compareGraphSnapshots,
-};
+export { serializeGraph, serializeSymbol, serializeEdge, compareGraphSnapshots };

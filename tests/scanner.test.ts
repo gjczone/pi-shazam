@@ -14,9 +14,7 @@ describe("scanProject", () => {
 		expect(graph).toBeDefined();
 		expect(graph.symbols.size).toBeGreaterThan(0);
 		// Should find at least the TreeSitterAdapter class
-		const tsAdapter = [...graph.symbols.values()].find(
-			(s) => s.name === "TreeSitterAdapter",
-		);
+		const tsAdapter = [...graph.symbols.values()].find((s) => s.name === "TreeSitterAdapter");
 		expect(tsAdapter).toBeDefined();
 		if (tsAdapter) {
 			expect(tsAdapter.kind).toBe("class");
@@ -26,9 +24,7 @@ describe("scanProject", () => {
 
 	it("should set PageRank scores on symbols", () => {
 		const graph = scanProject(".");
-		const symbolsWithPR = [...graph.symbols.values()].filter(
-			(s) => s.pagerank > 0,
-		);
+		const symbolsWithPR = [...graph.symbols.values()].filter((s) => s.pagerank > 0);
 		expect(symbolsWithPR.length).toBeGreaterThan(0);
 	});
 
@@ -60,21 +56,21 @@ export function greet(): string {
 			const graph = scanProject(tmpDir);
 			expect(graph.symbols.size).toBeGreaterThanOrEqual(2);
 
-			const hello = [...graph.symbols.values()].find(
-				(s) => s.name === "hello",
-			);
+			const hello = [...graph.symbols.values()].find((s) => s.name === "hello");
 			expect(hello).toBeDefined();
 			if (hello) {
 				expect(hello.kind).toBe("function");
 				expect(hello.signature).toContain("hello");
 			}
 
-			const greet = [...graph.symbols.values()].find(
-				(s) => s.name === "greet",
-			);
+			const greet = [...graph.symbols.values()].find((s) => s.name === "greet");
 			expect(greet).toBeDefined();
 		} finally {
-			try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ok */ }
+			try {
+				rmSync(tmpDir, { recursive: true, force: true });
+			} catch {
+				/* ok */
+			}
 		}
 	});
 
@@ -85,7 +81,11 @@ export function greet(): string {
 			expect(graph).toBeDefined();
 			expect(graph.symbols.size).toBe(0);
 		} finally {
-			try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ok */ }
+			try {
+				rmSync(tmpDir, { recursive: true, force: true });
+			} catch {
+				/* ok */
+			}
 		}
 	});
 

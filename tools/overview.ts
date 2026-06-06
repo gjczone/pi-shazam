@@ -68,9 +68,7 @@ export function registerOverview(pi: ExtensionAPI): void {
 		execute(graph, params) {
 			const filter = (params.filter as string) ?? "";
 			const json = params.json ?? false;
-			return json
-				? executeOverviewJson(graph, ".", filter)
-				: executeOverview(graph, ".", filter);
+			return json ? executeOverviewJson(graph, ".", filter) : executeOverview(graph, ".", filter);
 		},
 	});
 }
@@ -80,9 +78,7 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 
 	// ── Apply file filtering ───────────────────────────────────────
 	const files = filter
-		? [...graph.fileSymbols.keys()].filter(
-				(f) => !isNonSourceFile(f) && f.includes(filter),
-			)
+		? [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f) && f.includes(filter))
 		: [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
 
 	if (files.length === 0) {
@@ -95,9 +91,7 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 	// Summary stats
 	lines.push("## Project Overview");
 	lines.push("");
-	lines.push(
-		`${graph.symbols.size} symbols across ${files.length} source files`,
-	);
+	lines.push(`${graph.symbols.size} symbols across ${files.length} source files`);
 
 	// Key Dependencies and Recent Changes (only in full overview, not filter mode)
 	if (!filter) {
@@ -114,10 +108,7 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 	}
 
 	// Calculate per-file symbol counts and aggregate PageRank
-	const fileStats = new Map<
-		string,
-		{ count: number; pagerank: number; topSym: string }
-	>();
+	const fileStats = new Map<string, { count: number; pagerank: number; topSym: string }>();
 	for (const file of files) {
 		const symIds = graph.fileSymbols.get(file);
 		if (!symIds) continue;
@@ -138,9 +129,7 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 	}
 
 	// Top files by PageRank
-	const topFiles = [...fileStats.entries()]
-		.sort((a, b) => b[1].pagerank - a[1].pagerank)
-		.slice(0, 10);
+	const topFiles = [...fileStats.entries()].sort((a, b) => b[1].pagerank - a[1].pagerank).slice(0, 10);
 
 	lines.push("");
 	lines.push("### Top 10 Files by PageRank");
@@ -163,9 +152,7 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 		lines.push("### Entry Points");
 		lines.push("");
 		for (const sym of entryPoints) {
-			lines.push(
-				`- ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (PR ${sym.pagerank.toFixed(3)})`,
-			);
+			lines.push(`- ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (PR ${sym.pagerank.toFixed(3)})`);
 		}
 	}
 
@@ -180,9 +167,7 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 	}
 	const sortedDirs = [...dirs].sort();
 	for (const dir of sortedDirs) {
-		const dirFiles = files.filter(
-			(f) => f.startsWith(dir + "/") || (dir === "(root)" && !f.includes("/")),
-		);
+		const dirFiles = files.filter((f) => f.startsWith(dir + "/") || (dir === "(root)" && !f.includes("/")));
 		lines.push(`- \`${dir}/\` — ${dirFiles.length} files`);
 	}
 
@@ -215,15 +200,9 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 	return lines.join("\n");
 }
 
-export function executeOverviewJson(
-	graph: RepoGraph,
-	projectRoot: string,
-	filter?: string,
-): string {
+export function executeOverviewJson(graph: RepoGraph, projectRoot: string, filter?: string): string {
 	const files = filter
-		? [...graph.fileSymbols.keys()].filter(
-				(f) => !isNonSourceFile(f) && f.includes(filter),
-			)
+		? [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f) && f.includes(filter))
 		: [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
 
 	const fileStats = new Map<string, { count: number; pagerank: number }>();
@@ -237,9 +216,7 @@ export function executeOverviewJson(
 		fileStats.set(file, { count: symIds.length, pagerank: totalPR });
 	}
 
-	const topFiles = [...fileStats.entries()]
-		.sort((a, b) => b[1].pagerank - a[1].pagerank)
-		.slice(0, 10);
+	const topFiles = [...fileStats.entries()].sort((a, b) => b[1].pagerank - a[1].pagerank).slice(0, 10);
 
 	return JSON.stringify({
 		schema_version: "1.0",
@@ -287,9 +264,7 @@ function buildRoutesSection(graph: RepoGraph): string | null {
 
 	for (const [_file, syms] of [...byFile.entries()].sort()) {
 		for (const sym of syms) {
-			lines.push(
-				`- ${sym.kind} \`${sym.name}\` L${sym.line} — ${sym.signature.slice(0, 80)}`,
-			);
+			lines.push(`- ${sym.kind} \`${sym.name}\` L${sym.line} — ${sym.signature.slice(0, 80)}`);
 		}
 	}
 
@@ -308,16 +283,10 @@ export function executeRoutes(graph: RepoGraph, _projectRoot: string): string {
 	if (!hasWebFramework) {
 		lines.push("No web framework detected in this project.");
 		lines.push("");
-		lines.push(
-			"Route inventory is only available for projects using recognized web frameworks.",
-		);
-		lines.push(
-			`Supported frameworks: ${WEB_FRAMEWORK_INDICATORS.slice(0, 6).join(", ")}, etc.`,
-		);
+		lines.push("Route inventory is only available for projects using recognized web frameworks.");
+		lines.push(`Supported frameworks: ${WEB_FRAMEWORK_INDICATORS.slice(0, 6).join(", ")}, etc.`);
 		lines.push("");
-		lines.push(
-			"If this project uses a web framework not in the supported list, route detection will not find routes.",
-		);
+		lines.push("If this project uses a web framework not in the supported list, route detection will not find routes.");
 		return lines.join("\n");
 	}
 
@@ -332,9 +301,7 @@ export function executeRoutes(graph: RepoGraph, _projectRoot: string): string {
 		return lines.join("\n");
 	}
 
-	lines.push(
-		`Framework: **${hasWebFramework}** | Found ${routeSymbols.length} route-related symbols`,
-	);
+	lines.push(`Framework: **${hasWebFramework}** | Found ${routeSymbols.length} route-related symbols`);
 	lines.push("");
 
 	const byFile = new Map<string, Symbol[]>();
@@ -348,9 +315,7 @@ export function executeRoutes(graph: RepoGraph, _projectRoot: string): string {
 		lines.push("");
 		lines.push(`### ${file}`);
 		for (const sym of syms) {
-			lines.push(
-				`- ${sym.kind} \`${sym.name}\` L${sym.line} — ${sym.signature.slice(0, 80)}`,
-			);
+			lines.push(`- ${sym.kind} \`${sym.name}\` L${sym.line} — ${sym.signature.slice(0, 80)}`);
 		}
 	}
 

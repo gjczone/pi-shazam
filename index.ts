@@ -9,10 +9,7 @@
  * Core has zero Pi or LSP imports. LSP may import from core.
  */
 
-import type {
-	ExtensionAPI,
-	ExtensionCommandContext,
-} from "./types/pi-extension.js";
+import type { ExtensionAPI, ExtensionCommandContext } from "./types/pi-extension.js";
 import { LspManager } from "./lsp/manager.js";
 import { generateSetupReport } from "./lsp/setup.js";
 import { setLspManager } from "./tools/_context.js";
@@ -21,7 +18,7 @@ import { setLspManager } from "./tools/_context.js";
 import { registerBeforeStartHook } from "./hooks/before-start.js";
 import { registerAfterWriteHook } from "./hooks/after-write.js";
 import { registerToolLogger } from "./hooks/tool-logger.js";
-import { registerShazamGuide } from "./hooks/shasam-guide.js";
+import { registerShazamGuide } from "./hooks/shazam-guide.js";
 
 // ── Tool registrations ────────────────────────────────────────────────────
 import { registerOverview } from "./tools/overview.js";
@@ -80,8 +77,7 @@ export default function (pi: ExtensionAPI): void {
 	// ── /shazam-setup command ───────────────────────────────────────────────
 
 	pi.registerCommand("shazam-setup", {
-		description:
-			"Detect and report LSP server availability with install instructions",
+		description: "Detect and report LSP server availability with install instructions",
 		async handler(_args: string, ctx: ExtensionCommandContext) {
 			const report = generateSetupReport(projectRoot);
 			ctx.ui?.setStatus?.("shazam-setup", "LSP setup report generated");
@@ -97,8 +93,7 @@ export default function (pi: ExtensionAPI): void {
 	// ── /shazam-doctor command ──────────────────────────────────────────────
 
 	pi.registerCommand("shazam-doctor", {
-		description:
-			"Health check: tree-sitter grammars, LSP servers, cache integrity",
+		description: "Health check: tree-sitter grammars, LSP servers, cache integrity",
 		async handler(_args: string, ctx: ExtensionCommandContext) {
 			const lspReport = generateSetupReport(projectRoot);
 			const msg = ["## Shazam Doctor — Health Check", "", lspReport].join("\n");

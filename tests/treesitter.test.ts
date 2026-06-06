@@ -29,9 +29,7 @@ describe("TreeSitterAdapter integration", () => {
 			const symbols = adapter.extractSymbols(tree, "typescript", "index.ts");
 			expect(symbols.length).toBeGreaterThanOrEqual(0);
 			// Should find the default export function
-			const defaultExport = symbols.find(
-				(s) => s.kind === "function" || s.kind === "anonymous_function",
-			);
+			const defaultExport = symbols.find((s) => s.kind === "function" || s.kind === "anonymous_function");
 			// At minimum, the file has some structure
 			expect(tree.rootNode.type).toBe("program");
 		}
@@ -42,11 +40,7 @@ describe("TreeSitterAdapter integration", () => {
 		const tree = adapter.parse(source, "typescript");
 		expect(tree).not.toBeNull();
 		if (tree) {
-			const symbols = adapter.extractSymbols(
-				tree,
-				"typescript",
-				"core/graph.ts",
-			);
+			const symbols = adapter.extractSymbols(tree, "typescript", "core/graph.ts");
 			expect(symbols.length).toBeGreaterThan(0);
 		}
 	});

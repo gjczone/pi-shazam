@@ -23,13 +23,7 @@ import { createTool } from "./_factory.js";
 
 // ── State map (absorbed from tools/state_map.ts) ────────────────────────
 
-const STATE_MAP_KINDS = new Set([
-	"enum",
-	"class",
-	"interface",
-	"type_alias",
-	"const",
-]);
+const STATE_MAP_KINDS = new Set(["enum", "class", "interface", "type_alias", "const"]);
 
 export function registerSymbol(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -61,7 +55,12 @@ export function registerSymbol(pi: ExtensionAPI): void {
 				const graph = scanProject(".");
 				const result = executeStateMap(graph, params.name as string);
 				let text = json
-					? JSON.stringify({ schema_version: "1.0", command: "symbol", status: "ok", result: { symbol: params.name, mode: "state", text: result } })
+					? JSON.stringify({
+							schema_version: "1.0",
+							command: "symbol",
+							status: "ok",
+							result: { symbol: params.name, mode: "state", text: result },
+						})
 					: result;
 				if (maxTokens && !json) {
 					text = truncateOutput(text.split("\n"), maxTokens as number);
@@ -171,11 +170,7 @@ function locateInHierarchy(
 	return null;
 }
 
-function findSymbols(
-	graph: RepoGraph,
-	name: string,
-	file?: string,
-): Symbol[] {
+function findSymbols(graph: RepoGraph, name: string, file?: string): Symbol[] {
 	const results: Symbol[] = [];
 	for (const sym of graph.symbols.values()) {
 		if (sym.name === name) {
@@ -191,11 +186,7 @@ function findSymbols(
  * Backward-compatible synchronous symbol lookup (no LSP enrichment).
  * Used by tests and callers that need a string result without awaiting.
  */
-export function executeSymbol(
-	graph: RepoGraph,
-	name: string,
-	file?: string,
-): string {
+export function executeSymbol(graph: RepoGraph, name: string, file?: string): string {
 	const matches = findSymbols(graph, name, file);
 	const enriched: EnrichedMatch[] = matches.map((m) => ({
 		sym: m,
@@ -210,12 +201,7 @@ export function executeSymbol(
  * Backward-compatible symbol lookup with mode support.
  * When mode is "state", returns state map output.
  */
-export function executeSymbolWithMode(
-	graph: RepoGraph,
-	name: string,
-	mode?: string,
-	file?: string,
-): string {
+export function executeSymbolWithMode(graph: RepoGraph, name: string, mode?: string, file?: string): string {
 	if (mode === "state") {
 		return executeStateMap(graph, name);
 	}
@@ -225,11 +211,7 @@ export function executeSymbolWithMode(
 /**
  * Backward-compatible JSON output (no LSP enrichment).
  */
-export function executeSymbolJson(
-	graph: RepoGraph,
-	name: string,
-	file?: string,
-): string {
+export function executeSymbolJson(graph: RepoGraph, name: string, file?: string): string {
 	const matches = findSymbols(graph, name, file);
 	return JSON.stringify({
 		schema_version: "1.0",
@@ -258,16 +240,11 @@ function formatSymbolResult(matches: EnrichedMatch[], name: string): string {
 
 	const hasLsp = matches.some((m) => m.source === "lsp");
 	const sourceLabel = hasLsp ? " (LSP enriched)" : " (tree-sitter only)";
-	const lines: string[] = [
-		`## Symbol: \`${name}\` (${matches.length} matches)${sourceLabel}`,
-		"",
-	];
+	const lines: string[] = [`## Symbol: \`${name}\` (${matches.length} matches)${sourceLabel}`, ""];
 
 	for (const e of matches) {
 		const s = e.sym;
-		lines.push(
-			`${s.kind} \`${s.name}\` — ${s.file}:${s.line}-${e.endLine} [${s.visibility}]`,
-		);
+		lines.push(`${s.kind} \`${s.name}\` — ${s.file}:${s.line}-${e.endLine} [${s.visibility}]`);
 		if (e.container) {
 			lines.push(`  container: ${e.container}`);
 		}
@@ -290,10 +267,7 @@ function formatSymbolResult(matches: EnrichedMatch[], name: string): string {
  * Execute state map analysis for a given symbol name.
  * Filters to STATE_MAP_KINDS and shows members, usage, and dependencies.
  */
-export function executeStateMap(
-	graph: RepoGraph,
-	symbolName: string,
-): string {
+export function executeStateMap(graph: RepoGraph, symbolName: string): string {
 	const targets: Symbol[] = [];
 	for (const sym of graph.symbols.values()) {
 		if (sym.name === symbolName) {
@@ -309,33 +283,27 @@ export function executeStateMap(
 	for (const target of targets) {
 		// Check if symbol kind is eligible for state map analysis
 		if (!STATE_MAP_KINDS.has(target.kind)) {
-			lines.push(
-				`## ${target.kind} \`${target.name}\` — cannot generate state map`,
-			);
+			lines.push(`## ${target.kind} \`${target.name}\` — cannot generate state map`);
 			lines.push("");
-			lines.push(
-				`Symbol \`${target.name}\` is a ${target.kind}, not an enum, const group, or state machine.`,
-			);
+			lines.push(`Symbol \`${target.name}\` is a ${target.kind}, not an enum, const group, or state machine.`);
 			lines.push(
 				"State map analysis requires: enum, class (constants/state machine), interface, type_alias (union type), or const.",
 			);
 			lines.push("");
-			lines.push(`Use \`shazam_symbol --name ${target.name}\` or \`shazam_call_chain --symbol ${target.name} --flat\` instead.`);
+			lines.push(
+				`Use \`shazam_symbol --name ${target.name}\` or \`shazam_call_chain --symbol ${target.name} --flat\` instead.`,
+			);
 			continue;
 		}
 
-		lines.push(
-			`## State Map: ${target.kind} \`${target.name}\` (${target.file}:${target.line})`,
-		);
+		lines.push(`## State Map: ${target.kind} \`${target.name}\` (${target.file}:${target.line})`);
 		lines.push("");
 
 		const incoming = graph.incoming.get(target.id) || [];
 		const outgoing = graph.outgoing.get(target.id) || [];
 
 		if (incoming.length > 0) {
-			lines.push(
-				`### Usages (${incoming.length} references from other symbols)`,
-			);
+			lines.push(`### Usages (${incoming.length} references from other symbols)`);
 			const byFile = new Map<string, Symbol[]>();
 			for (const edge of incoming) {
 				const sym = graph.symbols.get(edge.source);
@@ -352,9 +320,7 @@ export function executeStateMap(
 
 		if (outgoing.length > 0) {
 			lines.push("");
-			lines.push(
-				`### Dependencies (${outgoing.length} symbols this depends on)`,
-			);
+			lines.push(`### Dependencies (${outgoing.length} symbols this depends on)`);
 			for (const edge of outgoing) {
 				const sym = graph.symbols.get(edge.target);
 				if (sym) {

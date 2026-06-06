@@ -28,7 +28,9 @@ export function registerTypeHierarchy(pi: ExtensionAPI): void {
 		implementations, or adding methods to a parent type.`,
 		params: Type.Object({
 			name: Type.String(),
-			direction: Type.Optional(Type.Union([Type.Literal("both"), Type.Literal("supertypes"), Type.Literal("subtypes")])),
+			direction: Type.Optional(
+				Type.Union([Type.Literal("both"), Type.Literal("supertypes"), Type.Literal("subtypes")]),
+			),
 		}),
 		execute(graph, params) {
 			const json = params.json ?? false;
@@ -98,10 +100,7 @@ export function executeTypeHierarchy(
 			const client = serverInfo.client;
 			try {
 				if (!client.isFileOpened(symbol.file)) {
-					const content = readFileSync(
-						resolve(serverInfo.workspaceRoot, symbol.file),
-						"utf-8",
-					);
+					const content = readFileSync(resolve(serverInfo.workspaceRoot, symbol.file), "utf-8");
 					void client.didOpen(symbol.file, content).catch(() => {});
 				}
 			} catch {
@@ -180,9 +179,7 @@ function formatTypeHierarchy(result: TypeHierarchyResult, name: string): string 
 	if (result.supertypes.length > 0) {
 		lines.push(`### Supertypes (${result.supertypes.length})`);
 		for (const s of result.supertypes) {
-			lines.push(
-				`- ${s.kind} \`${s.name}\` — ${s.file}:${s.line}`,
-			);
+			lines.push(`- ${s.kind} \`${s.name}\` — ${s.file}:${s.line}`);
 		}
 		lines.push("");
 	} else {
@@ -192,9 +189,7 @@ function formatTypeHierarchy(result: TypeHierarchyResult, name: string): string 
 	if (result.subtypes.length > 0) {
 		lines.push(`### Subtypes (${result.subtypes.length})`);
 		for (const s of result.subtypes) {
-			lines.push(
-				`- ${s.kind} \`${s.name}\` — ${s.file}:${s.line}`,
-			);
+			lines.push(`- ${s.kind} \`${s.name}\` — ${s.file}:${s.line}`);
 		}
 		lines.push("");
 	} else {

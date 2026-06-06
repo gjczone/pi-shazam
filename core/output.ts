@@ -226,8 +226,7 @@ export const NEXT_RULES: NextRule[] = [
 	},
 	{
 		forTools: ["hover"],
-		condition: (ctx, graph) =>
-			Boolean(ctx.topSymbol) && (graph === undefined || hasHierarchyKinds(graph)),
+		condition: (ctx, graph) => Boolean(ctx.topSymbol) && (graph === undefined || hasHierarchyKinds(graph)),
 		recommendation: (ctx) => ({
 			tool: "type_hierarchy",
 			params: { name: ctx.topSymbol! },
@@ -249,8 +248,7 @@ export const NEXT_RULES: NextRule[] = [
 	},
 	{
 		forTools: ["file_detail"],
-		condition: (ctx, graph) =>
-			Boolean(ctx.topFile) && (graph === undefined || hasTestFiles(graph)),
+		condition: (ctx, graph) => Boolean(ctx.topFile) && (graph === undefined || hasTestFiles(graph)),
 		recommendation: (ctx) => ({
 			tool: "find_tests",
 			params: { sourceFile: ctx.topFile! },
@@ -378,12 +376,7 @@ export function formatNextSection(nextItems: NextRecommendation[]): string {
 	const lines: string[] = ["### Next (Recommended)", ""];
 
 	for (const item of nextItems) {
-		const label =
-			item.level === "required"
-				? "REQUIRED"
-				: item.level === "recommended"
-					? "RECOMMENDED"
-					: "OPTIONAL";
+		const label = item.level === "required" ? "REQUIRED" : item.level === "recommended" ? "RECOMMENDED" : "OPTIONAL";
 		const cmd = buildToolCommand(item);
 		lines.push(`- [${label}] ${item.label}: \`${cmd}\``);
 	}
@@ -409,11 +402,7 @@ function buildToolCommand(item: NextRecommendation): string {
  * (e.g., suppress find_tests when project has no test files). When
  * graph is undefined, filters preserve legacy (always-emit) behavior.
  */
-export function getNextForTool(
-	toolName: string,
-	context?: NextContext,
-	graph?: RepoGraph,
-): NextRecommendation[] {
+export function getNextForTool(toolName: string, context?: NextContext, graph?: RepoGraph): NextRecommendation[] {
 	const ctx: NextContext = context ?? {};
 	const out: NextRecommendation[] = [];
 
@@ -432,10 +421,7 @@ export function getNextForTool(
 /**
  * Build a standardized Result Summary section with key-value pairs.
  */
-export function formatResultSummary(
-	title: string,
-	pairs: [string, string | number][],
-): string {
+export function formatResultSummary(title: string, pairs: [string, string | number][]): string {
 	const lines: string[] = [`## ${title}`, ""];
 	for (const [key, value] of pairs) {
 		lines.push(`**${key}:** ${value}`);
@@ -447,12 +433,7 @@ export function formatResultSummary(
 /**
  * Build a file-item line for the Detail section.
  */
-export function formatFileItem(
-	file: string,
-	line: number,
-	label: string,
-	extra?: string,
-): string {
+export function formatFileItem(file: string, line: number, label: string, extra?: string): string {
 	const loc = line > 0 ? `:${line}` : "";
 	const suffix = extra ? ` — ${extra}` : "";
 	return `- ${label} \`${file}${loc}\`${suffix}`;
@@ -480,10 +461,7 @@ export function buildToolOutput(
  */
 export function getGitChangeCount(): number {
 	try {
-		const output = execSync(
-			"git diff --stat 2>/dev/null | tail -1",
-			{ encoding: "utf-8", timeout: 3000 },
-		).trim();
+		const output = execSync("git diff --stat 2>/dev/null | tail -1", { encoding: "utf-8", timeout: 3000 }).trim();
 		const match = output.match(/(\d+)\s+file/);
 		return match ? parseInt(match[1]!, 10) : 0;
 	} catch {

@@ -29,9 +29,9 @@ export function registerImpact(pi: ExtensionAPI): void {
 			return json
 				? executeImpactJson(graph, files)
 				: executeImpact(graph, files, {
-					withSymbols: (params.withSymbols as boolean) ?? false,
-					compact: (params.compact as boolean) ?? false,
-				});
+						withSymbols: (params.withSymbols as boolean) ?? false,
+						compact: (params.compact as boolean) ?? false,
+					});
 		},
 	});
 }
@@ -111,9 +111,7 @@ export function executeImpact(
 		lines.push("");
 		lines.push("### Affected Symbols");
 		for (const sym of affectedSymbols.slice(0, 30)) {
-			lines.push(
-				`- ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line}`,
-			);
+			lines.push(`- ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line}`);
 		}
 		if (affectedSymbols.length > 30) {
 			lines.push(`  ... and ${affectedSymbols.length - 30} more`);
@@ -122,11 +120,7 @@ export function executeImpact(
 
 	// Identify test files in affected set
 	const testFiles = [...affectedFiles].filter(
-		(f) =>
-			f.includes(".test.") ||
-			f.includes(".spec.") ||
-			f.includes("__tests__") ||
-			f.startsWith("tests/"),
+		(f) => f.includes(".test.") || f.includes(".spec.") || f.includes("__tests__") || f.startsWith("tests/"),
 	);
 	if (testFiles.length > 0) {
 		lines.push("");
@@ -146,11 +140,7 @@ export function executeImpact(
 	return lines.join("\n");
 }
 
-export function executeImpactJson(
-	graph: RepoGraph,
-	files: string[],
-): string {
-	
+export function executeImpactJson(graph: RepoGraph, files: string[]): string {
 	const affectedFiles = new Set<string>();
 	const affectedSymbols: Symbol[] = [];
 

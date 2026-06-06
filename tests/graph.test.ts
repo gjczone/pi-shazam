@@ -1,11 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-	createSymbol,
-	createEdge,
-	createRepoGraph,
-	compareGraphSnapshots,
-	serializeSymbol,
-	} from "../core/graph.js";
+import { createSymbol, createEdge, createRepoGraph, compareGraphSnapshots, serializeSymbol } from "../core/graph.js";
 import type { Symbol, Edge } from "../core/graph.js";
 
 describe("graph", () => {
@@ -77,9 +71,7 @@ describe("graph", () => {
 		});
 
 		it("should detect removed symbols", () => {
-			const prevSyms = [
-				serializeSymbol(createSymbol("old", "gone", "function", "f.ts", 1)),
-			];
+			const prevSyms = [serializeSymbol(createSymbol("old", "gone", "function", "f.ts", 1))];
 			const result = compareGraphSnapshots([], [], prevSyms, []);
 			expect(result.summary.removed).toBe(1);
 		});
@@ -106,5 +98,4 @@ describe("graph", () => {
 			expect(result.modifiedSymbols[0]!.signatureChanged).toBe(true);
 		});
 	});
-
 });

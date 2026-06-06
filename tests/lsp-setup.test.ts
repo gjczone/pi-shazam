@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-	detectLspServers,
-	type LspServerDetection,
-} from "../lsp/setup.js";
+import { detectLspServers, type LspServerDetection } from "../lsp/setup.js";
 
 describe("lsp/setup", () => {
 	describe("detectLspServers", () => {
@@ -25,10 +22,7 @@ describe("lsp/setup", () => {
 		});
 
 		it("should return detection for multiple languages", () => {
-			const results = detectLspServers("/test/project", [
-				"python",
-				"typescript",
-			]);
+			const results = detectLspServers("/test/project", ["python", "typescript"]);
 			const languages = results.map((r) => r.language);
 			expect(languages).toContain("python");
 			expect(languages).toContain("typescript");

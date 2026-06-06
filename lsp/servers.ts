@@ -53,20 +53,9 @@ export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
 		serverName: "typescript-language-server",
 		commandNames: ["typescript-language-server"] as const,
 		args: ["--stdio"] as const,
-		fileSuffixes: [
-			".ts",
-			".tsx",
-			".mts",
-			".cts",
-			".js",
-			".jsx",
-			".mjs",
-			".cjs",
-		] as const,
+		fileSuffixes: [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"] as const,
 		rootMarkers: ["package.json", "tsconfig.json", "jsconfig.json"] as const,
-		projectRelativeCandidates: [
-			"node_modules/.bin/typescript-language-server",
-		] as const,
+		projectRelativeCandidates: ["node_modules/.bin/typescript-language-server"] as const,
 	},
 
 	// ── Go ────────────────────────────────────────────────────────────────────
@@ -83,10 +72,7 @@ export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
 	{
 		language: "json",
 		serverName: "vscode-json-languageserver",
-		commandNames: [
-			"vscode-json-languageserver",
-			"json-languageserver",
-		] as const,
+		commandNames: ["vscode-json-languageserver", "json-languageserver"] as const,
 		args: ["--stdio"] as const,
 		fileSuffixes: [".json", ".jsonc", ".json5"] as const,
 		rootMarkers: ["package.json", ".vscode"] as const,

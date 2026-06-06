@@ -27,10 +27,7 @@ const _QueryCtor = _tsModule.Query;
 if (typeof _QueryCtor !== "function") {
 	throw new Error("tree-sitter: Query is not a constructor, got " + typeof _QueryCtor);
 }
-const Query = _QueryCtor as new (
-	language: unknown,
-	source: string,
-) => QueryInstance;
+const Query = _QueryCtor as new (language: unknown, source: string) => QueryInstance;
 
 import { createSymbol } from "./graph.js";
 import type { Symbol, JSImportBinding, JSExportBinding } from "./graph.js";
@@ -41,11 +38,7 @@ import { QUERIES } from "./treesitter-queries.js";
 interface ParserInstance {
 	setLanguage(language: unknown): void;
 	getLanguage(): unknown;
-	parse(
-		input: string,
-		oldTree?: Tree | null,
-		options?: Record<string, unknown>,
-	): Tree;
+	parse(input: string, oldTree?: Tree | null, options?: Record<string, unknown>): Tree;
 }
 
 interface Tree {
@@ -63,10 +56,7 @@ interface SyntaxNode {
 }
 
 interface QueryInstance {
-	captures(
-		node: SyntaxNode,
-		options?: Record<string, unknown>,
-	): { name: string; node: SyntaxNode }[];
+	captures(node: SyntaxNode, options?: Record<string, unknown>): { name: string; node: SyntaxNode }[];
 }
 
 // ── File extension → tree-sitter language mapping ────────────────────────────
@@ -177,9 +167,7 @@ export class TreeSitterAdapter {
 			const jsParser = this.parsers.get("javascript");
 			if (jsParser) {
 				this.parsers.set("typescript", jsParser);
-				this.log(
-					"TypeScript parser unavailable, falling back to JavaScript parser",
-				);
+				this.log("TypeScript parser unavailable, falling back to JavaScript parser");
 			}
 		}
 	}
@@ -225,29 +213,18 @@ export class TreeSitterAdapter {
 
 		const MAX_PARSE_SIZE = 10 * 1024 * 1024; // 10MB
 		if (source.length > MAX_PARSE_SIZE) {
-			this.log(
-				`File too large for parsing (${source.length} chars > ${MAX_PARSE_SIZE}), skipping`,
-			);
+			this.log(`File too large for parsing (${source.length} chars > ${MAX_PARSE_SIZE}), skipping`);
 			return null;
 		}
 
 		// Quick nesting depth check on first 256KB
 		const scanStr = source.slice(0, 256 * 1024);
 		const openCount =
-			(scanStr.match(/\(/g) || []).length +
-			(scanStr.match(/\{/g) || []).length +
-			(scanStr.match(/\[/g) || []).length;
+			(scanStr.match(/\(/g) || []).length + (scanStr.match(/\{/g) || []).length + (scanStr.match(/\[/g) || []).length;
 		const closeCount =
-			(scanStr.match(/\)/g) || []).length +
-			(scanStr.match(/\}/g) || []).length +
-			(scanStr.match(/\]/g) || []).length;
-		if (
-			Math.abs(openCount - closeCount) > 100 ||
-			Math.max(openCount, closeCount) > 1000
-		) {
-			this.log(
-				`Extreme nesting risk detected (${openCount} open, ${closeCount} close), skipping`,
-			);
+			(scanStr.match(/\)/g) || []).length + (scanStr.match(/\}/g) || []).length + (scanStr.match(/\]/g) || []).length;
+		if (Math.abs(openCount - closeCount) > 100 || Math.max(openCount, closeCount) > 1000) {
+			this.log(`Extreme nesting risk detected (${openCount} open, ${closeCount} close), skipping`);
 			return null;
 		}
 
@@ -268,11 +245,7 @@ export class TreeSitterAdapter {
 
 	// ── Standard symbol extraction (function/class via query) ──────────────────
 
-	private _extractStandardSymbols(
-		tree: Tree,
-		lang: string,
-		file: string,
-	): Symbol[] {
+	private _extractStandardSymbols(tree: Tree, lang: string, file: string): Symbol[] {
 		const symbolsById = new Map<string, Symbol>();
 		const root = tree.rootNode;
 		const langQueries = this.queries.get(lang);
@@ -289,10 +262,7 @@ export class TreeSitterAdapter {
 			for (const { name: capName, node } of captures) {
 				if (capName === "name") {
 					nameNodes.push(node);
-				} else if (
-					capName.includes("definition") ||
-					capName.includes("export")
-				) {
+				} else if (capName.includes("definition") || capName.includes("export")) {
 					defNodes.push([node, capName]);
 				}
 			}
@@ -326,34 +296,21 @@ export class TreeSitterAdapter {
 
 				for (const [defNode, defCap] of matchingDefs) {
 					const kind = defCap.includes(".") ? defCap.split(".").pop()! : defCap;
-					let vis: Symbol["visibility"] = defCap.includes("export")
-						? "exported"
-						: "public";
+					let vis: Symbol["visibility"] = defCap.includes("export") ? "exported" : "public";
 					const name = nameNode.text;
 					if (!name) break;
 
-					if (
-						lang === "python" &&
-						name.startsWith("_") &&
-						!name.startsWith("__")
-					) {
+					if (lang === "python" && name.startsWith("_") && !name.startsWith("__")) {
 						vis = "private";
 					}
 
 					const symId = `${file}::${name}::${nameNode.startPosition.row + 1}`;
-					const sym = createSymbol(
-						symId,
-						name,
-						kind,
-						file,
-						nameNode.startPosition.row + 1,
-						{
-							endLine: defNode.endPosition.row + 1,
-							col: nameNode.startPosition.column,
-							visibility: vis,
-							signature: this._signature(defNode),
-						},
-					);
+					const sym = createSymbol(symId, name, kind, file, nameNode.startPosition.row + 1, {
+						endLine: defNode.endPosition.row + 1,
+						col: nameNode.startPosition.column,
+						visibility: vis,
+						signature: this._signature(defNode),
+					});
 					symbolsById.set(symId, sym);
 					break;
 				}
@@ -411,23 +368,14 @@ export class TreeSitterAdapter {
 		}
 
 		return [...symbolsById.values()].sort(
-			(a, b) =>
-				a.file.localeCompare(b.file) ||
-				a.line - b.line ||
-				a.col - b.col ||
-				a.name.localeCompare(b.name),
+			(a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.col - b.col || a.name.localeCompare(b.name),
 		);
 	}
 
 	private _extractCssSymbols(tree: Tree, file: string): Symbol[] {
 		const symbolsById = new Map<string, Symbol>();
 		const seen = new Map<string, number>();
-		const selTypes = [
-			"class_selector",
-			"id_selector",
-			"tag_name",
-			"nesting_selector",
-		];
+		const selTypes = ["class_selector", "id_selector", "tag_name", "nesting_selector"];
 
 		for (const node of this._walkTree(tree.rootNode)) {
 			if (!selTypes.includes(node.type)) continue;
@@ -457,11 +405,7 @@ export class TreeSitterAdapter {
 		}
 
 		return [...symbolsById.values()].sort(
-			(a, b) =>
-				a.file.localeCompare(b.file) ||
-				a.line - b.line ||
-				a.col - b.col ||
-				a.name.localeCompare(b.name),
+			(a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.col - b.col || a.name.localeCompare(b.name),
 		);
 	}
 
@@ -495,11 +439,7 @@ export class TreeSitterAdapter {
 		}
 
 		return [...symbolsById.values()].sort(
-			(a, b) =>
-				a.file.localeCompare(b.file) ||
-				a.line - b.line ||
-				a.col - b.col ||
-				a.name.localeCompare(b.name),
+			(a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.col - b.col || a.name.localeCompare(b.name),
 		);
 	}
 
@@ -557,16 +497,9 @@ export class TreeSitterAdapter {
 		return [...results]
 			.map((s) => {
 				const parts = s.split("::");
-				return [parts[0]!, parseInt(parts[1]!, 10), parts[2]!] as [
-					string,
-					number,
-					string,
-				];
+				return [parts[0]!, parseInt(parts[1]!, 10), parts[2]!] as [string, number, string];
 			})
-			.sort(
-				(a, b) =>
-					a[1] - b[1] || a[0].localeCompare(b[0]) || a[2].localeCompare(b[2]),
-			);
+			.sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]) || a[2].localeCompare(b[2]));
 	}
 
 	// ── JS/TS import/export binding extraction ─────────────────────────────────
@@ -600,8 +533,7 @@ export class TreeSitterAdapter {
 					for (const spec of child.children) {
 						if (spec.type !== "import_specifier") continue;
 						const src = this._idText(spec.childForFieldName?.("name")) || "";
-						const alias =
-							this._idText(spec.childForFieldName?.("alias")) || src;
+						const alias = this._idText(spec.childForFieldName?.("alias")) || src;
 						if (src && alias) {
 							const key = `n:${alias}:${src}:${module}:${line}`;
 							bindings.set(key, {
@@ -696,10 +628,7 @@ export class TreeSitterAdapter {
 		return result;
 	}
 
-	private _firstChildOfType(
-		node: SyntaxNode,
-		nodeType: string,
-	): SyntaxNode | null {
+	private _firstChildOfType(node: SyntaxNode, nodeType: string): SyntaxNode | null {
 		for (const child of node.children) {
 			if (child.type === nodeType) return child;
 		}
@@ -711,12 +640,10 @@ export class TreeSitterAdapter {
 		// A position (r1, c1) is <= (r2, c2) iff r1 < r2 or (r1 === r2 and c1 <= c2).
 		const startOk =
 			inner.startPosition.row > outer.startPosition.row ||
-			(inner.startPosition.row === outer.startPosition.row &&
-				inner.startPosition.column >= outer.startPosition.column);
+			(inner.startPosition.row === outer.startPosition.row && inner.startPosition.column >= outer.startPosition.column);
 		const endOk =
 			inner.endPosition.row < outer.endPosition.row ||
-			(inner.endPosition.row === outer.endPosition.row &&
-				inner.endPosition.column <= outer.endPosition.column);
+			(inner.endPosition.row === outer.endPosition.row && inner.endPosition.column <= outer.endPosition.column);
 		return startOk && endOk;
 	}
 
@@ -725,15 +652,7 @@ export class TreeSitterAdapter {
 		while (parent) {
 			if (parent.type === "call_expression" || parent.type === "call") {
 				const fn = parent.childForFieldName?.("function");
-				if (
-					fn &&
-					[
-						"member_expression",
-						"field_expression",
-						"selector_expression",
-						"attribute",
-					].includes(fn.type)
-				) {
+				if (fn && ["member_expression", "field_expression", "selector_expression", "attribute"].includes(fn.type)) {
 					return "member";
 				}
 				return "direct";
@@ -756,14 +675,7 @@ export class TreeSitterAdapter {
 
 	private _idText(node: SyntaxNode | null | undefined): string | null {
 		if (!node) return null;
-		if (
-			[
-				"identifier",
-				"property_identifier",
-				"type_identifier",
-				"shorthand_property_identifier",
-			].includes(node.type)
-		) {
+		if (["identifier", "property_identifier", "type_identifier", "shorthand_property_identifier"].includes(node.type)) {
 			return node.text;
 		}
 		return null;
@@ -771,11 +683,7 @@ export class TreeSitterAdapter {
 
 	private _lastIdent(node: SyntaxNode): string | null {
 		const ids = node.children
-			.filter((c) =>
-				["identifier", "property_identifier", "type_identifier"].includes(
-					c.type,
-				),
-			)
+			.filter((c) => ["identifier", "property_identifier", "type_identifier"].includes(c.type))
 			.map((c) => c.text);
 		return ids.length > 0 ? ids[ids.length - 1]! : null;
 	}

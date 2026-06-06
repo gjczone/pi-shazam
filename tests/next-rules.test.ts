@@ -31,14 +31,8 @@ function graphWithTestFiles(): RepoGraph {
 
 function graphWithHierarchy(): RepoGraph {
 	const g = createRepoGraph();
-	g.symbols.set(
-		"src/model.ts::User::1",
-		createSymbol("src/model.ts::User::1", "User", "class", "src/model.ts", 1),
-	);
-	g.symbols.set(
-		"src/util.ts::add::1",
-		createSymbol("src/util.ts::add::1", "add", "function", "src/util.ts", 1),
-	);
+	g.symbols.set("src/model.ts::User::1", createSymbol("src/model.ts::User::1", "User", "class", "src/model.ts", 1));
+	g.symbols.set("src/util.ts::add::1", createSymbol("src/util.ts::add::1", "add", "function", "src/util.ts", 1));
 	return g;
 }
 

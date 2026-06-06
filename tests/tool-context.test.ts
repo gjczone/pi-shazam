@@ -24,9 +24,7 @@ describe("Tool context: LspManager injection", () => {
 	});
 
 	it("setLspManager stores and getLspManager retrieves the instance", async () => {
-		const { setLspManager, getLspManager } = await import(
-			"../tools/_context.js"
-		);
+		const { setLspManager, getLspManager } = await import("../tools/_context.js");
 		const { LspManager } = await import("../lsp/manager.js");
 		const mgr = new LspManager("/tmp/test-project");
 		setLspManager(mgr);
@@ -52,12 +50,7 @@ describe("Architecture: core/ has zero LSP imports", () => {
 	});
 
 	it("core/lsp-global.ts does not exist", () => {
-		const lspGlobalPath = join(
-			import.meta.dirname,
-			"..",
-			"core",
-			"lsp-global.ts",
-		);
+		const lspGlobalPath = join(import.meta.dirname, "..", "core", "lsp-global.ts");
 		let exists = true;
 		try {
 			readFileSync(lspGlobalPath);

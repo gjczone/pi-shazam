@@ -31,9 +31,7 @@ export function registerFix(pi: ExtensionAPI): void {
 			const json = params.json ?? false;
 			const dryRun = (params.dryRun as boolean) ?? true;
 			const file = params.file as string | undefined;
-			return json
-				? executeFixJson(graph, ".", { dryRun, file })
-				: executeFix(graph, ".", { dryRun, file });
+			return json ? executeFixJson(graph, ".", { dryRun, file }) : executeFix(graph, ".", { dryRun, file });
 		},
 	});
 }
@@ -52,17 +50,15 @@ export interface FixOptions {
 /**
  * Run format fix analysis. In dry-run mode (default), only reports issues.
  */
-export function executeFix(
-	graph: RepoGraph,
-	projectRoot: string,
-	options: FixOptions = {},
-): string {
+export function executeFix(graph: RepoGraph, projectRoot: string, options: FixOptions = {}): string {
 	const dryRun = options.dryRun ?? true;
 	const lines: string[] = [];
 
 	lines.push("## Fix Results");
 	lines.push("");
-	lines.push(dryRun ? "**Mode: DRY RUN** (preview only, no changes applied)" : "**Mode: APPLY** (changes will be written)");
+	lines.push(
+		dryRun ? "**Mode: DRY RUN** (preview only, no changes applied)" : "**Mode: APPLY** (changes will be written)",
+	);
 	lines.push("");
 
 	// ── Detect available formatters ──────────────────────────────────────
@@ -78,9 +74,7 @@ export function executeFix(
 	lines.push("");
 
 	// ── Scan files for common issues ─────────────────────────────────────
-	const targetFiles = options.file
-		? [options.file]
-		: [...graph.fileSymbols.keys()];
+	const targetFiles = options.file ? [options.file] : [...graph.fileSymbols.keys()];
 
 	const issues = scanFormatIssues(projectRoot, targetFiles, graph);
 
@@ -119,7 +113,7 @@ export function executeFix(
 
 	if (dryRun) {
 		lines.push("");
-		lines.push("To apply fixes, call with `{ \"dryRun\": false }`.");
+		lines.push('To apply fixes, call with `{ "dryRun": false }`.');
 	}
 
 	// Add Next recommendations
@@ -135,16 +129,10 @@ export function executeFix(
 /**
  * Run fix analysis and return structured JSON.
  */
-export function executeFixJson(
-	graph: RepoGraph,
-	projectRoot: string,
-	options: FixOptions = {},
-): string {
+export function executeFixJson(graph: RepoGraph, projectRoot: string, options: FixOptions = {}): string {
 	const dryRun = options.dryRun ?? true;
 	const formatters = detectFormatters(projectRoot);
-	const targetFiles = options.file
-		? [options.file]
-		: [...graph.fileSymbols.keys()];
+	const targetFiles = options.file ? [options.file] : [...graph.fileSymbols.keys()];
 	const issues = scanFormatIssues(projectRoot, targetFiles, graph);
 
 	return JSON.stringify({
@@ -176,26 +164,29 @@ interface FormatIssue {
 function detectFormatters(projectRoot: string): string[] {
 	const formatters: string[] = [];
 
-	if (existsSync(join(projectRoot, ".prettierrc")) ||
+	if (
+		existsSync(join(projectRoot, ".prettierrc")) ||
 		existsSync(join(projectRoot, ".prettierrc.json")) ||
 		existsSync(join(projectRoot, ".prettierrc.js")) ||
 		existsSync(join(projectRoot, "prettier.config.js")) ||
-		existsSync(join(projectRoot, "prettier.config.mjs"))) {
+		existsSync(join(projectRoot, "prettier.config.mjs"))
+	) {
 		formatters.push("prettier");
 	}
 
-	if (existsSync(join(projectRoot, ".eslintrc.js")) ||
+	if (
+		existsSync(join(projectRoot, ".eslintrc.js")) ||
 		existsSync(join(projectRoot, ".eslintrc.cjs")) ||
 		existsSync(join(projectRoot, ".eslintrc.json")) ||
 		existsSync(join(projectRoot, ".eslintrc.yaml")) ||
 		existsSync(join(projectRoot, ".eslintrc.yml")) ||
 		existsSync(join(projectRoot, "eslint.config.js")) ||
-		existsSync(join(projectRoot, "eslint.config.mjs"))) {
+		existsSync(join(projectRoot, "eslint.config.mjs"))
+	) {
 		formatters.push("eslint");
 	}
 
-	if (existsSync(join(projectRoot, "biome.json")) ||
-		existsSync(join(projectRoot, "biome.jsonc"))) {
+	if (existsSync(join(projectRoot, "biome.json")) || existsSync(join(projectRoot, "biome.jsonc"))) {
 		formatters.push("biome");
 	}
 
@@ -215,11 +206,7 @@ function detectFormatters(projectRoot: string): string[] {
 /**
  * Scan files for common formatting issues.
  */
-function scanFormatIssues(
-	projectRoot: string,
-	files: string[],
-	_graph: RepoGraph,
-): FormatIssue[] {
+function scanFormatIssues(projectRoot: string, files: string[], _graph: RepoGraph): FormatIssue[] {
 	const issues: FormatIssue[] = [];
 
 	for (const file of files.slice(0, 100)) {

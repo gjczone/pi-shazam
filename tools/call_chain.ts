@@ -31,18 +31,12 @@ export function registerCallChain(pi: ExtensionAPI): void {
 				const refs = getFlatReferences(graph, symbolName);
 				return json ? JSON.stringify(refs, null, 2) : formatFlatReferences(refs, symbolName);
 			}
-			return json
-				? executeCallChainJson(graph, symbolName, depth)
-				: executeCallChain(graph, symbolName, depth);
+			return json ? executeCallChainJson(graph, symbolName, depth) : executeCallChain(graph, symbolName, depth);
 		},
 	});
 }
 
-export function executeCallChain(
-	graph: RepoGraph,
-	symbolName: string,
-	depth: number = 2,
-): string {
+export function executeCallChain(graph: RepoGraph, symbolName: string, depth: number = 2): string {
 	const targets = findSymbolsByName(graph, symbolName);
 	if (targets.length === 0) {
 		return `Symbol not found: ${symbolName}`;
@@ -50,9 +44,7 @@ export function executeCallChain(
 
 	const lines: string[] = [];
 	for (const target of targets) {
-		lines.push(
-			`## Call Chain for ${target.kind} \`${target.name}\` (${target.file}:${target.line})`,
-		);
+		lines.push(`## Call Chain for ${target.kind} \`${target.name}\` (${target.file}:${target.line})`);
 		lines.push("");
 
 		// Incoming callers (upstream) — BFS
@@ -61,9 +53,7 @@ export function executeCallChain(
 			lines.push(`### Incoming Calls (${incomingChain.length} callers in ${depth} levels)`);
 			for (const [level, sym, edge] of incomingChain) {
 				const indent = "  ".repeat(level);
-				lines.push(
-					`${indent}L${level}: ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (${edge.kind})`,
-				);
+				lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (${edge.kind})`);
 			}
 		}
 
@@ -74,9 +64,7 @@ export function executeCallChain(
 			lines.push(`### Outgoing Calls (${outgoingChain.length} callees in ${depth} levels)`);
 			for (const [level, sym, edge] of outgoingChain) {
 				const indent = "  ".repeat(level);
-				lines.push(
-					`${indent}L${level}: ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (${edge.kind})`,
-				);
+				lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (${edge.kind})`);
 			}
 		}
 
@@ -93,11 +81,7 @@ export function executeCallChain(
 	return lines.join("\n").trim();
 }
 
-export function executeCallChainJson(
-	graph: RepoGraph,
-	symbolName: string,
-	depth: number,
-): string {
+export function executeCallChainJson(graph: RepoGraph, symbolName: string, depth: number): string {
 	const targets = findSymbolsByName(graph, symbolName);
 	const result = targets.map((target) => ({
 		symbol: { id: target.id, name: target.name, kind: target.kind, file: target.file, line: target.line },
@@ -131,11 +115,7 @@ function findSymbolsByName(graph: RepoGraph, name: string): Symbol[] {
 	return results;
 }
 
-function traceIncoming(
-	graph: RepoGraph,
-	startId: string,
-	maxDepth: number,
-): [number, Symbol, { kind: string }][] {
+function traceIncoming(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, { kind: string }][] {
 	const visited = new Set<string>();
 	const result: [number, Symbol, { kind: string }][] = [];
 	const queue: { id: string; depth: number }[] = [{ id: startId, depth: 0 }];
@@ -160,11 +140,7 @@ function traceIncoming(
 	return result;
 }
 
-function traceOutgoing(
-	graph: RepoGraph,
-	startId: string,
-	maxDepth: number,
-): [number, Symbol, { kind: string }][] {
+function traceOutgoing(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, { kind: string }][] {
 	const visited = new Set<string>();
 	const result: [number, Symbol, { kind: string }][] = [];
 	const queue: { id: string; depth: number }[] = [{ id: startId, depth: 0 }];
@@ -199,10 +175,7 @@ interface FlatReference {
 	direction: string;
 }
 
-export function getFlatReferences(
-	graph: RepoGraph,
-	symbolName: string,
-): FlatReference[] {
+export function getFlatReferences(graph: RepoGraph, symbolName: string): FlatReference[] {
 	const targets = findSymbolsByName(graph, symbolName);
 	if (targets.length === 0) return [];
 
@@ -252,18 +225,12 @@ export function getFlatReferences(
 	return refs;
 }
 
-export function formatFlatReferences(
-	refs: FlatReference[],
-	symbolName: string,
-): string {
+export function formatFlatReferences(refs: FlatReference[], symbolName: string): string {
 	if (refs.length === 0) {
 		return `No references found for "${symbolName}".`;
 	}
 
-	const lines: string[] = [
-		`## Flat References for \`${symbolName}\` (${refs.length} total)`,
-		"",
-	];
+	const lines: string[] = [`## Flat References for \`${symbolName}\` (${refs.length} total)`, ""];
 
 	const incoming = refs.filter((r) => r.direction === "incoming");
 	const outgoing = refs.filter((r) => r.direction === "outgoing");
@@ -271,9 +238,7 @@ export function formatFlatReferences(
 	if (incoming.length > 0) {
 		lines.push(`### Incoming (${incoming.length})`);
 		for (const r of incoming) {
-			lines.push(
-				`- ${r.kind} \`${r.symbol}\` — ${r.file}:${r.line}`,
-			);
+			lines.push(`- ${r.kind} \`${r.symbol}\` — ${r.file}:${r.line}`);
 		}
 		lines.push("");
 	}
@@ -281,9 +246,7 @@ export function formatFlatReferences(
 	if (outgoing.length > 0) {
 		lines.push(`### Outgoing (${outgoing.length})`);
 		for (const r of outgoing) {
-			lines.push(
-				`- ${r.kind} \`${r.symbol}\` — ${r.file}:${r.line}`,
-			);
+			lines.push(`- ${r.kind} \`${r.symbol}\` — ${r.file}:${r.line}`);
 		}
 		lines.push("");
 	}
@@ -297,4 +260,3 @@ export function formatFlatReferences(
 
 	return lines.join("\n");
 }
-

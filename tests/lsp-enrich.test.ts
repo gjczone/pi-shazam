@@ -1,10 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { LspClient } from "../lsp/client.js";
-import {
-	lspWorkspaceSearch,
-	mapSymbolKindNumber,
-	type LspEnrichContext,
-} from "../tools/lsp_enrich.js";
+import { lspWorkspaceSearch, mapSymbolKindNumber, type LspEnrichContext } from "../tools/lsp_enrich.js";
 
 describe("LspClient new protocol methods", () => {
 	it("exposes workspaceSymbol method", () => {

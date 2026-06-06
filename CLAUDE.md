@@ -22,13 +22,13 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 
 ## Commands
 
-| Command | Purpose |
-|---------|---------|
-| `npm install --legacy-peer-deps` | Install dependencies (legacy-peer-deps required for tree-sitter) |
-| `npm run build` | Compile TS → `dist/` |
-| `npm run typecheck` | `tsc --noEmit` — type validation without emit |
-| `npm run dev` | `tsc --watch` — incremental compilation |
-| `npm publish` | **禁止直接使用**——发布统一通过 GitHub Actions（见 Release & Publish 流程） |
+| Command                          | Purpose                                                                    |
+| -------------------------------- | -------------------------------------------------------------------------- |
+| `npm install --legacy-peer-deps` | Install dependencies (legacy-peer-deps required for tree-sitter)           |
+| `npm run build`                  | Compile TS → `dist/`                                                       |
+| `npm run typecheck`              | `tsc --noEmit` — type validation without emit                              |
+| `npm run dev`                    | `tsc --watch` — incremental compilation                                    |
+| `npm publish`                    | **禁止直接使用**——发布统一通过 GitHub Actions（见 Release & Publish 流程） |
 
 ## Development Environment
 
@@ -122,38 +122,39 @@ mcp/                        ← MCP server for non-Pi clients
 
 `lsp/client.ts` exposes the following LSP protocol methods. Each returns `null` when the server is unavailable, the file is not opened, the server capability is missing, or the call times out (5s). Tools compose these via `tools/lsp_enrich.ts`.
 
-| Method | LSP request | Consumer |
-|--------|-------------|----------|
-| `definition` | `textDocument/definition` | tools/symbol.ts (future), tools/type_hierarchy.ts |
-| `references` | `textDocument/references` | tools/call_chain.ts, tools/verify.ts |
-| `hover` | `textDocument/hover` | tools/hover.ts |
-| `documentSymbols` | `textDocument/documentSymbol` | tools/symbol.ts, tools/file_detail.ts (via `lspDocumentSymbols`) |
-| `workspaceSymbol` | `workspace/symbol` | tools/codesearch.ts (via `lspWorkspaceSearch`) |
-| `semanticTokens` | `textDocument/semanticTokens/full` | (wired via `lspSemanticTokens`, not yet consumed by tools) |
-| `foldingRange` | `textDocument/foldingRange` | (wired via `lspFoldingRanges`, not yet consumed by tools) |
+| Method            | LSP request                        | Consumer                                                         |
+| ----------------- | ---------------------------------- | ---------------------------------------------------------------- |
+| `definition`      | `textDocument/definition`          | tools/symbol.ts (future), tools/type_hierarchy.ts                |
+| `references`      | `textDocument/references`          | tools/call_chain.ts, tools/verify.ts                             |
+| `hover`           | `textDocument/hover`               | tools/hover.ts                                                   |
+| `documentSymbols` | `textDocument/documentSymbol`      | tools/symbol.ts, tools/file_detail.ts (via `lspDocumentSymbols`) |
+| `workspaceSymbol` | `workspace/symbol`                 | tools/codesearch.ts (via `lspWorkspaceSearch`)                   |
+| `semanticTokens`  | `textDocument/semanticTokens/full` | (wired via `lspSemanticTokens`, not yet consumed by tools)       |
+| `foldingRange`    | `textDocument/foldingRange`        | (wired via `lspFoldingRanges`, not yet consumed by tools)        |
 
 > ⚠️ 契约文档：`CONTRACT.md` 为 Pi ExtensionAPI 真实契约的权威来源，提取自 `pi-coding-agent@0.78.1` 运行时源码。
 
 ### Registered Tools (LLM-visible)
 
-| Tool | Style | Description |
-|------|-------|-------------|
-| `shazam_overview` | Scenario trigger | When you first enter a project — see structure, deps, git history before reading a single file |
-| `shazam_impact` | Prerequisite | Required before editing 2+ files or any shared/exported module |
-| `shazam_codesearch` | Anti-pattern | Don't reach for grep — this ranks results by relevance with BM25 |
-| `shazam_symbol` | Scenario trigger | When you need to look up a symbol before importing or calling it |
-| `shazam_hover` | Action binding | After finding a symbol, get its full type signature and documentation |
-| `shazam_file_detail` | Scenario trigger | When about to edit an unfamiliar file — shows structure, not just syntax |
-| `shazam_call_chain` | Consequence hint | Without this you ship bugs — traces ALL upstream callers and downstream callees |
-| `shazam_verify` | Action binding | After every write or edit — confirm no errors (PASS/WARN/FAIL) |
-| `shazam_find_tests` | Scenario trigger | When adding tests — discover test files and coverage for a module |
-| `shazam_hotspots` | Consequence hint | Without this you optimize the wrong files — ranked by blast radius |
-| `shazam_fix` | Action binding | When verify reports format/lint errors — auto-fix with nearest-wins formatters |
-| `shazam_type_hierarchy` | Scenario trigger | When working with OOP types — see the full inheritance chain |
-| `shazam_rename_symbol` | Prerequisite | Safety gate before renaming — verify references first, then rename |
-| `shazam_safe_delete` | Prerequisite | Safety gate before removal — verify zero incoming references first |
+| Tool                    | Style            | Description                                                                                    |
+| ----------------------- | ---------------- | ---------------------------------------------------------------------------------------------- |
+| `shazam_overview`       | Scenario trigger | When you first enter a project — see structure, deps, git history before reading a single file |
+| `shazam_impact`         | Prerequisite     | Required before editing 2+ files or any shared/exported module                                 |
+| `shazam_codesearch`     | Anti-pattern     | Don't reach for grep — this ranks results by relevance with BM25                               |
+| `shazam_symbol`         | Scenario trigger | When you need to look up a symbol before importing or calling it                               |
+| `shazam_hover`          | Action binding   | After finding a symbol, get its full type signature and documentation                          |
+| `shazam_file_detail`    | Scenario trigger | When about to edit an unfamiliar file — shows structure, not just syntax                       |
+| `shazam_call_chain`     | Consequence hint | Without this you ship bugs — traces ALL upstream callers and downstream callees                |
+| `shazam_verify`         | Action binding   | After every write or edit — confirm no errors (PASS/WARN/FAIL)                                 |
+| `shazam_find_tests`     | Scenario trigger | When adding tests — discover test files and coverage for a module                              |
+| `shazam_hotspots`       | Consequence hint | Without this you optimize the wrong files — ranked by blast radius                             |
+| `shazam_fix`            | Action binding   | When verify reports format/lint errors — auto-fix with nearest-wins formatters                 |
+| `shazam_type_hierarchy` | Scenario trigger | When working with OOP types — see the full inheritance chain                                   |
+| `shazam_rename_symbol`  | Prerequisite     | Safety gate before renaming — verify references first, then rename                             |
+| `shazam_safe_delete`    | Prerequisite     | Safety gate before removal — verify zero incoming references first                             |
 
 All tools follow the same pattern:
+
 - Parameters: TypeBox schema via direct `import { Type } from "typebox"`（不使用 `pi.typebox`——Pi 运行时不一定注入，参考 pi-smart-fetch 的做法）
 - Output: `{ content: [{ type: "text", text: string }] }` — plain text for LLM reading
 - Optional `{ json: true }` parameter for structured JSON output
@@ -168,11 +169,11 @@ All tools follow the same pattern:
 
 ```json
 {
-  "schema_version": "1.0",
-  "command": "<tool_name>",
-  "project": "<absolute_path>",
-  "status": "ok",
-  "result": { }
+	"schema_version": "1.0",
+	"command": "<tool_name>",
+	"project": "<absolute_path>",
+	"status": "ok",
+	"result": {}
 }
 ```
 
@@ -184,7 +185,7 @@ All tools follow the same pattern:
 - **Changing graph algorithm**: Modify `core/pagerank.ts` or `core/graph.ts` → verify all tools that consume `RepoGraph` still produce correct output
 - **Changing LSP protocol**: Modify `lsp/client.ts` → verify `lsp/manager.ts` lifecycle still works → test with at least 2 different language servers
 - **Changing tool output format**: Update the specific `tools/*.ts` formatter → verify JSON envelope schema
-- **Adding a new hook**: Create `hooks/<name>.ts` with a `register*` function that calls `pi.on(...)` → import and call in `index.ts` default export. Hooks subscribe to lifecycle events (`tool_execution_start`, `before_agent_start`, etc.) and do not return tools to the LLM. Add  to hooks/ tree in `AGENTS.md`.
+- **Adding a new hook**: Create `hooks/<name>.ts` with a `register*` function that calls `pi.on(...)` → import and call in `index.ts` default export. Hooks subscribe to lifecycle events (`tool_execution_start`, `before_agent_start`, etc.) and do not return tools to the LLM. Add to hooks/ tree in `AGENTS.md`.
 - **Adding a tool (MCP sync)**: After adding/changing/deleting a Pi tool → add/update/remove the matching `registerTool` in `mcp/tools.ts` → update `mcp/README.md` tool table → sync Pi tool description changes to MCP tool descriptions. MCP and Pi tools must stay in sync in the same PR. Update `README.md` if user-facing tool list or usage changed.
 
 ## Release & Publish 流程
@@ -194,6 +195,7 @@ All tools follow the same pattern:
 **禁止直接 `npm publish`。** 本地 npm token 容易过期。发布统一通过 GitHub Actions workflow `.github/workflows/publish.yml`。
 
 发布流程：
+
 1. 开发完成、测试通过后，提交代码到分支
 2. `npm version patch`（或 `minor`/`major`）→ 自动创建 git tag
 3. `git push origin <branch> --tags`
@@ -205,6 +207,7 @@ All tools follow the same pattern:
 ### 发布 CI 做的事
 
 `.github/workflows/publish.yml`：
+
 - `npm ci --legacy-peer-deps`
 - `npx tsc --noEmit`（类型检查）
 - `npm test`（单元测试）
@@ -226,11 +229,11 @@ All tools follow the same pattern:
 
 ### 每次修改后（强制）
 
-| Step | Command | What it checks |
-|------|---------|---------------|
-| 1 | `npm run typecheck` | Type safety |
-| 2 | `npm test` | 98 tests |
-| 3 | `npm run build` | Compile output |
+| Step | Command             | What it checks |
+| ---- | ------------------- | -------------- |
+| 1    | `npm run typecheck` | Type safety    |
+| 2    | `npm test`          | 98 tests       |
+| 3    | `npm run build`     | Compile output |
 
 ### 发布前契约检查（强制）
 
@@ -250,7 +253,7 @@ All tools follow the same pattern:
 - **扩展加载失败** → 检查 `CONTRACT.md`，对比运行时 API 版本
 - **`text.replace is not a function`** → 检查 sendMessage content 是否 string
 - **`Cannot read properties of undefined`** → 检查是否直接访问 pi.logger/pi.typebox/ctx.ui
-- **工具不出现** → 检查 register* 是否在 index.ts 中调用
+- **工具不出现** → 检查 register\* 是否在 index.ts 中调用
 
 ## First Places to Inspect
 

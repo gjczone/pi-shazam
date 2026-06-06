@@ -137,7 +137,7 @@ describe("Tool: hover", () => {
 	it("should return hover info for a symbol", async () => {
 		const { executeHover } = await import("../tools/hover.js");
 		const graph = getGraph();
-		const sym = [...graph.symbols.values()].find(s => s.name === "scanProject");
+		const sym = [...graph.symbols.values()].find((s) => s.name === "scanProject");
 		if (sym) {
 			const result = await executeHover(graph, sym.name);
 			expect(result).toBeDefined();
@@ -172,8 +172,8 @@ describe("Tool: hotspots", () => {
 		const result = executeHotspots(getGraph(), 20);
 		// package-lock.json and other config files should not appear in hotspots
 		// Check that no ranked line (starting with a number) contains config files
-			const rankedLines = result.split("\n").filter((l: string) => /^\d+\./.test(l));
-			expect(rankedLines).not.toContainEqual(expect.stringMatching(/package-lock\.json/));
+		const rankedLines = result.split("\n").filter((l: string) => /^\d+\./.test(l));
+		expect(rankedLines).not.toContainEqual(expect.stringMatching(/package-lock\.json/));
 	});
 });
 
@@ -205,9 +205,7 @@ describe("Tool: symbol — state mode", () => {
 	it("should explore enum/state symbols via state mode", async () => {
 		const { executeStateMap } = await import("../tools/symbol.js");
 		const graph = getGraph();
-		const enumSym = [...graph.symbols.values()].find(
-			(s) => s.kind === "class" || s.kind === "enum",
-		);
+		const enumSym = [...graph.symbols.values()].find((s) => s.kind === "class" || s.kind === "enum");
 		if (enumSym) {
 			const result = executeStateMap(graph, enumSym.name);
 			expect(result).toBeDefined();
@@ -219,9 +217,7 @@ describe("Tool: symbol — state mode", () => {
 		const { executeStateMap } = await import("../tools/symbol.js");
 		const graph = getGraph();
 		// Find a function symbol (not enum/const/state-machine)
-		const funcSym = [...graph.symbols.values()].find(
-			(s) => s.kind === "function",
-		);
+		const funcSym = [...graph.symbols.values()].find((s) => s.kind === "function");
 		if (funcSym) {
 			const result = executeStateMap(graph, funcSym.name);
 			// Should indicate this is not a state-map-able symbol
@@ -232,9 +228,7 @@ describe("Tool: symbol — state mode", () => {
 	it("should return state map output when mode=state via executeSymbol", async () => {
 		const { executeSymbolWithMode } = await import("../tools/symbol.js");
 		const graph = getGraph();
-		const enumSym = [...graph.symbols.values()].find(
-			(s) => s.kind === "class" || s.kind === "enum",
-		);
+		const enumSym = [...graph.symbols.values()].find((s) => s.kind === "class" || s.kind === "enum");
 		if (enumSym) {
 			const result = executeSymbolWithMode(graph, enumSym.name, "state");
 			expect(result).toBeDefined();
@@ -338,5 +332,4 @@ describe("Tool: fix", () => {
 		expect(parsed.result).toBeDefined();
 		expect(parsed.result.dryRun).toBe(true);
 	});
-
 });

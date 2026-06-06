@@ -61,33 +61,20 @@ export function executeFindTests(
 	opts: { sourceFile?: string; module?: string },
 ): FindTestsResult {
 	const matches: TestFileMatch[] = [];
-	const allSources = [...graph.fileSymbols.keys()].filter(
-		(f) => !isNonSourceFile(f),
-	);
+	const allSources = [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
 	const testPattern = /\.(test|spec|e2e)\.(ts|js|tsx|jsx|mts|mjs)$/;
 	const testDirs = ["__tests__", "test", "tests", "__test__"];
 
 	if (opts.sourceFile) {
 		const sourceFile = opts.sourceFile;
-		const base = basename(sourceFile).replace(
-			/\.(ts|js|tsx|jsx|mts|mjs)$/,
-			"",
-		);
+		const base = basename(sourceFile).replace(/\.(ts|js|tsx|jsx|mts|mjs)$/, "");
 		const dir = dirname(sourceFile);
 
 		for (const f of allSources) {
 			if (!testPattern.test(f)) continue;
-			const fBase = basename(f).replace(
-				/\.(test|spec|e2e)\.(ts|js|tsx|jsx|mts|mjs)$/,
-				"",
-			);
-			if (
-				fBase === base &&
-				(dirname(f) === dir || dirname(f) === join(dir, "__tests__"))
-			) {
-				matches.push(
-					extractTests(f, sourceFile, "direct", testPattern, projectRoot),
-				);
+			const fBase = basename(f).replace(/\.(test|spec|e2e)\.(ts|js|tsx|jsx|mts|mjs)$/, "");
+			if (fBase === base && (dirname(f) === dir || dirname(f) === join(dir, "__tests__"))) {
+				matches.push(extractTests(f, sourceFile, "direct", testPattern, projectRoot));
 			}
 		}
 
@@ -97,9 +84,7 @@ export function executeFindTests(
 				for (const f of allSources) {
 					if (f.startsWith(join(dir, td)) && testPattern.test(f)) {
 						if (!matches.some((m) => m.testFile === f)) {
-							matches.push(
-								extractTests(f, sourceFile, "direct", testPattern, projectRoot),
-							);
+							matches.push(extractTests(f, sourceFile, "direct", testPattern, projectRoot));
 						}
 					}
 				}
@@ -112,19 +97,10 @@ export function executeFindTests(
 		for (const f of allSources) {
 			if (!testPattern.test(f)) continue;
 			const fLower = f.toLowerCase();
-			if (
-				fLower.includes(lower) ||
-				fLower
-					.replace(/[^a-z0-9]/g, "")
-					.includes(lower.replace(/[^a-z0-9]/g, ""))
-			) {
+			if (fLower.includes(lower) || fLower.replace(/[^a-z0-9]/g, "").includes(lower.replace(/[^a-z0-9]/g, ""))) {
 				if (!matches.some((m) => m.testFile === f)) {
-					const sourceFile = f
-						.replace(/\.(test|spec|e2e)\./, ".")
-						.replace(/_(test|spec|e2e)\./, ".");
-					matches.push(
-						extractTests(f, sourceFile, "convention", testPattern, projectRoot),
-					);
+					const sourceFile = f.replace(/\.(test|spec|e2e)\./, ".").replace(/_(test|spec|e2e)\./, ".");
+					matches.push(extractTests(f, sourceFile, "convention", testPattern, projectRoot));
 				}
 			}
 		}
@@ -133,12 +109,8 @@ export function executeFindTests(
 	if (!opts.sourceFile && !opts.module) {
 		for (const f of allSources) {
 			if (testPattern.test(f)) {
-				const sourceFile = f
-					.replace(/\.(test|spec|e2e)\./, ".")
-					.replace(/_(test|spec|e2e)\./, ".");
-				matches.push(
-					extractTests(f, sourceFile, "sibling", testPattern, projectRoot),
-				);
+				const sourceFile = f.replace(/\.(test|spec|e2e)\./, ".").replace(/_(test|spec|e2e)\./, ".");
+				matches.push(extractTests(f, sourceFile, "sibling", testPattern, projectRoot));
 			}
 		}
 	}
@@ -161,10 +133,7 @@ function extractTests(
 ): TestFileMatch {
 	const tests: string[] = [];
 	try {
-		const content = readFileSync(
-			join(projectRoot, file),
-			"utf-8",
-		);
+		const content = readFileSync(join(projectRoot, file), "utf-8");
 		const testRegex = /(?:(?:it|test|describe)\(['"`])([^'"`]+)/g;
 		let m: RegExpExecArray | null;
 		while ((m = testRegex.exec(content)) !== null) {
@@ -183,11 +152,7 @@ function extractTests(
 	};
 }
 
-function formatFindTestsResult(
-	result: FindTestsResult,
-	sourceFile?: string,
-	module?: string,
-): string {
+function formatFindTestsResult(result: FindTestsResult, sourceFile?: string, module?: string): string {
 	const lines: string[] = [];
 	lines.push("## Find Tests Result");
 	lines.push("");
@@ -221,9 +186,7 @@ function formatFindTestsResult(
 		lines.push(`- Source: \`${match.sourceFile}\``);
 		lines.push(`- Tests: ${match.testCount}`);
 		if (match.tests.length > 0) {
-			lines.push(
-				"  - " + match.tests.slice(0, 10).join("\n  - "),
-			);
+			lines.push("  - " + match.tests.slice(0, 10).join("\n  - "));
 			if (match.tests.length > 10) {
 				lines.push(`  - ... and ${match.tests.length - 10} more`);
 			}

@@ -45,12 +45,7 @@ export function readFileAdaptive(filePath: string): string {
  */
 export function detectEncoding(buffer: Buffer): string {
 	// UTF-8 BOM check
-	if (
-		buffer.length >= 3 &&
-		buffer[0] === 0xef &&
-		buffer[1] === 0xbb &&
-		buffer[2] === 0xbf
-	) {
+	if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
 		return "utf-8";
 	}
 
@@ -112,10 +107,7 @@ function tryDecode(buffer: Buffer, encoding: string): string | null {
 /**
  * Read a file with specific encoding.
  */
-export function readFileWithEncoding(
-	filePath: string,
-	encoding: string,
-): string {
+export function readFileWithEncoding(filePath: string, encoding: string): string {
 	const buffer = readFileSync(filePath);
 	if (encoding === "utf-8") {
 		return buffer.toString("utf-8");
