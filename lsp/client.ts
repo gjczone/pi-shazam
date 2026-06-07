@@ -43,6 +43,7 @@ import type {
 	SemanticTokens,
 	FoldingRangeParams,
 	FoldingRange,
+	WorkspaceEdit,
 } from "vscode-languageserver-protocol";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -462,6 +463,30 @@ export class LspClient {
 			return result ?? null;
 		} catch (err) {
 			this._log(`[lsp] foldingRange failed: ${err}`);
+			return null;
+		}
+	}
+
+	/**
+	 * Request a cross-file rename via LSP textDocument/rename.
+	 * Returns a WorkspaceEdit describing all changes, or null on failure.
+	 */
+	async rename(filePath: string, line: number, character: number, newName: string): Promise<WorkspaceEdit | null> {
+		if (!this.isFileOpened(filePath)) return null;
+
+		const params = {
+			textDocument: { uri: pathToUri(filePath) },
+			position: { line, character },
+			newName,
+		};
+
+		try {
+			const result = await this.withTimeout(
+				this.connection!.sendRequest<WorkspaceEdit | null>("textDocument/rename", params),
+			);
+			return result ?? null;
+		} catch (err) {
+			this._log(`[lsp] rename failed: ${err}`);
 			return null;
 		}
 	}

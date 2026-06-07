@@ -157,7 +157,7 @@ export function mapSymbolKindNumber(kind: number): string {
  * Ensure a file is opened in its LSP server (best-effort, swallow errors).
  * Reads file content via fs and sends didOpen if not already opened.
  */
-async function ensureFileOpened(
+export async function ensureFileOpened(
 	ctx: LspEnrichContext,
 	filePath: string,
 ): Promise<{ client: LspClient; workspaceRoot: string } | null> {
