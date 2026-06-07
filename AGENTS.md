@@ -284,6 +284,118 @@ All tools follow the same pattern:
 - **Adding a new hook**: Create `hooks/<name>.ts` with a `register*` function that calls `pi.on(...)` → import and call in `index.ts` default export. Hooks subscribe to lifecycle events (`tool_execution_start`, `before_agent_start`, etc.) and do not return tools to the LLM. Add to hooks/ tree in `AGENTS.md`.
 - **Adding a tool (MCP sync)**: After adding/changing/deleting a Pi tool → add/update/remove the matching `registerTool` in `mcp/tools.ts` → update `mcp/README.md` tool table → sync Pi tool description changes to MCP tool descriptions. MCP and Pi tools must stay in sync in the same PR. Update `README.md` if user-facing tool list or usage changed.
 
+## Issue Fix Workflow (Task Flow)
+
+When fixing open issues, follow this workflow **without exception**. Pushing directly
+to `main` is forbidden — every fix goes through a PR.
+
+### Step-by-Step
+
+```bash
+# 1. Start from a clean main
+git checkout main
+git pull origin main
+
+# 2. Create a feature branch named after the issues being fixed
+git checkout -b fix/issue-<NUM>   # single issue
+git checkout -b fix/issue-<A>-<B> # multiple related issues
+
+# 3. Implement the fix (edit files, write tests, verify locally)
+npm run typecheck
+npm test
+npm run build
+
+# 4. Commit with referencing issue numbers in the message
+git add -A
+git commit -m "fix(#<A>,#<B>): concise description of the fix"
+
+# 5. Push the branch
+git push origin fix/issue-<NUM>
+
+# 6. Create a PR
+gh pr create \
+  --title "fix(#<A>,#<B>): concise description" \
+  --body "Closes #<A>, closes #<B>.
+
+## Problem
+...
+
+## Fix
+...
+
+## Verification
+- [ ] typecheck passes
+- [ ] tests pass
+- [ ] build succeeds" \
+  --base main
+
+# 7. Wait for CI to pass on the PR
+#    - typecheck job must be green
+#    - test job must be green (ubuntu + macos)
+#    - build job must be green
+#    - security job must be green
+gh pr checks fix/issue-<NUM>
+
+# 8. Once CI is green, merge the PR
+gh pr merge fix/issue-<NUM> --squash --delete-branch
+
+# 9. Close the issues (if not auto-closed by the PR merge)
+gh issue close <NUM> -r completed -c "Fixed in PR #<PR_NUM>."
+```
+
+### Branch Naming Convention
+
+| Pattern | Usage |
+|---------|-------|
+| `fix/issue-<NUM>` | Single issue fix |
+| `fix/issue-<A>-<B>` | Multiple related issues (2-5 issues) |
+| `feat/<name>` | New feature |
+| `refactor/<name>` | Refactoring |
+| `docs/<name>` | Documentation only |
+
+### Commit Message Convention
+
+```
+fix(#<A>,#<B>): concise description
+
+Optional detailed body explaining the fix.
+```
+
+- Reference all fixed issues in the subject line with `fix(#NNN)`.
+- Use `fix:`, `feat:`, `refactor:`, `docs:` prefixes.
+- Keep the subject line under 72 characters when possible.
+
+### CI Checks (ci.yml)
+
+The CI workflow runs on both `push` to `main` and `pull_request` to `main`.
+Do NOT merge until all jobs pass:
+
+| Job | What It Checks |
+|-----|---------------|
+| `typecheck` | `npx tsc --noEmit` — zero type errors |
+| `test` | `npm test` — all tests pass (ubuntu + macos) |
+| `build` | `npm run build` — `dist/` output exists |
+| `security` | `npm audit --omit=dev` — informational |
+
+### Anti-Patterns
+
+- **NEVER push directly to `main`**. Always use a feature branch + PR.
+- **NEVER skip CI**. Wait for all checks to pass before merging.
+- **NEVER leave stale branches**. Use `--delete-branch` when merging or clean up
+  with `git push origin --delete <branch>` afterward.
+- **NEVER close issues before the PR is merged**. Close issues after merge.
+
+### Post-Merge Cleanup
+
+```bash
+# Switch back to main and pull the merge commit
+git checkout main
+git pull origin main
+
+# Delete the local branch (remote already deleted by --delete-branch)
+git branch -d fix/issue-<NUM>
+```
+
 ## Release & Publish Workflow
 
 ### Publishing Method: GitHub Actions (Mandatory)
