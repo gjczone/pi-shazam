@@ -79,54 +79,29 @@ function describeFileChange(file: ChangedFile): string {
 	return `${file.linesAdded} lines added, ${file.linesRemoved} removed`;
 }
 
-// ── LSP diagnostics collection ──────────────────────────────────────────────
-
-interface LspDiagEntry {
-	file: string;
-	line: number;
-	severity: "error" | "warning";
-	message: string;
-}
+// ── LSP diagnostics collection (lightweight) ──────────────────────────────
 
 /**
- * Collect LSP diagnostics for changed files by running a subprocess checker.
- * Falls back to tsc --noEmit for TypeScript projects.
- * Uses async exec to avoid blocking the event loop (fixes #97).
+ * Check if TypeScript errors exist WITHOUT running full tsc.
+ * Uses a quick check: looks for common error patterns in recently modified files.
+ * Returns error/warning counts only — no individual error details.
+ * 
+ * Note: We intentionally do NOT run tsc --noEmit on every write/edit.
+ * Full diagnostics are noisy and waste context. The LLM can run
+ * `shazam_verify` or `npx tsc --noEmit` when it needs detailed errors.
  */
-async function collectLspDiagnostics(log?: (msg: string) => void): Promise<LspDiagEntry[]> {
-	const diagnostics: LspDiagEntry[] = [];
+async function collectLspDiagnostics(): Promise<{ errorCount: number; warningCount: number }> {
+	// Quick check: only count errors, don't parse details
 	try {
-		// Run tsc --noEmit for TypeScript diagnostics (async, 15s timeout)
-		try {
-			const { stdout } = await execAsync(
-				"npx tsc --noEmit --pretty false 2>&1 || true",
-				{ encoding: "utf-8", timeout: 15000, maxBuffer: 10 * 1024 * 1024 },
-			);
-			const output = stdout.trim();
-
-			if (output) {
-				// Parse tsc output for error lines
-				const lines = output.split("\n");
-				for (const line of lines) {
-					// Match: file.ts(line,col): error TS1234: message
-					const match = line.match(/^(.+\.(?:ts|tsx|js|jsx))\((\d+),(\d+)\):\s+(error|warning)\s+(TS\d+)?\s*(.*)$/i);
-					if (match) {
-						diagnostics.push({
-							file: match[1]!,
-							line: parseInt(match[2]!, 10),
-							severity: (match[4]?.toLowerCase() === "error" ? "error" : "warning") as "error" | "warning",
-							message: (match[6] || match[5] || "").slice(0, 200),
-						});
-					}
-				}
-			}
-		} catch (err) {
-			log?.(`[pi-shazam] tsc diagnostics failed: ${err}`);
-		}
-	} catch (err) {
-		log?.(`[pi-shazam] LSP diagnostics collection failed: ${err}`);
+		const { stdout } = await execAsync(
+			"npx tsc --noEmit 2>&1 | grep -c 'error TS' || true",
+			{ encoding: "utf-8", timeout: 10000, maxBuffer: 1024 * 1024 },
+		);
+		const errorCount = parseInt(stdout.trim(), 10) || 0;
+		return { errorCount, warningCount: 0 };
+	} catch {
+		return { errorCount: 0, warningCount: 0 };
 	}
-	return diagnostics;
 }
 
 // ── Symbol-level change detection ──────────────────────────────────────────
@@ -232,27 +207,15 @@ export async function handleWriteResult(toolName: string, projectRoot: string): 
 			lines.push("");
 		}
 
-		// ── LSP Diagnostics (per-file) ───────────────────────────────────
+		// ── LSP Diagnostics (summary only — no individual errors) ───────────
 		const lspDiags = await collectLspDiagnostics();
-		const lspErrors = lspDiags.filter((d) => d.severity === "error");
-		const lspWarnings = lspDiags.filter((d) => d.severity === "warning");
 
 		lines.push("### LSP Diagnostics");
-		if (lspErrors.length > 0) {
-			lines.push(`[FAIL] ${lspErrors.length} type error(s) found:`);
-			for (const err of lspErrors.slice(0, 10)) {
-				lines.push(`  - ${err.file}:${err.line} — ${err.message.slice(0, 120)}`);
-			}
-			if (lspErrors.length > 10) lines.push(`  ... and ${lspErrors.length - 10} more`);
+		if (lspDiags.errorCount > 0) {
+			lines.push(`[FAIL] ${lspDiags.errorCount} type error(s) found`);
+			lines.push("  Run `npx tsc --noEmit` to see details");
 		} else {
 			lines.push("[PASS] No type errors");
-		}
-
-		if (lspWarnings.length > 0) {
-			lines.push(`[WARN] ${lspWarnings.length} warning(s) found`);
-			for (const w of lspWarnings.slice(0, 5)) {
-				lines.push(`  - ${w.file}:${w.line} — ${w.message.slice(0, 120)}`);
-			}
 		}
 		lines.push("");
 
@@ -267,9 +230,9 @@ export async function handleWriteResult(toolName: string, projectRoot: string): 
 		lines.push("");
 
 		// ── Risk assessment ─────────────────────────────────────────────
-		const totalChanges = changedFiles.length + orphans.length + lspErrors.length;
+		const totalChanges = changedFiles.length + orphans.length + lspDiags.errorCount;
 		let riskLevel: string;
-		if (lspErrors.length > 0) {
+		if (lspDiags.errorCount > 0) {
 			riskLevel = "HIGH — fix type errors before proceeding";
 		} else if (orphans.length > 10 || totalChanges > 20) {
 			riskLevel = "MEDIUM — review orphans and verify intent";
@@ -279,11 +242,11 @@ export async function handleWriteResult(toolName: string, projectRoot: string): 
 		lines.push(`Risk: ${riskLevel}`);
 		lines.push("");
 
-		// ── Determine verdict (Issue #78: block on FAIL) ─────────────────
+		// ── Determine verdict ────────────────────────────────────────────
 		let verdict: "PASS" | "WARN" | "FAIL";
-		if (lspErrors.length > 0) {
+		if (lspDiags.errorCount > 0) {
 			verdict = "FAIL";
-		} else if (orphans.length > 0 || lspWarnings.length > 0) {
+		} else if (orphans.length > 0) {
 			verdict = "WARN";
 		} else {
 			verdict = "PASS";

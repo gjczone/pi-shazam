@@ -166,7 +166,7 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 	lines.push(`**Symbols:** ${symbolCount} | **Files:** ${fileCount} | **Edges:** ${edgeCount}`);
 	lines.push("");
 
-	// LSP diagnostics (CORE)
+	// LSP diagnostics (CORE) — summary only, no individual errors
 	if (!quick) {
 		const lspResult = await runLspDiagnostics(graph, projectRoot, options);
 		lines.push("### LSP Diagnostics");
@@ -177,25 +177,17 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 				lines.push(`  Reason: ${lspResult.errorMessage}`);
 			}
 			lines.push("  To fix: Install language servers (e.g., typescript-language-server, pyright, gopls, rust-analyzer)");
-			lines.push("");
 		} else if (lspResult.diagnostics.length === 0) {
-			lines.push("No diagnostics found.");
-			lines.push("");
+			lines.push("[PASS] No diagnostics found.");
 		} else {
 			const errors = lspResult.diagnostics.filter((d) => d.severity === "error");
 			const warnings = lspResult.diagnostics.filter((d) => d.severity === "warning");
 			lines.push(`Errors: ${errors.length} | Warnings: ${warnings.length} | Total: ${lspResult.diagnostics.length}`);
-			lines.push("");
-			for (const d of lspResult.diagnostics.slice(0, 50)) {
-				const sevLabel = d.severity.toUpperCase();
-				const code = d.code ? ` (${d.code})` : "";
-				lines.push(`- [${sevLabel}] ${d.file}:${d.line}:${d.col}${code} — ${d.message}`);
+			if (errors.length > 0) {
+				lines.push("  Run `npx tsc --noEmit` or `shazam_verify --lspOnly` to see details");
 			}
-			if (lspResult.diagnostics.length > 50) {
-				lines.push(`... and ${lspResult.diagnostics.length - 50} more`);
-			}
-			lines.push("");
 		}
+		lines.push("");
 	}
 
 	if (lspOnly) {
