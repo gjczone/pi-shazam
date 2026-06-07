@@ -134,6 +134,7 @@ export class LspClient {
 	private _running = false;
 	private _initialized = false;
 	private _initPromise: Promise<void> | null = null;
+	private _closePromise: Promise<void> | null = null;
 	private _log: (msg: string) => void;
 
 	// Store notifications (e.g., diagnostics) received outside request-response
@@ -183,20 +184,12 @@ export class LspClient {
 
 		this.process.on("error", (err) => {
 			this._log(`LSP process error: ${err.message}`);
-			this._running = false;
-			this.connection = null;
-			this._openedFiles.clear();
-			this._notifications = [];
-			this._serverCapabilities = {};
+			this._cleanupAfterCrash();
 		});
 
 		this.process.on("exit", (code, signal) => {
 			this._log(`LSP process exited: code=${code}, signal=${signal}`);
-			this._running = false;
-			this.connection = null;
-			this._openedFiles.clear();
-			this._notifications = [];
-			this._serverCapabilities = {};
+			this._cleanupAfterCrash();
 		});
 
 		// Drain stderr to prevent deadlock
@@ -615,15 +608,55 @@ export class LspClient {
 		return results;
 	}
 
+	// ── Crash cleanup ────────────────────────────────────────────────────────────
+
+	/**
+	 * Clean up after an unexpected process crash or error.
+	 * Disposes the connection and rejects all in-flight requests.
+	 */
+	private _cleanupAfterCrash(): void {
+		const closeError = new Error("LSP process exited unexpectedly");
+
+		// Reject all in-flight requests
+		for (const [p, reject] of this._inFlightRequests) {
+			void p.catch(() => {});
+			reject(closeError);
+		}
+		this._inFlightRequests.clear();
+
+		// Dispose connection
+		if (this.connection) {
+			try {
+				this.connection.dispose();
+			} catch {
+				// ignore dispose errors on crash
+			}
+		}
+
+		this._running = false;
+		this.connection = null;
+		this.process = null;
+		this._openedFiles.clear();
+		this._notifications = [];
+		this._serverCapabilities = {};
+		this._initialized = false;
+	}
+
 	// ── Close ──────────────────────────────────────────────────────────────────
 
 	async close(): Promise<void> {
+		// Concurrent-close guard: if already closing, return existing promise.
+		if (this._closePromise) return this._closePromise;
+
 		if (!this.process) return;
 
+		this._closePromise = this._doClose();
+		return this._closePromise;
+	}
+
+	private async _doClose(): Promise<void> {
 		this._log(`Closing LSP: ${this.command[0]}`);
 
-		// Capture process reference before nulling — the 2s kill timeout
-		// needs it after this.process is set to null below.
 		const proc = this.process;
 		const closeError = new Error("connection closed");
 
@@ -660,9 +693,20 @@ export class LspClient {
 				}
 			}
 
-			// 3. Kill the process if it hasn't exited after the shutdown handshake.
+			// 3a. Kill the process if it hasn't exited after the shutdown handshake.
 			if (proc && proc.exitCode === null) {
 				proc.kill();
+			}
+
+			// 3b. Wait for process exit with 2s SIGKILL timeout.
+			if (proc && proc.exitCode === null) {
+				await new Promise<void>((resolve) => {
+					proc.once("exit", () => resolve());
+					setTimeout(() => {
+						try { proc.kill("SIGKILL"); } catch { /* ignore */ }
+						resolve();
+					}, 2000);
+				});
 			}
 		} finally {
 			// 4. Cancel all in-flight LSP requests to prevent unhandled rejections.

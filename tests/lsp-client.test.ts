@@ -551,4 +551,62 @@ describe("LspClient edge cases", () => {
 		await client.close();
 		expect(client.isRunning()).toBe(false);
 	});
+
+	describe("LspClient crash and close cleanup", () => {
+		it("should reject in-flight requests when process crashes", async () => {
+			let rejectInFlight: (err: Error) => void = () => {};
+			const conn = createMockConnection();
+			const { client, process: proc } = createStartedClient(conn);
+
+			// Register an in-flight request
+			const inFlightPromise = new Promise<unknown>((_resolve, reject) => {
+				rejectInFlight = reject;
+			});
+			(client as any)._inFlightRequests.set(inFlightPromise, rejectInFlight);
+
+			// Crash the process — exit handler should clean up
+			proc.exitCode = 1;
+			proc.emit("exit", 1, "SIGTERM");
+
+			expect(client.isRunning()).toBe(false);
+			// In-flight promises should be rejected
+			await expect(inFlightPromise).rejects.toThrow();
+		});
+
+		it("should reject in-flight requests and dispose connection on crash", async () => {
+			const conn = createMockConnection();
+			const { client, process: proc } = createStartedClient(conn);
+
+			// Register an in-flight request
+			const neverResolves = new Promise<never>(() => {});
+			(client as any)._inFlightRequests.set(neverResolves, (err: Error) => {});
+
+			// Crash
+			proc.exitCode = 1;
+			proc.emit("exit", 1, "SIGTERM");
+
+			// Should have disposed the connection
+			expect(conn.dispose).toHaveBeenCalled();
+			// _inFlightRequests should be empty (all rejected and removed)
+			expect((client as any)._inFlightRequests.size).toBe(0);
+		});
+
+		it("should handle concurrent close() calls without double-dispose", async () => {
+			const conn = createMockConnection();
+			conn.sendRequest.mockResolvedValue(null);
+			const { client, process: proc } = createStartedClient(conn);
+
+			// Make process exit wait so we can call close() twice
+			proc.exitCode = null;
+
+			const close1 = client.close();
+			const close2 = client.close();
+
+			await Promise.all([close1, close2]);
+
+			// dispose should only be called once
+			expect(conn.dispose).toHaveBeenCalledTimes(1);
+			expect(client.isRunning()).toBe(false);
+		});
+	});
 });
