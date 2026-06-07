@@ -399,16 +399,20 @@ export const NEXT_RULES: NextRule[] = [
 
 /**
  * Build a standardized "Next" section with tool recommendations.
+ * Only shows "required" level recommendations to reduce noise (fixes #112).
+ * "recommended" and "also" levels are suppressed since the AI already
+ * knows about available tools from the system prompt.
  */
 export function formatNextSection(nextItems: NextRecommendation[]): string {
-	if (nextItems.length === 0) return "";
+	// Filter to only show required-level recommendations
+	const requiredItems = nextItems.filter(item => item.level === "required");
+	if (requiredItems.length === 0) return "";
 
-	const lines: string[] = ["### Next (Recommended)", ""];
+	const lines: string[] = ["### Next (Required)", ""];
 
-	for (const item of nextItems) {
-		const label = item.level === "required" ? "REQUIRED" : item.level === "recommended" ? "RECOMMENDED" : "OPTIONAL";
+	for (const item of requiredItems) {
 		const cmd = buildToolCommand(item);
-		lines.push(`- [${label}] ${item.label}: \`${cmd}\``);
+		lines.push(`- [REQUIRED] ${item.label}: \`${cmd}\``);
 	}
 
 	return lines.join("\n");

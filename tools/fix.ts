@@ -204,10 +204,83 @@ function detectFormatters(projectRoot: string): string[] {
 }
 
 /**
+ * Detect the dominant indentation style in the project.
+ * Returns 'tabs' if most files use tabs, 'spaces' otherwise.
+ * This prevents false positives when the project consistently uses tabs (fixes #111).
+ */
+function detectIndentationStyle(files: string[], projectRoot: string): 'tabs' | 'spaces' {
+	let tabFiles = 0;
+	let spaceFiles = 0;
+	const sampleSize = Math.min(files.length, 20); // Sample up to 20 files
+	
+	for (let i = 0; i < sampleSize; i++) {
+		const fullPath = join(projectRoot, files[i]!);
+		if (!existsSync(fullPath)) continue;
+		
+		try {
+			const content = readFileSync(fullPath, "utf-8");
+			const lines = content.split("\n").slice(0, 50); // Check first 50 lines
+			
+			let tabCount = 0;
+			let spaceCount = 0;
+			
+			for (const line of lines) {
+				if (line.startsWith("\t")) tabCount++;
+				else if (line.startsWith("    ")) spaceCount++;
+			}
+			
+			if (tabCount > spaceCount) tabFiles++;
+			else if (spaceCount > tabCount) spaceFiles++;
+		} catch {
+			// Skip unreadable files
+		}
+	}
+	
+	return tabFiles > spaceFiles ? 'tabs' : 'spaces';
+}
+
+/**
+ * Check if prettierrc has useTabs setting.
+ */
+function hasUseTabsInConfig(projectRoot: string): boolean {
+	const configFiles = ['.prettierrc', '.prettierrc.json', 'prettier.config.js', 'prettier.config.mjs'];
+	
+	for (const configFile of configFiles) {
+		const configPath = join(projectRoot, configFile);
+		if (existsSync(configPath)) {
+			try {
+				const content = readFileSync(configPath, "utf-8");
+				if (content.includes('"useTabs"') || content.includes("'useTabs'")) {
+					return content.includes('"useTabs": true') || content.includes("'useTabs': true");
+				}
+			} catch {
+				// Skip unreadable configs
+			}
+		}
+	}
+	
+	// Check package.json
+	try {
+		const pkgPath = join(projectRoot, "package.json");
+		if (existsSync(pkgPath)) {
+			const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+			if (pkg.prettier?.useTabs === true) return true;
+		}
+	} catch {
+		// Skip
+	}
+	
+	return false;
+}
+
+/**
  * Scan files for common formatting issues.
  */
 function scanFormatIssues(projectRoot: string, files: string[], _graph: RepoGraph): FormatIssue[] {
 	const issues: FormatIssue[] = [];
+	
+	// Detect indentation style to avoid false positives (fixes #111)
+	const useTabs = hasUseTabsInConfig(projectRoot) || detectIndentationStyle(files, projectRoot) === 'tabs';
 
 	for (const file of files.slice(0, 100)) {
 		const fullPath = join(projectRoot, file);
@@ -231,8 +304,8 @@ function scanFormatIssues(projectRoot: string, files: string[], _graph: RepoGrap
 					});
 				}
 
-				// Tab indentation (when project uses spaces)
-				if (file.endsWith(".ts") || file.endsWith(".js") || file.endsWith(".json")) {
+				// Tab indentation — only report if project uses spaces (fixes #111)
+				if (!useTabs && (file.endsWith(".ts") || file.endsWith(".js") || file.endsWith(".json"))) {
 					if (line.startsWith("\t")) {
 						issues.push({
 							file,

@@ -3,11 +3,11 @@ import { LSP_SERVER_SPECS, suffixToLanguage, languageForSuffix } from "../lsp/se
 
 describe("lsp/servers", () => {
 	describe("LSP_SERVER_SPECS", () => {
-		it("should contain exactly 6 language entries", () => {
+		it("should contain exactly 5 language entries", () => {
 			const languages = new Set(LSP_SERVER_SPECS.map((s) => s.language));
-			// 6 languages: python, typescript, go, json, yaml, rust
-			// python has 2 specs (pyright + pylsp), so specs count >= 7
-			expect(languages.size).toBe(6);
+			// 5 languages: python, typescript, go, yaml, rust
+			// python has 2 specs (pyright + pylsp), so specs count >= 6
+			expect(languages.size).toBe(5);
 		});
 
 		it("should have python specs (pyright + pylsp)", () => {
@@ -50,12 +50,6 @@ describe("lsp/servers", () => {
 			expect(rust!.commandNames).toContain("rust-analyzer");
 			expect(rust!.fileSuffixes).toContain(".rs");
 			expect(rust!.rootMarkers).toContain("Cargo.toml");
-		});
-
-		it("should have json spec", () => {
-			const json = LSP_SERVER_SPECS.find((s) => s.language === "json");
-			expect(json).toBeDefined();
-			expect(json!.fileSuffixes).toContain(".json");
 		});
 
 		it("should have yaml spec", () => {
@@ -103,7 +97,7 @@ describe("lsp/servers", () => {
 			expect(languageForSuffix(".tsx")).toBe("typescript");
 			expect(languageForSuffix(".go")).toBe("go");
 			expect(languageForSuffix(".rs")).toBe("rust");
-			expect(languageForSuffix(".json")).toBe("json");
+			
 			expect(languageForSuffix(".yaml")).toBe("yaml");
 			expect(languageForSuffix(".yml")).toBe("yaml");
 		});

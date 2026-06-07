@@ -85,10 +85,25 @@ function isDocumentSymbols(
 	return syms.length > 0 && "range" in syms[0]! && "children" in syms[0]!;
 }
 
+// LSP SymbolKind constants
+const SYMBOL_KIND_VARIABLE = 13;
+const SYMBOL_KIND_CONSTANT = 14;
+
+// Kinds that represent local variables/consts inside function bodies
+const LOCAL_KINDS = new Set([SYMBOL_KIND_VARIABLE, SYMBOL_KIND_CONSTANT]);
+
+/**
+ * Format LSP document symbol hierarchy, filtering out local variables.
+ * Only shows function/method signatures, type definitions, and exported symbols.
+ * This reduces output verbosity significantly (fixes #106).
+ */
 function formatHierarchy(syms: DocumentSymbol[], depth: number): string[] {
 	const out: string[] = [];
 	const indent = "  ".repeat(depth);
 	for (const s of syms) {
+		// Skip local variables and constants (implementation details)
+		if (depth > 0 && LOCAL_KINDS.has(s.kind)) continue;
+		
 		const startLine = s.range.start.line + 1;
 		const endLine = s.range.end.line + 1;
 		out.push(`${indent}- \`${s.name}\` L${startLine}-${endLine}`);

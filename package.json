@@ -1,7 +1,7 @@
 {
 	"name": "pi-shazam",
 	"version": "0.4.1",
-	"description": "Pi coding agent native codebase awareness extension - Shazam: power from multiple sources (repomap, pi-lens, serena MCP, tree-sitter, LSP) unified into one",
+	"description": "Pi coding agent native codebase awareness toolkit — 14 structural analysis tools. Also supports MCP (Cursor, Claude Desktop, Windsurf, etc.)",
 	"type": "module",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",

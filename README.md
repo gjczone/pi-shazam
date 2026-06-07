@@ -1,132 +1,150 @@
 # pi-shazam
 
-> Give your AI agent structural awareness of your codebase — before it reads a single file.
+> **Pi coding agent native codebase awareness toolkit** — 14 structural analysis tools for AI agents. Also supports MCP (Cursor, Claude Desktop, Windsurf, etc.)
 
 [![npm version](https://img.shields.io/npm/v/pi-shazam)](https://www.npmjs.com/package/pi-shazam)
 [![CI](https://github.com/gjczone/pi-shazam/actions/workflows/ci.yml/badge.svg)](https://github.com/gjczone/pi-shazam/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## What It Solves
+## What It Does
 
-AI coding agents start blind. They see a file tree, maybe a README. They don't know which files are the "spine" of the project, what depends on what, or which callers will break when a function signature changes. They guess. Sometimes they guess wrong.
+**pi-shazam** is a native codebase analysis toolkit built for the **Pi coding agent**. It provides 14 structural analysis tools that help AI agents understand project architecture before reading code.
 
-pi-shazam answers the questions every agent should ask before touching code:
+pi-shazam also supports **MCP (Model Context Protocol)**, allowing any compatible AI client to use the same analysis tools. Supported clients include Cursor, Claude Desktop, Windsurf, Qoder, Kimi Code, and more.
 
-- "What's the structure of this project?" → `shazam_overview`
-- "What will break if I change this file?" → `shazam_impact`
-- "Who calls this function?" → `shazam_call_chain`
-- "Did my edit introduce errors?" → `shazam_verify`
+## Core Capabilities
 
-Under the hood it parses **every source file** with tree-sitter (14 languages), builds a **full dependency graph** (symbols, imports, calls, references), ranks them with **PageRank**, and optionally enriches results with **LSP diagnostics** (6 languages). The agent gets precise, ranked answers in one call — no grep, no guesswork.
+- **Tree-sitter parsing** — 14 programming languages, full symbol dependency graph
+- **PageRank ranking** — Identify core files and key symbols
+- **LSP integration** — Type checking, diagnostics, type hierarchy (5 languages)
+- **Incremental analysis** — Baseline comparison, focus on changes
+- **Smart verification** — Auto-check after edits, PASS/WARN/FAIL verdict
 
-## Primary: Pi Package
+## Quick Start
 
-pi-shazam is a **Pi coding agent package** — the native, first-class experience. Install once, tools appear alongside `read` and `bash`:
+### Pi Agent (Recommended)
 
 ```bash
 pi install npm:pi-shazam
 ```
 
-All 14 analysis tools register as native Pi tools. Automatic hooks inject structural overviews into the system prompt, verify code after every edit, log tool usage, and guard against risky multi-file edits. This is the recommended setup for Pi users.
+After installation, 14 analysis tools register as native Pi tools alongside `read`, `write`, and `bash`. Automatic hooks inject project structure into system prompts, verify code after edits, and log tool usage.
 
-## Also: MCP Server
-
-pi-shazam ships with an MCP server (`npx pi-shazam-mcp`) so **any MCP-compatible client** can use the same analysis tools. No Pi required.
-
-Supported clients: Cursor, Claude Desktop, Windsurf, Qoder, Kimi Code, and any tool that speaks MCP.
+### MCP Clients (Cursor, Claude Desktop, etc.)
 
 ```json
 {
-	"mcpServers": {
-		"pi-shazam": {
-			"command": "npx",
-			"args": ["pi-shazam-mcp"]
-		}
-	}
+  "mcpServers": {
+    "pi-shazam": {
+      "command": "npx",
+      "args": ["pi-shazam-mcp"]
+    }
+  }
 }
 ```
 
-The same 14 tools, the same analysis engine, the same output format. MCP tools sync with Pi tools in every release.
+Works with all MCP-compatible clients. Same 14 tools, same analysis engine.
 
 ## Tools
 
-### Query (read-only)
+### Query (Read-Only)
 
-| Tool                    | What it tells the agent                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------------------ |
-| `shazam_overview`       | Project structure, top-10 files by PageRank, key dependencies, recent commits, HTTP routes |
-| `shazam_impact`         | Every file, symbol, and test affected by your planned changes                              |
-| `shazam_codesearch`     | BM25-ranked symbol search — use instead of grep                                            |
-| `shazam_symbol`         | Definition, kind, signature, callers, callees for any symbol. `mode: "state"` for enums    |
-| `shazam_hover`          | Type signatures and JSDoc via LSP — content raw reads miss                                 |
-| `shazam_file_detail`    | All symbols in a file with signatures, PageRank, call counts, LSP hierarchy                |
-| `shazam_call_chain`     | Full upstream/downstream call graph. `flat: true` for reference list                       |
-| `shazam_find_tests`     | Which test files cover a given module                                                      |
-| `shazam_hotspots`       | Files ranked by complexity — where bugs hurt most                                          |
-| `shazam_type_hierarchy` | Class/interface inheritance chain                                                          |
+| Tool | What It Does |
+|------|--------------|
+| `shazam_overview` | Project structure, top-10 core files by PageRank, key dependencies, recent commits |
+| `shazam_impact` | Change impact analysis: affected files, symbols, tests |
+| `shazam_codesearch` | BM25 symbol search — ranked alternative to grep |
+| `shazam_symbol` | Symbol definition, signature, callers, callees |
+| `shazam_hover` | Type signatures and JSDoc — rich info from LSP |
+| `shazam_file_detail` | All symbols in a file: signatures, PageRank, call counts, LSP hierarchy |
+| `shazam_call_chain` | Full upstream/downstream call graph |
+| `shazam_find_tests` | Find test files covering a module |
+| `shazam_hotspots` | Files ranked by complexity — where bugs hurt most |
+| `shazam_type_hierarchy` | Class/interface inheritance chain |
 
 ### Write & Verify
 
-| Tool                   | What it tells the agent                                                       |
-| ---------------------- | ----------------------------------------------------------------------------- |
-| `shazam_verify`        | Post-edit gate: LSP diagnostics + risk + orphans + graph diff. PASS/WARN/FAIL |
-| `shazam_fix`           | Auto-fix format issues (prettier, biome, eslint, ruff, gofmt)                 |
-| `shazam_rename_symbol` | Safe project-wide rename via LSP — verifies references first                  |
-| `shazam_safe_delete`   | Confirms zero incoming references before removing a symbol                    |
+| Tool | What It Does |
+|------|--------------|
+| `shazam_verify` | Post-edit verification: LSP diagnostics + risk assessment + orphan detection |
+| `shazam_fix` | Auto-fix format issues (prettier, biome, eslint, ruff, gofmt) |
+| `shazam_rename_symbol` | Safe project-wide rename — verify references first |
+| `shazam_safe_delete` | Delete with zero-reference confirmation |
 
-## Pi-Only Features
+## Platform Support
 
-These run automatically when installed as a Pi package:
+### Pi Agent Features
 
-| Hook                 | When                 | What it does                                                        |
-| -------------------- | -------------------- | ------------------------------------------------------------------- |
-| `before_agent_start` | Agent starts         | Injects project structure overview into system prompt               |
-| `after_write/edit`   | Agent writes/edits   | Auto-verifies changes, reports structural impact                    |
-| `shazam-guide`       | Key lifecycle events | Nudges agent to use shazam tools at the right moments               |
-| `tool-logger`        | Every shazam call    | Logs usage to `~/.pi/hooks/audit/shazam-calls.log` for optimization |
-| `pre-edit-guard`     | Before write/edit    | Detects multi-file edits and suggests `shazam_impact` first          |
+| Hook | Trigger | What It Does |
+|------|---------|--------------|
+| `before_agent_start` | Agent starts | Inject project structure overview into system prompt |
+| `after_write/edit` | After edit | Auto-verify changes, report structural impact |
+| `shazam-guide` | Key lifecycle | Guide agent to use tools at the right moments |
+| `pre-edit-guard` | Before write | Detect multi-file edits, suggest `shazam_impact` first |
 
-Plus five commands: `/shazam-setup` (LSP detection), `/shazam-doctor` (health check),
-`/shazam-install-git-hooks` (pre-commit hook), `/shazam-remove-git-hooks` (undo),
-and `/shazam-pre-commit-verify` (internal hook script).
+Additional commands: `/shazam-setup`, `/shazam-doctor`, `/shazam-install-git-hooks`, etc.
 
-## Supported Languages
+### MCP Client Support
 
-**Tree-sitter parsing (14)**: TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, C, C++, C#, Ruby, CSS, HTML, JSON
+pi-shazam's MCP server supports all MCP-compatible clients:
 
-**LSP diagnostics (6)**: TypeScript/JavaScript, Python (pyright), Rust (rust-analyzer), Go (gopls), JSON, YAML
+- **Cursor** — Built-in MCP support
+- **Claude Desktop** — Via configuration file
+- **Windsurf** — Native MCP support
+- **Qoder** — AI coding assistant
+- **Kimi Code** — Moonshot AI coding assistant
+- **Others** — Any tool implementing MCP protocol
 
-When LSP servers are unavailable, tools fall back to tree-sitter only.
+## Platform & Build
+
+### npm Auto-Build
+
+pi-shazam is published via npm with automatic platform support:
+
+| Platform | Architecture | Status |
+|----------|--------------|--------|
+| **Linux** | x64, arm64 | Fully supported |
+| **macOS** | x64 (Intel), arm64 (Apple Silicon) | Fully supported |
+| **Windows** | x64 | Fully supported |
+
+### Dependencies
+
+pi-shazam uses `tree-sitter` for code parsing, a native Node.js module. npm automatically compiles binaries for your platform during installation — no manual steps required.
+
+Supported Node.js versions: **>= 18.0.0**
+
+### Community Format/Version Support
+
+- **TypeScript/JavaScript**: `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`
+- **Python**: `.py`, `.pyi`, `.pyx`, `.pxd`
+- **Rust**: `.rs`
+- **Go**: `.go`
+- **Java**: `.java`
+- **C/C++**: `.c`, `.cpp`, `.h`, `.hpp`
+- **C#**: `.cs`
+- **Ruby**: `.rb`
+- **Web**: `.css`, `.html`
+- **Data formats**: `.json`, `.yaml`, `.yml`
 
 ## Architecture
 
 ```
 pi-shazam (npm package)
-├── Pi extension                  MCP server
-│   index.ts ──tools/*.ts         mcp/entry.ts ──mcp/tools.ts
-│       │         │                   │              │
-│       └──── core/ + lsp/ ───────────┘──────────────┘
-│            (shared, no duplication)
+├── Pi Extension                    MCP Server
+│   index.ts ──tools/*.ts             mcp/entry.ts ──mcp/tools.ts
+│       │         │                       │              │
+│       └──── core/ + lsp/ ───────────────┘──────────────┘
+│            (shared core, zero duplication)
 │
-├── hooks/
-│   ├── before-start.ts    inject overview into prompt
-│   ├── after-write.ts     auto-verify after edits
-│   ├── pre-edit.ts        pre-edit guard for multi-file edits
-│   ├── shazam-guide.ts    nudge agent to use tools
-│   └── tool-logger.ts     usage analytics
+├── hooks/                          Automatic hooks
+│   ├── before-start.ts             Inject project overview
+│   ├── after-write.ts              Auto-verify after edits
+│   ├── pre-edit.ts                 Multi-file edit protection
+│   ├── shazam-guide.ts             Tool usage guidance
+│   └── tool-logger.ts              Usage analytics
 │
-└── core/ + lsp/           pure analysis (zero Pi/MCP imports)
+└── core/ + lsp/                    Pure analysis engine (zero Pi/MCP dependencies)
 ```
-
-## MCP Sync Discipline
-
-Pi and MCP tools ship in the same package, from the same codebase. When Pi tools change, MCP tools must update in the same PR:
-
-| Pi change           | MCP action                           |
-| ------------------- | ------------------------------------ |
-| New tool            | Add `registerTool` in `mcp/tools.ts` |
-| Tool deleted        | Remove from `mcp/tools.ts`           |
-| Schema changed      | Update Zod schema                    |
-| Description updated | Sync to MCP tool description         |
 
 ## Development
 
@@ -137,10 +155,29 @@ npm install --legacy-peer-deps
 
 npm run dev          # tsc --watch
 npm run typecheck    # tsc --noEmit
-npm test             # vitest (208 tests)
+npm test             # vitest
 npm run build        # tsc → dist/
 ```
+
+## LSP Support
+
+| Language | LSP Server | Status |
+|----------|-----------|--------|
+| TypeScript/JavaScript | typescript-language-server | Supported |
+| Python | pyright-langserver / pylsp | Supported |
+| Go | gopls | Supported |
+| Rust | rust-analyzer | Supported |
+| YAML | yaml-language-server | Supported |
+
+When LSP servers are unavailable, tools automatically fall back to tree-sitter mode.
 
 ## License
 
 MIT
+
+## Links
+
+- [npm](https://www.npmjs.com/package/pi-shazam)
+- [GitHub](https://github.com/gjczone/pi-shazam)
+- [Pi Agent](https://pi.dev)
+- [MCP Protocol](https://modelcontextprotocol.io)

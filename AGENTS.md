@@ -1,5 +1,15 @@
 # pi-shazam
 
+> **IMPORTANT: LANGUAGE RULE**
+> 
+> **All source code, code comments, JSDoc, commit messages, PR titles/descriptions, 
+> GitHub Issue content, and GitHub Release notes MUST be written in English.**
+> 
+> No Chinese or any other non-English language in any artifact that goes into the repository.
+> This is a hard requirement for this project.
+
+
+
 > **DEVELOPMENT RULE: All development and maintenance of this project MUST follow
 > the conventions, workflows, and contracts defined in [INSTRUCTION.md](./INSTRUCTION.md).
 > This includes Pi extension API contracts, architecture layer boundaries, tool
@@ -41,7 +51,7 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 | `npm run build`                  | Compile TS → `dist/`                                                       |
 | `npm run typecheck`              | `tsc --noEmit` — type validation without emit                              |
 | `npm run dev`                    | `tsc --watch` — incremental compilation                                    |
-| `npm publish`                    | **禁止直接使用**——发布统一通过 GitHub Actions（见 Release & Publish 流程） |
+| `npm publish`                    | **DO NOT use directly** — Publishing is done via GitHub Actions (see Release & Publish workflow) |
 
 ## Development Environment
 
@@ -60,18 +70,18 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 - **Parser**: `import Parser from "tree-sitter"` → `new Parser()` → `parser.setLanguage(new Language(grammarModule))`
 - **Parsing**: `parser.parse(sourceString)` returns `Tree`; `tree.rootNode` for root `SyntaxNode`
 - **Query**: `new Query(language, queryString)` → `query.captures(node)` returns `{name: string, node: SyntaxNode}[]`
-- **无 QueryCursor**: Node.js binding 没有 Python 版的 `QueryCursor` 类，直接用 `query.captures()`
-- **Node 属性**: `node.type`, `node.text`, `node.children`, `node.parent`, `node.previousSibling`, `node.startPosition`/`endPosition`（`.row`/`.column`）, `node.childForFieldName("name")`
-- **Grammar 加载**: `new Language(grammarModule)` 包装 native module，不是 Python 的 `Language(fn())` 构造器模式
-- **输入类型**: `parse()` 接受 `string` 或回调 `(index, position) => string | null`，不接受 Buffer
-- **无内置 .d.ts**: 需要自行声明类型或使用 `@types/tree-sitter`
+- **No QueryCursor**: Node.js binding does not have Python's `QueryCursor` class, use `query.captures()` directly
+- **Node properties**: `node.type`, `node.text`, `node.children`, `node.parent`, `node.previousSibling`, `node.startPosition`/`endPosition` (`.row`/`.column`), `node.childForFieldName("name")`
+- **Grammar loading**: `new Language(grammarModule)` wraps native module, not Python's `Language(fn())` constructor pattern
+- **Input type**: `parse()` accepts `string` or callback `(index, position) => string | null`, not Buffer
+- **No built-in .d.ts**: Need to declare types manually or use `@types/tree-sitter`
 
 ### vscode-languageserver-protocol (v3.18.0) + vscode-jsonrpc (v9.0.0)
 
-- **协议类型**: 从 `vscode-languageserver-protocol` 导入 `Diagnostic`, `Location`, `Position`, `Range`, `SymbolKind`, `InitializeParams`, `InitializeResult`, `TextDocumentItem`, `DidOpenTextDocumentParams`, `ReferenceContext` 等
-- **LSP 客户端通信**: 使用 `vscode-jsonrpc/node` 的 `StreamMessageReader` / `StreamMessageWriter` + `createMessageConnection` 替代手写 Content-Length 帧解析。这是官方推荐的客户端模式，且 `vscode-jsonrpc@9.0.0` 已作为传递依赖存在
-- **用法示例**: `import * as rpc from "vscode-jsonrpc/node"` → `rpc.createMessageConnection(new rpc.StreamMessageReader(child.stdout), new rpc.StreamMessageWriter(child.stdin))` → `connection.sendRequest(method, params)` / `connection.onNotification(type, handler)`
-- **不用 createConnection**: `createConnection` 是服务端 API（用于构建 language server），本项目是客户端，不需要
+- **Protocol types**: Import `Diagnostic`, `Location`, `Position`, `Range`, `SymbolKind`, `InitializeParams`, `InitializeResult`, `TextDocumentItem`, `DidOpenTextDocumentParams`, `ReferenceContext` etc. from `vscode-languageserver-protocol`
+- **LSP client communication**: Use `vscode-jsonrpc/node`'s `StreamMessageReader` / `StreamMessageWriter` + `createMessageConnection` instead of hand-written Content-Length frame parsing. This is the officially recommended client pattern, and `vscode-jsonrpc@9.0.0` is already a transitive dependency
+- **Usage example**: `import * as rpc from "vscode-jsonrpc/node"` → `rpc.createMessageConnection(new rpc.StreamMessageReader(child.stdout), new rpc.StreamMessageWriter(child.stdin))` → `connection.sendRequest(method, params)` / `connection.onNotification(type, handler)`
+- **Do not use createConnection**: `createConnection` is a server-side API (for building language servers), this project is a client and does not need it
 
 ## Architecture
 
@@ -149,7 +159,7 @@ mcp/                        ← MCP server for non-Pi clients
 | `semanticTokens`  | `textDocument/semanticTokens/full` | (wired via `lspSemanticTokens`, not yet consumed by tools)       |
 | `foldingRange`    | `textDocument/foldingRange`        | (wired via `lspFoldingRanges`, not yet consumed by tools)        |
 
-> ⚠️ 契约文档：`CONTRACT.md` 为 Pi ExtensionAPI 真实契约的权威来源，提取自 `pi-coding-agent@0.78.1` 运行时源码。
+> ⚠️ Contract documentation: `CONTRACT.md` is the authoritative source for Pi ExtensionAPI real contract, extracted from `pi-coding-agent@0.78.1` runtime source.
 
 ### Registered Tools (LLM-visible)
 
@@ -172,7 +182,7 @@ mcp/                        ← MCP server for non-Pi clients
 
 All tools follow the same pattern:
 
-- Parameters: TypeBox schema via direct `import { Type } from "typebox"`（不使用 `pi.typebox`——Pi 运行时不一定注入，参考 pi-smart-fetch 的做法）
+- Parameters: TypeBox schema via direct `import { Type } from "typebox"`(Do not use `pi.typebox` — Pi runtime may not inject it, see pi-smart-fetch for reference)
 - Output: `{ content: [{ type: "text", text: string }] }` — plain text for LLM reading
 - Optional `{ json: true }` parameter for structured JSON output
 - Write-operation tools support `{ dryRun: true }`
@@ -205,46 +215,46 @@ All tools follow the same pattern:
 - **Adding a new hook**: Create `hooks/<name>.ts` with a `register*` function that calls `pi.on(...)` → import and call in `index.ts` default export. Hooks subscribe to lifecycle events (`tool_execution_start`, `before_agent_start`, etc.) and do not return tools to the LLM. Add to hooks/ tree in `AGENTS.md`.
 - **Adding a tool (MCP sync)**: After adding/changing/deleting a Pi tool → add/update/remove the matching `registerTool` in `mcp/tools.ts` → update `mcp/README.md` tool table → sync Pi tool description changes to MCP tool descriptions. MCP and Pi tools must stay in sync in the same PR. Update `README.md` if user-facing tool list or usage changed.
 
-## Release & Publish 流程
+## Release & Publish Workflow
 
-### 发布方式：GitHub Actions（强制）
+### Publishing Method: GitHub Actions (Mandatory)
 
-**禁止直接 `npm publish`。** 本地 npm token 容易过期。发布统一通过 GitHub Actions workflow `.github/workflows/publish.yml`。
+**DO NOT use `npm publish` directly.** Local npm tokens expire easily. Publishing is done via GitHub Actions workflow `.github/workflows/publish.yml`.
 
-发布流程：
+Publishing workflow:
 
-1. 开发完成、测试通过后，提交代码到分支
-2. `npm version patch`（或 `minor`/`major`）→ 自动创建 git tag
+1. After development is complete and tests pass, commit code to branch
+2. `npm version patch` (or `minor`/`major`) → automatically creates git tag
 3. `git push origin <branch> --tags`
-4. 创建 PR → 合并到 main
-5. 创建 GitHub Release（`gh release create vX.Y.Z`）
-6. Release 发布事件自动触发 `.github/workflows/publish.yml`
-   - 也可以手动触发：`gh workflow run publish.yml --ref main -f tag=latest`
+4. Create PR → merge to main
+5. Create GitHub Release (`gh release create vX.Y.Z`)
+6. Release publish event automatically triggers `.github/workflows/publish.yml`
+   - Can also trigger manually: `gh workflow run publish.yml --ref main -f tag=latest`
 
-### 发布 CI 做的事
+### What the Publish CI Does
 
 `.github/workflows/publish.yml`：
 
 - `npm ci --legacy-peer-deps`
-- `npx tsc --noEmit`（类型检查）
-- `npm test`（单元测试）
-- `npm run build`（编译）
-- `npm publish`（用 `secrets.NPM_TOKEN` 认证）
-- 等待 15 秒后 `npm view pi-shazam` 验证
+- `npx tsc --noEmit` (type checking)
+- `npm test` (unit tests)
+- `npm run build` (compile)
+- `npm publish` (authenticated with `secrets.NPM_TOKEN`)
+- Wait 15 seconds then verify with `npm view pi-shazam`
 
-**NOTE**: `secrets.NPM_TOKEN` 是 GitHub 仓库秘密，在 Settings → Secrets and variables → Actions 中配置。值是 npm 的 Automation Token（无 2FA）。
+**NOTE**: `secrets.NPM_TOKEN` is a GitHub repository secret, configured in Settings → Secrets and variables → Actions. The value is an npm Automation Token (no 2FA).
 
-### tool 参数 schema 注意事项
+### Tool Parameter Schema Notes
 
-- **使用 `import { Type } from "typebox"`**，不要用 `pi.typebox`
-  - Pi 运行时的 `ExtensionAPI.typebox` 不一定存在，`pi.typebox.Object()` 会导致 `Cannot read properties of undefined (reading 'Object')`
-  - 其他 Pi 扩展（如 `pi-smart-fetch`）都是直接导入 `@sinclair/typebox` 或 `typebox`
-- `typebox` 包版本固定在 `1.1.39`（`sinclairzx81` 的同名包）
-- API：`Type.Object({...})`、`Type.Optional(...)`、`Type.String()`、`Type.Number()`、`Type.Boolean()`、`Type.Array(...)`
+- **Use `import { Type } from "typebox"`**, do not use `pi.typebox`
+  - Pi runtime's `ExtensionAPI.typebox` may not exist, `pi.typebox.Object()` will cause `Cannot read properties of undefined (reading 'Object')`
+  - Other Pi extensions (like `pi-smart-fetch`) import `@sinclair/typebox` or `typebox` directly
+- `typebox` package version is pinned at `1.1.39` (`sinclairzx81`'s package of the same name)
+- API: `Type.Object({...})`, `Type.Optional(...)`, `Type.String()`, `Type.Number()`, `Type.Boolean()`, `Type.Array(...)`
 
 ## Verification Matrix
 
-### 每次修改后（强制）
+### After Every Change (Mandatory)
 
 | Step | Command             | What it checks |
 | ---- | ------------------- | -------------- |
@@ -253,7 +263,7 @@ All tools follow the same pattern:
 | 3    | `npm run build`     | Compile output |
 | 4    | `pi -p "call shazam_overview briefly"` | Pi integration smoke test |
 
-### Pi 集成测试
+### Pi Integration Testing
 
 ```bash
 # Install into Pi
@@ -269,13 +279,13 @@ pi -p "call shazam_hotspots"
 # Check: no "Extension error" in output, tools return meaningful results.
 ```
 
-### MCP 测试
+### MCP Testing
 
 ```bash
 printf '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}\n{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shazam_hotspots","arguments":{}}}\n' | timeout 15 node dist/mcp/entry.js . 2>/dev/null | tail -1
 ```
 
-### Hook 验证
+### Hook Verification
 
 ```bash
 # Verify all hooks registered in built dist
@@ -286,25 +296,25 @@ grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerA
 pi -p "call shazam_overview" 2>&1 | grep -q "Extension error" && echo "FAIL" || echo "OK"
 ```
 
-### 发布前契约检查（强制）
+### Pre-Publish Contract Check (Mandatory)
 
-参考 `CONTRACT.md` 完整契约文档。
+Refer to `CONTRACT.md` for the complete contract documentation.
 
 ```
-□ grep "pi\.logger\." dist/          # 不能有无保护的直接调用
-□ grep "pi\.typebox" dist/           # 不能有引用
-□ grep "content:" dist/index.js      # sendMessage: string 格式
-□ grep "content:" dist/hooks/*.js    # sendMessage: string 格式
-□ grep "content:" dist/tools/*.js    # Tool 返回: [{type:"text", text:...}]
-□ grep "systemPrompt:" dist/hooks/   # 返回 string，非 Array
+□ grep "pi\.logger\." dist/          # No unprotected direct calls
+□ grep "pi\.typebox" dist/           # No references
+□ grep "content:" dist/index.js      # sendMessage: string format
+□ grep "content:" dist/hooks/*.js    # sendMessage: string format
+□ grep "content:" dist/tools/*.js    # Tool returns: [{type:"text", text:...}]
+□ grep "systemPrompt:" dist/hooks/   # Returns string, not Array
 ```
 
-### 调试指南
+### Debugging Guide
 
-- **扩展加载失败** → 检查 `CONTRACT.md`，对比运行时 API 版本
-- **`text.replace is not a function`** → 检查 sendMessage content 是否 string
-- **`Cannot read properties of undefined`** → 检查是否直接访问 pi.logger/pi.typebox/ctx.ui
-- **工具不出现** → 检查 register\* 是否在 index.ts 中调用
+- **Extension load failure** → Check `CONTRACT.md`, compare with runtime API version
+- **`text.replace is not a function`** → Check if sendMessage content is string
+- **`Cannot read properties of undefined`** → Check if directly accessing pi.logger/pi.typebox/ctx.ui
+- **Tool not appearing** → Check if register* is called in index.ts
 
 ## First Places to Inspect
 

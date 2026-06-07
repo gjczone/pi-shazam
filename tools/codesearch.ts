@@ -120,9 +120,14 @@ export function executeCodesearch(graph: RepoGraph, query: string, topN?: number
 		const nameLower = sym.name.toLowerCase();
 		let score = 0;
 
-		// Exact match
+		// Exact match — highest priority (fixes #108)
 		if (nameLower === lower) {
-			score += 100;
+			score += 200;
+		}
+
+		// Prefix match (e.g., "verify" matches "executeVerify")
+		if (nameLower.startsWith(lower) || nameLower.endsWith(lower)) {
+			score += 50;
 		}
 
 		// Substring match
@@ -137,8 +142,8 @@ export function executeCodesearch(graph: RepoGraph, query: string, topN?: number
 			}
 		}
 
-		// PageRank boost
-		score += sym.pagerank * 50;
+		// PageRank boost (reduced weight to fix #108 — was 50, now 15)
+		score += sym.pagerank * 15;
 
 		if (score > 0) {
 			scored.push({ sym, score });

@@ -35,6 +35,7 @@ function getUncommittedChangeCount(projectRoot: string): number {
 
 /**
  * Build proactive recommendations section based on project state.
+ * Only includes contextually relevant recommendations to minimize tokens.
  * Accepts an already-scanned graph to avoid redundant re-scanning (fixes #95).
  */
 function buildProactiveRecommendations(projectRoot: string, graph: RepoGraph): string {
@@ -48,24 +49,28 @@ function buildProactiveRecommendations(projectRoot: string, graph: RepoGraph): s
 		lines.push("### Proactive Recommendations");
 		lines.push("");
 
+		// Only include recommendations that are contextually relevant
 		if (uncommitted > 0) {
 			lines.push(`- [REQUIRED] You have ${uncommitted} uncommitted change(s). Run \`shazam_verify --preCommit\` before committing.`);
 		}
 
-		lines.push("- Before editing any file for the first time: \`shazam_file_detail --file <path>\`");
+		// Always include the most critical workflow guidance
+		lines.push("- Before editing a file for the first time: \`shazam_file_detail --file <path>\`");
 		lines.push("- Before changing a shared/exported symbol: \`shazam_call_chain --symbol <name>\`");
 
+		// Conditional: only mention if project has tests
 		if (hasTests) {
-			lines.push("- Before adding/modifying code: \`shazam_find_tests --sourceFile <file>\` to find related tests");
+			lines.push("- Find related tests: \`shazam_find_tests --sourceFile <file>\`");
 		}
 
+		// Conditional: only mention if project has OOP types
 		if (hasHierarchy) {
-			lines.push("- When working with OOP types: \`shazam_type_hierarchy --name <class>\` for inheritance chain");
+			lines.push("- For OOP type hierarchies: \`shazam_type_hierarchy --name <class>\`");
 		}
 
-		lines.push("- When editing 2+ files: \`shazam_impact --files <file1> <file2>\` to assess blast radius");
+		// Core workflow tools
 		lines.push("- After every edit: \`shazam_verify\` to check for errors");
-		lines.push("- Instead of grep: \`shazam_codesearch --query <keyword>\` for ranked results");
+		lines.push("- Instead of grep: \`shazam_codesearch --query <keyword>\`");
 	} catch {
 		// If scan fails, provide minimal recommendations
 		lines.push("### Recommendations");

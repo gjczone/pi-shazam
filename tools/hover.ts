@@ -47,6 +47,84 @@ interface HoverResult {
 	signature: string;
 	pagerank: number;
 	lspHover?: string;
+	docstring?: string;
+	contextLines?: string[];
+}
+
+/**
+ * Extract JSDoc comment above a symbol definition from source file.
+ * Returns the comment text or undefined if not found.
+ */
+function extractDocstring(filePath: string, symbolLine: number): string | undefined {
+	try {
+		const content = readFileSync(filePath, "utf-8");
+		const lines = content.split("\n");
+		const lineIdx = symbolLine - 1; // Convert to 0-based
+		
+		// Look backwards for JSDoc comment
+		const docLines: string[] = [];
+		let i = lineIdx - 1;
+		
+		// Skip empty lines above the symbol
+		while (i >= 0 && lines[i]?.trim() === "") i--;
+		
+		// Check if we have a */ (end of JSDoc)
+		if (i >= 0 && lines[i]?.trim().endsWith("*/")) {
+			// Collect JSDoc lines backwards
+			while (i >= 0) {
+				const line = lines[i]!;
+				docLines.unshift(line);
+				if (line.trim().startsWith("/**")) break;
+				i--;
+			}
+			
+			// Clean up JSDoc comment
+			if (docLines.length > 0) {
+				return docLines
+					.map(l => l.replace(/^\s*\/\*\*?\s?/, "").replace(/\s*\*\/\s*$/, "").replace(/^\s*\*\s?/, ""))
+					.filter(l => l.length > 0)
+					.join("\n");
+			}
+		}
+		
+		// Check for single-line comment above
+		if (i >= 0 && lines[i]?.trim().startsWith("//")) {
+			while (i >= 0 && lines[i]?.trim().startsWith("//")) {
+				docLines.unshift(lines[i]!.trim().replace(/^\/\/\s?/, ""));
+				i--;
+			}
+			return docLines.join("\n");
+		}
+	} catch {
+		// File read failed
+	}
+	return undefined;
+}
+
+/**
+ * Extract context lines around a symbol definition.
+ * Returns 5-10 lines of source code around the symbol.
+ */
+function extractContextLines(filePath: string, symbolLine: number, contextSize: number = 5): string[] | undefined {
+	try {
+		const content = readFileSync(filePath, "utf-8");
+		const lines = content.split("\n");
+		const lineIdx = symbolLine - 1; // Convert to 0-based
+		
+		const start = Math.max(0, lineIdx);
+		const end = Math.min(lines.length, lineIdx + contextSize);
+		
+		const context: string[] = [];
+		for (let i = start; i < end; i++) {
+			const lineNum = i + 1;
+			const lineContent = lines[i] || "";
+			context.push(`L${lineNum}: ${lineContent}`);
+		}
+		return context;
+	} catch {
+		// File read failed
+	}
+	return undefined;
 }
 
 export async function executeHover(graph: RepoGraph, name: string, file?: string): Promise<HoverResult> {
@@ -131,6 +209,13 @@ export async function executeHover(graph: RepoGraph, name: string, file?: string
 			}
 		}
 	}
+	
+	// If LSP hover unavailable, extract from source (fixes #109)
+	if (!result.lspHover) {
+		const filePath = resolve(process.cwd(), symbol.file);
+		result.docstring = extractDocstring(filePath, symbol.line);
+		result.contextLines = extractContextLines(filePath, symbol.line);
+	}
 
 	return result;
 }
@@ -168,9 +253,24 @@ export function formatHoverResult(result: HoverResult, name: string): string {
 		lines.push("");
 		lines.push(result.lspHover);
 	} else {
-		lines.push("*No LSP hover info available.*");
+		// Show source-extracted info when LSP unavailable (fixes #109)
+		lines.push("*LSP hover unavailable — showing source-extracted info.*");
 		lines.push("");
-		lines.push('Run with diagnostics="lsp" in shazam_check to ensure LSP servers are initialized.');
+		
+		if (result.docstring) {
+			lines.push("### Documentation (from source)");
+			lines.push("");
+			lines.push(result.docstring);
+			lines.push("");
+		}
+		
+		if (result.contextLines && result.contextLines.length > 0) {
+			lines.push("### Context (source lines)");
+			lines.push("");
+			for (const ctxLine of result.contextLines) {
+				lines.push(ctxLine);
+			}
+		}
 	}
 
 	return lines.join("\n");

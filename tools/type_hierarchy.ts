@@ -178,24 +178,36 @@ function formatTypeHierarchy(result: TypeHierarchyResult, name: string): string 
 		"",
 	];
 
-	if (result.supertypes.length > 0) {
-		lines.push(`### Supertypes (${result.supertypes.length})`);
-		for (const s of result.supertypes) {
-			lines.push(`- ${s.kind} \`${s.name}\` — ${s.file}:${s.line}`);
-		}
-		lines.push("");
+	// Show appropriate message based on symbol kind and hierarchy
+	const isInterfaceOrType = ["interface", "type_alias", "enum"].includes(result.symbol.kind);
+	const hasHierarchy = result.supertypes.length > 0 || result.subtypes.length > 0;
+	
+	if (result.symbol.kind === "unknown") {
+		lines.push(`Symbol \`${name}\` not found in the project.`, "");
+	} else if (isInterfaceOrType && !hasHierarchy) {
+		// Standalone interface/type alias — show clear message (fixes #110)
+		lines.push(`This is a standalone ${result.symbol.kind} (no supertypes or subtypes).`, "");
 	} else {
-		lines.push("No supertypes found.", "");
-	}
+		// Show hierarchy
+		if (result.supertypes.length > 0) {
+			lines.push(`### Supertypes (${result.supertypes.length})`);
+			for (const s of result.supertypes) {
+				lines.push(`- ${s.kind} \`${s.name}\` — ${s.file}:${s.line}`);
+			}
+			lines.push("");
+		} else {
+			lines.push("No supertypes found.", "");
+		}
 
-	if (result.subtypes.length > 0) {
-		lines.push(`### Subtypes (${result.subtypes.length})`);
-		for (const s of result.subtypes) {
-			lines.push(`- ${s.kind} \`${s.name}\` — ${s.file}:${s.line}`);
+		if (result.subtypes.length > 0) {
+			lines.push(`### Subtypes (${result.subtypes.length})`);
+			for (const s of result.subtypes) {
+				lines.push(`- ${s.kind} \`${s.name}\` — ${s.file}:${s.line}`);
+			}
+			lines.push("");
+		} else {
+			lines.push("No subtypes found.", "");
 		}
-		lines.push("");
-	} else {
-		lines.push("No subtypes found.", "");
 	}
 
 	const nextItems = getNextForTool("type_hierarchy");

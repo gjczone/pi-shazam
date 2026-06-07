@@ -68,6 +68,34 @@ export function isNonSourceFile(file: string): boolean {
 }
 
 /**
+ * Check if a file path is in an MCP/tools registration directory.
+ * These files export functions that are called dynamically by frameworks.
+ */
+function isRegistrationFile(file: string): boolean {
+	return (
+		file.includes("/mcp/") ||
+		file.includes("/hooks/") ||
+		file.endsWith("_factory.ts") ||
+		file.endsWith("_factory.js") ||
+		file.endsWith("index.ts") ||
+		file.endsWith("index.js")
+	);
+}
+
+/**
+ * Check if a symbol name matches a registration pattern.
+ * Registration functions are typically called dynamically by frameworks.
+ */
+function isRegistrationSymbol(name: string): boolean {
+	return (
+		name.startsWith("register") ||
+		name.startsWith("createTool") ||
+		name === "execute" ||
+		name === "handler"
+	);
+}
+
+/**
  * Shared orphan symbol detection.
  *
  * Single implementation used by baseline diff and verify tools.
@@ -79,6 +107,8 @@ export function isNonSourceFile(file: string): boolean {
  *  - High-PageRank exported symbols (likely public API)
  *  - Anonymous functions (no name to reference)
  *  - Test files
+ *  - Registration functions (register*, createTool) called by MCP/extension frameworks
+ *  - Exported symbols in registration/entry-point files (called externally)
  */
 export function findOrphans(graph: RepoGraph): { name: string; kind: string; file: string; line: number }[] {
 	const orphans: { name: string; kind: string; file: string; line: number }[] = [];
@@ -86,9 +116,16 @@ export function findOrphans(graph: RepoGraph): { name: string; kind: string; fil
 		if (isNonSourceFile(sym.file)) continue;
 		const incoming = graph.incoming.get(sym.id);
 		if (!incoming || incoming.length === 0) {
+			// Skip high-PageRank exported symbols (public API)
 			if (sym.visibility === "exported" && sym.pagerank > 0.01) continue;
+			// Skip anonymous functions
 			if (sym.kind === "anonymous_function") continue;
+			// Skip test files
 			if (sym.file.includes("tests/") || sym.file.includes(".test.")) continue;
+			// Skip registration functions called dynamically by frameworks
+			if (isRegistrationSymbol(sym.name)) continue;
+			// Skip exported symbols in registration/entry-point files
+			if (sym.visibility === "exported" && isRegistrationFile(sym.file)) continue;
 			orphans.push({ name: sym.name, kind: sym.kind, file: sym.file, line: sym.line });
 		}
 	}
