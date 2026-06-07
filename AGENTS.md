@@ -119,7 +119,6 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 │   └── safe_delete.ts      ← Prerequisite: safety gate before removing (verify zero refs first)
 └── hooks/                  ← Automatic (not LLM-visible)
     ├── before-start.ts     ← Inject overview into system prompt
-    ├── after-write.ts      ← Auto verify + fix after write/edit
     ├── pre-edit.ts         ← Pre-edit guard: detect multi-file edits, suggest shazam_impact
     ├── tool-logger.ts      ← Log shazam calls to ~/.pi/hooks/audit/shazam-calls.log
     └── shazam-guide.ts     ← Inject shazam usage guidance into system prompt
@@ -138,7 +137,6 @@ mcp/                        ← MCP server for non-Pi clients
 | Hook | Event | Auto? | Effect | Value |
 |------|-------|-------|--------|-------|
 | `before-start` | `before_agent_start` | YES | Injects project overview + proactive recommendations into system prompt | HIGH — LLM has structural awareness before reading code |
-| `after-write` | `tool_result` (write/edit) | DISABLED | Was: auto-verify after every write. Now: no-op (LLM calls shazam_verify manually) | N/A — disabled to avoid noise |
 | `pre-edit` | `tool_call` (write/edit) | YES | Detects multi-file edits, warns about blast radius | MEDIUM — prevents accidental multi-file breaks |
 | `shazam-guide` | `tool_result` | YES | Suggests related shazam tools based on context | MEDIUM — helps LLM discover tools |
 | `tool-logger` | `tool_call` + `tool_result` | YES | Logs all shazam tool calls to JSONL file | LOW — debugging only, no LLM impact |
@@ -208,7 +206,7 @@ mcp/                        ← MCP server for non-Pi clients
 
 - **Overview injection**: `before_agent_start` event → `core/treesitter` scan (with persistent disk cache) → `core/pagerank` → format summary → inject into `systemPrompt` array
 - **Tool call**: LLM calls tool → `tools/*.execute()` → `core/scanner` (disk cache → in-memory cache → incremental/full scan) → `core/` analysis → optional LSP enrichment via `tools/lsp_enrich.ts` (5s timeout, tree-sitter fallback) → return `AgentToolResult`
-- **Auto-verify**: DISABLED — after-write hook is a no-op. LLM calls `shazam_verify` manually when needed.
+- **Verification**: LLM calls `shazam_verify` manually when needed (no automatic verification after edits).
 - **Tool logging**: `tool_call` + `tool_result` events → `hooks/tool-logger` → writes JSONL to `~/.pi/hooks/audit/shazam-calls.log`
 - **Agent guidance**: `before_agent_start` → `hooks/shazam-guide` → injects tool list into system prompt; `tool_result` (write/edit) → nudges `shazam_verify`; `tool_call` (grep/find) → nudges `shazam_codesearch`
 - **MCP tool calls**: MCP client → JSON-RPC over stdio → `mcp/tools.ts` → `core/` analysis → return `{ content: [...] }`

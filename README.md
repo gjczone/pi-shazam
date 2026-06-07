@@ -18,7 +18,7 @@ pi-shazam also supports **MCP (Model Context Protocol)**, allowing any compatibl
 - **PageRank ranking** — Identify core files and key symbols
 - **LSP integration** — Type checking, diagnostics, type hierarchy (5 languages)
 - **Incremental analysis** — Baseline comparison, focus on changes
-- **Smart verification** — Auto-check after edits, PASS/WARN/FAIL verdict
+- **Smart verification** — Post-edit verification with PASS/WARN/FAIL verdict
 
 ## Quick Start
 
@@ -78,7 +78,6 @@ Works with all MCP-compatible clients. Same 14 tools, same analysis engine.
 | Hook | Trigger | What It Does |
 |------|---------|--------------|
 | `before_agent_start` | Agent starts | Inject project structure overview into system prompt |
-| `after_write/edit` | After edit | Auto-verify changes, report structural impact |
 | `shazam-guide` | Key lifecycle | Guide agent to use tools at the right moments |
 | `pre-edit-guard` | Before write | Detect multi-file edits, suggest `shazam_impact` first |
 
@@ -139,7 +138,6 @@ pi-shazam (npm package)
 │
 ├── hooks/                          Automatic hooks
 │   ├── before-start.ts             Inject project overview
-│   ├── after-write.ts              Auto-verify after edits
 │   ├── pre-edit.ts                 Multi-file edit protection
 │   ├── shazam-guide.ts             Tool usage guidance
 │   └── tool-logger.ts              Usage analytics
