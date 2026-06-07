@@ -132,6 +132,8 @@ export class LspClient {
 	private _openedFiles = new Set<string>();
 	private _serverCapabilities: Record<string, unknown> = {};
 	private _running = false;
+	private _initialized = false;
+	private _initPromise: Promise<void> | null = null;
 	private _log: (msg: string) => void;
 
 	// Store notifications (e.g., diagnostics) received outside request-response
@@ -152,6 +154,10 @@ export class LspClient {
 
 	isRunning(): boolean {
 		return this._running;
+	}
+
+	isInitialized(): boolean {
+		return this._initialized;
 	}
 
 	isFileOpened(filePath: string): boolean {
@@ -219,6 +225,16 @@ export class LspClient {
 			throw new Error("LSP client not started");
 		}
 
+		// Double-initialize guard: if already initialized, return immediately.
+		// If another init is in-flight, await its promise.
+		if (this._initialized) return;
+		if (this._initPromise) return this._initPromise;
+
+		this._initPromise = this._doInitialize();
+		await this._initPromise;
+	}
+
+	private async _doInitialize(): Promise<void> {
 		const initParams: InitializeParams = {
 			processId: process.pid,
 			rootUri: pathToUri(this.workspaceRoot),
@@ -282,13 +298,14 @@ export class LspClient {
 		};
 
 		const result = await this.withTimeout(
-			this.connection.sendRequest<InitializeResult>("initialize", initParams),
+			this.connection!.sendRequest<InitializeResult>("initialize", initParams),
 			10000,
 		);
 
 		this._serverCapabilities = ((result as InitializeResult).capabilities as Record<string, unknown>) ?? {};
 
-		await this.connection.sendNotification("initialized", {});
+		await this.connection!.sendNotification("initialized", {});
+		this._initialized = true;
 		this._log(`LSP initialized: ${this.command[0]}`);
 	}
 

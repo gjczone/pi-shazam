@@ -282,7 +282,7 @@ export async function executeHover(graph: RepoGraph, name: string, file?: string
 	// Try LSP hover
 	const lspManager = getLspManager();
 	if (lspManager) {
-		const serverInfo = lspManager.getServerForFile(symbol.file);
+		const serverInfo = await lspManager.getServerForFile(symbol.file);
 		if (serverInfo) {
 			const client = serverInfo.client;
 			try {

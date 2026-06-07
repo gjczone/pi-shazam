@@ -155,6 +155,19 @@ describe("lsp/client", () => {
 		it("should have an initialize method", () => {
 			expect(typeof client.initialize).toBe("function");
 		});
+
+		it("should expose isInitialized method", () => {
+			expect(typeof client.isInitialized).toBe("function");
+		});
+
+		it("should start with isInitialized false", () => {
+			expect(client.isInitialized()).toBe(false);
+		});
+
+		it("isInitialized should be false when client not started", () => {
+			const result = client.isInitialized();
+			expect(result).toBe(false);
+		});
 	});
 
 	describe("LspClient protocol methods", () => {
@@ -261,6 +274,57 @@ describe("lsp/client", () => {
 });
 
 // ── close() tests ──────────────────────────────────────────────────────────────
+
+describe("LspClient initialize()", () => {
+	beforeEach(() => {
+		mockConnForStart = null;
+	});
+
+	it("should return initialized state after successful init", async () => {
+		const conn = createMockConnection();
+		conn.sendRequest.mockResolvedValue({
+			capabilities: { hoverProvider: true },
+		});
+		const { client } = createStartedClient(conn);
+
+		await client.initialize();
+		expect(client.isInitialized()).toBe(true);
+	});
+
+	it("should not send duplicate initialize when called twice", async () => {
+		const conn = createMockConnection();
+		conn.sendRequest.mockResolvedValue({
+			capabilities: { hoverProvider: true },
+		});
+		const { client } = createStartedClient(conn);
+
+		await Promise.all([client.initialize(), client.initialize()]);
+
+		// Should only have sent one initialize request
+		const initCalls = conn.sendRequest.mock.calls.filter((c: any[]) => c[0] === "initialize");
+		expect(initCalls.length).toBe(1);
+	});
+
+	it("should await in-flight initialize on concurrent calls", async () => {
+		const conn = createMockConnection();
+		let resolveInit: (v: unknown) => void = () => {};
+		conn.sendRequest.mockReturnValue(new Promise((resolve) => { resolveInit = resolve; }));
+		const { client } = createStartedClient(conn);
+
+		// Start concurrent initializations
+		const init1 = client.initialize();
+		const init2 = client.initialize();
+
+		// Resolve the first
+		resolveInit({ capabilities: {} });
+
+		await Promise.all([init1, init2]);
+
+		// Should only have sent one initialize request
+		const initCalls = conn.sendRequest.mock.calls.filter((c: any[]) => c[0] === "initialize");
+		expect(initCalls.length).toBe(1);
+	});
+});
 
 describe("LspClient close()", () => {
 	// ═══ Bug 1: Zombie process — process reference nulled before timeout fires ═══

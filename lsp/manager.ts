@@ -308,7 +308,7 @@ export class LspManager {
 	 * Get the LSP client for a given file, creating one if needed.
 	 * Returns null if no LSP server is available for the file's language.
 	 */
-	getServerForFile(filePath: string): LspServerInfo | null {
+	async getServerForFile(filePath: string): Promise<LspServerInfo | null> {
 		// Skip vendored / generated / cache directories
 		if (shouldSkipPath(filePath)) return null;
 
@@ -322,10 +322,10 @@ export class LspManager {
 	/**
 	 * Get or create an LSP client for a language.
 	 */
-	getServerForLanguage(language: string, filePath?: string): LspServerInfo | null {
-		// Return existing server if already running
+	async getServerForLanguage(language: string, filePath?: string): Promise<LspServerInfo | null> {
+		// Return existing server if already initialized
 		const existing = this.servers.get(language);
-		if (existing && existing.client.isRunning()) return existing;
+		if (existing && existing.client.isInitialized()) return existing;
 		// Remove dead client so re-detection can happen
 		if (existing) {
 			this.servers.delete(language);
@@ -344,13 +344,10 @@ export class LspManager {
 
 		try {
 			client.start();
+			// Initialize immediately so tools get a ready client
+			await client.initialize();
 		} catch (err) {
-			this.log(`Failed to start LSP for ${language}: ${err}`);
-			return null;
-		}
-
-		if (!client.isRunning()) {
-			this.log(`LSP process for ${language} died immediately after start`);
+			this.log(`Failed to start/initialize LSP for ${language}: ${err}`);
 			return null;
 		}
 
@@ -374,14 +371,9 @@ export class LspManager {
 		const languages = this.detectLanguages();
 
 		const promises = languages.map(async (language) => {
-			const info = this.getServerForLanguage(language);
+			const info = await this.getServerForLanguage(language);
 			if (info) {
-				try {
-					await info.client.initialize();
-					this.log(`LSP initialized: ${language} (${info.serverName})`);
-				} catch (err) {
-					this.log(`LSP init failed for ${language}: ${err}`);
-				}
+				this.log(`LSP initialized: ${language} (${info.serverName})`);
 			}
 		});
 

@@ -39,10 +39,10 @@ describe("lsp/manager", () => {
 	});
 
 	describe("getServerForFile", () => {
-		it("should return null for unsupported file types", () => {
+		it("should return null for unsupported file types", async () => {
 			const manager = new LspManager("/test/project");
 			// Manager starts with no servers, and .rb is not in our 6-language map
-			expect(manager.getServerForFile("/test/script.rb")).toBeNull();
+			expect(await manager.getServerForFile("/test/script.rb")).toBeNull();
 		});
 	});
 });

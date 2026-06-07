@@ -331,7 +331,7 @@ async function runLspDiagnostics(
 	const serversUsed = new Set<string>();
 
 	for (const filePath of targetFiles) {
-		const serverInfo = lspManager.getServerForFile(filePath);
+		const serverInfo = await lspManager.getServerForFile(filePath);
 		if (!serverInfo) continue;
 		serversUsed.add(serverInfo.serverName);
 		try {
@@ -343,7 +343,7 @@ async function runLspDiagnostics(
 	}
 
 	for (const filePath of targetFiles) {
-		const serverInfo = lspManager.getServerForFile(filePath);
+		const serverInfo = await lspManager.getServerForFile(filePath);
 		if (!serverInfo) continue;
 		const notifications = serverInfo.client.collectDiagnostics([filePath]);
 		for (const notif of notifications) {

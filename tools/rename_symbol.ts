@@ -125,7 +125,7 @@ export async function executeRenameSymbol(
 	}
 
 	// Get LSP server for the symbol's file
-	const serverInfo = lspManager.getServerForFile(symbol.file);
+	const serverInfo = await lspManager.getServerForFile(symbol.file);
 	if (!serverInfo || !serverInfo.client.isRunning()) {
 		return {
 			status: "lsp_unavailable",

@@ -35,11 +35,11 @@ export const DEFAULT_LSP_ENRICH_TIMEOUT_MS = 5000;
  * Accepts the real LspManager or a test stub.
  */
 export interface LspEnrichContext {
-	getServerForFile(filePath: string): {
+	getServerForFile(filePath: string): Promise<{
 		language: string;
 		client: LspClient;
 		workspaceRoot: string;
-	} | null;
+	} | null>;
 	getActiveServers(): {
 		language: string;
 		client: LspClient;
@@ -166,7 +166,7 @@ export async function ensureFileOpened(
 	ctx: LspEnrichContext,
 	filePath: string,
 ): Promise<{ client: LspClient; workspaceRoot: string } | null> {
-	const info = ctx.getServerForFile(filePath);
+	const info = await ctx.getServerForFile(filePath);
 	if (!info) return null;
 	if (!info.client.isRunning()) return null;
 	try {

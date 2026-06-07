@@ -97,7 +97,7 @@ export async function executeTypeHierarchy(
 	// Try LSP typeHierarchy (fixes #123)
 	const lspManager = getLspManager();
 	if (lspManager) {
-		const serverInfo = lspManager.getServerForFile(symbol.file);
+		const serverInfo = await lspManager.getServerForFile(symbol.file);
 		if (serverInfo) {
 			const client = serverInfo.client;
 			try {
