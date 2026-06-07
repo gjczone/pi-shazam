@@ -17,7 +17,6 @@ import { installPreCommitHook, removePreCommitHook, runPreCommitVerify } from ".
 
 // ── Hook registrations ───────────────────────────────────────────────────
 import { registerBeforeStartHook } from "./hooks/before-start.js";
-import { registerAfterWriteHook } from "./hooks/after-write.js";
 import { registerToolLogger } from "./hooks/tool-logger.js";
 import { registerShazamGuide } from "./hooks/shazam-guide.js";
 import { registerPreEditGuard } from "./hooks/pre-edit.js";
@@ -72,7 +71,6 @@ export default function (pi: ExtensionAPI): void {
 
 	// ── Hooks ────────────────────────────────────────────────────────────────
 	registerBeforeStartHook(pi);
-	registerAfterWriteHook(pi);
 	registerToolLogger(pi);
 	registerShazamGuide(pi);
 	registerPreEditGuard(pi);
