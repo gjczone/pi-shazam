@@ -14,6 +14,7 @@
 import type { LspClient } from "../lsp/client.js";
 import { uriToPath } from "../lsp/client.js";
 import { readFileAdaptive } from "../core/encoding.js";
+import { statSync } from "node:fs";
 import type {
 	SymbolInformation,
 	WorkspaceSymbol,
@@ -153,9 +154,13 @@ export function mapSymbolKindNumber(kind: number): string {
 
 // ── File opening helper ──────────────────────────────────────────────────────
 
+// Track file modification times for opened files to detect edits.
+const _openedFileMtimes = new Map<string, number>();
+
 /**
  * Ensure a file is opened in its LSP server (best-effort, swallow errors).
  * Reads file content via fs and sends didOpen if not already opened.
+ * If the file was already opened but its mtime changed, sends didChange.
  */
 export async function ensureFileOpened(
 	ctx: LspEnrichContext,
@@ -165,11 +170,23 @@ export async function ensureFileOpened(
 	if (!info) return null;
 	if (!info.client.isRunning()) return null;
 	try {
+		const { resolve } = await import("node:path");
+		const absPath = resolve(info.workspaceRoot, filePath);
+
 		if (!info.client.isFileOpened(filePath)) {
-			const { resolve } = await import("node:path");
-			const absPath = resolve(info.workspaceRoot, filePath);
 			const content = readFileAdaptive(absPath);
 			await info.client.didOpen(filePath, content);
+			// Track the mtime after opening
+			_openedFileMtimes.set(filePath, statSync(absPath).mtimeMs);
+		} else {
+			// File already opened — check if mtime changed
+			const currentMtime = statSync(absPath).mtimeMs;
+			const prevMtime = _openedFileMtimes.get(filePath);
+			if (prevMtime === undefined || currentMtime > prevMtime) {
+				const content = readFileAdaptive(absPath);
+				await info.client.didChange(filePath, content);
+				_openedFileMtimes.set(filePath, currentMtime);
+			}
 		}
 	} catch {
 		return null;

@@ -28,6 +28,8 @@ import type {
 	InitializeParams,
 	InitializeResult,
 	DidOpenTextDocumentParams,
+	DidChangeTextDocumentParams,
+	DidSaveTextDocumentParams,
 	Location,
 	PublishDiagnosticsParams,
 	DocumentSymbolParams,
@@ -315,6 +317,55 @@ export class LspClient {
 
 		await this.connection.sendNotification("textDocument/didOpen", params);
 		this._openedFiles.add(path.resolve(filePath));
+	}
+
+	async didChange(filePath: string, text: string): Promise<void> {
+		if (!this.connection) {
+			return null as unknown as void;
+		}
+
+		if (!this.isFileOpened(filePath)) return;
+
+		// Skip large files
+		const byteLength = Buffer.byteLength(text, "utf-8");
+		if (byteLength > MAX_LSP_FILE_SIZE) {
+			this._log(`Skipping LSP didChange for large file ${filePath} (${byteLength} bytes)`);
+			return;
+		}
+
+		const uri = pathToUri(filePath);
+
+		const params: DidChangeTextDocumentParams = {
+			textDocument: {
+				uri,
+				version: Date.now(),
+			},
+			contentChanges: [
+				{
+					text,
+				},
+			],
+		};
+
+		await this.connection.sendNotification("textDocument/didChange", params);
+	}
+
+	async didSave(filePath: string): Promise<void> {
+		if (!this.connection) {
+			return null as unknown as void;
+		}
+
+		if (!this.isFileOpened(filePath)) return;
+
+		const uri = pathToUri(filePath);
+
+		const params: DidSaveTextDocumentParams = {
+			textDocument: {
+				uri,
+			},
+		};
+
+		await this.connection.sendNotification("textDocument/didSave", params);
 	}
 
 	async request(method: string, params: unknown): Promise<unknown> {

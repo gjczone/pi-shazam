@@ -168,12 +168,87 @@ describe("lsp/client", () => {
 			expect(typeof client.didOpen).toBe("function");
 		});
 
+		it("should expose didChange method", () => {
+			expect(typeof client.didChange).toBe("function");
+		});
+
+		it("should expose didSave method", () => {
+			expect(typeof client.didSave).toBe("function");
+		});
+
 		it("should expose request method", () => {
 			expect(typeof client.request).toBe("function");
 		});
 
 		it("should expose close method", () => {
 			expect(typeof client.close).toBe("function");
+		});
+	});
+
+	describe("LspClient didChange", () => {
+		it("should return null when client not started", async () => {
+			const client = new LspClient(["mock"], "/ws", 5000);
+			const result = await client.didChange("/test/file.ts", "new content");
+			expect(result).toBeNull();
+		});
+
+		it("should skip large files", async () => {
+			const { client, conn } = createRunningClient();
+
+			// Create content larger than MAX_LSP_FILE_SIZE
+			const largeContent = "x".repeat(5 * 1024 * 1024 + 1);
+			const result = await client.didChange("/test/file.ts", largeContent);
+			// Should not throw and should not send notification
+			expect(result).toBeUndefined();
+			expect(conn.sendNotification).not.toHaveBeenCalledWith("textDocument/didChange", expect.anything());
+		});
+
+		it("should send didChange notification with full content sync", async () => {
+			const { client, conn } = createRunningClient();
+
+			// First open the file
+			const content = "const x = 1;";
+			const newContent = "const x = 2;";
+
+			// Manually add to opened files since we bypassed didOpen
+			(client as any)._openedFiles.add("/test/file.ts");
+
+			const result = await client.didChange("/test/file.ts", newContent);
+			expect(result).toBeUndefined();
+
+			// Verify didChange notification was sent
+			const calls = conn.sendNotification.mock.calls.filter((c: any[]) => c[0] === "textDocument/didChange");
+			expect(calls.length).toBe(1);
+
+			const params = calls[0][1];
+			expect(params.textDocument.uri).toContain("file.ts");
+			expect(params.contentChanges).toBeDefined();
+			expect(params.contentChanges.length).toBe(1);
+			expect(params.contentChanges[0].text).toBe(newContent);
+		});
+	});
+
+	describe("LspClient didSave", () => {
+		it("should return null when client not started", async () => {
+			const client = new LspClient(["mock"], "/ws", 5000);
+			const result = await client.didSave("/test/file.ts");
+			expect(result).toBeNull();
+		});
+
+		it("should send didSave notification", async () => {
+			const { client, conn } = createRunningClient();
+
+			// Manually add to opened files
+			(client as any)._openedFiles.add("/test/file.ts");
+
+			const result = await client.didSave("/test/file.ts");
+			expect(result).toBeUndefined();
+
+			const calls = conn.sendNotification.mock.calls.filter((c: any[]) => c[0] === "textDocument/didSave");
+			expect(calls.length).toBe(1);
+
+			const params = calls[0][1];
+			expect(params.textDocument.uri).toContain("file.ts");
 		});
 	});
 
