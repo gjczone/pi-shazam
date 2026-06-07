@@ -89,6 +89,9 @@ describe("Tool: codesearch", () => {
 		expect(result).toBeDefined();
 		expect(Array.isArray(result)).toBe(true);
 		expect(result.length).toBeGreaterThan(0);
+		expect(result[0]).toHaveProperty("sym");
+		expect(result[0]).toHaveProperty("score");
+		expect(result[0]!.score).toBeGreaterThan(0);
 	});
 });
 
