@@ -78,6 +78,16 @@ export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
 		rootMarkers: [".github", ".yaml", ".yml"] as const,
 	},
 
+	// ── JSON ──────────────────────────────────────────────────────────────────
+	{
+		language: "json",
+		serverName: "vscode-json-languageserver",
+		commandNames: ["vscode-json-languageserver"] as const,
+		args: ["--stdio"] as const,
+		fileSuffixes: [".json", ".jsonc", ".json5"] as const,
+		rootMarkers: [".git", "package.json"] as const,
+	},
+
 	// ── Rust ──────────────────────────────────────────────────────────────────
 	{
 		language: "rust",
@@ -138,6 +148,7 @@ const LSP_TIMEOUT_BY_LANGUAGE: Record<string, number> = {
 	rust: 20_000,
 	go: 8_000,
 	yaml: 8_000,
+	json: 8_000,
 };
 
 export const DEFAULT_LSP_TIMEOUT_MS = 8_000;

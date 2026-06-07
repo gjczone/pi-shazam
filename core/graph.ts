@@ -42,7 +42,6 @@ export interface RepoGraph {
 	fileImports: Map<string, string[]>;
 	fileCalls: Map<string, [string, number, string][]>;
 	fileImportBindings: Map<string, JSImportBinding[]>;
-	fileExports: Map<string, JSExportBinding[]>;
 }
 
 /** A JS/TS import binding */
@@ -52,15 +51,6 @@ export interface JSImportBinding {
 	module: string;
 	line: number;
 	kind: "default" | "named" | "namespace";
-}
-
-/** A JS/TS export binding */
-export interface JSExportBinding {
-	exportedName: string;
-	sourceName: string | null;
-	module: string | null;
-	line: number;
-	kind: "local" | "reexport" | "namespace" | "wildcard";
 }
 
 // ── Edge counting ────────────────────────────────────────────────────────────
@@ -85,7 +75,6 @@ export function createRepoGraph(): RepoGraph {
 		fileImports: new Map(),
 		fileCalls: new Map(),
 		fileImportBindings: new Map(),
-		fileExports: new Map(),
 	};
 }
 
@@ -153,13 +142,6 @@ export interface SerializedEdge {
 	confidence?: number;
 }
 
-export interface SerializedGraph {
-	symbols: SerializedSymbol[];
-	edges: SerializedEdge[];
-	version: number;
-	timestamp: number;
-}
-
 export function serializeSymbol(sym: Symbol): SerializedSymbol {
 	return {
 		id: sym.id,
@@ -188,25 +170,6 @@ export function serializeEdge(edge: Edge): SerializedEdge {
 	};
 }
 
-export function serializeGraph(graph: RepoGraph): SerializedGraph {
-	const symbols: SerializedSymbol[] = [];
-	for (const sym of graph.symbols.values()) {
-		symbols.push(serializeSymbol(sym));
-	}
-	const edges: SerializedEdge[] = [];
-	for (const [, edgeList] of graph.outgoing) {
-		for (const edge of edgeList) {
-			edges.push(serializeEdge(edge));
-		}
-	}
-	return {
-		symbols,
-		edges,
-		version: 1,
-		timestamp: Date.now(),
-	};
-}
-
 export interface SerializedGraphV2 {
 	version: 2;
 	timestamp: number;
@@ -216,7 +179,6 @@ export interface SerializedGraphV2 {
 	fileImports: Record<string, string[]>;
 	fileCalls: Record<string, [string, number, string][]>;
 	fileImportBindings: Record<string, JSImportBinding[]>;
-	fileExports: Record<string, JSExportBinding[]>;
 	fileMtimes: Record<string, number>;
 }
 
@@ -244,9 +206,6 @@ export function serializeGraphV2(graph: RepoGraph, fileMtimes: Map<string, numbe
 	const fileImportBindings: Record<string, JSImportBinding[]> = {};
 	for (const [k, v] of graph.fileImportBindings) fileImportBindings[k] = v;
 
-	const fileExports: Record<string, JSExportBinding[]> = {};
-	for (const [k, v] of graph.fileExports) fileExports[k] = v;
-
 	const fileMtimesObj: Record<string, number> = {};
 	for (const [k, v] of fileMtimes) fileMtimesObj[k] = v;
 
@@ -259,7 +218,6 @@ export function serializeGraphV2(graph: RepoGraph, fileMtimes: Map<string, numbe
 		fileImports,
 		fileCalls,
 		fileImportBindings,
-		fileExports,
 		fileMtimes: fileMtimesObj,
 	};
 }
@@ -314,10 +272,6 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 	for (const [k, v] of Object.entries(data.fileImportBindings)) {
 		graph.fileImportBindings.set(k, v);
 	}
-	for (const [k, v] of Object.entries(data.fileExports)) {
-		graph.fileExports.set(k, v);
-	}
-
 	return graph;
 }
 
@@ -481,12 +435,12 @@ export function compareGraphSnapshots(
 		modifiedSymbols,
 		callChainChanges: {
 			newCalls: edgesAdded.slice(0, 20).map((e) => {
-				const [from, to, kind] = e.split("|");
-				return { from, to, kind };
+				const [from, to, kind] = e.split("|", 3);
+				return { from: from!, to: to!, kind: kind! };
 			}),
 			removedCalls: edgesRemoved.slice(0, 20).map((e) => {
-				const [from, to, kind] = e.split("|");
-				return { from, to, kind };
+				const [from, to, kind] = e.split("|", 3);
+				return { from: from!, to: to!, kind: kind! };
 			}),
 		},
 	};

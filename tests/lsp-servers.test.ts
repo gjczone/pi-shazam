@@ -3,11 +3,11 @@ import { LSP_SERVER_SPECS, suffixToLanguage, languageForSuffix } from "../lsp/se
 
 describe("lsp/servers", () => {
 	describe("LSP_SERVER_SPECS", () => {
-		it("should contain exactly 5 language entries", () => {
+		it("should contain exactly 6 language entries", () => {
 			const languages = new Set(LSP_SERVER_SPECS.map((s) => s.language));
-			// 5 languages: python, typescript, go, yaml, rust
-			// python has 2 specs (pyright + pylsp), so specs count >= 6
-			expect(languages.size).toBe(5);
+			// 6 languages: python, typescript, go, yaml, json, rust
+			// python has 2 specs (pyright + pylsp), so specs count >= 7
+			expect(languages.size).toBe(6);
 		});
 
 		it("should have python specs (pyright + pylsp)", () => {

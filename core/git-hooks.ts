@@ -10,7 +10,7 @@
  * through the MCP entry point.
  */
 
-import { writeFileSync, chmodSync, existsSync, readFileSync } from "node:fs";
+import { writeFileSync, chmodSync, existsSync, readFileSync, unlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { execSync } from "node:child_process";
 
@@ -251,7 +251,7 @@ export function removePreCommitHook(projectRoot: string): boolean {
 		chmodSync(hookPath, 0o755);
 	} else {
 		// Remove the shazam-installed hook
-		writeFileSync(hookPath, "", "utf-8");
+		unlinkSync(hookPath);
 	}
 
 	return true;
@@ -321,13 +321,25 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 		// ── Python ─────────────────────────────────────────────────────────
 		if (existsSync(join(projectRoot, "pyproject.toml")) || existsSync(join(projectRoot, "setup.py"))) {
 			// Try pyright first, then mypy
+			let pyrightAvailable = false;
 			try {
 				execSync("pyright . 2>/dev/null", {
 					cwd: projectRoot,
 					encoding: "utf-8",
 					timeout: 60000,
 				});
-			} catch {
+				pyrightAvailable = true;
+			} catch (err: any) {
+				if (err.code === "ENOENT" || err.status === 127) {
+					// pyright not installed — try mypy
+				} else {
+					// pyright found type errors
+					errors.push("pyright found type errors");
+					pyrightAvailable = true; // already reported, don't fall through
+				}
+			}
+
+			if (!pyrightAvailable) {
 				try {
 					execSync("mypy . 2>/dev/null", {
 						cwd: projectRoot,

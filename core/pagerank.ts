@@ -85,6 +85,19 @@ export function calculatePageRank(
 			newPr.set(id, score);
 		}
 
+		// Dangling node redistribution: nodes with zero outgoing edges distribute
+		// their accumulated score uniformly to all nodes (standard PageRank).
+		let danglingSum = 0;
+		for (const id of ids) {
+			if ((outW.get(id) || 0) === 0) {
+				danglingSum += pr.get(id) || 0;
+			}
+		}
+		const danglingContrib = (damping * danglingSum) / n;
+		for (const id of ids) {
+			newPr.set(id, (newPr.get(id) || 0) + danglingContrib);
+		}
+
 		// Normalize
 		let total = 0;
 		for (const score of newPr.values()) {

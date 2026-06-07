@@ -30,7 +30,7 @@ if (typeof _QueryCtor !== "function") {
 const Query = _QueryCtor as new (language: unknown, source: string) => QueryInstance;
 
 import { createSymbol } from "./graph.js";
-import type { Symbol, JSImportBinding, JSExportBinding } from "./graph.js";
+import type { Symbol, JSImportBinding } from "./graph.js";
 import { QUERIES } from "./treesitter-queries.js";
 
 // ── Runtime type stubs for tree-sitter (no @types available) ─────────────────
@@ -223,7 +223,7 @@ export class TreeSitterAdapter {
 			(scanStr.match(/\(/g) || []).length + (scanStr.match(/\{/g) || []).length + (scanStr.match(/\[/g) || []).length;
 		const closeCount =
 			(scanStr.match(/\)/g) || []).length + (scanStr.match(/\}/g) || []).length + (scanStr.match(/\]/g) || []).length;
-		if (Math.abs(openCount - closeCount) > 100 || Math.max(openCount, closeCount) > 1000) {
+		if (Math.abs(openCount - closeCount) > 100 || Math.max(openCount, closeCount) > 10_000) {
 			this.log(`Extreme nesting risk detected (${openCount} open, ${closeCount} close), skipping`);
 			return null;
 		}
@@ -567,48 +567,6 @@ export class TreeSitterAdapter {
 				a.module.localeCompare(b.module) ||
 				a.localName.localeCompare(b.localName) ||
 				a.importedName.localeCompare(b.importedName) ||
-				a.kind.localeCompare(b.kind),
-		);
-	}
-
-	extractJsTsExportBindings(tree: Tree, lang: string): JSExportBinding[] {
-		if (!["javascript", "typescript", "tsx"].includes(lang)) return [];
-
-		const bindings = new Map<string, JSExportBinding>();
-
-		for (const node of tree.rootNode.children) {
-			if (node.type !== "export_statement") continue;
-
-			const line = node.startPosition.row + 1;
-			const module = this._moduleLiteral(node);
-			const clause = this._firstChildOfType(node, "export_clause");
-
-			if (clause) {
-				const kind: JSExportBinding["kind"] = module ? "reexport" : "local";
-				for (const spec of clause.children) {
-					if (spec.type !== "export_specifier") continue;
-					const src = this._idText(spec.childForFieldName?.("name")) || "";
-					const alias = this._idText(spec.childForFieldName?.("alias")) || src;
-					if (src && alias) {
-						const key = `${alias}:${src}:${module || ""}:${line}`;
-						bindings.set(key, {
-							exportedName: alias,
-							sourceName: src,
-							module: module || null,
-							line,
-							kind,
-						});
-					}
-				}
-			}
-		}
-
-		return [...bindings.values()].sort(
-			(a, b) =>
-				a.line - b.line ||
-				a.exportedName.localeCompare(b.exportedName) ||
-				(a.sourceName || "").localeCompare(b.sourceName || "") ||
-				(a.module || "").localeCompare(b.module || "") ||
 				a.kind.localeCompare(b.kind),
 		);
 	}

@@ -11,14 +11,11 @@ import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import {
-	serializeGraph,
-	serializeSymbol,
-	serializeEdge,
 	serializeGraphV2,
 	deserializeGraphV2,
 	compareGraphSnapshots,
 } from "./graph.js";
-import type { RepoGraph, SerializedGraph, GraphDiff, Symbol, Edge } from "./graph.js";
+import type { RepoGraph, GraphDiff, Symbol, Edge, SerializedSymbol, SerializedEdge } from "./graph.js";
 
 // ── Cache directory management ───────────────────────────────────────────────
 
@@ -53,23 +50,22 @@ export function getCachePaths(projectPath: string): {
 	};
 }
 
-// ── Baseline save/load ───────────────────────────────────────────────────────
+// ── Baseline load (V1 format, for backward compatibility) ────────────────────
 
 /**
- * Save the current graph as a baseline snapshot.
+ * V1 baseline data format (kept for reading legacy baseline files).
  */
-export function saveBaseline(graph: RepoGraph, projectPath: string): string {
-	const { symbols } = getCachePaths(projectPath);
-	const serialized = serializeGraph(graph);
-	mkdirSync(dirname(symbols), { recursive: true });
-	writeFileSync(symbols, JSON.stringify(serialized, null, 2), "utf-8");
-	return symbols;
+interface BaselineData {
+	symbols: SerializedSymbol[];
+	edges: SerializedEdge[];
+	version: number;
+	timestamp: number;
 }
 
 /**
- * Load a previously saved baseline snapshot.
+ * Load a previously saved baseline snapshot (V1 format).
  */
-export function loadBaseline(projectPath: string): SerializedGraph | null {
+export function loadBaseline(projectPath: string): BaselineData | null {
 	const { symbols } = getCachePaths(projectPath);
 	if (!existsSync(symbols)) return null;
 	try {
@@ -78,8 +74,9 @@ export function loadBaseline(projectPath: string): SerializedGraph | null {
 		if (!data || !Array.isArray(data.symbols) || !Array.isArray(data.edges)) {
 			return null;
 		}
-		return data as SerializedGraph;
-	} catch {
+		return data as BaselineData;
+	} catch (err) {
+		console.warn(`[pi-shazam] loadBaseline: failed to parse baseline cache: ${err}`);
 		return null;
 	}
 }
@@ -143,7 +140,8 @@ export function loadGraphCache(cachePath: string): GraphCacheData | null {
 		}
 
 		return { graph, fileMtimes, timestamp: data.timestamp };
-	} catch {
+	} catch (err) {
+		console.warn(`[pi-shazam] loadGraphCache: failed to parse graph cache: ${err}`);
 		return null;
 	}
 }
@@ -151,4 +149,4 @@ export function loadGraphCache(cachePath: string): GraphCacheData | null {
 /**
  * Re-export serialization helpers for convenience.
  */
-export { serializeGraph, serializeSymbol, serializeEdge, compareGraphSnapshots };
+export { compareGraphSnapshots };

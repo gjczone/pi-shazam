@@ -45,7 +45,6 @@ export function readFileAdaptive(filePath: string): string {
 			throw err; // re-throw our size error
 		}
 		// stat failed (permission, missing) — fall through to readFileSync which will error with a clearer message
-		fileSize = 0;
 	}
 	const buffer = readFileSync(filePath);
 

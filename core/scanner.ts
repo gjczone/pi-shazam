@@ -586,6 +586,9 @@ function collectSourceFiles(root: string, maxFiles: number): string[] {
 				if (SKIP_DIRS.has(entry.name)) continue;
 				if (entry.name.startsWith(".") && !SKIP_DIRS.has(entry.name)) continue;
 				walk(join(dir, entry.name));
+			} else if (entry.isSymbolicLink()) {
+				// Symlinks are silently skipped to avoid cycles and
+				// duplicate processing of linked directories.
 			} else if (entry.isFile()) {
 				const ext = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();
 				if (SOURCE_EXTS.has(ext)) {
@@ -629,6 +632,10 @@ function resolveImport(importPath: string, fromFile: string, root: string, graph
 			`${resolved}.tsx`,
 			`${resolved}.js`,
 			`${resolved}.jsx`,
+			`${resolved}.mjs`,
+			`${resolved}.cjs`,
+			`${resolved}.mts`,
+			`${resolved}.cts`,
 			`${resolved}/index.ts`,
 			`${resolved}/index.tsx`,
 			`${resolved}/index.js`,

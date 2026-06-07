@@ -11,9 +11,6 @@ export interface QueryDict {
 		class?: string;
 		import?: string;
 		call?: string;
-		http_route?: string;
-		http_route_nestjs?: string;
-		http_route_explicit?: string;
 	};
 }
 
@@ -188,25 +185,6 @@ export const QUERIES: QueryDict = {
 		call: `\
 (invocation_expression function: (identifier) @name) @reference.call
 (invocation_expression function: (member_access_expression name: (identifier) @name)) @reference.call
-`,
-	},
-	php: {
-		function: `\
-(function_definition name: (name) @name) @definition.function
-(method_declaration name: (name) @name) @definition.method
-`,
-		class: `\
-(class_declaration name: (name) @name) @definition.class
-(interface_declaration name: (name) @name) @definition.interface
-(trait_declaration name: (name) @name) @definition.trait
-(enum_declaration name: (name) @name) @definition.enum
-`,
-		import: `\
-(namespace_use_declaration (qualified_name) @name)
-`,
-		call: `\
-(function_call_expression function: (name) @name) @reference.call
-(member_call_expression name: (name) @name) @reference.call
 `,
 	},
 	ruby: {
