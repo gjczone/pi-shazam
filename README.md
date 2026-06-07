@@ -105,7 +105,8 @@ pi-shazam is published via npm with automatic platform support:
 |----------|--------------|--------|
 | **Linux** | x64, arm64 | Fully supported |
 | **macOS** | x64 (Intel), arm64 (Apple Silicon) | Fully supported |
-| **Windows** | x64 | Fully supported |
+
+> **Note**: Windows is not supported due to path handling differences.
 
 ### Dependencies
 
