@@ -106,7 +106,7 @@ export function registerCodesearch(pi: ExtensionAPI): void {
 	});
 }
 
-export function executeCodesearch(graph: RepoGraph, query: string, topN?: number): Symbol[] {
+export function executeCodesearch(graph: RepoGraph, query: string, topN?: number): { sym: Symbol; score: number }[] {
 	const limit = topN ?? 20;
 	const lower = query.toLowerCase();
 	const tokens = tokenize(query);
@@ -151,7 +151,7 @@ export function executeCodesearch(graph: RepoGraph, query: string, topN?: number
 	}
 
 	scored.sort((a, b) => b.score - a.score);
-	return scored.slice(0, limit).map((s) => s.sym);
+	return scored.slice(0, limit);
 }
 
 function tokenize(query: string): string[] {
@@ -190,7 +190,7 @@ export interface CodesearchHit {
  */
 export function mergeResults(
 	graph: RepoGraph,
-	bm25Syms: Symbol[],
+	bm25Results: { sym: Symbol; score: number }[],
 	lspHits: EnrichedSymbolHit[],
 	topN?: number,
 ): CodesearchHit[] {
@@ -198,12 +198,10 @@ export function mergeResults(
 	const seen = new Set<string>();
 	const out: CodesearchHit[] = [];
 
-	// Score BM25 results by position (preserves their ranking)
-	let bm25Score = 1000;
-	const bm25ById = new Map<string, number>();
-	for (const sym of bm25Syms) {
-		bm25ById.set(sym.id, bm25Score);
-		bm25Score -= 1;
+	// Build map of BM25 scores by symbol ID
+	const bm25ScoreById = new Map<string, number>();
+	for (const { sym, score } of bm25Results) {
+		bm25ScoreById.set(sym.id, score);
 	}
 
 	// LSP hits first
@@ -214,7 +212,7 @@ export function mergeResults(
 
 		const graphSym = findGraphSymbol(graph, hit.name, hit.file, hit.line);
 		if (graphSym) {
-			const base = bm25ById.get(graphSym.id) ?? 0;
+			const base = bm25ScoreById.get(graphSym.id) ?? 0;
 			out.push({ sym: graphSym, score: base + LSP_BOOST, source: "lsp+bm25" });
 		} else {
 			// Synthesize a Symbol from LSP hit
@@ -233,16 +231,16 @@ export function mergeResults(
 				params: "",
 				pagerank: 0,
 			};
-			out.push({ sym: synth, score: 1000 + LSP_BOOST, source: "lsp" });
+			out.push({ sym: synth, score: LSP_BOOST, source: "lsp" });
 		}
 	}
 
 	// BM25 hits next, skipping duplicates
-	for (const sym of bm25Syms) {
+	for (const { sym, score } of bm25Results) {
 		const key = `${sym.file}:${sym.line}:${sym.name}`;
 		if (seen.has(key)) continue;
 		seen.add(key);
-		out.push({ sym, score: bm25ById.get(sym.id) ?? 0, source: "bm25" });
+		out.push({ sym, score, source: "bm25" });
 		if (out.length >= limit) break;
 	}
 
@@ -297,7 +295,7 @@ interface FulltextMatch {
 	text: string;
 }
 
-function executeFulltextSearch(query: string, topN?: number): FulltextMatch[] {
+export function executeFulltextSearch(query: string, topN?: number): FulltextMatch[] {
 	const limit = topN ?? 20;
 
 	// Try ripgrep first (fastest, respects .gitignore)
@@ -351,10 +349,18 @@ function parseRipgrepOutput(output: string, query: string, limit: number): Fullt
 		// Skip context lines (starting with -)
 		if (line.startsWith("-")) continue;
 
-		const match = line.match(/^([^:]+):(\d+):(.+)/);
+		// Match pattern: <file>:<line>:<content>
+		// Handle Windows paths (C:\...) by looking for the last colon before digits
+		const match = line.match(/^(.+):(\d+):(.+)/);
 		if (match) {
+			let file = match[1]!;
+			// Fix Windows paths: if file ends with a drive letter like "C", add back the colon
+			if (/^[A-Za-z]$/.test(file) && i + 1 < lines.length) {
+				// This is likely a Windows path split incorrectly — skip
+				continue;
+			}
 			results.push({
-				file: match[1]!,
+				file,
 				line: parseInt(match[2]!, 10),
 				column: match[3]!.search(new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")) + 1 || 1,
 				text: match[3]!.trim(),

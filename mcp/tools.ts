@@ -7,7 +7,7 @@ import { z } from "zod";
 import type { RepoGraph } from "../core/graph.js";
 import { executeOverview } from "../tools/overview.js";
 import { executeImpact } from "../tools/impact.js";
-import { executeCodesearch } from "../tools/codesearch.js";
+import { executeCodesearch, executeFulltextSearch } from "../tools/codesearch.js";
 import { executeSymbolWithMode } from "../tools/symbol.js";
 import { executeFileDetail } from "../tools/file_detail.js";
 import { executeCallChain, getFlatReferences, formatFlatReferences } from "../tools/call_chain.js";
@@ -109,8 +109,13 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 				target: z.enum(["symbol", "code"]).optional().default("symbol").describe("symbol or code"),
 			}),
 		},
-		withLogging("shazam_codesearch", async ({ query }) => {
-			const results = executeCodesearch(graph, query as string);
+		withLogging("shazam_codesearch", async ({ query, target }) => {
+			if (target === "code") {
+				const results = executeFulltextSearch(query as string);
+				return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+			}
+			const scored = executeCodesearch(graph, query as string);
+			const results = scored.map(({ sym, score }) => ({ ...sym, score }));
 			return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
 		}),
 	);
@@ -263,10 +268,11 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			inputSchema: z.object({
 				symbol: z.string().describe("Current symbol name to rename"),
 				newName: z.string().describe("New symbol name"),
+				dryRun: z.boolean().optional().default(false).describe("Preview only, do not modify files"),
 			}),
 		},
-		withLogging("shazam_rename_symbol", async ({ symbol, newName }) => {
-			const result = executeRenameSymbol(graph, symbol as string, newName as string);
+		withLogging("shazam_rename_symbol", async ({ symbol, newName, dryRun }) => {
+			const result = await executeRenameSymbol(graph, symbol as string, newName as string, dryRun as boolean);
 			return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
 		}),
 	);
