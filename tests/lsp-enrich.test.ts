@@ -21,19 +21,19 @@ describe("LspClient new protocol methods", () => {
 	it("workspaceSymbol returns null when client not started", async () => {
 		const client = new LspClient(["mock"], "/ws", 5000);
 		const result = await client.workspaceSymbol("foo");
-		expect(result).toBeNull();
+		expect(result).toEqual({ status: "ok", data: null });
 	});
 
 	it("semanticTokens returns null when file not opened", async () => {
 		const client = new LspClient(["mock"], "/ws", 5000);
 		const result = await client.semanticTokens("/not/opened.ts");
-		expect(result).toBeNull();
+		expect(result).toEqual({ status: "ok", data: null });
 	});
 
 	it("foldingRange returns null when file not opened", async () => {
 		const client = new LspClient(["mock"], "/ws", 5000);
 		const result = await client.foldingRange("/not/opened.ts");
-		expect(result).toBeNull();
+		expect(result).toEqual({ status: "ok", data: null });
 	});
 });
 

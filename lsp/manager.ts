@@ -74,7 +74,12 @@ export function detectProjectLanguages(projectRoot: string, maxFiles: number = 2
 		let entries: string[];
 		try {
 			entries = readdirSync(dir);
-		} catch {
+		} catch (e) {
+			// Log non-permission errors (permission errors are common in node_modules, .git, etc.)
+			const err = e as NodeJS.ErrnoException;
+			if (err.code !== "EACCES" && err.code !== "EPERM") {
+				console.warn(`[pi-shazam] detectProjectLanguages: readdirSync failed for ${dir}: ${err.message}`);
+			}
 			return;
 		}
 		for (const entry of entries) {
@@ -84,7 +89,11 @@ export function detectProjectLanguages(projectRoot: string, maxFiles: number = 2
 			let st;
 			try {
 				st = statSync(fullPath);
-			} catch {
+			} catch (e) {
+				const err = e as NodeJS.ErrnoException;
+				if (err.code !== "EACCES" && err.code !== "EPERM" && err.code !== "ENOENT") {
+					console.warn(`[pi-shazam] detectProjectLanguages: statSync failed for ${fullPath}: ${err.message}`);
+				}
 				continue;
 			}
 			if (st.isDirectory()) {
@@ -140,7 +149,7 @@ function detectWorkspaceRoot(projectRoot: string, filePath: string | null, langu
 		}
 		// Check if we've reached or passed the project root
 		const parent = resolve(current, "..");
-		if (current === parent || current === "/" || parent === root) {
+		if (current === parent || parent === root) {
 			if (current !== root) {
 				// Check root itself
 				for (const marker of markers) {
@@ -199,7 +208,14 @@ function trustedUserCandidates(commandName: string): string[] {
 		join(home, ".local", "share", "pnpm", commandName),
 		join(home, ".local", "share", "nvim", "mason", "bin", commandName),
 	];
-	return candidates.filter(isExecutable);
+	// Return all matching executables, not just the first (fixes for-of with immediate return)
+	const results: string[] = [];
+	for (const candidate of candidates) {
+		if (isExecutable(candidate)) {
+			results.push(candidate);
+		}
+	}
+	return results;
 }
 
 // ── Detection ────────────────────────────────────────────────────────────────
@@ -253,13 +269,14 @@ export function detectLspServer(projectRoot: string, language: string, filePath?
 				};
 			}
 
-			// Check user directories
-			for (const candidate of trustedUserCandidates(cmdName)) {
+			// Check user directories (return first match only)
+			const userCandidates = trustedUserCandidates(cmdName);
+			if (userCandidates.length > 0) {
 				return {
 					language,
 					serverName: spec.serverName,
 					status: "available",
-					command: [candidate, ...spec.args],
+					command: [userCandidates[0]!, ...spec.args],
 					source: "user",
 					workspaceRoot,
 				};
@@ -284,6 +301,8 @@ export class LspManager {
 	private projectRoot: string;
 	private servers = new Map<string, LspServerInfo>();
 	private log: (msg: string) => void;
+	// Track opened file paths per language for re-open after server crash
+	private _openedFilePaths = new Map<string, Set<string>>();
 
 	constructor(projectRoot: string, log?: (msg: string) => void) {
 		this.projectRoot = resolve(projectRoot);
@@ -365,6 +384,24 @@ export class LspManager {
 		};
 
 		this.servers.set(language, info);
+
+		// Re-open previously opened files after server crash/reconnection
+		const prevOpened = this._openedFilePaths.get(language);
+		if (prevOpened && prevOpened.size > 0) {
+			const { readFileSync } = await import('node:fs');
+			const { resolve } = await import('node:path');
+			for (const filePath of prevOpened) {
+				try {
+					const absPath = resolve(detection.workspaceRoot, filePath);
+					const content = readFileSync(absPath, 'utf-8');
+					await client.didOpen(filePath, content);
+				} catch {
+					// File may have been deleted; remove from tracking
+					prevOpened.delete(filePath);
+				}
+			}
+		}
+
 		return info;
 	}
 
@@ -394,15 +431,30 @@ export class LspManager {
 	/**
 	 * Shutdown all LSP servers gracefully.
 	 */
+	/**
+	 * Track a file as opened for a language (for crash recovery).
+	 */
+	trackOpenedFile(language: string, filePath: string): void {
+		let paths = this._openedFilePaths.get(language);
+		if (!paths) {
+			paths = new Set();
+			this._openedFilePaths.set(language, paths);
+		}
+		paths.add(filePath);
+	}
+
 	async shutdown(): Promise<void> {
-		for (const [language, info] of this.servers) {
+		// Parallel shutdown: close all servers concurrently via Promise.allSettled
+		const closePromises = [...this.servers.entries()].map(async ([language, info]) => {
 			try {
 				await info.client.close();
 				this.log(`LSP shutdown: ${language}`);
 			} catch (err) {
 				this.log(`LSP shutdown error for ${language}: ${err}`);
 			}
-		}
+		});
+		await Promise.allSettled(closePromises);
 		this.servers.clear();
+		this._openedFilePaths.clear();
 	}
 }

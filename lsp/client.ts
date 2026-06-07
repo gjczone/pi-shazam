@@ -54,6 +54,24 @@ const MAX_LSP_FILE_SIZE = 1_048_576; // 1 MiB
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+/**
+ * Discriminated union for LSP protocol method results.
+ * Callers can distinguish "no data" (status: "ok", data: null) from
+ * "server error/timeout" (status: "error") instead of both returning null.
+ */
+export interface LspOk<T> {
+	status: "ok";
+	data: T | null;
+}
+
+export interface LspErr {
+	status: "error";
+	reason: string;
+	timeout: boolean;
+}
+
+export type LspResult<T> = LspOk<T> | LspErr;
+
 export interface LspDiagnostic {
 	file: string;
 	line: number;
@@ -78,8 +96,12 @@ export interface LspLocation {
 
 function pathToUri(filePath: string): string {
 	const resolved = path.resolve(filePath);
-	// file:// URI with absolute path
-	const normalized = resolved.replace(/\\/g, "/");
+	// file:// URI with absolute path, percent-encoding special characters
+	const normalized = resolved
+		.replace(/\\/g, "/")
+		.split("/")
+		.map(encodeURIComponent)
+		.join("/");
 	if (normalized[0] !== "/") {
 		return `file:///${normalized}`;
 	}
@@ -95,6 +117,8 @@ export function uriToPath(uri: string): string {
 		try {
 			return decodeURIComponent(p);
 		} catch {
+			// Log the raw path for debugging (silent fallback is confusing)
+			console.warn(`[pi-shazam] uriToPath: decodeURIComponent failed for URI: ${uri.slice(0, 200)}`);
 			return p;
 		}
 	}
@@ -134,10 +158,13 @@ export class LspClient {
 	private _running = false;
 	private _initialized = false;
 	private _initPromise: Promise<void> | null = null;
+	private _closing = false;
 	private _closePromise: Promise<void> | null = null;
 	private _log: (msg: string) => void;
 
-	// Store notifications (e.g., diagnostics) received outside request-response
+	// Store notifications (e.g., diagnostics) received outside request-response.
+	// Capped at MAX_NOTIFICATIONS_PER_URI per URI to prevent unbounded growth.
+	private static readonly MAX_NOTIFICATIONS_PER_URI = 5;
 	private _notifications: PublishDiagnosticsParams[] = [];
 
 	// Track in-flight LSP requests with their reject callbacks so close()
@@ -206,7 +233,19 @@ export class LspClient {
 
 		// Listen for notifications (diagnostics etc.)
 		this.connection.onNotification("textDocument/publishDiagnostics", (params: PublishDiagnosticsParams) => {
+			// Replace previous notification for same URI (keep only latest)
+			const idx = this._notifications.findIndex((n) => n.uri === params.uri);
+			if (idx !== -1) {
+				this._notifications.splice(idx, 1);
+			}
 			this._notifications.push(params);
+			// Cap per URI: remove oldest if too many entries
+			const count = this._notifications.filter((n) => n.uri === params.uri).length;
+			if (count > LspClient.MAX_NOTIFICATIONS_PER_URI) {
+				// Remove the oldest entry for this URI
+				const oldestIdx = this._notifications.findIndex((n) => n.uri === params.uri);
+				if (oldestIdx !== -1) this._notifications.splice(oldestIdx, 1);
+			}
 		});
 
 		this.connection.listen();
@@ -388,8 +427,12 @@ export class LspClient {
 
 	// ── Protocol methods ───────────────────────────────────────────────────────
 
-	async definition(filePath: string, line: number, character: number): Promise<Location | Location[] | null> {
-		if (!this.isFileOpened(filePath)) return null;
+	async definition(filePath: string, line: number, character: number): Promise<LspResult<Location | Location[]>> {
+		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
+		const cap = this._serverCapabilities;
+		if (!cap || !(cap as Record<string, unknown>).definitionProvider) {
+			return { status: "error", reason: "definition provider not supported", timeout: false };
+		}
 
 		const params: DefinitionParams = {
 			textDocument: { uri: pathToUri(filePath) },
@@ -400,15 +443,21 @@ export class LspClient {
 			const result = await this.withTimeout(
 				this.connection!.sendRequest<Location | Location[] | null>("textDocument/definition", params),
 			);
-			return result ?? null;
+			return { status: "ok", data: result ?? null };
 		} catch (err) {
-			this._log(`[lsp] definition failed: ${err}`);
-			return null;
+			const msg = err instanceof Error ? err.message : String(err);
+			const isTimeout = msg.includes("timed out");
+			this._log(`[lsp] definition failed: ${msg}`);
+			return { status: "error", reason: msg, timeout: isTimeout };
 		}
 	}
 
-	async references(filePath: string, line: number, character: number): Promise<Location[] | null> {
-		if (!this.isFileOpened(filePath)) return null;
+	async references(filePath: string, line: number, character: number): Promise<LspResult<Location[]>> {
+		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
+		const cap = this._serverCapabilities;
+		if (!cap || !(cap as Record<string, unknown>).referencesProvider) {
+			return { status: "error", reason: "references provider not supported", timeout: false };
+		}
 
 		const params: ReferenceParams = {
 			textDocument: { uri: pathToUri(filePath) },
@@ -420,15 +469,21 @@ export class LspClient {
 			const result = await this.withTimeout(
 				this.connection!.sendRequest<Location[] | null>("textDocument/references", params),
 			);
-			return result ?? null;
+			return { status: "ok", data: result ?? null };
 		} catch (err) {
-			this._log(`[lsp] references failed: ${err}`);
-			return null;
+			const msg = err instanceof Error ? err.message : String(err);
+			const isTimeout = msg.includes("timed out");
+			this._log(`[lsp] references failed: ${msg}`);
+			return { status: "error", reason: msg, timeout: isTimeout };
 		}
 	}
 
-	async hover(filePath: string, line: number, character: number): Promise<Hover | null> {
-		if (!this.isFileOpened(filePath)) return null;
+	async hover(filePath: string, line: number, character: number): Promise<LspResult<Hover>> {
+		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
+		const cap = this._serverCapabilities;
+		if (!cap || !(cap as Record<string, unknown>).hoverProvider) {
+			return { status: "error", reason: "hover provider not supported", timeout: false };
+		}
 
 		const params: HoverParams = {
 			textDocument: { uri: pathToUri(filePath) },
@@ -436,16 +491,24 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.withTimeout(this.connection!.sendRequest<Hover | null>("textDocument/hover", params));
-			return result ?? null;
+			const result = await this.withTimeout(
+				this.connection!.sendRequest<Hover | null>("textDocument/hover", params),
+			);
+			return { status: "ok", data: result ?? null };
 		} catch (err) {
-			this._log(`[lsp] hover failed: ${err}`);
-			return null;
+			const msg = err instanceof Error ? err.message : String(err);
+			const isTimeout = msg.includes("timed out");
+			this._log(`[lsp] hover failed: ${msg}`);
+			return { status: "error", reason: msg, timeout: isTimeout };
 		}
 	}
 
-	async documentSymbols(filePath: string): Promise<DocumentSymbol[] | SymbolInformation[] | null> {
-		if (!this.isFileOpened(filePath)) return null;
+	async documentSymbols(filePath: string): Promise<LspResult<DocumentSymbol[] | SymbolInformation[]>> {
+		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
+		const cap = this._serverCapabilities;
+		if (!cap || !(cap as Record<string, unknown>).documentSymbolProvider) {
+			return { status: "error", reason: "documentSymbol provider not supported", timeout: false };
+		}
 
 		const params: DocumentSymbolParams = {
 			textDocument: { uri: pathToUri(filePath) },
@@ -458,18 +521,20 @@ export class LspClient {
 					params,
 				),
 			);
-			return result ?? null;
+			return { status: "ok", data: result ?? null };
 		} catch (err) {
-			this._log(`[lsp] documentSymbols failed: ${err}`);
-			return null;
+			const msg = err instanceof Error ? err.message : String(err);
+			const isTimeout = msg.includes("timed out");
+			this._log(`[lsp] documentSymbols failed: ${msg}`);
+			return { status: "error", reason: msg, timeout: isTimeout };
 		}
 	}
 
-	async workspaceSymbol(query: string): Promise<SymbolInformation[] | WorkspaceSymbol[] | null> {
-		if (!this.connection) return null;
+	async workspaceSymbol(query: string): Promise<LspResult<SymbolInformation[] | WorkspaceSymbol[]>> {
+		if (!this.connection) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		if (!cap || !(cap as Record<string, unknown>).workspaceSymbolProvider) {
-			return null;
+			return { status: "error", reason: "workspaceSymbol provider not supported", timeout: false };
 		}
 
 		const params: WorkspaceSymbolParams = { query };
@@ -478,18 +543,22 @@ export class LspClient {
 			const result = await this.withTimeout(
 				this.connection.sendRequest<SymbolInformation[] | WorkspaceSymbol[] | null>("workspace/symbol", params),
 			);
-			return result ?? null;
+			return { status: "ok", data: result ?? null };
 		} catch (err) {
-			this._log(`[lsp] workspaceSymbol failed: ${err}`);
-			return null;
+			const msg = err instanceof Error ? err.message : String(err);
+			const isTimeout = msg.includes("timed out");
+			this._log(`[lsp] workspaceSymbol failed: ${msg}`);
+			return { status: "error", reason: msg, timeout: isTimeout };
 		}
 	}
 
-	async semanticTokens(filePath: string): Promise<SemanticTokens | null> {
-		if (!this.isFileOpened(filePath)) return null;
+	async semanticTokens(filePath: string): Promise<LspResult<SemanticTokens>> {
+		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		const stProvider = (cap as Record<string, unknown> | undefined)?.semanticTokensProvider;
-		if (!stProvider) return null;
+		if (!stProvider) {
+			return { status: "error", reason: "semanticTokens provider not supported", timeout: false };
+		}
 
 		const params: SemanticTokensParams = {
 			textDocument: { uri: pathToUri(filePath) },
@@ -499,18 +568,20 @@ export class LspClient {
 			const result = await this.withTimeout(
 				this.connection!.sendRequest<SemanticTokens | null>("textDocument/semanticTokens/full", params),
 			);
-			return result ?? null;
+			return { status: "ok", data: result ?? null };
 		} catch (err) {
-			this._log(`[lsp] semanticTokens failed: ${err}`);
-			return null;
+			const msg = err instanceof Error ? err.message : String(err);
+			const isTimeout = msg.includes("timed out");
+			this._log(`[lsp] semanticTokens failed: ${msg}`);
+			return { status: "error", reason: msg, timeout: isTimeout };
 		}
 	}
 
-	async foldingRange(filePath: string): Promise<FoldingRange[] | null> {
-		if (!this.isFileOpened(filePath)) return null;
+	async foldingRange(filePath: string): Promise<LspResult<FoldingRange[]>> {
+		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		if (!cap || !(cap as Record<string, unknown>).foldingRangeProvider) {
-			return null;
+			return { status: "error", reason: "foldingRange provider not supported", timeout: false };
 		}
 
 		const params: FoldingRangeParams = {
@@ -521,10 +592,12 @@ export class LspClient {
 			const result = await this.withTimeout(
 				this.connection!.sendRequest<FoldingRange[] | null>("textDocument/foldingRange", params),
 			);
-			return result ?? null;
+			return { status: "ok", data: result ?? null };
 		} catch (err) {
-			this._log(`[lsp] foldingRange failed: ${err}`);
-			return null;
+			const msg = err instanceof Error ? err.message : String(err);
+			const isTimeout = msg.includes("timed out");
+			this._log(`[lsp] foldingRange failed: ${msg}`);
+			return { status: "error", reason: msg, timeout: isTimeout };
 		}
 	}
 
@@ -532,8 +605,8 @@ export class LspClient {
 	 * Request a cross-file rename via LSP textDocument/rename.
 	 * Returns a WorkspaceEdit describing all changes, or null on failure.
 	 */
-	async rename(filePath: string, line: number, character: number, newName: string): Promise<WorkspaceEdit | null> {
-		if (!this.isFileOpened(filePath)) return null;
+	async rename(filePath: string, line: number, character: number, newName: string): Promise<LspResult<WorkspaceEdit>> {
+		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 
 		const params = {
 			textDocument: { uri: pathToUri(filePath) },
@@ -545,10 +618,12 @@ export class LspClient {
 			const result = await this.withTimeout(
 				this.connection!.sendRequest<WorkspaceEdit | null>("textDocument/rename", params),
 			);
-			return result ?? null;
+			return { status: "ok", data: result ?? null };
 		} catch (err) {
-			this._log(`[lsp] rename failed: ${err}`);
-			return null;
+			const msg = err instanceof Error ? err.message : String(err);
+			const isTimeout = msg.includes("timed out");
+			this._log(`[lsp] rename failed: ${msg}`);
+			return { status: "error", reason: msg, timeout: isTimeout };
 		}
 	}
 
@@ -585,7 +660,7 @@ export class LspClient {
 
 	/**
 	 * Collect diagnostics for a set of file paths.
-	 * Checks accumulated notifications first, then polls briefly for more.
+	 * Returns the newest notification per URI (iterates in reverse).
 	 */
 	collectDiagnostics(filePaths: string[]): PublishDiagnosticsParams[] {
 		const expectedUris = new Set(filePaths.filter((f) => this.isFileOpened(f)).map((f) => pathToUri(f)));
@@ -595,7 +670,9 @@ export class LspClient {
 		const results: PublishDiagnosticsParams[] = [];
 		const remaining: PublishDiagnosticsParams[] = [];
 
-		for (const notif of this._notifications) {
+		// Iterate in reverse to return the newest notification per URI first
+		for (let i = this._notifications.length - 1; i >= 0; i--) {
+			const notif = this._notifications[i]!;
 			if (expectedUris.has(notif.uri)) {
 				results.push(notif);
 				expectedUris.delete(notif.uri);
@@ -615,6 +692,10 @@ export class LspClient {
 	 * Disposes the connection and rejects all in-flight requests.
 	 */
 	private _cleanupAfterCrash(): void {
+		// During intentional close(), the finally block handles cleanup.
+		// Suppress double-cleanup from the exit handler firing after kill().
+		if (this._closing) return;
+
 		const closeError = new Error("LSP process exited unexpectedly");
 
 		// Reject all in-flight requests
@@ -660,6 +741,9 @@ export class LspClient {
 		const proc = this.process;
 		const closeError = new Error("connection closed");
 
+		// Set flag to suppress _cleanupAfterCrash during intentional close
+		this._closing = true;
+
 		try {
 			// 1. Clean shutdown handshake: await shutdown, then exit, then dispose.
 			if (this.connection) {
@@ -680,7 +764,8 @@ export class LspClient {
 				}
 			}
 
-			// 2. Remove only our event listeners (not Node.js internal ones).
+			// 2. Remove our event listeners before kill to prevent crash handler
+			//    from firing during intentional close.
 			if (proc) {
 				proc.removeAllListeners("exit");
 				proc.removeAllListeners("error");
@@ -693,12 +778,12 @@ export class LspClient {
 				}
 			}
 
-			// 3a. Kill the process if it hasn't exited after the shutdown handshake.
+			// 3. Kill the process if it hasn't exited after the shutdown handshake.
 			if (proc && proc.exitCode === null) {
 				proc.kill();
 			}
 
-			// 3b. Wait for process exit with 2s SIGKILL timeout.
+			// 4. Wait for process exit with fallback SIGKILL if it refuses to exit.
 			if (proc && proc.exitCode === null) {
 				await new Promise<void>((resolve) => {
 					proc.once("exit", () => resolve());
@@ -709,7 +794,7 @@ export class LspClient {
 				});
 			}
 		} finally {
-			// 4. Cancel all in-flight LSP requests to prevent unhandled rejections.
+			// 5. Cancel all in-flight LSP requests to prevent unhandled rejections.
 			for (const [p, reject] of this._inFlightRequests) {
 				void p.catch(() => {});
 				reject(closeError);
@@ -722,6 +807,7 @@ export class LspClient {
 			this._openedFiles.clear();
 			this._notifications = [];
 			this._serverCapabilities = {};
+			this._closing = false;
 		}
 	}
 

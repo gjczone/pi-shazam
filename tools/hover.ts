@@ -290,7 +290,8 @@ export async function executeHover(graph: RepoGraph, name: string, file?: string
 					const content = readFileSync(resolve(serverInfo.workspaceRoot, symbol.file), "utf-8");
 					await client.didOpen(symbol.file, content);
 				}
-				const hoverData = await client.hover(symbol.file, symbol.line - 1, 0);
+				const hoverResult = await client.hover(symbol.file, symbol.line - 1, 0);
+				const hoverData = hoverResult.status === "ok" ? hoverResult.data : null;
 				if (hoverData?.contents) {
 					const contents = hoverData.contents;
 					if (typeof contents === "string") {
