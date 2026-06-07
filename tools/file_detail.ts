@@ -5,6 +5,7 @@
  * parent-child hierarchy section from documentSymbol. Falls back to
  * flat list with "(tree-sitter only)" annotation when LSP unavailable.
  */
+import { statSync } from "node:fs";
 import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
@@ -17,9 +18,10 @@ import { createTool } from "./_factory.js";
 
 /**
  * Cache for file detail results within a session.
- * Key: file path, Value: { text, timestamp }
+ * Key: file path, Value: { text, timestamp, mtimeMs }
+ * Cache is invalidated when file mtime changes or TTL expires.
  */
-const fileDetailCache = new Map<string, { text: string; timestamp: number }>();
+const fileDetailCache = new Map<string, { text: string; timestamp: number; mtimeMs: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 export function registerFileDetail(pi: ExtensionAPI): void {
@@ -43,11 +45,22 @@ export function registerFileDetail(pi: ExtensionAPI): void {
 				return { content: [{ type: "text", text: "Error: file parameter is required" }] };
 			}
 
-			// Check cache first (fixes #119)
+			// Check cache first (fixes #119, invalidates on mtime change #174)
 			const cacheKey = `${file}:${json ? "json" : "text"}`;
 			const cached = fileDetailCache.get(cacheKey);
 			if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-				return { content: [{ type: "text", text: cached.text }] };
+				// Verify file hasn't been modified since caching
+				try {
+					const st = statSync(file);
+					if (st.mtimeMs === cached.mtimeMs) {
+						return { content: [{ type: "text", text: cached.text }] };
+					}
+					// File modified — evict stale entry
+					fileDetailCache.delete(cacheKey);
+				} catch {
+					// File may not exist — use cached value if TTL valid
+					return { content: [{ type: "text", text: cached.text }] };
+				}
 			}
 
 			const graph = scanProject(".");
@@ -83,8 +96,14 @@ export function registerFileDetail(pi: ExtensionAPI): void {
 				text = truncateOutput(text.split("\n"), maxTokens as number);
 			}
 
-			// Cache the result
-			fileDetailCache.set(cacheKey, { text, timestamp: Date.now() });
+			// Cache the result with file mtime for invalidation
+			let mtimeMs = 0;
+			try {
+				mtimeMs = statSync(file).mtimeMs;
+			} catch {
+				// File may not exist — cache with mtime 0
+			}
+			fileDetailCache.set(cacheKey, { text, timestamp: Date.now(), mtimeMs });
 
 			return {
 				content: [
