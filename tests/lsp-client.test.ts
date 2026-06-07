@@ -155,6 +155,19 @@ describe("lsp/client", () => {
 		it("should have an initialize method", () => {
 			expect(typeof client.initialize).toBe("function");
 		});
+
+		it("should expose isInitialized method", () => {
+			expect(typeof client.isInitialized).toBe("function");
+		});
+
+		it("should start with isInitialized false", () => {
+			expect(client.isInitialized()).toBe(false);
+		});
+
+		it("isInitialized should be false when client not started", () => {
+			const result = client.isInitialized();
+			expect(result).toBe(false);
+		});
 	});
 
 	describe("LspClient protocol methods", () => {
@@ -261,6 +274,57 @@ describe("lsp/client", () => {
 });
 
 // ── close() tests ──────────────────────────────────────────────────────────────
+
+describe("LspClient initialize()", () => {
+	beforeEach(() => {
+		mockConnForStart = null;
+	});
+
+	it("should return initialized state after successful init", async () => {
+		const conn = createMockConnection();
+		conn.sendRequest.mockResolvedValue({
+			capabilities: { hoverProvider: true },
+		});
+		const { client } = createStartedClient(conn);
+
+		await client.initialize();
+		expect(client.isInitialized()).toBe(true);
+	});
+
+	it("should not send duplicate initialize when called twice", async () => {
+		const conn = createMockConnection();
+		conn.sendRequest.mockResolvedValue({
+			capabilities: { hoverProvider: true },
+		});
+		const { client } = createStartedClient(conn);
+
+		await Promise.all([client.initialize(), client.initialize()]);
+
+		// Should only have sent one initialize request
+		const initCalls = conn.sendRequest.mock.calls.filter((c: any[]) => c[0] === "initialize");
+		expect(initCalls.length).toBe(1);
+	});
+
+	it("should await in-flight initialize on concurrent calls", async () => {
+		const conn = createMockConnection();
+		let resolveInit: (v: unknown) => void = () => {};
+		conn.sendRequest.mockReturnValue(new Promise((resolve) => { resolveInit = resolve; }));
+		const { client } = createStartedClient(conn);
+
+		// Start concurrent initializations
+		const init1 = client.initialize();
+		const init2 = client.initialize();
+
+		// Resolve the first
+		resolveInit({ capabilities: {} });
+
+		await Promise.all([init1, init2]);
+
+		// Should only have sent one initialize request
+		const initCalls = conn.sendRequest.mock.calls.filter((c: any[]) => c[0] === "initialize");
+		expect(initCalls.length).toBe(1);
+	});
+});
 
 describe("LspClient close()", () => {
 	// ═══ Bug 1: Zombie process — process reference nulled before timeout fires ═══
@@ -486,5 +550,63 @@ describe("LspClient edge cases", () => {
 		// close() should still clean up the stale process reference
 		await client.close();
 		expect(client.isRunning()).toBe(false);
+	});
+
+	describe("LspClient crash and close cleanup", () => {
+		it("should reject in-flight requests when process crashes", async () => {
+			let rejectInFlight: (err: Error) => void = () => {};
+			const conn = createMockConnection();
+			const { client, process: proc } = createStartedClient(conn);
+
+			// Register an in-flight request
+			const inFlightPromise = new Promise<unknown>((_resolve, reject) => {
+				rejectInFlight = reject;
+			});
+			(client as any)._inFlightRequests.set(inFlightPromise, rejectInFlight);
+
+			// Crash the process — exit handler should clean up
+			proc.exitCode = 1;
+			proc.emit("exit", 1, "SIGTERM");
+
+			expect(client.isRunning()).toBe(false);
+			// In-flight promises should be rejected
+			await expect(inFlightPromise).rejects.toThrow();
+		});
+
+		it("should reject in-flight requests and dispose connection on crash", async () => {
+			const conn = createMockConnection();
+			const { client, process: proc } = createStartedClient(conn);
+
+			// Register an in-flight request
+			const neverResolves = new Promise<never>(() => {});
+			(client as any)._inFlightRequests.set(neverResolves, (err: Error) => {});
+
+			// Crash
+			proc.exitCode = 1;
+			proc.emit("exit", 1, "SIGTERM");
+
+			// Should have disposed the connection
+			expect(conn.dispose).toHaveBeenCalled();
+			// _inFlightRequests should be empty (all rejected and removed)
+			expect((client as any)._inFlightRequests.size).toBe(0);
+		});
+
+		it("should handle concurrent close() calls without double-dispose", async () => {
+			const conn = createMockConnection();
+			conn.sendRequest.mockResolvedValue(null);
+			const { client, process: proc } = createStartedClient(conn);
+
+			// Make process exit wait so we can call close() twice
+			proc.exitCode = null;
+
+			const close1 = client.close();
+			const close2 = client.close();
+
+			await Promise.all([close1, close2]);
+
+			// dispose should only be called once
+			expect(conn.dispose).toHaveBeenCalledTimes(1);
+			expect(client.isRunning()).toBe(false);
+		});
 	});
 });
