@@ -12,6 +12,7 @@ import { createTool } from "./_factory.js";
 import { readFileAdaptive } from "../core/encoding.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerFix(pi: ExtensionAPI): void {
@@ -49,6 +50,7 @@ export interface FixOptions {
 
 /**
  * Run format fix analysis. In dry-run mode (default), only reports issues.
+ * In apply mode, runs detected formatters with auto-fix flags.
  */
 export function executeFix(graph: RepoGraph, projectRoot: string, options: FixOptions = {}): string {
 	const dryRun = options.dryRun ?? true;
@@ -59,6 +61,22 @@ export function executeFix(graph: RepoGraph, projectRoot: string, options: FixOp
 	lines.push(
 		dryRun ? "**Mode: DRY RUN** (preview only, no changes applied)" : "**Mode: APPLY** (changes will be written)",
 	);
+
+	if (!dryRun) {
+		const formatters = detectFormatters(projectRoot);
+		const results = runFormatters(projectRoot, formatters, options.file);
+		for (const r of results) {
+			if (r.error) {
+				lines.push(`- ❌ ${r.formatter}: ${r.error}`);
+			} else {
+				lines.push(`- ✅ ${r.formatter}: ${r.summary}`);
+			}
+		}
+		if (results.length === 0) {
+			lines.push("- No known formatters detected. Install prettier, eslint, biome, ruff, or gofmt.");
+		}
+		lines.push("");
+	}
 	lines.push("");
 
 	// ── Detect available formatters ──────────────────────────────────────
@@ -426,4 +444,91 @@ function scanFormatIssues(projectRoot: string, files: string[], _graph: RepoGrap
 	}
 
 	return issues;
+}
+
+// ── Formatter execution ──────────────────────────────────────────────────────
+
+interface FormatterResult {
+	formatter: string;
+	summary: string;
+	error?: string;
+}
+
+/**
+ * Run detected formatters with auto-fix flags.
+ * Each formatter runs on the project root. Errors are caught per-formatter.
+ */
+function runFormatters(projectRoot: string, formatters: string[], targetFile?: string): FormatterResult[] {
+	const results: FormatterResult[] = [];
+
+	for (const formatter of formatters) {
+		try {
+			switch (formatter) {
+				case "prettier": {
+					const args = ["npx", "--yes", "prettier", "--write"];
+					if (targetFile) {
+						args.push(targetFile);
+					} else {
+						args.push("--ignore-unknown", "**/*.{ts,js,json,css,html,md}");
+					}
+					runFormatterCommand(args, projectRoot);
+					results.push({
+						formatter: "prettier",
+						summary: targetFile ? `Formatted ${targetFile}` : "Formatted project files",
+					});
+					break;
+				}
+				case "eslint": {
+					const args = ["npx", "--yes", "eslint", "--fix"];
+					if (targetFile) {
+						args.push(targetFile);
+					}
+					runFormatterCommand(args, projectRoot);
+					results.push({
+						formatter: "eslint",
+						summary: "Lint fixes applied",
+					});
+					break;
+				}
+				case "biome": {
+					const args = ["npx", "--yes", "@biomejs/biome", "check", "--write"];
+					if (targetFile) {
+						args.push(targetFile);
+					} else {
+						args.push(".");
+					}
+					runFormatterCommand(args, projectRoot);
+					results.push({
+						formatter: "biome",
+						summary: "Biome fixes applied",
+					});
+					break;
+				}
+				default: {
+					results.push({
+						formatter,
+						summary: "No auto-fix implementation available",
+						error: `Unsupported formatter: ${formatter}`,
+					});
+				}
+			}
+		} catch (err) {
+			results.push({
+				formatter,
+				summary: "Failed",
+				error: String(err),
+			});
+		}
+	}
+
+	return results;
+}
+
+function runFormatterCommand(args: string[], cwd: string): void {
+	const [cmd, ...cmdArgs] = args;
+	try {
+		execFileSync(cmd, cmdArgs, { cwd, stdio: "pipe", timeout: 30000, shell: true });
+	} catch {
+		// Formatter may fail on individual files — non-fatal
+	}
 }
