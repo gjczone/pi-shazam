@@ -15,6 +15,7 @@ import type { LspClient } from "../lsp/client.js";
 import { uriToPath } from "../lsp/client.js";
 import { readFileAdaptive } from "../core/encoding.js";
 import { statSync } from "node:fs";
+import { resolve } from "node:path";
 import type {
 	SymbolInformation,
 	WorkspaceSymbol,
@@ -170,7 +171,6 @@ export async function ensureFileOpened(
 	if (!info) return null;
 	if (!info.client.isRunning()) return null;
 	try {
-		const { resolve } = await import("node:path");
 		const absPath = resolve(info.workspaceRoot, filePath);
 
 		if (!info.client.isFileOpened(filePath)) {
@@ -216,7 +216,10 @@ export async function lspWorkspaceSearch(
 			return [];
 		}
 		try {
-			const raw = await withEnrichTimeout(srv.client.workspaceSymbol(query), timeoutMs);
+			const raw = await withEnrichTimeout(
+				srv.client.workspaceSymbol(query).then((r) => (r.status === "ok" ? r.data : null)),
+				timeoutMs,
+			);
 			if (!raw) return [];
 			return raw.map((s) => toEnrichedHit(s)).filter(Boolean) as EnrichedSymbolHit[];
 		} catch {
@@ -273,7 +276,11 @@ export async function lspDocumentSymbols(
 	if (!cap || !(cap as Record<string, unknown>).documentSymbolProvider) {
 		return null;
 	}
-	return withEnrichTimeout(opened.client.documentSymbols(filePath), timeoutMs);
+	const result = await withEnrichTimeout(
+		opened.client.documentSymbols(filePath).then((r) => (r.status === "ok" ? r.data : null)),
+		timeoutMs,
+	);
+	return result;
 }
 
 // ── semanticTokens ───────────────────────────────────────────────────────────
@@ -293,7 +300,11 @@ export async function lspSemanticTokens(
 	const cap = opened.client.serverCapabilities;
 	const stProvider = (cap as Record<string, unknown> | undefined)?.semanticTokensProvider;
 	if (!stProvider) return null;
-	return withEnrichTimeout(opened.client.semanticTokens(filePath), timeoutMs);
+	const result = await withEnrichTimeout(
+		opened.client.semanticTokens(filePath).then((r) => (r.status === "ok" ? r.data : null)),
+		timeoutMs,
+	);
+	return result;
 }
 
 // ── foldingRange ─────────────────────────────────────────────────────────────
@@ -314,5 +325,9 @@ export async function lspFoldingRanges(
 	if (!cap || !(cap as Record<string, unknown>).foldingRangeProvider) {
 		return null;
 	}
-	return withEnrichTimeout(opened.client.foldingRange(filePath), timeoutMs);
+	const result = await withEnrichTimeout(
+		opened.client.foldingRange(filePath).then((r) => (r.status === "ok" ? r.data : null)),
+		timeoutMs,
+	);
+	return result;
 }

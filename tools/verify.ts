@@ -22,7 +22,8 @@ import { execSync, exec } from "node:child_process";
 import { promisify } from "node:util";
 
 const execAsync = promisify(exec);
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { readFileAdaptive } from "../core/encoding.js";
 import { resolve } from "node:path";
 import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 import { getLspManager } from "./_context.js";
@@ -106,10 +107,31 @@ async function executeVerifyJsonAsync(projectRoot: string, options: VerifyOption
 
 	let lspDiagnostics: LspDiagEntry[] = [];
 	let lspAvailable = false;
-	if (!quick) {
+	if (lspOnly || !quick) {
 		const lspResult = await runLspDiagnostics(graph, projectRoot, options);
 		lspDiagnostics = lspResult.diagnostics;
 		lspAvailable = lspResult.available;
+	}
+
+	// JSON mode: early return for lspOnly (skip graph analysis, same as text mode)
+	if (lspOnly) {
+		return {
+			symbolCount: graph.symbols.size,
+			fileCount: graph.fileSymbols.size,
+			edgeCount: getGraphEdgeCount(graph),
+			riskLevel: "low",
+			riskReason: "lspOnly mode — graph analysis skipped",
+			orphanCount: 0,
+			orphans: [],
+			gitChangedFiles: [],
+			baselineDiff: null,
+			lspDiagnostics,
+			lspAvailable,
+			verdict: lspDiagnostics.some((d) => d.severity === "error") ? "FAIL" : "PASS",
+			quickMode: quick,
+			lspOnlyMode: lspOnly,
+			preCommitMode: preCommit,
+		};
 	}
 
 	const risk = assessRisk(graph, diff, orphans, gitChangedFiles, preCommit);
@@ -167,8 +189,9 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 	lines.push("");
 
 	// LSP diagnostics (CORE) — show all errors
+	let lspResult: LspDiagResult = { diagnostics: [], available: false };
 	if (!quick) {
-		const lspResult = await runLspDiagnostics(graph, projectRoot, options);
+		lspResult = await runLspDiagnostics(graph, projectRoot, options);
 		lines.push("### LSP Diagnostics");
 		lines.push("");
 		if (!lspResult.available) {
@@ -267,7 +290,9 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 	if (quick) lines.push("[Quick mode — skipped deep analysis]\n");
 
 	if (preCommit) {
-		const hasLspErrors = (await runLspDiagnostics(graph, projectRoot, options)).diagnostics.some(
+		// Reuse the LSP result from above — do NOT call runLspDiagnostics again
+		// (collectDiagnostics is destructive, second call returns empty results)
+		const hasLspErrors = lspResult.diagnostics.some(
 			(d) => d.severity === "error",
 		);
 		const isReady = !hasLspErrors && risk.level === "low" && orphans.length === 0;
@@ -329,17 +354,29 @@ async function runLspDiagnostics(
 
 	const diagnostics: LspDiagEntry[] = [];
 	const serversUsed = new Set<string>();
+	const failedOpens: string[] = [];
 
+	// Open files first (batch all didOpen calls)
 	for (const filePath of targetFiles) {
 		const serverInfo = await lspManager.getServerForFile(filePath);
 		if (!serverInfo) continue;
-		serversUsed.add(serverInfo.serverName);
 		try {
-			const content = readFileSync(resolve(projectRoot, filePath), "utf-8");
+			const content = readFileAdaptive(resolve(projectRoot, filePath));
 			await serverInfo.client.didOpen(filePath, content);
-		} catch {
-			/* skip failed opens */
+			serversUsed.add(serverInfo.serverName);
+			// Track for crash recovery
+			lspManager.trackOpenedFile(serverInfo.language, filePath);
+		} catch (e) {
+			failedOpens.push(filePath);
+			console.warn(`[pi-shazam] LSP didOpen failed for ${filePath}: ${e instanceof Error ? e.message : String(e)}`);
 		}
+	}
+
+	// Wait for LSP servers to process files and publish diagnostics.
+	// Servers push diagnostics asynchronously after parsing — calling
+	// collectDiagnostics immediately returns empty/stale results.
+	if (serversUsed.size > 0) {
+		await new Promise((r) => setTimeout(r, 500));
 	}
 
 	for (const filePath of targetFiles) {
@@ -353,12 +390,17 @@ async function runLspDiagnostics(
 					file: filePath,
 					line: diag.range.start.line + 1,
 					col: diag.range.start.character + 1,
-					severity: sev === 1 ? "error" : sev === 2 ? "warning" : "info",
+					severity: sev === 1 ? "error" : sev === 2 ? "warning" : sev === 3 ? "info" : "hint",
 					code: String(diag.code ?? ""),
 					message: typeof diag.message === "object" ? (diag.message as { value: string }).value || "" : diag.message,
 				});
 			}
 		}
+	}
+
+	// Annotate output if files failed to open
+	if (failedOpens.length > 0) {
+		console.warn(`[pi-shazam] LSP didOpen failed for ${failedOpens.length} file(s): ${failedOpens.slice(0, 5).join(", ")}${failedOpens.length > 5 ? "..." : ""}`);
 	}
 
 	return { diagnostics, available: serversUsed.size > 0, errorMessage: serversUsed.size === 0 ? "No LSP servers available for detected file types" : undefined };

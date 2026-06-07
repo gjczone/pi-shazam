@@ -151,7 +151,8 @@ export async function executeRenameSymbol(
 	}
 
 	// Call LSP rename
-	const workspaceEdit = await opened.client.rename(symbol.file, symbol.line - 1, symbol.col - 1, newName);
+	const renameResult = await opened.client.rename(symbol.file, symbol.line - 1, symbol.col - 1, newName);
+	const workspaceEdit = renameResult.status === "ok" ? renameResult.data : null;
 
 	if (!workspaceEdit) {
 		return {
