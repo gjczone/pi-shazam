@@ -20,6 +20,19 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 - **External dependency**: Language servers (pyright, tsserver, rust-analyzer, gopls) are user-installed; pi-shazam manages process lifecycle
 - **Release artifact**: npm package with `dist/` compiled output
 
+## Current Version
+
+**0.4.1** — synced across all surfaces:
+
+| Surface | Version | Check |
+|---------|---------|-------|
+| `package.json` | 0.4.1 | `node -e "console.log(require('./package.json').version)"` |
+| MCP server (`mcp/entry.ts`) | 0.4.1 | `grep version mcp/entry.ts` |
+| Global npm install | 0.4.1 | `npm ls -g pi-shazam` |
+| GitHub Release | v0.4.1 | `gh release view v0.4.1` |
+| Git tag | v0.4.1 | `git describe --tags` |
+| npm registry | 0.4.1 | `npm view pi-shazam version` |
+
 ## Commands
 
 | Command                          | Purpose                                                                    |
