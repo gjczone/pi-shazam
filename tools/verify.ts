@@ -166,7 +166,7 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 	lines.push(`**Symbols:** ${symbolCount} | **Files:** ${fileCount} | **Edges:** ${edgeCount}`);
 	lines.push("");
 
-	// LSP diagnostics (CORE) — summary only, no individual errors
+	// LSP diagnostics (CORE) — show all errors
 	if (!quick) {
 		const lspResult = await runLspDiagnostics(graph, projectRoot, options);
 		lines.push("### LSP Diagnostics");
@@ -183,8 +183,21 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 			const errors = lspResult.diagnostics.filter((d) => d.severity === "error");
 			const warnings = lspResult.diagnostics.filter((d) => d.severity === "warning");
 			lines.push(`Errors: ${errors.length} | Warnings: ${warnings.length} | Total: ${lspResult.diagnostics.length}`);
-			if (errors.length > 0) {
-				lines.push("  Run `npx tsc --noEmit` or `shazam_verify --lspOnly` to see details");
+			lines.push("");
+			// Show ALL errors (errors are critical, not noise)
+			for (const d of errors) {
+				const sevLabel = d.severity.toUpperCase();
+				const code = d.code ? ` (${d.code})` : "";
+				lines.push(`- [${sevLabel}] ${d.file}:${d.line}:${d.col}${code} — ${d.message}`);
+			}
+			// Show first 10 warnings (warnings are less critical)
+			for (const d of warnings.slice(0, 10)) {
+				const sevLabel = d.severity.toUpperCase();
+				const code = d.code ? ` (${d.code})` : "";
+				lines.push(`- [${sevLabel}] ${d.file}:${d.line}:${d.col}${code} — ${d.message}`);
+			}
+			if (warnings.length > 10) {
+				lines.push(`... and ${warnings.length - 10} more warnings`);
 			}
 		}
 		lines.push("");

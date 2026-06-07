@@ -314,34 +314,18 @@ export function shouldTriggerVerify(toolName: string, isError: boolean): boolean
 }
 
 export function registerAfterWriteHook(pi: ExtensionAPI): void {
-	pi.on("tool_result", async (event, _ctx) => {
-		try {
-			// Skip non-write tools and errors
-			if (!shouldTriggerVerify(event.toolName, event.isError)) {
-				return;
-			}
-
-			const result = await handleWriteResult(event.toolName, ".");
-
-			// Send findings as a message to the LLM
-			pi.sendMessage({
-				customType: "shazam-auto-verify",
-				content: result.text,
-				display: true,
-			});
-
-			// Issue #78: Block on FAIL verdict to prevent continuing with broken code
-			// This returns { block: true } which stops the LLM from proceeding
-			// until the user acknowledges or fixes the issues.
-			if (result.verdict === "FAIL") {
-				// Return from the handler to signal blocking
-				// Note: tool_result handlers can return { block: true } but this
-				// is not standard in all Pi versions. We use sendMessage as
-				// the primary mechanism; blocking is best-effort.
-				pi.logger?.warn?.("[pi-shazam] FAIL verdict — fix errors before proceeding");
-			}
-		} catch (err) {
-			pi.logger?.warn(`[pi-shazam] Auto-verify hook error: ${err}`);
-		}
-	});
+	// Auto-verify is intentionally disabled.
+	// The LLM should call shazam_verify when it needs to check for errors.
+	// This avoids:
+	//   1. Running tsc on every write (slow)
+	//   2. Showing errors from files the LLM didn't touch (noise)
+	//   3. Interrupting the LLM's workflow
+	//
+	// The LLM can call:
+	//   - shazam_verify          — full verification with all errors
+	//   - shazam_verify --quick  — fast git-diff-only check
+	//   - shazam_verify --lspOnly — only type errors
+	//
+	// We still register the hook to keep the API stable, but it's a no-op.
+	pi.logger?.info?.("[pi-shazam] after-write hook registered (auto-verify disabled — use shazam_verify manually)");
 }
