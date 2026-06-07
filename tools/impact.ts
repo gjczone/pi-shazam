@@ -150,6 +150,7 @@ export function executeImpactJson(graph: RepoGraph, files: string[]): string {
 	for (const file of files) {
 		const symIds = graph.fileSymbols.get(file) || [];
 		for (const id of symIds) {
+			// Incoming: what calls/imports symbols from this file?
 			const incoming = graph.incoming.get(id);
 			if (incoming) {
 				for (const edge of incoming) {
@@ -157,6 +158,18 @@ export function executeImpactJson(graph: RepoGraph, files: string[]): string {
 					if (callerSym && !files.includes(callerSym.file)) {
 						affectedFiles.add(callerSym.file);
 						affectedSymbols.push(callerSym);
+					}
+				}
+			}
+
+			// Outgoing: what does this file's symbols depend on?
+			const outgoing = graph.outgoing.get(id);
+			if (outgoing) {
+				for (const edge of outgoing) {
+					const calleeSym = graph.symbols.get(edge.target);
+					if (calleeSym && !files.includes(calleeSym.file)) {
+						affectedFiles.add(calleeSym.file);
+						affectedSymbols.push(calleeSym);
 					}
 				}
 			}
