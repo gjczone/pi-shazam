@@ -160,15 +160,21 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 	lines.push("");
 	lines.push("### Module Structure");
 	lines.push("");
-	const dirs = new Set<string>();
+	// Show 2 levels of directory depth for better project structure visibility
+	const dirs = new Map<string, number>();
 	for (const file of files) {
-		const dir = file.includes("/") ? file.split("/")[0]! : "(root)";
-		dirs.add(dir);
+		if (!file.includes("/")) {
+			dirs.set("(root)", (dirs.get("(root)") ?? 0) + 1);
+		} else {
+			const parts = file.split("/");
+			const twoLevels = parts.slice(0, 2).join("/");
+			dirs.set(twoLevels, (dirs.get(twoLevels) ?? 0) + 1);
+		}
 	}
-	const sortedDirs = [...dirs].sort();
-	for (const dir of sortedDirs) {
-		const dirFiles = files.filter((f) => f.startsWith(dir + "/") || (dir === "(root)" && !f.includes("/")));
-		lines.push(`- \`${dir}/\` — ${dirFiles.length} files`);
+	const sortedDirs = [...dirs.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+	for (const [dir, count] of sortedDirs) {
+		const label = dir === "(root)" ? "(root)/" : `${dir}/`;
+		lines.push(`- \`${label}\` — ${count} files`);
 	}
 
 	// HTTP Routes section (absorbed from tools/routes.ts)

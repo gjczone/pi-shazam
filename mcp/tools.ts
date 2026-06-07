@@ -12,20 +12,21 @@ import { executeSymbolWithMode } from "../tools/symbol.js";
 import { executeFileDetail } from "../tools/file_detail.js";
 import { executeCallChain, getFlatReferences, formatFlatReferences } from "../tools/call_chain.js";
 import { executeHover, formatHoverResult } from "../tools/hover.js";
-import { executeFindTests } from "../tools/find_tests.js";
+import { executeFindTests, formatFindTestsResult } from "../tools/find_tests.js";
 import { executeHotspots } from "../tools/hotspots.js";
 import { executeFix } from "../tools/fix.js";
 import { executeVerify } from "../tools/verify.js";
-import { executeTypeHierarchy } from "../tools/type_hierarchy.js";
-import { executeRenameSymbol } from "../tools/rename_symbol.js";
-import { executeSafeDelete } from "../tools/safe_delete.js";
+import { executeTypeHierarchy, formatTypeHierarchy } from "../tools/type_hierarchy.js";
+import { executeRenameSymbol, formatRenameResult } from "../tools/rename_symbol.js";
+import { executeSafeDelete, formatSafeDeleteResult } from "../tools/safe_delete.js";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
 // ── Logging ──────────────────────────────────────────────────────
 
-const LOG_DIR = join(homedir(), ".kimi-code", "audit");
+// Use pi-shazam-specific audit directory (was .kimi-code/audit for Kimi Code compatibility)
+const LOG_DIR = join(homedir(), ".pi", "hooks", "audit");
 
 function logMCP(entry: Record<string, unknown>): void {
 	try {
@@ -107,6 +108,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			inputSchema: z.object({
 				query: z.string().describe("Search query text"),
 				target: z.enum(["symbol", "code"]).optional().default("symbol").describe("symbol or code"),
+				topN: z.number().optional().describe("Max results to return"),
 			}),
 		},
 		withLogging("shazam_codesearch", async ({ query, target }) => {
@@ -203,7 +205,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 				sourceFile: sourceFile as string | undefined,
 				module: mod as string | undefined,
 			});
-			return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+			return { content: [{ type: "text", text: formatFindTestsResult(result, sourceFile as string | undefined, mod as string | undefined) }] };
 		}),
 	);
 
@@ -251,12 +253,12 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			}),
 		},
 		withLogging("shazam_type_hierarchy", async ({ name, direction }) => {
-			const result = executeTypeHierarchy(
+			const result = await executeTypeHierarchy(
 				graph,
 				name as string,
 				(direction as "both" | "supertypes" | "subtypes") ?? "both",
 			);
-			return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+			return { content: [{ type: "text", text: formatTypeHierarchy(result, name as string) }] };
 		}),
 	);
 
@@ -273,7 +275,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		},
 		withLogging("shazam_rename_symbol", async ({ symbol, newName, dryRun }) => {
 			const result = await executeRenameSymbol(graph, symbol as string, newName as string, dryRun as boolean);
-			return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+			return { content: [{ type: "text", text: formatRenameResult(result, symbol as string, newName as string, dryRun as boolean) }] };
 		}),
 	);
 
@@ -289,7 +291,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		},
 		withLogging("shazam_safe_delete", async ({ symbol, dryRun }) => {
 			const result = executeSafeDelete(graph, symbol as string, dryRun as boolean);
-			return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+			return { content: [{ type: "text", text: formatSafeDeleteResult(result, symbol as string) }] };
 		}),
 	);
 

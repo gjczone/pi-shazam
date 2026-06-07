@@ -102,7 +102,8 @@ function buildSessionBaselineSection(_projectRoot: string, graph: RepoGraph): st
 		clearBaseline();
 		createBaseline(graph, 0, 0, branch || "unknown", commit || "unknown");
 
-		return formatBaselineSummary(getBaseline()!);
+		const baseline = getBaseline();
+		return baseline ? formatBaselineSummary(baseline) : "";
 	} catch {
 		return "";
 	}
@@ -152,6 +153,11 @@ export function resetOverviewShown(): void {
  * into the system prompt array. Skips full overview for continuation sessions.
  */
 export function registerBeforeStartHook(pi: ExtensionAPI): void {
+	// Reset overview flag on new session (fixes stale continuation detection)
+	pi.on("session_start", () => {
+		_hasShownOverview = false;
+	});
+
 	pi.on("before_agent_start", async (_event, _ctx) => {
 		try {
 			// Use module-level flag to detect continuation (fixes #117, #118)
@@ -161,7 +167,7 @@ export function registerBeforeStartHook(pi: ExtensionAPI): void {
 				systemPrompt: overviewText,
 			};
 		} catch (err) {
-			pi.logger?.warn(`[pi-shazam] Failed to generate overview: ${err}`);
+			console.warn(`[pi-shazam] Failed to generate overview: ${err}`);
 			// Don't block agent start on overview failure
 			return undefined;
 		}

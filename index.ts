@@ -50,13 +50,18 @@ export default function (pi: ExtensionAPI): void {
 	// Share LspManager with tools via global reference
 	setLspManager(lspManager);
 
-	// Auto-initialize LSP on agent start
+	// Auto-initialize LSP on agent start (with overall 15s timeout guard)
 	pi.on("before_agent_start", async (_event, _ctx) => {
 		try {
 			const languages = lspManager.detectLanguages();
 			if (languages.length > 0) {
 				log(`Detected languages: ${languages.join(", ")}`);
-				await lspManager.initializeAll();
+				await Promise.race([
+					lspManager.initializeAll(),
+					new Promise<void>((_, reject) =>
+						setTimeout(() => reject(new Error("LSP initialization timed out after 15s")), 15000),
+					),
+				]);
 			}
 		} catch (err) {
 			log(`LSP init error: ${err}`);
@@ -65,8 +70,13 @@ export default function (pi: ExtensionAPI): void {
 
 	// Shutdown LSP servers on session shutdown
 	pi.on("session_shutdown", async () => {
-		log("Shutting down LSP servers...");
-		await lspManager.shutdown();
+		try {
+			log("Shutting down LSP servers...");
+			await lspManager.shutdown();
+		} catch (err) {
+			const errMsg = err instanceof Error ? err.message : String(err);
+			console.error(`[pi-shazam] session_shutdown: LSP shutdown failed: ${errMsg}`);
+		}
 	});
 
 	// ── Hooks ────────────────────────────────────────────────────────────────

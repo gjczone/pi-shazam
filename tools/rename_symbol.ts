@@ -252,7 +252,7 @@ async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise
 	return { fileCount, totalChanges, preview };
 }
 
-function formatRenameResult(result: RenameResult, symbolName: string, newName: string, dryRun: boolean): string {
+export function formatRenameResult(result: RenameResult, symbolName: string, newName: string, dryRun: boolean): string {
 	const lines: string[] = [
 		`## Rename${dryRun ? " (Dry Run)" : ""}: \`${symbolName}\` → \`${newName}\``,
 		"",

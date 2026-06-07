@@ -750,20 +750,13 @@ export function executeReady(graph: RepoGraph, projectRoot: string): string {
 	const verifyJsonRaw = executeVerifyJson(graph, projectRoot);
 	const checkJsonRaw = executeCheckJson(graph, projectRoot);
 
-	let verifyData: { result?: { riskLevel?: string; orphanCount?: number; symbolCount?: number; fileCount?: number } } =
-		{};
-	let checkData: { result?: { parsedFiles?: number; failedFiles?: number; symbolCount?: number } } = {};
-
-	try {
-		verifyData = JSON.parse(verifyJsonRaw);
-	} catch {
-		/* use defaults */
-	}
-	try {
-		checkData = JSON.parse(checkJsonRaw);
-	} catch {
-		/* use defaults */
-	}
+	// Own JSON.stringify output — parse failure is impossible, no try/catch needed
+	const verifyData = JSON.parse(verifyJsonRaw) as {
+		result?: { riskLevel?: string; orphanCount?: number; symbolCount?: number; fileCount?: number };
+	};
+	const checkData = JSON.parse(checkJsonRaw) as {
+		result?: { parsedFiles?: number; failedFiles?: number; symbolCount?: number };
+	};
 
 	const riskLevel = verifyData.result?.riskLevel ?? "unknown";
 	const orphanCount = verifyData.result?.orphanCount ?? 0;
@@ -805,20 +798,13 @@ export function executeReadyJson(graph: RepoGraph, projectRoot: string): string 
 	const verifyJsonRaw = executeVerifyJson(graph, projectRoot);
 	const checkJsonRaw = executeCheckJson(graph, projectRoot);
 
-	let verifyData: { result?: { riskLevel?: string; orphanCount?: number; symbolCount?: number; fileCount?: number } } =
-		{};
-	let checkData: { result?: { parsedFiles?: number; failedFiles?: number; symbolCount?: number } } = {};
-
-	try {
-		verifyData = JSON.parse(verifyJsonRaw);
-	} catch {
-		/* use defaults */
-	}
-	try {
-		checkData = JSON.parse(checkJsonRaw);
-	} catch {
-		/* use defaults */
-	}
+	// Own JSON.stringify output — parse failure is impossible, no try/catch needed
+	const verifyData = JSON.parse(verifyJsonRaw) as {
+		result?: { riskLevel?: string; orphanCount?: number; symbolCount?: number; fileCount?: number };
+	};
+	const checkData = JSON.parse(checkJsonRaw) as {
+		result?: { parsedFiles?: number; failedFiles?: number; symbolCount?: number };
+	};
 
 	const riskLevel = verifyData.result?.riskLevel ?? "unknown";
 	const orphanCount = verifyData.result?.orphanCount ?? 0;

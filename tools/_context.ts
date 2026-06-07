@@ -12,6 +12,12 @@ import type { LspManager } from "../lsp/manager.js";
 let _manager: LspManager | null = null;
 
 export function setLspManager(mgr: LspManager): void {
+	// Shut down previous manager before overwriting to prevent resource leaks.
+	// Fire-and-forget: shutdown is async but we don't block the caller.
+	const prev = _manager;
+	if (prev) {
+		prev.shutdown().catch(() => {});
+	}
 	_manager = mgr;
 }
 

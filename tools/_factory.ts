@@ -93,7 +93,16 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 			const maxTokens = params.maxTokens as number | undefined;
 			const graph = scanProject(".");
 
-			let text = await domainFn(graph, params);
+			let text: string;
+			try {
+				text = await domainFn(graph, params);
+			} catch (err) {
+				const errMsg = err instanceof Error ? err.message : String(err);
+				return {
+					content: [{ type: "text", text: `Error: ${spec.name} failed — ${errMsg}` }],
+					isError: true,
+				};
+			}
 
 			if (json) {
 				try {

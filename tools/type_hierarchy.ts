@@ -151,8 +151,9 @@ export async function executeTypeHierarchy(
 						}
 					}
 				}
-			} catch {
+			} catch (e) {
 				// Fall through to graph-based
+				console.warn(`[pi-shazam] LSP typeHierarchy failed for ${name}: ${e instanceof Error ? e.message : String(e)}`);
 			}
 		}
 	}
@@ -215,7 +216,7 @@ function deduplicate(entries: TypeHierarchyEntry[]): TypeHierarchyEntry[] {
 	});
 }
 
-function formatTypeHierarchy(result: TypeHierarchyResult, name: string): string {
+export function formatTypeHierarchy(result: TypeHierarchyResult, name: string): string {
 	const lines: string[] = [
 		`## Result: Type Hierarchy for \`${name}\``,
 		"",

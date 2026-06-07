@@ -152,7 +152,7 @@ function extractTests(
 	};
 }
 
-function formatFindTestsResult(result: FindTestsResult, sourceFile?: string, module?: string): string {
+export function formatFindTestsResult(result: FindTestsResult, sourceFile?: string, module?: string): string {
 	const lines: string[] = [];
 	lines.push("## Find Tests Result");
 	lines.push("");

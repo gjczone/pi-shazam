@@ -178,7 +178,7 @@ function tokenize(query: string): string[] {
 /**
  * Result type covering both BM25 and LSP sources.
  */
-export interface CodesearchHit {
+interface CodesearchHit {
 	sym: Symbol;
 	score: number;
 	source: "bm25" | "lsp" | "lsp+bm25";
@@ -315,7 +315,11 @@ export function executeFulltextSearch(query: string, topN?: number): FulltextMat
 				{ encoding: "utf-8", timeout: 5000, maxBuffer: 10 * 1024 * 1024 },
 			);
 			return parseRipgrepOutput(output, query, limit);
-		} catch {
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			if (!msg.includes("not found") && !msg.includes("No such file")) {
+				console.warn(`[pi-shazam] ripgrep fulltext search failed: ${msg}`);
+			}
 			// ripgrep found nothing or errored — fall through to built-in
 		}
 	}

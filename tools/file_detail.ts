@@ -117,13 +117,6 @@ export function registerFileDetail(pi: ExtensionAPI): void {
 	});
 }
 
-/**
- * Clear the file detail cache (for testing).
- */
-export function clearFileDetailCache(): void {
-	fileDetailCache.clear();
-}
-
 function isDocumentSymbols(
 	syms: DocumentSymbol[] | import("vscode-languageserver-protocol").SymbolInformation[],
 ): syms is DocumentSymbol[] {

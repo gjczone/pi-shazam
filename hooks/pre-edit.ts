@@ -108,13 +108,23 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 		const files = extractFilesFromInput(input);
 		if (files.length === 0) return;
 
-		// Track tentatively for this tool call (for removal on failure)
+		// Track tentatively for this tool call (for removal on failure).
+		// Also schedule TTL-based eviction in case tool_result never arrives.
 		const toolId = (event as unknown as Record<string, unknown>).toolCallId as string | undefined;
 		if (toolId) {
 			if (!_tentativeFiles.has(toolId)) _tentativeFiles.set(toolId, new Set());
 			for (const f of files) {
 				_tentativeFiles.get(toolId)!.add(f);
 			}
+			// Clean up orphaned entries after 5 minutes if tool_result never arrives
+			setTimeout(() => {
+				if (_tentativeFiles.has(toolId)) {
+					for (const f of _tentativeFiles.get(toolId)!) {
+						_editedFiles.delete(f);
+					}
+					_tentativeFiles.delete(toolId);
+				}
+			}, 5 * 60 * 1000);
 		}
 
 		// Track files for multi-edit detection (with eviction)

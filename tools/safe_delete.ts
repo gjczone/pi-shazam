@@ -111,7 +111,7 @@ export function executeSafeDelete(graph: RepoGraph, symbolName: string, dryRun: 
 	};
 }
 
-function formatSafeDeleteResult(result: SafeDeleteResult, symbolName: string): string {
+export function formatSafeDeleteResult(result: SafeDeleteResult, symbolName: string): string {
 	const lines: string[] = [
 		`## Safe Delete: \`${symbolName}\``,
 		"",

@@ -20,8 +20,6 @@ import type {
 	SymbolInformation,
 	WorkspaceSymbol,
 	DocumentSymbol,
-	SemanticTokens,
-	FoldingRange,
 	Location,
 } from "vscode-languageserver-protocol";
 
@@ -65,7 +63,7 @@ export interface EnrichedSymbolHit {
 /**
  * Race a promise against a timeout. Returns null on timeout.
  */
-export function withEnrichTimeout<T>(
+function withEnrichTimeout<T>(
 	promise: Promise<T | null | undefined>,
 	ms: number = DEFAULT_LSP_ENRICH_TIMEOUT_MS,
 ): Promise<T | null> {
@@ -283,51 +281,4 @@ export async function lspDocumentSymbols(
 	return result;
 }
 
-// ── semanticTokens ───────────────────────────────────────────────────────────
 
-/**
- * Fetch full semantic tokens for a file.
- * Returns null on timeout, no server, unsupported, or file not opened.
- */
-export async function lspSemanticTokens(
-	ctx: LspEnrichContext | null,
-	filePath: string,
-	timeoutMs: number = DEFAULT_LSP_ENRICH_TIMEOUT_MS,
-): Promise<SemanticTokens | null> {
-	if (!ctx) return null;
-	const opened = await ensureFileOpened(ctx, filePath);
-	if (!opened) return null;
-	const cap = opened.client.serverCapabilities;
-	const stProvider = (cap as Record<string, unknown> | undefined)?.semanticTokensProvider;
-	if (!stProvider) return null;
-	const result = await withEnrichTimeout(
-		opened.client.semanticTokens(filePath).then((r) => (r.status === "ok" ? r.data : null)),
-		timeoutMs,
-	);
-	return result;
-}
-
-// ── foldingRange ─────────────────────────────────────────────────────────────
-
-/**
- * Fetch folding ranges for a file.
- * Returns null on timeout, no server, unsupported, or file not opened.
- */
-export async function lspFoldingRanges(
-	ctx: LspEnrichContext | null,
-	filePath: string,
-	timeoutMs: number = DEFAULT_LSP_ENRICH_TIMEOUT_MS,
-): Promise<FoldingRange[] | null> {
-	if (!ctx) return null;
-	const opened = await ensureFileOpened(ctx, filePath);
-	if (!opened) return null;
-	const cap = opened.client.serverCapabilities;
-	if (!cap || !(cap as Record<string, unknown>).foldingRangeProvider) {
-		return null;
-	}
-	const result = await withEnrichTimeout(
-		opened.client.foldingRange(filePath).then((r) => (r.status === "ok" ? r.data : null)),
-		timeoutMs,
-	);
-	return result;
-}

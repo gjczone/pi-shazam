@@ -14,6 +14,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { getNextForTool, formatNextSection } from "../core/output.js";
+import { isNonSourceFile } from "../core/filter.js";
 
 export function registerFix(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -92,7 +93,8 @@ export function executeFix(graph: RepoGraph, projectRoot: string, options: FixOp
 	lines.push("");
 
 	// ── Scan files for common issues ─────────────────────────────────────
-	const targetFiles = options.file ? [options.file] : [...graph.fileSymbols.keys()];
+	const rawFiles = options.file ? [options.file] : [...graph.fileSymbols.keys()];
+	const targetFiles = rawFiles.filter((f) => !isNonSourceFile(f));
 
 	const issues = scanFormatIssues(projectRoot, targetFiles, graph);
 
@@ -119,6 +121,9 @@ export function executeFix(graph: RepoGraph, projectRoot: string, options: FixOp
 		lines.push("");
 		if (formatters.includes("prettier")) {
 			lines.push("- `npx prettier --write .`");
+		}
+		if (formatters.includes("biome")) {
+			lines.push("- `npx @biomejs/biome check --write .`");
 		}
 		if (formatters.includes("eslint")) {
 			lines.push("- `npx eslint --fix .`");
@@ -150,7 +155,9 @@ export function executeFix(graph: RepoGraph, projectRoot: string, options: FixOp
 export function executeFixJson(graph: RepoGraph, projectRoot: string, options: FixOptions = {}): string {
 	const dryRun = options.dryRun ?? true;
 	const formatters = detectFormatters(projectRoot);
-	const targetFiles = options.file ? [options.file] : [...graph.fileSymbols.keys()];
+	const rawFiles = options.file ? [options.file] : [...graph.fileSymbols.keys()];
+	const targetFiles = rawFiles.filter((f) => !isNonSourceFile(f));
+
 	const issues = scanFormatIssues(projectRoot, targetFiles, graph);
 
 	return JSON.stringify({

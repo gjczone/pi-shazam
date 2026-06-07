@@ -260,6 +260,9 @@ All tools follow the same pattern:
 
 - `/shazam-setup` — detect installed language servers, output install instructions for missing ones
 - `/shazam-doctor` — health check: verify tree-sitter grammars, LSP servers, cache integrity
+- `/shazam-install-git-hooks` — install git pre-commit hook that runs shazam_verify --preCommit
+- `/shazam-remove-git-hooks` — remove the shazam git pre-commit hook and restore original
+- `/shazam-pre-commit-verify` — run pre-commit verification (used by the git hook script)
 
 ### Output Envelope (JSON mode)
 

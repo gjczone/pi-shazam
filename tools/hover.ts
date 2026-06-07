@@ -312,8 +312,9 @@ export async function executeHover(graph: RepoGraph, name: string, file?: string
 						result.lspHover = String(contents);
 					}
 				}
-			} catch {
+			} catch (e) {
 				// LSP hover failed — fall back to graph metadata
+				console.warn(`[pi-shazam] LSP hover failed for ${symbol.name}: ${e instanceof Error ? e.message : String(e)}`);
 			}
 		}
 	}
