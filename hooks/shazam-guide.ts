@@ -64,10 +64,9 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 	// covers all tool guidance. Keeping only contextual lifecycle notifications.
 
 	pi.on("tool_result", (event, ctx) => {
-		// After write/edit: suggest verify
+		// After write/edit: suggest impact analysis for multi-file edits only
 		if (event.toolName === "write" || event.toolName === "edit") {
 			if (event.isError) return;
-			ctx.ui?.notify?.("reminder: shazam_verify checks for errors after editing", "info");
 
 			// Check if multi-file edit was done — suggest impact analysis
 			if (hasMultiFileEdit(event.content)) {
@@ -104,41 +103,13 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 				ctx.ui?.notify?.("shazam_verify reported FAIL — fix errors before proceeding", "warning");
 			} else if (combined.includes("[WARN]")) {
 				ctx.ui?.notify?.("shazam_verify reported WARN — review warnings, then run shazam_fix if needed", "info");
-			} else if (combined.includes("[PASS]")) {
-				ctx.ui?.notify?.("shazam_verify passed — changes look good", "info");
 			}
 			return;
-		}
-
-		// After shazam_file_detail: suggest find_tests if file might have tests
-		if (event.toolName === "shazam_file_detail" && !event.isError) {
-			const texts: string[] = [];
-			if (event.content) {
-				for (const c of event.content) {
-					if (typeof c === "object" && "text" in c) texts.push((c as { text: string }).text);
-				}
-			}
-			const combined = texts.join("\n");
-			// Extract the file name from the file detail output
-			const fileMatch = combined.match(/^## (.+?)(?:\s|$)/m) || combined.match(/File: `([^`]+)`/);
-			if (fileMatch) {
-				const fileName = fileMatch[1] || fileMatch[0];
-				ctx.ui?.notify?.(
-					`suggestion: shazam_find_tests --sourceFile ${fileName} finds tests for this file`,
-					"info",
-				);
-			}
 		}
 	});
 
 	pi.on("tool_call", (event, ctx) => {
 		const name = event.toolName;
-
-		// Suggest codesearch over grep/search/find
-		if (name === "search" || name === "grep" || name === "find") {
-			ctx.ui?.notify?.("reminder: shazam_codesearch gives ranked results, try it instead of grep", "info");
-			return;
-		}
 
 		// Before impact: suggest verifying first if there are uncommitted changes
 		if (name === "shazam_impact") {
