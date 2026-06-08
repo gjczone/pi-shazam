@@ -52,7 +52,7 @@ if [ -f "tsconfig.json" ] || [ -f "package.json" ]; then
   if command -v npx &>/dev/null; then
     if [ -f "tsconfig.json" ]; then
       echo "[shazam] Running TypeScript typecheck..."
-      if ! npx tsc --noEmit 2>/dev/null; then
+      if ! npx tsc --noEmit 2>&1; then
         echo "[shazam] FAIL: TypeScript typecheck found errors."
         ERRORS=$((ERRORS + 1))
       fi
@@ -61,13 +61,13 @@ if [ -f "tsconfig.json" ] || [ -f "package.json" ]; then
     # Lint (eslint or biome)
     if [ -f "eslint.config.js" ] || [ -f "eslint.config.mjs" ] || [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ]; then
       echo "[shazam] Running eslint..."
-      if ! npx eslint . --max-warnings=0 2>/dev/null; then
+      if ! npx eslint . --max-warnings=0 2>&1; then
         echo "[shazam] FAIL: eslint found issues."
         ERRORS=$((ERRORS + 1))
       fi
     elif [ -f "biome.json" ] || [ -f "biome.jsonc" ]; then
       echo "[shazam] Running biome check..."
-      if ! npx biome check . 2>/dev/null; then
+      if ! npx biome check . 2>&1; then
         echo "[shazam] FAIL: biome found issues."
         ERRORS=$((ERRORS + 1))
       fi
@@ -79,7 +79,7 @@ fi
 if [ -f "Cargo.toml" ]; then
   if command -v cargo &>/dev/null; then
     echo "[shazam] Running cargo check..."
-    if ! cargo check 2>/dev/null; then
+    if ! cargo check 2>&1; then
       echo "[shazam] FAIL: cargo check found errors."
       ERRORS=$((ERRORS + 1))
     fi
@@ -87,7 +87,7 @@ if [ -f "Cargo.toml" ]; then
     # Clippy (optional, only if installed)
     if cargo clippy --version &>/dev/null 2>&1; then
       echo "[shazam] Running cargo clippy..."
-      if ! cargo clippy -- -D warnings 2>/dev/null; then
+      if ! cargo clippy -- -D warnings 2>&1; then
         echo "[shazam] FAIL: clippy found warnings."
         ERRORS=$((ERRORS + 1))
       fi
@@ -99,7 +99,7 @@ fi
 if [ -f "go.mod" ]; then
   if command -v go &>/dev/null; then
     echo "[shazam] Running go vet..."
-    if ! go vet ./... 2>/dev/null; then
+    if ! go vet ./... 2>&1; then
       echo "[shazam] FAIL: go vet found errors."
       ERRORS=$((ERRORS + 1))
     fi
@@ -107,7 +107,7 @@ if [ -f "go.mod" ]; then
     # golangci-lint (optional)
     if command -v golangci-lint &>/dev/null; then
       echo "[shazam] Running golangci-lint..."
-      if ! golangci-lint run 2>/dev/null; then
+      if ! golangci-lint run 2>&1; then
         echo "[shazam] FAIL: golangci-lint found issues."
         ERRORS=$((ERRORS + 1))
       fi
@@ -120,13 +120,13 @@ if [ -f "pyproject.toml" ] || [ -f "setup.py" ] || [ -f "requirements.txt" ]; th
   # Type check (pyright or mypy)
   if command -v pyright &>/dev/null; then
     echo "[shazam] Running pyright..."
-    if ! pyright . 2>/dev/null; then
+    if ! pyright . 2>&1; then
       echo "[shazam] FAIL: pyright found errors."
       ERRORS=$((ERRORS + 1))
     fi
   elif command -v mypy &>/dev/null; then
     echo "[shazam] Running mypy..."
-    if ! mypy . 2>/dev/null; then
+    if ! mypy . 2>&1; then
       echo "[shazam] FAIL: mypy found errors."
       ERRORS=$((ERRORS + 1))
     fi
@@ -135,7 +135,7 @@ if [ -f "pyproject.toml" ] || [ -f "setup.py" ] || [ -f "requirements.txt" ]; th
   # Lint (ruff)
   if command -v ruff &>/dev/null; then
     echo "[shazam] Running ruff check..."
-    if ! ruff check . 2>/dev/null; then
+    if ! ruff check . 2>&1; then
       echo "[shazam] FAIL: ruff found issues."
       ERRORS=$((ERRORS + 1))
     fi
