@@ -32,16 +32,16 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 
 ## Current Version
 
-**0.5.2** — synced across all surfaces:
+**0.5.3** — synced across all surfaces:
 
 | Surface | Version | Check |
 |---------|---------|-------|
-| `package.json` | 0.5.2 | `node -e "console.log(require('./package.json').version)"` |
-| MCP server (`mcp/entry.ts`) | 0.5.2 | `grep version mcp/entry.ts` |
-| Global npm install | 0.5.2 | `npm ls -g pi-shazam` |
-| GitHub Release | v0.5.2 | `gh release view v0.5.2` |
-| Git tag | v0.5.2 | `git describe --tags` |
-| npm registry | 0.5.2 | `npm view pi-shazam version` |
+| `package.json` | 0.5.3 | `node -e "console.log(require('./package.json').version)"` |
+| MCP server (`mcp/entry.ts`) | 0.5.3 | `grep version mcp/entry.ts` |
+| Global npm install | 0.5.3 | `npm ls -g pi-shazam` |
+| GitHub Release | v0.5.3 | `gh release view v0.5.3` |
+| Git tag | v0.5.3 | `git describe --tags` |
+| npm registry | 0.5.3 | `npm view pi-shazam version` |
 
 ## Commands
 
