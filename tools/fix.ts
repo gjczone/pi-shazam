@@ -3,7 +3,7 @@
  *
  * Scans source files for common format issues and offers fixes.
  * In dry-run mode, previews what would change without modifying files.
- * Supports nearest-wins formatter detection (prettier, biome, eslint, ruff, gofmt).
+ * Supports nearest-wins formatter detection (prettier, biome, eslint, ruff, rustfmt, gofmt).
  */
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
@@ -128,6 +128,15 @@ export function executeFix(graph: RepoGraph, projectRoot: string, options: FixOp
 		if (formatters.includes("eslint")) {
 			lines.push("- `npx eslint --fix .`");
 		}
+		if (formatters.includes("ruff")) {
+			lines.push("- `ruff format .`");
+		}
+		if (formatters.includes("rustfmt")) {
+			lines.push("- `cargo fmt`");
+		}
+		if (formatters.includes("gofmt")) {
+			lines.push("- `gofmt -w .`");
+		}
 		if (formatters.length === 0) {
 			lines.push("- Install formatter: `npm install --save-dev prettier`");
 			lines.push("- Then run: `npx prettier --write .`");
@@ -228,6 +237,37 @@ function detectFormatters(projectRoot: string): string[] {
 	// Check .editorconfig (fixes #125)
 	if (existsSync(join(projectRoot, ".editorconfig"))) {
 		formatters.push("editorconfig");
+	}
+
+	// Python: ruff (pyproject.toml or ruff.toml)
+	if (existsSync(join(projectRoot, "ruff.toml"))) {
+		formatters.push("ruff");
+	} else if (existsSync(join(projectRoot, "pyproject.toml"))) {
+		try {
+			const pyproject = readFileSync(join(projectRoot, "pyproject.toml"), "utf-8");
+			if (pyproject.includes("[tool.ruff")) formatters.push("ruff");
+		} catch {
+			/* ignore */
+		}
+	}
+
+	// Rust: rustfmt (Cargo.toml with [package] section, or rustfmt.toml)
+	if (existsSync(join(projectRoot, "rustfmt.toml"))) {
+		formatters.push("rustfmt");
+	} else if (existsSync(join(projectRoot, ".rustfmt.toml"))) {
+		formatters.push("rustfmt");
+	} else if (existsSync(join(projectRoot, "Cargo.toml"))) {
+		try {
+			const cargo = readFileSync(join(projectRoot, "Cargo.toml"), "utf-8");
+			if (cargo.includes("[package]")) formatters.push("rustfmt");
+		} catch {
+			/* ignore */
+		}
+	}
+
+	// Go: gofmt (go.mod)
+	if (existsSync(join(projectRoot, "go.mod"))) {
+		formatters.push("gofmt");
 	}
 
 	return [...new Set(formatters)];
@@ -508,6 +548,43 @@ function runFormatters(projectRoot: string, formatters: string[], targetFile?: s
 					results.push({
 						formatter: "biome",
 						summary: "Biome fixes applied",
+					});
+					break;
+				}
+					case "ruff": {
+						const args = ["ruff", "format"];
+						if (targetFile) {
+							args.push(targetFile);
+						} else {
+							args.push(".");
+						}
+						runFormatterCommand(args, projectRoot);
+						results.push({
+							formatter: "ruff",
+							summary: "Ruff format applied",
+						});
+						break;
+					}
+				case "rustfmt": {
+					const args = ["cargo", "fmt"];
+					runFormatterCommand(args, projectRoot);
+					results.push({
+						formatter: "rustfmt",
+						summary: "Rustfmt applied",
+					});
+					break;
+				}
+				case "gofmt": {
+					const args = ["gofmt", "-w"];
+					if (targetFile) {
+						args.push(targetFile);
+					} else {
+						args.push(".");
+					}
+					runFormatterCommand(args, projectRoot);
+					results.push({
+						formatter: "gofmt",
+						summary: "Gofmt applied",
 					});
 					break;
 				}
