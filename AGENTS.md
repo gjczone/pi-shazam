@@ -406,6 +406,70 @@ git branch -d fix/issue-<NUM>
 
 ## Release & Publish Workflow
 
+### Release Notes & Changelog Requirements
+
+**Every release MUST have detailed release notes and a CHANGELOG.md entry.** This is non-negotiable.
+
+#### GitHub Release Notes
+
+After creating a release, update the release notes with:
+
+1. **What's Changed** section with subsections:
+   - Features & Enhancements
+   - Bug Fixes
+   - Refactoring
+   - Other
+2. Each item should include:
+   - Issue/PR number (e.g., `#199`)
+   - Brief description of the change
+   - Bullet points for specific details
+3. **Upgrade** section with installation commands
+4. **Full Changelog** link
+
+Example:
+```markdown
+# v0.6.0
+
+## What's Changed
+
+### Features & Enhancements
+
+- **enhance(#199): shazam_impact output now includes symbol-level detail** (#207)
+  - Added risk assessment based on affected file and symbol counts
+  - Added symbol grouping by file with upstream/downstream direction
+
+### Bug Fixes
+
+- **fix(#196,#200): find_tests sourceFile parameter now searches tests/ directory** (#204)
+  - Fixed sourceFile parameter to search project-root test directories
+
+## Upgrade
+
+```bash
+npm install -g pi-shazam@latest --legacy-peer-deps
+pi install npm:pi-shazam@latest
+```
+
+**Full Changelog**: https://github.com/gjczone/pi-shazam/compare/v0.5.5...v0.6.0
+```
+
+#### CHANGELOG.md
+
+Maintain a `CHANGELOG.md` file in the project root following [Keep a Changelog](https://keepachangelog.com/) format:
+
+1. Each version gets a `## [X.Y.Z] - YYYY-MM-DD` section
+2. Same subsections as release notes (Features, Bug Fixes, Refactoring, Other)
+3. Include issue/PR numbers for traceability
+4. Keep entries concise but informative
+
+#### Release Script Integration
+
+The release script (`scripts/release.sh`) creates a minimal release. After running it:
+
+1. Edit the GitHub Release to add detailed notes
+2. Update CHANGELOG.md with the same information
+3. Commit CHANGELOG.md changes
+
 ### Quick Release (Recommended)
 
 Use the automated release script:
@@ -424,6 +488,11 @@ This script handles everything:
 7. Updates local Pi extension (`pi update`)
 8. Updates global npm install
 9. Verifies all installations
+
+**After running the release script, you MUST:**
+1. Update the GitHub Release with detailed notes (see above)
+2. Update CHANGELOG.md with the same information
+3. Commit and push CHANGELOG.md changes
 
 ### Manual Publishing (If Needed)
 
