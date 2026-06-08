@@ -281,4 +281,11 @@ export async function lspDocumentSymbols(
 	return result;
 }
 
+/**
+ * Reset module-level state. Called on session shutdown to prevent memory leaks.
+ */
+export function resetLspEnrichState(): void {
+	_openedFileMtimes.clear();
+}
+
 

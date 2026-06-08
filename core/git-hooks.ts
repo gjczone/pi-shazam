@@ -329,8 +329,9 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 					timeout: 60000,
 				});
 				pyrightAvailable = true;
-			} catch (err: any) {
-				if (err.code === "ENOENT" || err.status === 127) {
+			} catch (err: unknown) {
+				const errnoErr = err as NodeJS.ErrnoException;
+				if (errnoErr.code === "ENOENT" || (errnoErr as NodeJS.ErrnoException & { status?: number }).status === 127) {
 					// pyright not installed — try mypy
 				} else {
 					// pyright found type errors

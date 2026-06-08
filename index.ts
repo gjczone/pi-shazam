@@ -12,7 +12,7 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "./types/pi-extension.js";
 import { LspManager } from "./lsp/manager.js";
 import { generateSetupReport } from "./lsp/setup.js";
-import { setLspManager } from "./tools/_context.js";
+import { setLspManager, awaitPreviousShutdown } from "./tools/_context.js";
 import { installPreCommitHook, removePreCommitHook, runPreCommitVerify } from "./core/git-hooks.js";
 
 // ── Hook registrations ───────────────────────────────────────────────────
@@ -53,6 +53,7 @@ export default function (pi: ExtensionAPI): void {
 	// Auto-initialize LSP on agent start (with overall 15s timeout guard)
 	pi.on("before_agent_start", async (_event, _ctx) => {
 		try {
+			await awaitPreviousShutdown();
 			const languages = lspManager.detectLanguages();
 			if (languages.length > 0) {
 				log(`Detected languages: ${languages.join(", ")}`);
@@ -77,6 +78,15 @@ export default function (pi: ExtensionAPI): void {
 			const errMsg = err instanceof Error ? err.message : String(err);
 			console.error(`[pi-shazam] session_shutdown: LSP shutdown failed: ${errMsg}`);
 		}
+		// Clean up module-level caches to prevent memory leaks
+		try {
+			const { resetCache } = await import("./core/scanner.js");
+			resetCache();
+		} catch { /* best effort */ }
+		try {
+			const { resetLspEnrichState } = await import("./tools/lsp_enrich.js");
+			resetLspEnrichState();
+		} catch { /* best effort */ }
 	});
 
 	// ── Hooks ────────────────────────────────────────────────────────────────

@@ -154,6 +154,7 @@ export class LspClient {
 	private process: ChildProcess | null = null;
 	private connection: import("vscode-jsonrpc").MessageConnection | null = null;
 	private _openedFiles = new Set<string>();
+	private _openingFiles = new Set<string>();
 	private _serverCapabilities: Record<string, unknown> = {};
 	private _running = false;
 	private _initialized = false;
@@ -353,6 +354,12 @@ export class LspClient {
 			return;
 		}
 
+		const resolvedPath = path.resolve(filePath);
+		if (this._openedFiles.has(resolvedPath) || this._openingFiles.has(resolvedPath)) {
+			return;
+		}
+		this._openingFiles.add(resolvedPath);
+
 		const uri = pathToUri(filePath);
 
 		const params: DidOpenTextDocumentParams = {
@@ -364,13 +371,18 @@ export class LspClient {
 			},
 		};
 
-		await this.connection.sendNotification("textDocument/didOpen", params);
-		this._openedFiles.add(path.resolve(filePath));
+		try {
+			await this.connection.sendNotification("textDocument/didOpen", params);
+			this._openedFiles.add(path.resolve(filePath));
+		} finally {
+			this._openingFiles.delete(resolvedPath);
+		}
 	}
 
 	async didChange(filePath: string, text: string): Promise<void> {
 		if (!this.connection) {
-			return null as unknown as void;
+			this._log("didChange: connection not available");
+			return;
 		}
 
 		if (!this.isFileOpened(filePath)) return;
@@ -401,7 +413,8 @@ export class LspClient {
 
 	async didSave(filePath: string): Promise<void> {
 		if (!this.connection) {
-			return null as unknown as void;
+			this._log("didSave: connection not available");
+			return;
 		}
 
 		if (!this.isFileOpened(filePath)) return;

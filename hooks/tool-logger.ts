@@ -18,6 +18,7 @@ const LOG_FILE = join(AUDIT_DIR, "shazam-calls.log");
 const MAX_RESULT_CHARS = 10_000;
 
 const _starts = new Map<string, number>();
+let _writeFailed = false;
 
 function ensureDir(): void {
 	mkdirSync(AUDIT_DIR, { recursive: true });
@@ -36,8 +37,11 @@ function write(entry: Record<string, unknown>): void {
 	try {
 		ensureDir();
 		appendFileSync(LOG_FILE, JSON.stringify(entry) + "\n", "utf-8");
-	} catch {
-		/* silent */
+	} catch (err) {
+		if (!_writeFailed) {
+			_writeFailed = true;
+			console.warn(`[pi-shazam] Audit log write failed: ${err instanceof Error ? err.message : String(err)}`);
+		}
 	}
 }
 

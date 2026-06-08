@@ -199,10 +199,10 @@ describe("lsp/client", () => {
 	});
 
 	describe("LspClient didChange", () => {
-		it("should return null when client not started", async () => {
+		it("should return undefined when client not started", async () => {
 			const client = new LspClient(["mock"], "/ws", 5000);
 			const result = await client.didChange("/test/file.ts", "new content");
-			expect(result).toBeNull();
+			expect(result).toBeUndefined();
 		});
 
 		it("should skip large files", async () => {
@@ -242,10 +242,10 @@ describe("lsp/client", () => {
 	});
 
 	describe("LspClient didSave", () => {
-		it("should return null when client not started", async () => {
+		it("should return undefined when client not started", async () => {
 			const client = new LspClient(["mock"], "/ws", 5000);
 			const result = await client.didSave("/test/file.ts");
-			expect(result).toBeNull();
+			expect(result).toBeUndefined();
 		});
 
 		it("should send didSave notification", async () => {

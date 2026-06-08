@@ -571,7 +571,7 @@ function collectSourceFiles(root: string, maxFiles: number): string[] {
 			if (err instanceof Error && (err.message.includes('EACCES') || err.message.includes('EPERM'))) {
 				console.warn(`[pi-shazam] collectSourceFiles: permission denied: ${dir}`);
 			} else {
-				const code = (err as any)?.code ?? String(err);
+				const code = (err as NodeJS.ErrnoException)?.code ?? String(err);
 				console.warn(`[pi-shazam] collectSourceFiles: unexpected error reading ${dir}: ${code}`);
 			}
 			return;

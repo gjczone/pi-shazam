@@ -10,17 +10,31 @@
 import type { LspManager } from "../lsp/manager.js";
 
 let _manager: LspManager | null = null;
+let _shutdownPromise: Promise<void> | null = null;
 
 export function setLspManager(mgr: LspManager): void {
-	// Shut down previous manager before overwriting to prevent resource leaks.
-	// Fire-and-forget: shutdown is async but we don't block the caller.
+	// Wait for previous manager shutdown to complete before overwriting.
+	// Store the shutdown promise so getLspManager callers can await it if needed.
 	const prev = _manager;
 	if (prev) {
-		prev.shutdown().catch(() => {});
+		_shutdownPromise = prev.shutdown().catch((err) => {
+			console.warn(`[pi-shazam] Previous LspManager shutdown failed: ${err instanceof Error ? err.message : String(err)}`);
+		});
 	}
 	_manager = mgr;
 }
 
 export function getLspManager(): LspManager | null {
 	return _manager;
+}
+
+/**
+ * Await the previous LspManager shutdown if one is in progress.
+ * Call this before initializing new LSP servers.
+ */
+export async function awaitPreviousShutdown(): Promise<void> {
+	if (_shutdownPromise) {
+		await _shutdownPromise;
+		_shutdownPromise = null;
+	}
 }
