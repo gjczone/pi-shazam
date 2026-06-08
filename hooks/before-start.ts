@@ -158,13 +158,16 @@ export function registerBeforeStartHook(pi: ExtensionAPI): void {
 		_hasShownOverview = false;
 	});
 
-	pi.on("before_agent_start", async (_event, _ctx) => {
+	pi.on("before_agent_start", async (event, _ctx) => {
 		try {
 			// Use module-level flag to detect continuation (fixes #117, #118)
 			const overviewText = generateOverviewForPrompt(".", _hasShownOverview);
-			// Append overview to the system prompt
+			// Append overview to the existing system prompt (AGENTS.md, skills, etc.)
+			// NOT replace — returning systemPrompt alone would wipe global rules and skill descriptions
+			const existing = event.systemPrompt ?? [];
+			const merged = [...existing, overviewText].filter(Boolean);
 			return {
-				systemPrompt: overviewText,
+				systemPrompt: merged.join("\n\n"),
 			};
 		} catch (err) {
 			console.warn(`[pi-shazam] Failed to generate overview: ${err}`);
