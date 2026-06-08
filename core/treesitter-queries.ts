@@ -61,6 +61,7 @@ export const QUERIES: QueryDict = {
 		function: `\
 (function_declaration name: (identifier) @name) @definition.function
 (variable_declarator name: (identifier) @name value: (arrow_function)) @definition.function
+(variable_declarator name: (identifier) @name value: (call_expression function: (identifier) @_fn (#match? @_fn "^(createContext|create|use[A-Z])"))) @definition.function
 (method_definition name: (property_identifier) @name) @definition.method
 `,
 		class: `\
