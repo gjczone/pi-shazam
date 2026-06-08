@@ -95,6 +95,48 @@ function isRegistrationSymbol(name: string): boolean {
 	);
 }
 
+function isEntryPointSymbol(name: string, kind: string): boolean {
+	// Python entry points
+	if (
+		name === "__init__" ||
+		name === "__str__" ||
+		name === "__repr__" ||
+		name === "__len__" ||
+		name === "__iter__" ||
+		name === "__getitem__" ||
+		name === "__setitem__" ||
+		name === "__call__" ||
+		name === "__enter__" ||
+		name === "__exit__" ||
+		name === "__aenter__" ||
+		name === "__aexit__" ||
+		name === "__anext__" ||
+		name === "__aiter__" ||
+		name === "__main__"
+	) {
+		return true;
+	}
+	// Rust entry points
+	if (name === "main" && kind === "function") return true;
+	if (name === "Default" && kind === "trait") return true;
+	if (name === "Drop" && kind === "trait") return true;
+	// Go entry points
+	if (name === "main" && kind === "function") return true;
+	if (name === "init" && kind === "function") return true;
+	// Common framework entry points
+	if (name.startsWith("test_") || name.startsWith("Test")) return true;
+	return false;
+}
+
+function isFrameworkHandler(name: string): boolean {
+	// Flask/FastAPI/Django route handlers and middleware
+	if (name.startsWith("test_") || name.startsWith("Test")) return true;
+	if (name.startsWith("handle_") || name.startsWith("on_")) return true;
+	if (name.startsWith("middleware")) return true;
+	if (name.endsWith("_handler") || name.endsWith("Handler")) return true;
+	return false;
+}
+
 /**
  * Shared orphan symbol detection.
  *
@@ -109,6 +151,8 @@ function isRegistrationSymbol(name: string): boolean {
  *  - Test files
  *  - Registration functions (register*, createTool) called by MCP/extension frameworks
  *  - Exported symbols in registration/entry-point files (called externally)
+ *  - Language-specific entry point symbols (dunder methods, main, traits)
+ *  - Framework handler patterns (handle_*, on_*, middleware, *_handler)
  *
  * Returns structured result with separate lists for internal and exported orphans.
  */
@@ -130,9 +174,13 @@ export function findOrphans(graph: RepoGraph): {
 			// Skip anonymous functions
 			if (sym.kind === "anonymous_function") continue;
 			// Skip test files
-			if (sym.file.includes("tests/") || sym.file.includes(".test.")) continue;
+			if (sym.file.includes("tests/") || sym.file.includes(".test.") || sym.file.includes("test_") || sym.file.includes("_test.") || sym.file.includes("/test/")) continue;
 			// Skip registration functions called dynamically by frameworks
 			if (isRegistrationSymbol(sym.name)) continue;
+			// Skip language-specific entry point symbols
+			if (isEntryPointSymbol(sym.name, sym.kind)) continue;
+			// Skip framework handler patterns
+			if (isFrameworkHandler(sym.name)) continue;
 			// Skip exported symbols in registration/entry-point files
 			if (sym.visibility === "exported" && isRegistrationFile(sym.file)) continue;
 
