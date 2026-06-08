@@ -7,6 +7,8 @@ import type { RepoGraph } from "../core/graph.js";
 import { createTool } from "./_factory.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 export function registerHotspots(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -36,6 +38,32 @@ interface FileHotspot {
 	hotspotScore: number;
 }
 
+function getExcludeMessage(): string {
+	const projectRoot = process.cwd();
+	const exclusions: string[] = [];
+
+	// JS/TS
+	if (existsSync(join(projectRoot, "package.json"))) {
+		exclusions.push("package-lock.json", "package.json", "tsconfig.json", "node_modules/");
+	}
+	// Python
+	if (existsSync(join(projectRoot, "pyproject.toml")) || existsSync(join(projectRoot, "setup.py"))) {
+		exclusions.push("pyproject.toml", "__pycache__/", ".ruff_cache/", ".pytest_cache/");
+	}
+	// Rust
+	if (existsSync(join(projectRoot, "Cargo.toml"))) {
+		exclusions.push("Cargo.lock", "target/");
+	}
+	// Go
+	if (existsSync(join(projectRoot, "go.mod"))) {
+		exclusions.push("go.sum", "vendor/");
+	}
+	// Universal
+	exclusions.push("dist/");
+
+	return `Config and generated files (${exclusions.join(", ")}) are excluded.`;
+}
+
 export function executeHotspots(graph: RepoGraph, topN: number = 10): string {
 	const hotspots = computeHotspots(graph, topN);
 
@@ -45,7 +73,7 @@ export function executeHotspots(graph: RepoGraph, topN: number = 10): string {
 	lines.push("Ranked by symbol density × PageRank score.");
 	lines.push("");
 	lines.push(
-		"Config and generated files (package-lock.json, package.json, tsconfig.json, dist/, node_modules/) are excluded.",
+		getExcludeMessage(),
 	);
 	lines.push("");
 
