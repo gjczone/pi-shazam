@@ -119,27 +119,37 @@ fi
 # Step 10: Update local installations
 log "Step 10: Updating local installations..."
 
-# Update global npm
+# Update global npm (use @latest to avoid locking version)
 log "Updating global npm..."
-npm install -g pi-shazam@"$NEW_VERSION" --legacy-peer-deps 2>&1 | tail -3
+npm install -g pi-shazam@latest --legacy-peer-deps 2>&1 | tail -3
 
-# Update Pi extension
+# Update Pi extension (use @latest to avoid locking version)
 log "Updating Pi extension..."
-pi update 2>&1 | tail -5
+pi install npm:pi-shazam@latest 2>&1 | tail -5
 
 # Step 11: Verify
 log "Step 11: Verifying installations..."
 
 echo ""
 echo "=== Verification ==="
-echo -n "Global npm: "
-npm ls -g pi-shazam 2>/dev/null | grep pi-shazam || echo "FAILED"
 
-echo -n "Pi extension: "
-cat ~/.pi/agent/npm/node_modules/pi-shazam/package.json 2>/dev/null | grep '"version"' || echo "FAILED"
+# Get installed versions
+GLOBAL_VERSION=$(npm ls -g pi-shazam 2>/dev/null | grep pi-shazam | sed 's/.*@//' | sed 's/ .*//')
+PI_VERSION=$(cat ~/.pi/agent/npm/node_modules/pi-shazam/package.json 2>/dev/null | grep '"version"' | sed 's/.*"//' | sed 's/".*//')
+NPM_VERSION=$(npm view pi-shazam version)
 
-echo -n "npm registry: "
-npm view pi-shazam version
+echo "Global npm: v$GLOBAL_VERSION"
+echo "Pi extension: v$PI_VERSION"
+echo "npm registry: v$NPM_VERSION"
+
+# Verify they match
+if [[ "$GLOBAL_VERSION" == "$NEW_VERSION" && "$PI_VERSION" == "$NEW_VERSION" ]]; then
+    echo ""
+    log "All installations synced to v$NEW_VERSION"
+else
+    warn "Version mismatch detected! Manual sync may be needed."
+    warn "Run: npm install -g pi-shazam@latest --legacy-peer-deps && pi install npm:pi-shazam@latest"
+fi
 
 echo ""
 log "Release v$NEW_VERSION complete!"
