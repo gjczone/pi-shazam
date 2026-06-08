@@ -3,6 +3,9 @@
  *
  * Locates test files for a given source file or module using common
  * naming conventions (*.test.ts, *.spec.ts, __tests__/ directories).
+ * Supports Python (test_*.py / *_test.py), Go (*_test.go), Rust
+ * (test_*.rs / *_test.rs), Java (Test*.java / *Test.java), and
+ * C# (Test*.cs / *Test.cs).
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join, basename, dirname } from "node:path";
@@ -20,9 +23,11 @@ export function registerFindTests(pi: ExtensionAPI): void {
 		description: `\
 		When adding tests or modifying source code — use this to discover
 		which test files already cover a module, what test functions exist,
-		and where new tests belong. Understands *.test.ts, *.spec.ts,
-		__tests__/ conventions. Pass sourceFile or module to scope the
-		search.`,
+		and where new tests belong. Understands conventions for JS/TS
+		(*.test.ts, *.spec.ts), Python (test_*.py / *_test.py), Go
+		(*_test.go), Rust (test_*.rs / *_test.rs), Java (Test*.java /
+		*Test.java), and C# (Test*.cs / *Test.cs). Pass sourceFile or
+		module to scope the search.`,
 		params: Type.Object({
 			sourceFile: Type.Optional(Type.String()),
 			module: Type.Optional(Type.String()),
@@ -55,6 +60,24 @@ interface FindTestsResult {
 	};
 }
 
+function getTestPatternForLanguage(sourceFile: string): RegExp {
+	const ext = sourceFile.split(".").pop()?.toLowerCase();
+	switch (ext) {
+		case "py":
+			return /(?:^|\/)(?:test_[^/]+\.py|[^/]+_test\.py)$/;
+		case "go":
+			return /(?:^|\/)[^/]+_test\.go$/;
+		case "rs":
+			return /(?:^|\/)(?:test_[^/]+\.rs|[^/]+_test\.rs)$/;
+		case "java":
+			return /(?:^|\/)(?:Test[^/]+\.java|[^/]+Test\.java)$/;
+		case "cs":
+			return /(?:^|\/)(?:Test[^/]+\.cs|[^/]+Test\.cs)$/;
+		default:
+			return /\.(test|spec|e2e)\.(ts|js|tsx|jsx|mts|mjs)$/;
+	}
+}
+
 export function executeFindTests(
 	graph: RepoGraph,
 	projectRoot: string,
@@ -62,7 +85,6 @@ export function executeFindTests(
 ): FindTestsResult {
 	const matches: TestFileMatch[] = [];
 	const allSources = [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
-	const testPattern = /\.(test|spec|e2e)\.(ts|js|tsx|jsx|mts|mjs)$/;
 	const testDirs = ["__tests__", "test", "tests", "__test__"];
 
 	if (opts.sourceFile) {
@@ -71,10 +93,10 @@ export function executeFindTests(
 		const dir = dirname(sourceFile);
 
 		for (const f of allSources) {
-			if (!testPattern.test(f)) continue;
+			if (!getTestPatternForLanguage(sourceFile).test(f)) continue;
 			const fBase = basename(f).replace(/\.(test|spec|e2e)\.(ts|js|tsx|jsx|mts|mjs)$/, "");
 			if (fBase === base && (dirname(f) === dir || dirname(f) === join(dir, "__tests__"))) {
-				matches.push(extractTests(f, sourceFile, "direct", testPattern, projectRoot));
+				matches.push(extractTests(f, sourceFile, "direct", getTestPatternForLanguage(sourceFile), projectRoot));
 			}
 		}
 
@@ -82,9 +104,9 @@ export function executeFindTests(
 			const testDir = join(projectRoot, dir, td);
 			if (existsSync(testDir)) {
 				for (const f of allSources) {
-					if (f.startsWith(join(dir, td)) && testPattern.test(f)) {
+					if (f.startsWith(join(dir, td)) && getTestPatternForLanguage(sourceFile).test(f)) {
 						if (!matches.some((m) => m.testFile === f)) {
-							matches.push(extractTests(f, sourceFile, "direct", testPattern, projectRoot));
+							matches.push(extractTests(f, sourceFile, "direct", getTestPatternForLanguage(sourceFile), projectRoot));
 						}
 					}
 				}
@@ -97,14 +119,14 @@ export function executeFindTests(
 			if (!existsSync(testDir)) continue;
 
 			for (const f of allSources) {
-				if (!testPattern.test(f)) continue;
+				if (!getTestPatternForLanguage(sourceFile).test(f)) continue;
 				// Only match files in this specific test directory
 				if (!f.startsWith(td + "/") && !f.startsWith(td + "\\")) continue;
 
 				const fBase = basename(f).replace(/\.(test|spec|e2e)\.(ts|js|tsx|jsx|mts|mjs)$/, "");
 				if (fBase === base) {
 					if (!matches.some((m) => m.testFile === f)) {
-						matches.push(extractTests(f, sourceFile, "convention", testPattern, projectRoot));
+						matches.push(extractTests(f, sourceFile, "convention", getTestPatternForLanguage(sourceFile), projectRoot));
 					}
 				}
 			}
@@ -114,12 +136,12 @@ export function executeFindTests(
 	if (opts.module) {
 		const lower = opts.module.toLowerCase();
 		for (const f of allSources) {
-			if (!testPattern.test(f)) continue;
+			if (!getTestPatternForLanguage(f).test(f)) continue;
 			const fLower = f.toLowerCase();
 			if (fLower.includes(lower) || fLower.replace(/[^a-z0-9]/g, "").includes(lower.replace(/[^a-z0-9]/g, ""))) {
 				if (!matches.some((m) => m.testFile === f)) {
 					const sourceFile = f.replace(/\.(test|spec|e2e)\./, ".").replace(/_(test|spec|e2e)\./, ".");
-					matches.push(extractTests(f, sourceFile, "convention", testPattern, projectRoot));
+					matches.push(extractTests(f, sourceFile, "convention", getTestPatternForLanguage(f), projectRoot));
 				}
 			}
 		}
@@ -127,9 +149,9 @@ export function executeFindTests(
 
 	if (!opts.sourceFile && !opts.module) {
 		for (const f of allSources) {
-			if (testPattern.test(f)) {
+			if (getTestPatternForLanguage(f).test(f)) {
 				const sourceFile = f.replace(/\.(test|spec|e2e)\./, ".").replace(/_(test|spec|e2e)\./, ".");
-				matches.push(extractTests(f, sourceFile, "sibling", testPattern, projectRoot));
+				matches.push(extractTests(f, sourceFile, "sibling", getTestPatternForLanguage(f), projectRoot));
 			}
 		}
 	}

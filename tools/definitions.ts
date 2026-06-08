@@ -136,7 +136,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_find_tests",
 		label: "Find Test Files",
 		description:
-			"When adding tests or modifying source code — use this to discover which test files already cover a module, what test functions exist, and where new tests belong. Understands *.test.ts, *.spec.ts, __tests__/ conventions. Pass sourceFile or module to scope the search.",
+			"When adding tests or modifying source code — use this to discover which test files already cover a module, what test functions exist, and where new tests belong. Understands conventions for JS/TS (*.test.ts, *.spec.ts), Python (test_*.py / *_test.py), Go (*_test.go), Rust (test_*.rs / *_test.rs), Java (Test*.java / *Test.java), and C# (Test*.cs / *Test.cs). Pass sourceFile or module to scope the search.",
 		typeboxParams: Type.Object({
 			sourceFile: Type.Optional(Type.String()),
 			module: Type.Optional(Type.String()),
