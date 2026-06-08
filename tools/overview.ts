@@ -9,6 +9,7 @@ import type { RepoGraph, Symbol } from "../core/graph.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool } from "./_factory.js";
+import { EXT_TO_LANG } from "../core/treesitter.js";
 import { readFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
@@ -92,6 +93,24 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 	lines.push("## Project Overview");
 	lines.push("");
 	lines.push(`${graph.symbols.size} symbols across ${files.length} source files`);
+
+	// Language breakdown
+	const langCounts = new Map<string, number>();
+	for (const file of files) {
+		const ext = "." + file.split(".").pop()?.toLowerCase();
+		const lang = EXT_TO_LANG[ext];
+		if (lang) {
+			langCounts.set(lang, (langCounts.get(lang) ?? 0) + 1);
+		}
+	}
+	if (langCounts.size > 0) {
+		lines.push("");
+		lines.push("### Language Support");
+		lines.push("");
+		lines.push("Supported: " + [...langCounts.entries()].map(([l, c]) => `${l} (${c} files)`).join(", "));
+		lines.push("");
+		lines.push("Note: Only Python, TypeScript, Go, Rust, and JSON are analyzed. Other file types are skipped.");
+	}
 
 	// Key Dependencies and Recent Changes (only in full overview, not filter mode)
 	if (!filter) {
