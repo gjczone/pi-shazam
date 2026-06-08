@@ -86,7 +86,8 @@ export function createBaseline(
 ): SessionBaseline {
 	const edgeCount = getGraphEdgeCount(graph);
 
-	const orphanCount = findOrphans(graph).length;
+	const orphanResult = findOrphans(graph);
+	const orphanCount = orphanResult.all.length;
 
 	const baseline: SessionBaseline = {
 		branch,
@@ -104,7 +105,7 @@ export function createBaseline(
 
 	// Cache current orphan set for future diff
 	_previousOrphans = new Map();
-	for (const orphan of findOrphans(graph)) {
+	for (const orphan of orphanResult.all) {
 		_previousOrphans.set(`${orphan.name}::${orphan.file}`, orphan);
 	}
 
@@ -120,7 +121,8 @@ export function diffFromBaseline(graph: RepoGraph, lspErrors: number, lspWarning
 
 	const edgeCount = getGraphEdgeCount(graph);
 
-	const currentOrphans = findOrphans(graph);
+	const orphanResult = findOrphans(graph);
+	const currentOrphans = orphanResult.all;
 	const currentOrphanCount = currentOrphans.length;
 
 	// Find new orphans (not in previous baseline)

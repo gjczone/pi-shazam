@@ -109,9 +109,18 @@ function isRegistrationSymbol(name: string): boolean {
  *  - Test files
  *  - Registration functions (register*, createTool) called by MCP/extension frameworks
  *  - Exported symbols in registration/entry-point files (called externally)
+ *
+ * Returns structured result with separate lists for internal and exported orphans.
  */
-export function findOrphans(graph: RepoGraph): { name: string; kind: string; file: string; line: number }[] {
-	const orphans: { name: string; kind: string; file: string; line: number }[] = [];
+export function findOrphans(graph: RepoGraph): {
+	all: { name: string; kind: string; file: string; line: number; isExported: boolean }[];
+	internal: { name: string; kind: string; file: string; line: number }[];
+	exported: { name: string; kind: string; file: string; line: number }[];
+} {
+	const all: { name: string; kind: string; file: string; line: number; isExported: boolean }[] = [];
+	const internal: { name: string; kind: string; file: string; line: number }[] = [];
+	const exported: { name: string; kind: string; file: string; line: number }[] = [];
+
 	for (const sym of graph.symbols.values()) {
 		if (isNonSourceFile(sym.file)) continue;
 		const incoming = graph.incoming.get(sym.id);
@@ -126,8 +135,17 @@ export function findOrphans(graph: RepoGraph): { name: string; kind: string; fil
 			if (isRegistrationSymbol(sym.name)) continue;
 			// Skip exported symbols in registration/entry-point files
 			if (sym.visibility === "exported" && isRegistrationFile(sym.file)) continue;
-			orphans.push({ name: sym.name, kind: sym.kind, file: sym.file, line: sym.line });
+
+			const isExported = sym.visibility === "exported";
+			const orphan = { name: sym.name, kind: sym.kind, file: sym.file, line: sym.line };
+			all.push({ ...orphan, isExported });
+			if (isExported) {
+				exported.push(orphan);
+			} else {
+				internal.push(orphan);
+			}
 		}
 	}
-	return orphans;
+
+	return { all, internal, exported };
 }

@@ -102,7 +102,10 @@ async function executeVerifyJsonAsync(projectRoot: string, options: VerifyOption
 	const edgeCount = getGraphEdgeCount(graph);
 
 	const diff = diffBaseline(graph, projectRoot);
-	const orphans = findOrphans(graph);
+	const orphanResult = findOrphans(graph);
+	const orphans = orphanResult.all;
+	const internalOrphans = orphanResult.internal;
+	const exportedOrphans = orphanResult.exported;
 	const gitChangedFiles = getGitChangedFiles(projectRoot);
 
 	let lspDiagnostics: LspDiagEntry[] = [];
@@ -123,6 +126,8 @@ async function executeVerifyJsonAsync(projectRoot: string, options: VerifyOption
 			riskReason: "lspOnly mode — graph analysis skipped",
 			orphanCount: 0,
 			orphans: [],
+			internalOrphanCount: 0,
+			exportedOrphanCount: 0,
 			gitChangedFiles: [],
 			baselineDiff: null,
 			lspDiagnostics,
@@ -134,7 +139,7 @@ async function executeVerifyJsonAsync(projectRoot: string, options: VerifyOption
 		};
 	}
 
-	const risk = assessRisk(graph, diff, orphans, gitChangedFiles, preCommit);
+	const risk = assessRisk(graph, diff, internalOrphans, gitChangedFiles, preCommit);
 
 	let verdict = "PASS";
 	if (lspDiagnostics.some((d) => d.severity === "error")) {
@@ -152,7 +157,9 @@ async function executeVerifyJsonAsync(projectRoot: string, options: VerifyOption
 		riskLevel: risk.level,
 		riskReason: risk.reason,
 		orphanCount: orphans.length,
-		orphans: orphans.slice(0, 20).map((s) => ({ name: s.name, kind: s.kind, file: s.file, line: s.line })),
+		orphans: orphans.slice(0, 20).map((s) => ({ name: s.name, kind: s.kind, file: s.file, line: s.line, isExported: s.isExported })),
+		internalOrphanCount: internalOrphans.length,
+		exportedOrphanCount: exportedOrphans.length,
 		gitChangedFiles: gitChangedFiles.slice(0, 50),
 		baselineDiff: diff
 			? {
@@ -258,7 +265,10 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 		lines.push("");
 	}
 
-	const orphans = findOrphans(graph);
+	const orphanResult = findOrphans(graph);
+	const orphans = orphanResult.all;
+	const internalOrphans = orphanResult.internal;
+	const exportedOrphans = orphanResult.exported;
 	const delta = options.delta ?? false;
 	
 	// Filter orphans based on delta mode (fixes #115)
@@ -272,17 +282,33 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 	if (displayOrphans.length > 0) {
 		const deltaLabel = delta ? " (new since baseline)" : "";
 		lines.push("### Potential Orphan Symbols");
-		lines.push(`Found ${displayOrphans.length} symbols with zero incoming references${deltaLabel}:`);
-		for (const orphan of displayOrphans.slice(0, 10)) {
-			lines.push(`- ${orphan.kind} \`${orphan.name}\` — ${orphan.file}:${orphan.line}`);
-		}
-		if (displayOrphans.length > 10) lines.push(`  ... and ${displayOrphans.length - 10} more`);
 		lines.push("");
+		lines.push(`Found ${displayOrphans.length} symbols with zero incoming references${deltaLabel}:`);
+		lines.push("");
+
+		// Separate internal and exported orphans
+		if (internalOrphans.length > 0) {
+			lines.push(`#### Internal (likely dead code) — ${internalOrphans.length} symbols`);
+			for (const orphan of internalOrphans.slice(0, 10)) {
+				lines.push(`- ${orphan.kind} \`${orphan.name}\` — ${orphan.file}:${orphan.line}`);
+			}
+			if (internalOrphans.length > 10) lines.push(`  ... and ${internalOrphans.length - 10} more`);
+			lines.push("");
+		}
+
+		if (exportedOrphans.length > 0) {
+			lines.push(`#### Exported (may be used externally) — ${exportedOrphans.length} symbols`);
+			for (const orphan of exportedOrphans.slice(0, 10)) {
+				lines.push(`- ${orphan.kind} \`${orphan.name}\` — ${orphan.file}:${orphan.line} [exported]`);
+			}
+			if (exportedOrphans.length > 10) lines.push(`  ... and ${exportedOrphans.length - 10} more`);
+			lines.push("");
+		}
 	} else {
 		lines.push("### Orphan Symbols: None detected", "");
 	}
 
-	const risk = assessRisk(graph, diff, orphans, gitChangedFiles, preCommit);
+	const risk = assessRisk(graph, diff, internalOrphans, gitChangedFiles, preCommit);
 	lines.push("### Risk Level");
 	lines.push(`**${risk.level}** — ${risk.reason}`);
 	lines.push("");
@@ -295,7 +321,7 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 		const hasLspErrors = lspResult.diagnostics.some(
 			(d) => d.severity === "error",
 		);
-		const isReady = !hasLspErrors && risk.level === "low" && orphans.length === 0;
+		const isReady = !hasLspErrors && risk.level === "low" && internalOrphans.length === 0;
 		lines.push("### Pre-Commit Verdict");
 		lines.push(`**Status:** ${isReady ? "[PASS] READY" : "[FAIL] NOT READY"}`);
 		lines.push("");
@@ -304,7 +330,7 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 			lines.push("");
 			if (hasLspErrors) lines.push("- LSP errors found — fix type errors before commit");
 			if (risk.level !== "low") lines.push(`- Risk level is **${risk.level}** — review affected files`);
-			if (orphans.length > 0) lines.push(`- ${orphans.length} orphan symbol(s) — review for dead code`);
+			if (internalOrphans.length > 0) lines.push(`- ${internalOrphans.length} internal orphan symbol(s) — review for dead code`);
 			lines.push("");
 		}
 	}
@@ -506,35 +532,35 @@ function getGitChangedFiles(projectRoot: string): string[] {
 function assessRisk(
 	_graph: RepoGraph,
 	diff: ReturnType<typeof diffBaseline>,
-	orphans: { name: string; kind: string; file: string; line: number }[],
+	internalOrphans: { name: string; kind: string; file: string; line: number }[],
 	gitChangedFiles?: string[],
 	preCommit?: boolean,
 ): RiskResult {
 	const baselineChanges =
 		(diff?.addedSymbols?.length ?? 0) + (diff?.removedSymbols?.length ?? 0) + (diff?.modifiedSymbols?.length ?? 0);
 	const gitFileCount = gitChangedFiles?.length ?? 0;
-	const totalImpact = baselineChanges + gitFileCount + orphans.length;
+	const totalImpact = baselineChanges + gitFileCount + internalOrphans.length;
 
-	if (totalImpact === 0) return { level: "low", reason: "No changes detected, no orphan symbols." };
+	if (totalImpact === 0) return { level: "low", reason: "No changes detected, no internal orphan symbols." };
 
 	const highThreshold = preCommit ? 30 : 60;
 	const mediumThreshold = preCommit ? 10 : 20;
 
-	if (orphans.length > 10 || totalImpact > highThreshold) {
+	if (internalOrphans.length > 10 || totalImpact > highThreshold) {
 		return {
 			level: "high",
-			reason: `${orphans.length} orphans, ${baselineChanges} graph changes, ${gitFileCount} git-modified files.`,
+			reason: `${internalOrphans.length} internal orphans, ${baselineChanges} graph changes, ${gitFileCount} git-modified files.`,
 		};
 	}
-	if (orphans.length > 0 || totalImpact > mediumThreshold) {
+	if (internalOrphans.length > 0 || totalImpact > mediumThreshold) {
 		return {
 			level: "medium",
-			reason: `${orphans.length} orphans, ${baselineChanges} graph changes, ${gitFileCount} modified files — review recommended.`,
+			reason: `${internalOrphans.length} internal orphans, ${baselineChanges} graph changes, ${gitFileCount} modified files — review recommended.`,
 		};
 	}
 	return {
 		level: "low",
-		reason: `${orphans.length} orphans, ${baselineChanges} changes, ${gitFileCount} modified files — acceptable.`,
+		reason: `${internalOrphans.length} internal orphans, ${baselineChanges} changes, ${gitFileCount} modified files — acceptable.`,
 	};
 }
 
@@ -593,19 +619,39 @@ export function executeVerify(graph: RepoGraph, _projectRoot: string, options: V
 		lines.push("");
 	}
 
-	const orphans = findOrphans(graph);
+	const orphanResult = findOrphans(graph);
+	const orphans = orphanResult.all;
+	const internalOrphans = orphanResult.internal;
+	const exportedOrphans = orphanResult.exported;
 	if (orphans.length > 0) {
 		lines.push("### Potential Orphan Symbols");
-		lines.push(`Found ${orphans.length} symbols with zero incoming references:`);
-		for (const orphan of orphans.slice(0, 10)) {
-			lines.push(`- ${orphan.kind} \`${orphan.name}\` — ${orphan.file}:${orphan.line}`);
-		}
 		lines.push("");
+		lines.push(`Found ${orphans.length} symbols with zero incoming references:`);
+		lines.push("");
+
+		// Separate internal and exported orphans
+		if (internalOrphans.length > 0) {
+			lines.push(`#### Internal (likely dead code) — ${internalOrphans.length} symbols`);
+			for (const orphan of internalOrphans.slice(0, 10)) {
+				lines.push(`- ${orphan.kind} \`${orphan.name}\` — ${orphan.file}:${orphan.line}`);
+			}
+			if (internalOrphans.length > 10) lines.push(`  ... and ${internalOrphans.length - 10} more`);
+			lines.push("");
+		}
+
+		if (exportedOrphans.length > 0) {
+			lines.push(`#### Exported (may be used externally) — ${exportedOrphans.length} symbols`);
+			for (const orphan of exportedOrphans.slice(0, 10)) {
+				lines.push(`- ${orphan.kind} \`${orphan.name}\` — ${orphan.file}:${orphan.line} [exported]`);
+			}
+			if (exportedOrphans.length > 10) lines.push(`  ... and ${exportedOrphans.length - 10} more`);
+			lines.push("");
+		}
 	} else {
 		lines.push("### Orphan Symbols: None detected", "");
 	}
 
-	const risk = assessRisk(graph, diff, orphans, gitChangedFiles, options.preCommit);
+	const risk = assessRisk(graph, diff, internalOrphans, gitChangedFiles, options.preCommit);
 	lines.push("### Risk Level");
 	lines.push(`**${risk.level}** — ${risk.reason}`);
 	lines.push("");
@@ -622,10 +668,13 @@ export function executeVerify(graph: RepoGraph, _projectRoot: string, options: V
 }
 
 export function executeVerifyJson(graph: RepoGraph, projectRoot: string, options: VerifyOptions = {}): string {
-	const orphans = findOrphans(graph);
+	const orphanResult = findOrphans(graph);
+	const orphans = orphanResult.all;
+	const internalOrphans = orphanResult.internal;
+	const exportedOrphans = orphanResult.exported;
 	const diff = diffBaseline(graph, projectRoot);
 	const gitChangedFiles = getGitChangedFiles(projectRoot);
-	const risk = assessRisk(graph, diff, orphans, gitChangedFiles, options.preCommit);
+	const risk = assessRisk(graph, diff, internalOrphans, gitChangedFiles, options.preCommit);
 
 	const edgeCount = getGraphEdgeCount(graph);
 
@@ -641,7 +690,9 @@ export function executeVerifyJson(graph: RepoGraph, projectRoot: string, options
 			riskLevel: risk.level,
 			riskReason: risk.reason,
 			orphanCount: orphans.length,
-			orphans: orphans.slice(0, 20).map((s) => ({ name: s.name, kind: s.kind, file: s.file, line: s.line })),
+			orphans: orphans.slice(0, 20).map((s) => ({ name: s.name, kind: s.kind, file: s.file, line: s.line, isExported: s.isExported })),
+			internalOrphanCount: internalOrphans.length,
+			exportedOrphanCount: exportedOrphans.length,
 			baselineDiff: diff
 				? {
 						addedSymbols: diff.addedSymbols?.length ?? 0,
@@ -760,9 +811,10 @@ export function executeReady(graph: RepoGraph, projectRoot: string): string {
 
 	const riskLevel = verifyData.result?.riskLevel ?? "unknown";
 	const orphanCount = verifyData.result?.orphanCount ?? 0;
+	const internalOrphanCount = (verifyData.result as Record<string, unknown>)?.internalOrphanCount as number ?? 0;
 	const failedFiles = checkData.result?.failedFiles ?? 0;
 	const parsedFiles = checkData.result?.parsedFiles ?? 0;
-	const isReady = riskLevel === "low" && orphanCount === 0 && failedFiles === 0;
+	const isReady = riskLevel === "low" && internalOrphanCount === 0 && failedFiles === 0;
 
 	const lines: string[] = [];
 	lines.push("## Pre-Commit Readiness");
@@ -771,7 +823,7 @@ export function executeReady(graph: RepoGraph, projectRoot: string): string {
 	lines.push("");
 	lines.push("### Verify");
 	lines.push(`Risk level: **${riskLevel}**`);
-	lines.push(`Orphan symbols: ${orphanCount}`);
+	lines.push(`Orphan symbols: ${orphanCount} (internal: ${internalOrphanCount})`);
 	lines.push(`Total symbols: ${verifyData.result?.symbolCount ?? "?"}`);
 	lines.push(`Total files: ${verifyData.result?.fileCount ?? "?"}`);
 	lines.push("");
@@ -784,7 +836,7 @@ export function executeReady(graph: RepoGraph, projectRoot: string): string {
 		lines.push("### Issues to Fix Before Commit");
 		lines.push("");
 		if (riskLevel !== "low") lines.push(`- Risk level is **${riskLevel}** — run \`shazam_verify\` for details`);
-		if (orphanCount > 0) lines.push(`- ${orphanCount} orphan symbol(s) — run \`shazam_verify\` for detailed review`);
+		if (internalOrphanCount > 0) lines.push(`- ${internalOrphanCount} internal orphan symbol(s) — run \`shazam_verify\` for detailed review`);
 		if (failedFiles > 0) lines.push(`- ${failedFiles} file(s) failed parse — run \`shazam_verify\` for details`);
 		lines.push("");
 	} else {
