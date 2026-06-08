@@ -113,24 +113,48 @@ function removeEdgesForFile(graph: RepoGraph, relPath: string): void {
 	graph.fileCalls.delete(relPath);
 	graph.fileImportBindings.delete(relPath);
 
-	// Also remove cross-file references: edges in other files that
-	// point to this file's symbols
-	for (const [source, edges] of graph.outgoing) {
-		const filtered = edges.filter((e) => !symIds.has(e.target));
-		if (filtered.length !== edges.length) {
-			graph.outgoing.set(source, filtered);
+	// 使用反向边索引清理跨文件引用：O(K) 而非 O(E)
+	for (const targetId of symIds) {
+		const sourceIds = graph.targetToSources.get(targetId);
+		if (!sourceIds) continue;
+		for (const sourceId of sourceIds) {
+			// 从 source 的 outgoing 中移除指向 targetId 的边
+			const edges = graph.outgoing.get(sourceId);
+			if (edges) {
+				const filtered = edges.filter((e) => e.target !== targetId);
+				if (filtered.length > 0) {
+					graph.outgoing.set(sourceId, filtered);
+				} else {
+					graph.outgoing.delete(sourceId);
+				}
+			}
+			// 从 source 的 incoming 中移除来自 targetId 的边（targetId 作为 source 的边）
+			// 注意：incoming[targetId] 已在上面删除，这里清理 incoming[sourceId] 中 source 为 targetId 的边
+			const incomingEdges = graph.incoming.get(sourceId);
+			if (incomingEdges) {
+				const filtered = incomingEdges.filter((e) => e.source !== targetId);
+				if (filtered.length > 0) {
+					graph.incoming.set(sourceId, filtered);
+				} else {
+					graph.incoming.delete(sourceId);
+				}
+			}
 		}
-	}
-	for (const [target, edges] of graph.incoming) {
-		const filtered = edges.filter((e) => !symIds.has(e.source));
-		if (filtered.length !== edges.length) {
-			graph.incoming.set(target, filtered);
-		}
+		graph.targetToSources.delete(targetId);
 	}
 }
 
 function removeFileData(graph: RepoGraph, relPath: string): void {
 	const symIds = graph.fileSymbols.get(relPath) || [];
+	const symIdSet = new Set(symIds);
+
+	// 在删除符号前先收集名称，用于清理 nameIndex
+	const symNames: string[] = [];
+	for (const id of symIds) {
+		const sym = graph.symbols.get(id);
+		if (sym) symNames.push(sym.name);
+	}
+
 	for (const id of symIds) {
 		graph.symbols.delete(id);
 		graph.outgoing.delete(id);
@@ -141,18 +165,43 @@ function removeFileData(graph: RepoGraph, relPath: string): void {
 	graph.fileCalls.delete(relPath);
 	graph.fileImportBindings.delete(relPath);
 
-	// Remove edges in other files that pointed to this file's symbols
-	const symIdSet = new Set(symIds);
-	for (const [source, edges] of graph.outgoing) {
-		const filtered = edges.filter((e) => !symIdSet.has(e.target));
-		if (filtered.length !== edges.length) {
-			graph.outgoing.set(source, filtered);
+	// 使用反向边索引清理跨文件引用：O(K) 而非 O(E)
+	for (const targetId of symIdSet) {
+		const sourceIds = graph.targetToSources.get(targetId);
+		if (!sourceIds) continue;
+		for (const sourceId of sourceIds) {
+			const edges = graph.outgoing.get(sourceId);
+			if (edges) {
+				const filtered = edges.filter((e) => e.target !== targetId);
+				if (filtered.length > 0) {
+					graph.outgoing.set(sourceId, filtered);
+				} else {
+					graph.outgoing.delete(sourceId);
+				}
+			}
+			const incomingEdges = graph.incoming.get(sourceId);
+			if (incomingEdges) {
+				const filtered = incomingEdges.filter((e) => e.source !== targetId);
+				if (filtered.length > 0) {
+					graph.incoming.set(sourceId, filtered);
+				} else {
+					graph.incoming.delete(sourceId);
+				}
+			}
 		}
+		graph.targetToSources.delete(targetId);
 	}
-	for (const [target, edges] of graph.incoming) {
-		const filtered = edges.filter((e) => !symIdSet.has(e.source));
-		if (filtered.length !== edges.length) {
-			graph.incoming.set(target, filtered);
+
+	// 从 nameIndex 中移除该文件的符号
+	for (const name of symNames) {
+		const named = graph.nameIndex.get(name);
+		if (named) {
+			const filtered = named.filter((s) => !symIdSet.has(s.id));
+			if (filtered.length > 0) {
+				graph.nameIndex.set(name, filtered);
+			} else {
+				graph.nameIndex.delete(name);
+			}
 		}
 	}
 }
@@ -406,6 +455,12 @@ function scanFull(root: string, files: string[], adapter: TreeSitterAdapter, log
 		// Add symbols to graph
 		for (const sym of entry.symbols) {
 			graph.symbols.set(sym.id, sym);
+			const named = graph.nameIndex.get(sym.name);
+			if (named) {
+				named.push(sym);
+			} else {
+				graph.nameIndex.set(sym.name, [sym]);
+			}
 			const fileSyms = graph.fileSymbols.get(relPath) || [];
 			fileSyms.push(sym.id);
 			graph.fileSymbols.set(relPath, fileSyms);
@@ -499,6 +554,12 @@ function scanIncremental(
 
 		for (const sym of entry.symbols) {
 			graph.symbols.set(sym.id, sym);
+			const named = graph.nameIndex.get(sym.name);
+			if (named) {
+				named.push(sym);
+			} else {
+				graph.nameIndex.set(sym.name, [sym]);
+			}
 			const fileSyms = graph.fileSymbols.get(relPath) || [];
 			fileSyms.push(sym.id);
 			graph.fileSymbols.set(relPath, fileSyms);
@@ -612,6 +673,14 @@ function addEdge(graph: RepoGraph, edge: Edge): void {
 	const incoming = graph.incoming.get(edge.target) || [];
 	incoming.push(edge);
 	graph.incoming.set(edge.target, incoming);
+
+	// 维护反向边索引
+	const sources = graph.targetToSources.get(edge.target);
+	if (sources) {
+		sources.add(edge.source);
+	} else {
+		graph.targetToSources.set(edge.target, new Set([edge.source]));
+	}
 }
 
 // ── Import resolution ─────────────────────────────────────────────────────────
@@ -683,6 +752,13 @@ function findCallerSymbols(fileSymIds: string[], symbols: Map<string, Symbol>, c
 }
 
 function findCalleeSymbols(name: string, symbols: Map<string, Symbol>): Symbol[] {
+	// 使用 nameIndex 做 O(1) 查找，兼容传入无索引 graph 的场景
+	const graph = symbols as unknown as RepoGraph;
+	const index = graph.nameIndex;
+	if (index && index.size > 0) {
+		return index.get(name) ?? [];
+	}
+	// 回退到 O(N) 扫描（反序列化后索引尚未构建时）
 	const results: Symbol[] = [];
 	for (const sym of symbols.values()) {
 		if (sym.name === name) {
@@ -693,6 +769,18 @@ function findCalleeSymbols(name: string, symbols: Map<string, Symbol>): Symbol[]
 }
 
 function findSymbolByNameInFile(name: string, file: string, symbols: Map<string, Symbol>): Symbol | undefined {
+	const graph = symbols as unknown as RepoGraph;
+	const index = graph.nameIndex;
+	if (index && index.size > 0) {
+		const candidates = index.get(name);
+		if (candidates) {
+			for (const sym of candidates) {
+				if (sym.file === file) return sym;
+			}
+		}
+		return undefined;
+	}
+	// 回退到 O(N) 扫描
 	for (const sym of symbols.values()) {
 		if (sym.file === file && sym.name === name) {
 			return sym;
