@@ -90,6 +90,25 @@ export function executeFindTests(
 				}
 			}
 		}
+
+		// Search project-root-level test directories (tests/, test/, __test__/)
+		for (const td of testDirs) {
+			const testDir = join(projectRoot, td);
+			if (!existsSync(testDir)) continue;
+
+			for (const f of allSources) {
+				if (!testPattern.test(f)) continue;
+				// Only match files in this specific test directory
+				if (!f.startsWith(td + "/") && !f.startsWith(td + "\\")) continue;
+
+				const fBase = basename(f).replace(/\.(test|spec|e2e)\.(ts|js|tsx|jsx|mts|mjs)$/, "");
+				if (fBase === base) {
+					if (!matches.some((m) => m.testFile === f)) {
+						matches.push(extractTests(f, sourceFile, "convention", testPattern, projectRoot));
+					}
+				}
+			}
+		}
 	}
 
 	if (opts.module) {

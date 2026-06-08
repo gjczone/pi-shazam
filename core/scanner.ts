@@ -465,6 +465,11 @@ function scanFull(root: string, files: string[], adapter: TreeSitterAdapter, log
 			fileSyms.push(sym.id);
 			graph.fileSymbols.set(relPath, fileSyms);
 		}
+
+		// Ensure file is in graph even with 0 symbols (e.g., test files with no exports)
+		if (!graph.fileSymbols.has(relPath)) {
+			graph.fileSymbols.set(relPath, []);
+		}
 	}
 
 	logger(`Extracted ${graph.symbols.size} symbols`);
@@ -564,6 +569,11 @@ function scanIncremental(
 			fileSyms.push(sym.id);
 			graph.fileSymbols.set(relPath, fileSyms);
 		}
+
+			// Ensure file is in graph even with 0 symbols (e.g., test files with no exports)
+			if (!graph.fileSymbols.has(relPath)) {
+				graph.fileSymbols.set(relPath, []);
+			}
 	}
 
 	// Rebuild edges only for changed files and files that depend on them.
