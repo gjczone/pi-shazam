@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-06-08
+
+### Bug Fixes
+
+- **fix(#212): make find_tests test patterns language-aware** (#219)
+  - Added `getTestPatternForLanguage()` returning language-specific regex for Python, Go, Rust, Java, C#, and JS/TS
+  - Updated `tools/definitions.ts` to document all supported conventions
+
+- **fix(#214): detect ruff, rustfmt, gofmt in shazam_fix** (#221)
+  - Added ruff detection via `pyproject.toml`/`ruff.toml`
+  - Added rustfmt detection via `Cargo.toml`/`rustfmt.toml`
+  - Added gofmt detection via `go.mod`
+  - Added language-aware recommended fix commands
+
+- **fix(#215): add Python/Rust/Go dependency detection to overview** (#222)
+  - Added `buildPythonDepsSection()` reading `pyproject.toml`/`requirements.txt`
+  - Added `buildRustDepsSection()` reading `Cargo.toml`
+  - Added `buildGoDepsSection()` reading `go.mod`
+  - Updated JSON envelope with new dependency fields
+
+- **fix(#216): show graph references when LSP unavailable in rename_symbol** (#223)
+  - Collects all matching symbols instead of first match
+  - Shows detailed graph reference listing when LSP is unavailable
+  - Suggests `shazam_call_chain` for manual verification
+
+- **fix(#217): add language-specific entry point detection to orphan filter** (#224)
+  - Added `isEntryPointSymbol()` for Python dunders, Rust main/Default/Drop, Go main/init
+  - Added `isFrameworkHandler()` for route handlers and middleware patterns
+  - Extended test file detection beyond JS patterns
+
+### Features & Enhancements
+
+- **enhance(#213): extract React context and custom hook symbols** (#220)
+  - Added `variable_declarator` + `call_expression` tree-sitter pattern
+  - Captures `createContext(...)`, `create...(...)`, and `use[A-Z]` custom hooks
+
+- **enhance(#218): make hotspots exclusion message language-aware** (#225)
+  - Added `getExcludeMessage()` helper detecting JS/TS, Python, Rust, Go project types
+  - Python projects now see language-appropriate exclusion list
+
 ## [0.6.2] - 2026-06-08
 
 ### Enhancements
