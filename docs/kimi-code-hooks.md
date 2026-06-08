@@ -187,6 +187,52 @@ Tool-specific `tool_input` shapes:
 }
 ```
 
+## 当前 Hooks 配置（优化后）
+
+| 事件 | Matcher | 脚本 | 用途 | 优化来源 |
+|------|---------|------|------|---------|
+| `PreToolUse` | `Bash` | `check-destructive.sh` | 阻断 rm -rf / dd / mkfs 等危险命令 | 保留 |
+| `SessionStart` | — | `radar-session.sh` | **工作区雷达**：git状态、项目分析、条件化shazam推荐 | 对标 Pi before-start |
+| `PreToolUse` | `Bash\|WriteFile\|StrReplaceFile\|ReadFile` | `shazam-guide.sh` | **上下文感知**：根据命令模式建议shazam工具 | 对标 Pi shazam-guide |
+| `PostToolUse` | `Bash\|WriteFile\|StrReplaceFile` | `watchdog.sh` | **看门狗**：重复失败检测 + 多文件编辑追踪 + 审计日志 | 对标 Pi pre-edit + tool-logger |
+| `PostToolUseFailure` | `Bash` | `watchdog.sh` | 失败计数和模式检测 | 新增 |
+| `SessionEnd` | — | `session-end.sh` | **会话摘要**：统计、失败模式、未提交提醒 | 对标 Pi baseline |
+
+### 对标 Pi 扩展 Hooks
+
+| Pi Hook | Kimi-Code 对应 | 关键差异 |
+|---------|---------------|---------|
+| `before-start.ts` | `radar-session.sh` | Pi 用 tree-sitter 扫描；Kimi-Code 用文件检测 + package.json 解析 |
+| `pre-edit.ts` | `watchdog.sh` (multi-edit) | Pi 用内存 Map 追踪；Kimi-Code 用 temp 文件持久化 |
+| `shazam-guide.ts` | `shazam-guide.sh` | Pi 在 tool_call/tool_result 事件中通知；Kimi-Code 在 PreToolUse/PostToolUse 中通知 |
+| `tool-logger.ts` | `watchdog.sh` (audit) | Pi 用 JSONL + 调用时长；Kimi-Code 用简单日志 |
+
+### 优化点（相比旧版）
+
+1. **radar-session.sh**: 新增项目分析（语言、包管理器、测试框架、依赖、CI）；resume 检测（紧凑输出）；条件化 shazam 推荐
+2. **shazam-guide.sh**: 从静态工具列表改为上下文感知建议；PostToolUse 多文件编辑检测
+3. **watchdog.sh**: 合并 post-bash.sh + audit-log.sh；新增多文件编辑追踪
+4. **session-end.sh**: 新增失败模式分析、未提交变更提醒、编辑统计
+5. **删除**: shazam-start.sh（静态列表）、post-bash.sh（合并入 watchdog）、audit-log.sh（合并入 watchdog）
+
+## 状态持久化
+
+Kimi-Code hooks 不像 Pi 运行在持久化的 Node.js 进程中，因此：
+
+- 用 `~/.kimi-code/watchdog/` 下的临时文件存状态
+- SessionEnd 时清理状态文件
+- 用 `md5sum` 或 `cksum` 对命令做稳定哈希
+
+## 注意事项
+
+- **jq 是必需的**，用于解析 stdin JSON。系统已预装。
+- **grep 用 POSIX 字符类**：`[[:space:]]` 代替 `\s`，`[0-9]` 代替 `\d`
+- **hooks 不能修改 tool input**——只能放行（exit 0）或阻断（exit 2）
+- `SessionStart` / `SessionEnd` 的 matcher 为空（匹配全部）
+- 观察型事件（PostToolUse 等）即使 exit 2 也不会阻断——它们是"即发即忘"的
+- 超时默认 30s，可配范围 1–600s
+- `[[hooks]]` 只允许 `event`/`matcher`/`command`/`timeout` 四个字段
+
 ## 脚本模板
 
 ```bash
@@ -206,45 +252,3 @@ fi
 
 exit 0
 ```
-
-## 现有 pi-shazam hooks
-
-所有 hooks 位于 `~/.A1/ai/.kimi-code/hooks/`（symlink 到 `~/.kimi-code/hooks/`）。
-
-| 事件 | Matcher | 脚本 | 用途 |
-|------|---------|------|------|
-| `PreToolUse` | `Bash` | `check-destructive.sh` | 阻断 rm -rf / dd / mkfs 等危险命令 |
-| `PreToolUse` | `Bash` | `audit-log.sh` | 记录每次bash调用到审计日志 |
-| `PostToolUse` | `Bash` | `post-bash.sh` | 记录退出码，跟踪git变更 |
-| `SessionStart` | — | `radar-session.sh` | **工作区雷达**：git状态、项目画像、shazam工具列表 |
-| `PostToolUse` | `Bash` | `watchdog.sh` | **看门狗**：重复失败检测(>=3)，测试输出摘要 |
-| `PreToolUse` | `Bash\|WriteFile\|StrReplaceFile\|ReadFile` | `shazam-guide.sh` | 提醒LLM用shazam MCP工具代替原始shell |
-| `SessionEnd` | — | `session-end.sh` | 会话摘要：统计数据、git状态、最近提交 |
-
-### 对标 Pi 扩展
-
-Pi 扩展（`~/.A1/ai/.pi/extensions/`）的 TypeScript hooks 启发我们：
-
-| Pi hook | Kimi-Code 对应 | 关键差异 |
-|---------|---------------|---------|
-| `radar.ts` | `radar-session.sh` | Kimi-Code 无 `before_agent_start`，所有上下文在 SessionStart 注入 |
-| `watchdog.ts` | `watchdog.sh` | Kimi-Code 用 temp 文件做状态持久化；grep 用 POSIX 类而非 `\s`/`\d` |
-| `bash-env.ts` | — | Kimi-Code hooks 不能修改 tool input，与 Pi 不同 |
-
-### 状态持久化
-
-Kimi-Code hooks 不像 Pi 运行在持久化的 Node.js 进程中，因此：
-
-- 用 `~/.kimi-code/watchdog/` 下的临时文件存状态
-- SessionEnd 时清理状态文件
-- 用 `md5sum` 或 `cksum` 对命令做稳定哈希
-
-## 注意事项
-
-- **jq 是必需的**，用于解析 stdin JSON。系统已预装。
-- **grep 用 POSIX 字符类**：`[[:space:]]` 代替 `\s`，`[0-9]` 代替 `\d`
-- **hooks 不能修改 tool input**——只能放行（exit 0）或阻断（exit 2）
-- `SessionStart` / `SessionEnd` 的 matcher 为空（匹配全部）
-- 观察型事件（PostToolUse 等）即使 exit 2 也不会阻断——它们是"即发即忘"的
-- 超时默认 30s，可配范围 1–600s
-- `[[hooks]]` 只允许 `event`/`matcher`/`command`/`timeout` 四个字段

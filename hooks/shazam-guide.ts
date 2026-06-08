@@ -64,9 +64,15 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 	// covers all tool guidance. Keeping only contextual lifecycle notifications.
 
 	pi.on("tool_result", (event, ctx) => {
-		// After write/edit: suggest impact analysis for multi-file edits only
+		// After write/edit: suggest format fix + impact analysis
 		if (event.toolName === "write" || event.toolName === "edit") {
 			if (event.isError) return;
+
+			// Always suggest auto-format after edits
+			ctx.ui?.notify?.(
+				"run shazam_fix to auto-format (prettier/ruff/gofmt/rustfmt)",
+				"info",
+			);
 
 			// Check if multi-file edit was done — suggest impact analysis
 			if (hasMultiFileEdit(event.content)) {
