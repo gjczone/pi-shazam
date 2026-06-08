@@ -42,6 +42,10 @@ export interface RepoGraph {
 	fileImports: Map<string, string[]>;
 	fileCalls: Map<string, [string, number, string][]>;
 	fileImportBindings: Map<string, JSImportBinding[]>;
+	/** 按符号名索引，加速 findCalleeSymbols / findSymbolByNameInFile 的 O(1) 查找 */
+	nameIndex: Map<string, Symbol[]>;
+	/** 反向边索引：target symbol ID → 指向它的 source symbol ID 集合，加速 removeEdgesForFile 的跨文件边清理 */
+	targetToSources: Map<string, Set<string>>;
 }
 
 /** A JS/TS import binding */
@@ -75,6 +79,8 @@ export function createRepoGraph(): RepoGraph {
 		fileImports: new Map(),
 		fileCalls: new Map(),
 		fileImportBindings: new Map(),
+		nameIndex: new Map(),
+		targetToSources: new Map(),
 	};
 }
 
@@ -226,7 +232,7 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 	const graph = createRepoGraph();
 
 	for (const s of data.symbols) {
-		graph.symbols.set(s.id, {
+		const sym: Symbol = {
 			id: s.id,
 			name: s.name,
 			kind: s.kind,
@@ -240,7 +246,15 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 			returnType: s.returnType,
 			params: s.params,
 			pagerank: s.pagerank,
-		});
+		};
+		graph.symbols.set(s.id, sym);
+		// 重建 nameIndex
+		const named = graph.nameIndex.get(sym.name);
+		if (named) {
+			named.push(sym);
+		} else {
+			graph.nameIndex.set(sym.name, [sym]);
+		}
 	}
 
 	for (const e of data.edges) {
@@ -258,6 +272,14 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 		const incoming = graph.incoming.get(e.target) || [];
 		incoming.push(edge);
 		graph.incoming.set(e.target, incoming);
+
+		// 重建 targetToSources 索引
+		const sources = graph.targetToSources.get(e.target);
+		if (sources) {
+			sources.add(e.source);
+		} else {
+			graph.targetToSources.set(e.target, new Set([e.source]));
+		}
 	}
 
 	for (const [k, v] of Object.entries(data.fileSymbols)) {
