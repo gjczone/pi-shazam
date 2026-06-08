@@ -17,7 +17,7 @@ const PROJECT_ROOT = process.argv[2] || ".";
 async function main(): Promise<void> {
 	const server = new McpServer({
 		name: "pi-shazam",
-		version: "0.6.0",
+		version: "0.6.1",
 	});
 
 	// Scan project (builds symbol graph, may take 1-5s for large projects)

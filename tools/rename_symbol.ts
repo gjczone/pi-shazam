@@ -16,6 +16,7 @@ import { ensureFileOpened } from "./lsp_enrich.js";
 import type { WorkspaceEdit } from "vscode-languageserver-protocol";
 import { uriToPath } from "../lsp/client.js";
 import { createTool } from "./_factory.js";
+import { scanProject } from "../core/scanner.js";
 
 export function registerRenameSymbol(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -44,6 +45,8 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 			if (!newName) {
 				return { content: [{ type: "text", text: "Error: newName parameter is required" }] };
 			}
+			// Scan project to get graph (fixes #209 — customExecute must not rely on module-level variable)
+			const graph = scanProject(".");
 			const result = await executeRenameSymbol(graph, symbolName, newName, dryRun);
 			const text = json
 				? JSON.stringify({ schema_version: "1.0", command: "rename_symbol", status: "ok", result }, null, 2)
@@ -53,15 +56,7 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 	});
 }
 
-// The graph is passed by the factory wrapper — capture it from the outer scope.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-let graph: RepoGraph;
-
-// Override to capture graph from factory wrapper
-export function registerRenameSymbolWithGraph(pi: ExtensionAPI, g: RepoGraph): void {
-	graph = g;
-	registerRenameSymbol(pi);
-}
+// registerRenameSymbolWithGraph removed — customExecute now scans project directly (fixes #209)
 
 interface RenameResult {
 	status: "ok" | "not_found" | "error" | "lsp_unavailable";
@@ -74,12 +69,11 @@ interface RenameResult {
 }
 
 export async function executeRenameSymbol(
-	g: RepoGraph,
+	graph: RepoGraph,
 	symbolName: string,
 	newName: string,
 	dryRun: boolean = false,
 ): Promise<RenameResult> {
-	graph = g;
 
 	// Find the symbol
 	let symbol: Symbol | undefined;

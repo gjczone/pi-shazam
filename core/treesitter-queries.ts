@@ -65,6 +65,9 @@ export const QUERIES: QueryDict = {
 `,
 		class: `\
 (class_declaration name: (_) @name) @definition.class
+(interface_declaration name: (type_identifier) @name) @definition.interface
+(type_alias_declaration name: (type_identifier) @name) @definition.type_alias
+(enum_declaration name: (identifier) @name) @definition.enum
 `,
 		import: `\
 (import_statement source: (string) @source)
