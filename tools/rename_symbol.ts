@@ -68,6 +68,36 @@ interface RenameResult {
 	edits?: { file: string; line: number; text: string }[];
 }
 
+/** Format graph reference edges into a detailed, human-readable string */
+function formatGraphRefs(
+	incoming: { source: string; target: string; kind: string }[],
+	outgoing: { source: string; target: string; kind: string }[],
+	graph: RepoGraph,
+	_symbolName: string,
+): string {
+	const lines: string[] = [];
+
+	if (incoming.length > 0) {
+		lines.push(`Incoming references (${incoming.length}):`);
+		for (const edge of incoming.slice(0, 20)) {
+			const refSym = graph.symbols.get(edge.source);
+			if (refSym) lines.push(`  - \`${refSym.name}\` in \`${refSym.file}\` (${edge.kind})`);
+		}
+		if (incoming.length > 20) lines.push(`  ... and ${incoming.length - 20} more`);
+	}
+
+	if (outgoing.length > 0) {
+		lines.push(`Outgoing references (${outgoing.length}):`);
+		for (const edge of outgoing.slice(0, 20)) {
+			const refSym = graph.symbols.get(edge.target);
+			if (refSym) lines.push(`  - \`${refSym.name}\` in \`${refSym.file}\` (${edge.kind})`);
+		}
+		if (outgoing.length > 20) lines.push(`  ... and ${outgoing.length - 20} more`);
+	}
+
+	return lines.join("\n");
+}
+
 export async function executeRenameSymbol(
 	graph: RepoGraph,
 	symbolName: string,
@@ -75,16 +105,15 @@ export async function executeRenameSymbol(
 	dryRun: boolean = false,
 ): Promise<RenameResult> {
 
-	// Find the symbol
-	let symbol: Symbol | undefined;
+	// Find all matching symbols (fix #216: show all matches, not just first)
+	const matchingSymbols: Symbol[] = [];
 	for (const sym of graph.symbols.values()) {
 		if (sym.name === symbolName) {
-			symbol = sym;
-			break;
+			matchingSymbols.push(sym);
 		}
 	}
 
-	if (!symbol) {
+	if (matchingSymbols.length === 0) {
 		return {
 			status: "not_found",
 			symbol: symbolName,
@@ -93,26 +122,55 @@ export async function executeRenameSymbol(
 		};
 	}
 
-	// Count references to estimate impact (safety gate)
-	const incoming = graph.incoming.get(symbol.id) || [];
-	const outgoing = graph.outgoing.get(symbol.id) || [];
-	const totalRefs = incoming.length + outgoing.length;
+	// Use the first matching symbol as primary for LSP operations
+	const symbol = matchingSymbols[0];
+	const symbolMatchesMsg = matchingSymbols.length > 1
+		? `Found ${matchingSymbols.length} matching symbols for "${symbolName}":\n${matchingSymbols.map(s => `  - ${s.file}:${s.line}`).join("\n")}`
+		: null;
 
-	// Group by file
+	// Aggregate edges from all matching symbols (fix #216: don't miss references)
+	const incoming: { source: string; target: string; kind: string }[] = [];
+	const outgoing: { source: string; target: string; kind: string }[] = [];
 	const files = new Set<string>();
-	for (const edge of [...incoming, ...outgoing]) {
-		const refSym = graph.symbols.get(edge.source) || graph.symbols.get(edge.target);
+
+	for (const sym of matchingSymbols) {
+		const inc = graph.incoming.get(sym.id) || [];
+		const outg = graph.outgoing.get(sym.id) || [];
+		for (const edge of inc) incoming.push(edge);
+		for (const edge of outg) outgoing.push(edge);
+	}
+
+	// Collect unique files
+	for (const edge of incoming) {
+		const refSym = graph.symbols.get(edge.source);
 		if (refSym) files.add(refSym.file);
 	}
+	for (const edge of outgoing) {
+		const refSym = graph.symbols.get(edge.target);
+		if (refSym) files.add(refSym.file);
+	}
+
+	const totalRefs = incoming.length + outgoing.length;
 
 	// Try LSP rename
 	const lspManager = getLspManager();
 	if (!lspManager) {
+		let msg = `LSP manager not available. Cannot perform rename via LSP.`;
+		if (totalRefs > 0) {
+			msg += `\n\nGraph analysis found **${totalRefs} references** across **${files.size} files**:\n\n`;
+			msg += formatGraphRefs(incoming, outgoing, graph, symbolName);
+		} else {
+			msg += `\n\nGraph analysis found no references for "${symbolName}".`;
+		}
+		if (symbolMatchesMsg) {
+			msg += `\n\n${symbolMatchesMsg}`;
+		}
+		msg += `\n\n**Recommendation:** Run \`shazam_call_chain --symbol "${symbolName}"\` to manually verify ALL references before attempting rename.`;
 		return {
 			status: "lsp_unavailable",
 			symbol: symbolName,
 			newName,
-			message: `LSP manager not available. Found ${totalRefs} references across ${files.size} files. Cannot perform rename.`,
+			message: msg,
 			fileCount: files.size,
 			changes: totalRefs,
 		};
@@ -121,11 +179,22 @@ export async function executeRenameSymbol(
 	// Get LSP server for the symbol's file
 	const serverInfo = await lspManager.getServerForFile(symbol.file);
 	if (!serverInfo || !serverInfo.client.isRunning()) {
+		let msg = `No LSP server available for ${symbol.file}. Cannot perform rename via LSP.`;
+		if (totalRefs > 0) {
+			msg += `\n\nGraph analysis found **${totalRefs} references** across **${files.size} files**:\n\n`;
+			msg += formatGraphRefs(incoming, outgoing, graph, symbolName);
+		} else {
+			msg += `\n\nGraph analysis found no references for "${symbolName}".`;
+		}
+		if (symbolMatchesMsg) {
+			msg += `\n\n${symbolMatchesMsg}`;
+		}
+		msg += `\n\n**Recommendation:** Run \`shazam_call_chain --symbol "${symbolName}"\` to manually verify ALL references before attempting rename.`;
 		return {
 			status: "lsp_unavailable",
 			symbol: symbolName,
 			newName,
-			message: `No LSP server available for ${symbol.file}. Found ${totalRefs} references across ${files.size} files.`,
+			message: msg,
 			fileCount: files.size,
 			changes: totalRefs,
 		};
@@ -134,11 +203,22 @@ export async function executeRenameSymbol(
 	// Ensure the file is opened in LSP
 	const opened = await ensureFileOpened(lspManager, symbol.file);
 	if (!opened) {
+		let msg = `Failed to open ${symbol.file} in LSP. Cannot perform rename via LSP.`;
+		if (totalRefs > 0) {
+			msg += `\n\nGraph analysis found **${totalRefs} references** across **${files.size} files**:\n\n`;
+			msg += formatGraphRefs(incoming, outgoing, graph, symbolName);
+		} else {
+			msg += `\n\nGraph analysis found no references for "${symbolName}".`;
+		}
+		if (symbolMatchesMsg) {
+			msg += `\n\n${symbolMatchesMsg}`;
+		}
+		msg += `\n\n**Recommendation:** Run \`shazam_call_chain --symbol "${symbolName}"\` to manually verify ALL references before attempting rename.`;
 		return {
 			status: "lsp_unavailable",
 			symbol: symbolName,
 			newName,
-			message: `Failed to open ${symbol.file} in LSP. Found ${totalRefs} references across ${files.size} files.`,
+			message: msg,
 			fileCount: files.size,
 			changes: totalRefs,
 		};
