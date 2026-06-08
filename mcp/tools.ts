@@ -3,7 +3,6 @@
  * Each handler is wrapped with withLogging() for usage analytics.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import type { RepoGraph } from "../core/graph.js";
 import { executeOverview } from "../tools/overview.js";
 import { executeImpact } from "../tools/impact.js";
@@ -22,6 +21,7 @@ import { executeSafeDelete, formatSafeDeleteResult } from "../tools/safe_delete.
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { getToolDefinition } from "../tools/definitions.js";
 
 // ── Logging ──────────────────────────────────────────────────────
 
@@ -74,12 +74,12 @@ function withLogging(
 // ── Registration ─────────────────────────────────────────────────
 
 export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoot: string): void {
+	const overviewDef = getToolDefinition("shazam_overview")!;
 	server.registerTool(
 		"shazam_overview",
 		{
-			description:
-				"When you first enter a project or return after changes — use this to understand the codebase before reading a single file. Returns module dependency map, top-10 PageRank files, key dependencies, recent git changes, entry points, reading order, and HTTP routes.",
-			inputSchema: z.object({ filter: z.string().optional().describe("Optional keyword to filter files") }),
+			description: overviewDef.description,
+			inputSchema: overviewDef.zodParams,
 		},
 		withLogging("shazam_overview", async ({ filter }) => {
 			const text = executeOverview(graph, projectRoot, filter as string | undefined);
@@ -87,12 +87,12 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		}),
 	);
 
+	const impactDef = getToolDefinition("shazam_impact")!;
 	server.registerTool(
 		"shazam_impact",
 		{
-			description:
-				"Required before editing 2+ files or any shared/exported module. Returns every file, symbol, and test affected by your planned changes.",
-			inputSchema: z.object({ files: z.array(z.string()).describe("List of file paths to analyze") }),
+			description: impactDef.description,
+			inputSchema: impactDef.zodParams,
 		},
 		withLogging("shazam_impact", async ({ files }) => {
 			const text = executeImpact(graph, files as string[]);
@@ -100,16 +100,12 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		}),
 	);
 
+	const codesearchDef = getToolDefinition("shazam_codesearch")!;
 	server.registerTool(
 		"shazam_codesearch",
 		{
-			description:
-				"Don't reach for grep or raw text search. Use this — it ranks results by relevance (BM25), understands camelCase/snake_case boundaries, and enriches hits with LSP workspace symbols.",
-			inputSchema: z.object({
-				query: z.string().describe("Search query text"),
-				target: z.enum(["symbol", "code"]).optional().default("symbol").describe("symbol or code"),
-				topN: z.number().optional().describe("Max results to return"),
-			}),
+			description: codesearchDef.description,
+			inputSchema: codesearchDef.zodParams,
 		},
 		withLogging("shazam_codesearch", async ({ query, target }) => {
 			if (target === "code") {
@@ -122,16 +118,12 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		}),
 	);
 
+	const symbolDef = getToolDefinition("shazam_symbol")!;
 	server.registerTool(
 		"shazam_symbol",
 		{
-			description:
-				"When you need to look up a symbol before importing or calling it — returns definition, kind, signature, callers, and callees in one call. Use mode=state for enum/state analysis.",
-			inputSchema: z.object({
-				name: z.string().describe("Symbol name to look up"),
-				mode: z.enum(["state"]).optional().describe("Use 'state' for enum/state map analysis"),
-				file: z.string().optional().describe("Optional file path to scope the search"),
-			}),
+			description: symbolDef.description,
+			inputSchema: symbolDef.zodParams,
 		},
 		withLogging("shazam_symbol", async ({ name, mode, file }) => {
 			const text = executeSymbolWithMode(graph, name as string, mode as string | undefined, file as string | undefined);
@@ -139,12 +131,12 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		}),
 	);
 
+	const fileDetailDef = getToolDefinition("shazam_file_detail")!;
 	server.registerTool(
 		"shazam_file_detail",
 		{
-			description:
-				"When you are about to edit a file you have not read before — this shows structure (symbols, signatures, visibility, PageRank), not just syntax.",
-			inputSchema: z.object({ file: z.string().describe("Path to the file to analyze") }),
+			description: fileDetailDef.description,
+			inputSchema: fileDetailDef.zodParams,
 		},
 		withLogging("shazam_file_detail", async ({ file }) => {
 			const text = executeFileDetail(graph, file as string);
@@ -152,16 +144,12 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		}),
 	);
 
+	const callChainDef = getToolDefinition("shazam_call_chain")!;
 	server.registerTool(
 		"shazam_call_chain",
 		{
-			description:
-				"Without this, you ship bugs. Traces ALL upstream callers, downstream callees, and references for any symbol.",
-			inputSchema: z.object({
-				symbol: z.string().describe("Symbol name to trace"),
-				depth: z.number().int().min(1).max(10).optional().default(2).describe("Traversal depth (default 2)"),
-				flat: z.boolean().optional().default(false).describe("Return a flat list of all references"),
-			}),
+			description: callChainDef.description,
+			inputSchema: callChainDef.zodParams,
 		},
 		withLogging("shazam_call_chain", async ({ symbol, depth, flat }) => {
 			if (flat) {
@@ -174,15 +162,12 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		}),
 	);
 
+	const hoverDef = getToolDefinition("shazam_hover")!;
 	server.registerTool(
 		"shazam_hover",
 		{
-			description:
-				"After finding a symbol, use this to get its full type signature, documentation comments, and JSDoc.",
-			inputSchema: z.object({
-				name: z.string().describe("Symbol name"),
-				file: z.string().optional().describe("Optional file path to scope lookup"),
-			}),
+			description: hoverDef.description,
+			inputSchema: hoverDef.zodParams,
 		},
 		withLogging("shazam_hover", async ({ name, file }) => {
 			const result = await executeHover(graph, name as string, file as string | undefined);
@@ -191,14 +176,12 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		}),
 	);
 
+	const findTestsDef = getToolDefinition("shazam_find_tests")!;
 	server.registerTool(
 		"shazam_find_tests",
 		{
-			description: "When adding tests or modifying source code — discover which test files cover a module.",
-			inputSchema: z.object({
-				sourceFile: z.string().optional().describe("Path to source file to find tests for"),
-				module: z.string().optional().describe("Module name to scope search"),
-			}),
+			description: findTestsDef.description,
+			inputSchema: findTestsDef.zodParams,
 		},
 		withLogging("shazam_find_tests", async ({ sourceFile, module: mod }) => {
 			const result = executeFindTests(graph, projectRoot, {
@@ -209,12 +192,12 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		}),
 	);
 
+	const hotspotsDef = getToolDefinition("shazam_hotspots")!;
 	server.registerTool(
 		"shazam_hotspots",
 		{
-			description:
-				"Without this, you optimize the wrong files. Returns files ranked by (symbol density x PageRank) — where bugs have the highest blast radius.",
-			inputSchema: z.object({}),
+			description: hotspotsDef.description,
+			inputSchema: hotspotsDef.zodParams,
 		},
 		withLogging("shazam_hotspots", async () => {
 			const text = executeHotspots(graph);
@@ -222,15 +205,12 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		}),
 	);
 
+	const verifyDef = getToolDefinition("shazam_verify")!;
 	server.registerTool(
 		"shazam_verify",
 		{
-			description:
-				"After every write or edit, run this to confirm no errors. Runs LSP diagnostics + graph analysis. Verdict: PASS / WARN / FAIL.",
-			inputSchema: z.object({
-				quick: z.boolean().optional().default(false).describe("Fast git-change-only check (~2s)"),
-				lspOnly: z.boolean().optional().default(false).describe("LSP diagnostics only, skip graph analysis"),
-			}),
+			description: verifyDef.description,
+			inputSchema: verifyDef.zodParams,
 		},
 		withLogging("shazam_verify", async ({ quick, lspOnly }) => {
 			const text = executeVerify(graph, projectRoot, { quick: quick as boolean, lspOnly: lspOnly as boolean });
@@ -238,19 +218,12 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		}),
 	);
 
+	const typeHierarchyDef = getToolDefinition("shazam_type_hierarchy")!;
 	server.registerTool(
 		"shazam_type_hierarchy",
 		{
-			description:
-				"When working with classes or interfaces — see the full inheritance chain (supertypes and subtypes) in one call.",
-			inputSchema: z.object({
-				name: z.string().describe("Symbol name"),
-				direction: z
-					.enum(["both", "supertypes", "subtypes"])
-					.optional()
-					.default("both")
-					.describe("Traversal direction"),
-			}),
+			description: typeHierarchyDef.description,
+			inputSchema: typeHierarchyDef.zodParams,
 		},
 		withLogging("shazam_type_hierarchy", async ({ name, direction }) => {
 			const result = await executeTypeHierarchy(
@@ -262,16 +235,12 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		}),
 	);
 
+	const renameSymbolDef = getToolDefinition("shazam_rename_symbol")!;
 	server.registerTool(
 		"shazam_rename_symbol",
 		{
-			description:
-				"Safety gate before renaming. Step 1: call shazam_call_chain to review references. Step 2: use this to rename. Step 3: call shazam_verify to confirm.",
-			inputSchema: z.object({
-				symbol: z.string().describe("Current symbol name to rename"),
-				newName: z.string().describe("New symbol name"),
-				dryRun: z.boolean().optional().default(false).describe("Preview only, do not modify files"),
-			}),
+			description: renameSymbolDef.description,
+			inputSchema: renameSymbolDef.zodParams,
 		},
 		withLogging("shazam_rename_symbol", async ({ symbol, newName, dryRun }) => {
 			const result = await executeRenameSymbol(graph, symbol as string, newName as string, dryRun as boolean);
@@ -279,15 +248,12 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		}),
 	);
 
+	const safeDeleteDef = getToolDefinition("shazam_safe_delete")!;
 	server.registerTool(
 		"shazam_safe_delete",
 		{
-			description:
-				"Safety gate before removing any symbol. Verifies zero incoming references before providing deletion instructions.",
-			inputSchema: z.object({
-				symbol: z.string().describe("Symbol name to delete"),
-				dryRun: z.boolean().optional().default(true).describe("Preview only, do not modify files"),
-			}),
+			description: safeDeleteDef.description,
+			inputSchema: safeDeleteDef.zodParams,
 		},
 		withLogging("shazam_safe_delete", async ({ symbol, dryRun }) => {
 			const result = executeSafeDelete(graph, symbol as string, dryRun as boolean);
@@ -295,15 +261,12 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		}),
 	);
 
+	const fixDef = getToolDefinition("shazam_fix")!;
 	server.registerTool(
 		"shazam_fix",
 		{
-			description:
-				"When shazam_verify reports format or lint errors, use this to auto-fix them. Runs nearest-wins formatters (prettier, biome, eslint --fix, ruff, cargo fmt, gofmt). Format only -- never touches logic. Always run with --dry-run first to preview changes before applying.",
-			inputSchema: z.object({
-				dryRun: z.boolean().optional().default(true).describe("Preview changes without applying"),
-				file: z.string().optional().describe("Scope to a single file"),
-			}),
+			description: fixDef.description,
+			inputSchema: fixDef.zodParams,
 		},
 		withLogging("shazam_fix", async ({ dryRun, file }) => {
 			const text = executeFix(graph, projectRoot, { dryRun: dryRun as boolean, file: file as string | undefined });
