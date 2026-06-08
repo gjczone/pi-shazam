@@ -14,7 +14,7 @@ For non-Pi agents, pi-shazam also exposes the same tools via **MCP (Model Contex
 
 ## Core Capabilities
 
-- **Tree-sitter parsing** — 14 programming languages, full symbol dependency graph
+- **Tree-sitter parsing** — 5 programming languages (Python, TypeScript, Go, Rust, JSON), full symbol dependency graph
 - **PageRank ranking** — Identify core files and key symbols
 - **LSP integration** — Type checking, diagnostics, type hierarchy (5 languages)
 - **Incremental analysis** — Baseline comparison, focus on changes
