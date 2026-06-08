@@ -10,7 +10,7 @@ import { isNonSourceFile } from "../core/filter.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool } from "./_factory.js";
 import { EXT_TO_LANG } from "../core/treesitter.js";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 
@@ -118,6 +118,21 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 		if (depsSection) {
 			lines.push("");
 			lines.push(depsSection);
+		}
+		const pythonDeps = buildPythonDepsSection(_projectRoot);
+		if (pythonDeps) {
+			lines.push("");
+			lines.push(pythonDeps);
+		}
+		const rustDeps = buildRustDepsSection(_projectRoot);
+		if (rustDeps) {
+			lines.push("");
+			lines.push(rustDeps);
+		}
+		const goDeps = buildGoDepsSection(_projectRoot);
+		if (goDeps) {
+			lines.push("");
+			lines.push(goDeps);
 		}
 		const changesSection = buildRecentChangesSection(_projectRoot);
 		if (changesSection) {
@@ -252,6 +267,9 @@ export function executeOverviewJson(graph: RepoGraph, projectRoot: string, filte
 			totalSymbols: graph.symbols.size,
 			totalFiles: graph.fileSymbols.size,
 			keyDependencies: filter ? undefined : buildKeyDependenciesSection(projectRoot),
+			pythonDependencies: filter ? undefined : buildPythonDepsSection(projectRoot),
+			rustDependencies: filter ? undefined : buildRustDepsSection(projectRoot),
+			goDependencies: filter ? undefined : buildGoDepsSection(projectRoot),
 			recentChanges: filter ? undefined : buildRecentChangesSection(projectRoot),
 			topFiles: topFiles.map(([file, stats]) => ({
 				file,
@@ -431,6 +449,95 @@ export function buildKeyDependenciesSection(projectRoot: string): string | null 
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Build a Python dependencies section for the overview.
+ * Reads pyproject.toml or falls back to requirements.txt.
+ * Returns null when neither file is found.
+ */
+function buildPythonDepsSection(projectRoot: string): string | null {
+	const lines: string[] = [];
+	lines.push("### Key Dependencies");
+	lines.push("");
+
+	// Try pyproject.toml first
+	const pyprojectPath = join(projectRoot, "pyproject.toml");
+	if (existsSync(pyprojectPath)) {
+		try {
+			const content = readFileSync(pyprojectPath, "utf-8");
+			const depsMatch = content.match(/\[project\.dependencies\]\s*\n([\s\S]*?)(?=\n\[|\n*$)/);
+			if (depsMatch) {
+				const deps = depsMatch[1]!.split("\n").filter(l => l.trim() && !l.trim().startsWith("#"));
+				lines.push("| Package | Version |");
+				lines.push("|---------|---------|");
+				for (const dep of deps.slice(0, 15)) {
+					const match = dep.match(/^"?([^"<>=]+)"?\s*[<>=]?\s*"?([^"]*)"?/);
+					if (match) lines.push(`| ${match[1]!.trim()} | ${match[2]?.trim() || ""} |`);
+				}
+				return lines.join("\n");
+			}
+		} catch { /* ignore */ }
+	}
+
+	// Fallback: requirements.txt
+	const reqPath = join(projectRoot, "requirements.txt");
+	if (existsSync(reqPath)) {
+		try {
+			const content = readFileSync(reqPath, "utf-8");
+			const deps = content.split("\n").filter(l => l.trim() && !l.startsWith("#") && !l.startsWith("-"));
+			lines.push("| Package |");
+			lines.push("|---------|");
+			for (const dep of deps.slice(0, 15)) {
+				lines.push(`| ${dep.trim()} |`);
+			}
+			return lines.join("\n");
+		} catch { /* ignore */ }
+	}
+
+	return null;
+}
+
+/**
+ * Build a Rust dependencies section for the overview.
+ * Reads Cargo.toml and extracts [dependencies].
+ * Returns null when no Cargo.toml is found.
+ */
+function buildRustDepsSection(projectRoot: string): string | null {
+	const cargoPath = join(projectRoot, "Cargo.toml");
+	if (!existsSync(cargoPath)) return null;
+	try {
+		const content = readFileSync(cargoPath, "utf-8");
+		const depsMatch = content.match(/\[dependencies\]\s*\n([\s\S]*?)(?=\n\[|\n*$)/);
+		if (!depsMatch) return null;
+		const deps = depsMatch[1]!.split("\n").filter(l => l.trim() && !l.trim().startsWith("#"));
+		const lines: string[] = ["### Key Dependencies", "", "| Crate | Version |", "|-------|---------|"];
+		for (const dep of deps.slice(0, 15)) {
+			const match = dep.match(/^"?([^"<>= ]+)"?\s*=\s*"?([^"]*)"?/);
+			if (match) lines.push(`| ${match[1]!.trim()} | ${match[2]?.trim() || ""} |`);
+		}
+		return lines.join("\n");
+	} catch { return null; }
+}
+
+/**
+ * Build a Go dependencies section for the overview.
+ * Reads go.mod and extracts require blocks.
+ * Returns null when no go.mod is found.
+ */
+function buildGoDepsSection(projectRoot: string): string | null {
+	const goModPath = join(projectRoot, "go.mod");
+	if (!existsSync(goModPath)) return null;
+	try {
+		const content = readFileSync(goModPath, "utf-8");
+		const deps = content.split("\n").filter(l => l.trim().startsWith("\t") && !l.includes("go "));
+		const lines: string[] = ["### Key Dependencies", "", "| Module | Version |", "|--------|---------|"];
+		for (const dep of deps.slice(0, 15)) {
+			const parts = dep.trim().split(/\s+/);
+			if (parts.length >= 2) lines.push(`| ${parts[0]} | ${parts[1]} |`);
+		}
+		return lines.join("\n");
+	} catch { return null; }
 }
 
 // ── Recent Changes section ──────────────────────────────────────────
