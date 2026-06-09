@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-06-09
+
+### Features
+
+- **feat: add safety hooks, auto-format, stop-verify, and failure-recovery**
+  - `hooks/safety.ts`: Destructive command confirmation dialog + Pre-commit gate
+    - Interactive confirmation for dangerous commands (rm -rf, dd, mkfs, etc.)
+    - Blocks git commit if shazam_verify was not run recently
+    - Uses Pi's ctx.ui.confirm() and ctx.ui.select() for user interaction
+  - `hooks/stop-verify.ts`: Turn-end verification reminder
+    - Checks if there were unverified file edits when turn ends
+    - Sends reminder to run shazam_verify before finishing
+  - `hooks/failure-recovery.ts`: Consecutive failure detection
+    - Tracks failure patterns per tool
+    - After 3 failures: suggests alternative approaches
+    - After 5 failures: suggests reorienting with shazam_overview
+    - Prevents LLM loops
+  - `hooks/shazam-guide.ts`: Auto-format feature
+    - Detects file type and runs native formatter (ruff, prettier, gofmt, rustfmt, biome)
+    - Falls back to suggesting shazam_fix if no native formatter found
+    - Shows notification after formatting
+
+### Documentation
+
+- Updated AGENTS.md with new hooks table and architecture
+- Updated docs/kimi-code-hooks.md with Pi vs Kimi-Code comparison
+
 ## [0.6.3] - 2026-06-08
 
 ### Bug Fixes
