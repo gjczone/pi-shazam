@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-06-10
+
+### Bug Fixes
+
+- **fix(#226): worktree-aware git diff in shazam_verify** (#227)
+  - Added `resolveGitWorkdir()` helper using `git rev-parse --show-toplevel` to detect worktree root
+  - Updated `getGitChangedFiles()` to resolve correct git working directory before running `git diff`
+  - Fixed sync `executeVerify()` using hardcoded `"."` instead of `projectRoot` parameter
+  - `shazam_verify` now correctly detects file changes when running from a git worktree
+  - Risk level now based on actual worktree changes instead of main repo pre-existing state
+  - Added 6 comprehensive worktree tests covering main repo, worktree, and cross-directory scenarios
+
+## [0.7.1] - 2026-06-09
+
+### Bug Fixes
+
+- **fix: use memory-based verify tracking in stop-verify hook**
+  - Changed from audit log file checking to in-memory tracking for more reliable `shazam_verify` detection
+  - Eliminated file system race conditions in the stop-verify hook
+
 ## [0.7.0] - 2026-06-09
 
 ### Features

@@ -516,10 +516,21 @@ This script handles everything:
 8. Updates global npm install
 9. Verifies all installations
 
-**After running the release script, you MUST:**
+**After running the release script, you MUST (non-negotiable, never skip):**
+
+> ⚠️ **A release without CHANGELOG.md is an INCOMPLETE release.** The release script
+> does NOT update CHANGELOG.md — this is a manual step that MUST happen every time.
+> If you run `release.sh` and forget CHANGELOG.md, go back and fix it immediately.
+
 1. Update the GitHub Release with detailed notes (see above)
-2. Update CHANGELOG.md with the same information
+2. Update `CHANGELOG.md` with the same information — use the format `[X.Y.Z] - YYYY-MM-DD`
+   with subsections: Features & Enhancements, Bug Fixes, Refactoring, Other
 3. Commit and push CHANGELOG.md changes
+
+**Checklist before declaring release done:**
+- [ ] GitHub Release has detailed notes (not just "See CHANGELOG")
+- [ ] `CHANGELOG.md` has a `[X.Y.Z]` entry with all changes listed
+- [ ] `CHANGELOG.md` changes committed and pushed
 
 ### Manual Publishing (If Needed)
 
