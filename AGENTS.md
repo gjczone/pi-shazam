@@ -754,3 +754,18 @@ when working on that topic, read the corresponding guide first.
 - Symbol IDs: Format as `{file}::{name}::{line}` to match the repomap convention. Keep this stable — other tools depend on it.
 
 </general-project-rules>
+
+## Pre-Commit Checklist
+
+Before committing or creating a PR, verify ALL of the following:
+
+- [ ] `npm run typecheck` passes with zero errors
+- [ ] `npm test` passes — 0 failures, 0 errors, 0 skipped
+- [ ] `npm run build` succeeds with `dist/index.js` and `dist/index.d.ts` present
+- [ ] `shazam_verify` called after all code changes (PASS/WARN verdict, no FAIL)
+- [ ] AGENTS.md updated if new module/tool/command/hook was added
+- [ ] MCP tools synced in `mcp/tools.ts` if Pi tools were changed
+- [ ] README.md updated if user-facing features or tool list changed
+- [ ] CHANGELOG.md updated if this is a release commit
+- [ ] `tree-sitter-javascript` grammar loaded if `.js`/`.jsx`/`.mjs`/`.cjs` extensions added to `EXT_TO_LANG`
+- [ ] All code comments, JSDoc, commit messages in English (no Chinese)

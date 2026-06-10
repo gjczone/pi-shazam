@@ -68,6 +68,10 @@ export const EXT_TO_LANG: Record<string, string> = {
 	".tsx": "tsx",
 	".mts": "typescript",
 	".cts": "typescript",
+	".js": "javascript",
+	".jsx": "javascript",
+	".mjs": "javascript",
+	".cjs": "javascript",
 	".go": "go",
 	".rs": "rust",
 	".json": "json",
@@ -90,6 +94,7 @@ export class TreeSitterAdapter {
 	private _initParsers(): void {
 		const grammars: [string, string, string?][] = [
 			["python", "tree-sitter-python", "python"],
+			["javascript", "tree-sitter-javascript"],
 			["go", "tree-sitter-go", "go"],
 			["rust", "tree-sitter-rust", "rust"],
 			["json", "tree-sitter-json", "json"],
@@ -271,7 +276,7 @@ export class TreeSitterAdapter {
 
 				for (const [defNode, defCap] of matchingDefs) {
 					const kind = defCap.includes(".") ? defCap.split(".").pop()! : defCap;
-					let vis: Symbol["visibility"] = defCap.includes("export") ? "exported" : "public";
+					let vis: Symbol["visibility"] = this._isExported(defNode) ? "exported" : "public";
 					const name = nameNode.text;
 					if (!name) break;
 
@@ -566,6 +571,19 @@ export class TreeSitterAdapter {
 			if (child.type === nodeType) return child;
 		}
 		return null;
+	}
+
+	private _isExported(node: SyntaxNode): boolean {
+		// Walk up the parent chain looking for an export node
+		// (e.g., export_statement in tree-sitter-typescript/tree-sitter-javascript)
+		let ancestor: SyntaxNode | null = node;
+		while (ancestor) {
+			if (ancestor.type.includes("export")) {
+				return true;
+			}
+			ancestor = ancestor.parent;
+		}
+		return false;
 	}
 
 	private _within(inner: SyntaxNode, outer: SyntaxNode): boolean {

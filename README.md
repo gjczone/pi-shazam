@@ -14,7 +14,7 @@ For non-Pi agents, pi-shazam also exposes the same tools via **MCP (Model Contex
 
 ## Core Capabilities
 
-- **Tree-sitter parsing** — 5 programming languages (Python, TypeScript, Go, Rust, JSON), full symbol dependency graph
+- **Tree-sitter parsing** — 6 programming languages (Python, TypeScript, JavaScript, Go, Rust, JSON), full symbol dependency graph
 - **PageRank ranking** — Identify core files and key symbols
 - **LSP integration** — Type checking, diagnostics, type hierarchy (5 languages)
 - **Incremental analysis** — Baseline comparison, focus on changes
@@ -127,6 +127,7 @@ Supported Node.js versions: **>= 18.0.0**
 ### Community Format/Version Support
 
 - **TypeScript**: `.ts`, `.tsx`, `.mts`, `.cts`
+- **JavaScript**: `.js`, `.jsx`, `.mjs`, `.cjs`
 - **Python**: `.py`, `.pyi`
 - **Go**: `.go`
 - **Rust**: `.rs`
@@ -136,22 +137,50 @@ Supported Node.js versions: **>= 18.0.0**
 
 ```
 pi-shazam (npm package)
-├── Pi Extension                    MCP Server
-│   index.ts ──tools/*.ts             mcp/entry.ts ──mcp/tools.ts
-│       │         │                       │              │
-│       └──── core/ + lsp/ ───────────────┘──────────────┘
-│            (shared core, zero duplication)
 │
-├── hooks/                          Automatic hooks
-│   ├── before-start.ts             Inject project overview
-│   ├── safety.ts                   Destructive command confirmation + pre-commit gate
-│   ├── pre-edit.ts                 Multi-file edit protection
-│   ├── shazam-guide.ts             Auto-format + tool usage guidance
-│   ├── stop-verify.ts              Turn-end verification reminder
-│   ├── failure-recovery.ts         Consecutive failure detection
-│   └── tool-logger.ts              Usage analytics
+├── hooks/                              Automatic hooks (hooks → tools → core)
+│   ├── before-start.ts                 Inject project overview into system prompt
+│   ├── safety.ts                       Destructive command confirmation + pre-commit gate
+│   ├── pre-edit.ts                     Multi-file edit protection
+│   ├── shazam-guide.ts                 Auto-format + tool usage guidance
+│   ├── stop-verify.ts                  Turn-end verification reminder
+│   ├── failure-recovery.ts             Consecutive failure detection
+│   └── tool-logger.ts                  Usage analytics
 │
-└── core/ + lsp/                    Pure analysis engine (zero Pi/MCP dependencies)
+├── tools/                              Pi tool wrappers (tools → core + lsp)
+│   ├── definitions.ts                  Shared tool definitions (names, descriptions, schemas)
+│   ├── _factory.ts                     Tool registration factory
+│   ├── _context.ts                     Shared LSP manager holder
+│   ├── lsp_enrich.ts                   LSP enrichment wrappers
+│   ├── overview.ts ─── impact.ts ─── codesearch.ts
+│   ├── symbol.ts ─── hover.ts ─── file_detail.ts
+│   ├── call_chain.ts ─── verify.ts ─── fix.ts
+│   ├── hotspots.ts ─── find_tests.ts ─── type_hierarchy.ts
+│   ├── rename_symbol.ts ─── safe_delete.ts
+│   │
+│   └── Pi Extension (index.ts)         MCP Server (mcp/entry.ts ── mcp/tools.ts)
+│           │                                   │
+│           └────────── core/ + lsp/ ───────────┘
+│                   (shared engine, zero duplication)
+│
+├── lsp/                                Language server management
+│   ├── manager.ts                      Server lifecycle (spawn, stdio, health, shutdown)
+│   ├── client.ts                       LSP protocol via vscode-jsonrpc
+│   ├── servers.ts                      Language → server config (6 languages)
+│   └── setup.ts                        /shazam-setup command
+│
+└── core/                               Pure analysis engine (zero dependencies)
+    ├── treesitter.ts                   AST parsing + symbol extraction (6 languages)
+    ├── treesitter-queries.ts           Tree-sitter query patterns
+    ├── graph.ts                        Symbol dependency graph
+    ├── pagerank.ts                     PageRank symbol importance scoring
+    ├── scanner.ts                      Project file scanning + graph building
+    ├── encoding.ts                     UTF-8 → GBK → GB2312 adaptive encoding
+    ├── cache.ts                        Graph baseline save/diff + persistent cache
+    ├── baseline.ts                     In-memory session baseline
+    ├── filter.ts                       Shared file filtering (source vs config/generated)
+    ├── output.ts                       Standardized tool output formatting
+    └── git-hooks.ts                    Git pre-commit hook management
 ```
 
 ## Development

@@ -192,18 +192,9 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 			if (!hasRecentVerify()) {
 				try {
 					const choice = await ctx.ui.select("Pre-Commit Gate", [
-						{
-							label: "Run shazam_verify first (Recommended)",
-							description: "Verify code before committing",
-						},
-						{
-							label: "Skip verification",
-							description: "Commit without verification",
-						},
-						{
-							label: "Cancel commit",
-							description: "Don't commit yet",
-						},
+						"Run shazam_verify first (Recommended)",
+						"Skip verification",
+						"Cancel commit",
 					]);
 
 					if (choice === "Run shazam_verify first (Recommended)") {
