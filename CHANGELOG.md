@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-06-10
+
+### Features & Enhancements
+
+- **feat(#229): add JavaScript file support to tree-sitter parsing** (#232)
+  - Added `.js`, `.jsx`, `.mjs`, `.cjs` to `EXT_TO_LANG` extension map
+  - Load `tree-sitter-javascript` grammar on initialization
+  - JavaScript queries already defined in `core/treesitter-queries.ts`
+  - `tree-sitter-javascript` v0.23.1 available as transitive dependency of `tree-sitter-typescript`
+
+### Bug Fixes
+
+- **fix(#228): visibility detection broken — all symbols marked as "public"** (#232)
+  - Replaced `defCap.includes("export")` with AST ancestor traversal (`_isExported` helper)
+  - Checks if any ancestor node type includes "export" (e.g., `export_statement`)
+  - Exported TS/JS functions, classes, and interfaces now correctly marked as `visibility: "exported"`
+  - Fixes orphan detection filters that rely on `sym.visibility === "exported"`
+
+- **fix(#230): pre-commit hook shows [object Object] instead of option labels** (#232)
+  - Replaced `{label, description}` objects with plain strings in `ctx.ui.select()` call
+  - Pi runtime's `toString()` on objects produces `[object Object]` instead of the label
+
+### Documentation
+
+- **docs(#231): improve README architecture diagram and AGENTS.md compliance checklist** (#232)
+  - Updated README architecture diagram to show clearer layering (hooks → tools → core/lsp)
+  - Added missing modules: `baseline.ts`, `filter.ts`, `git-hooks.ts`, `output.ts`, `treesitter-queries.ts`, `definitions.ts`
+  - Added JavaScript to language support list and file format table
+  - Added Pre-Commit Checklist to AGENTS.md covering all critical verification steps
+
 ## [0.8.0] - 2026-06-10
 
 ### Bug Fixes
