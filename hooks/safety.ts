@@ -5,11 +5,12 @@
  * 1. Destructive command detection — shows confirmation dialog for dangerous commands
  * 2. Pre-commit gate — blocks git commit if shazam_verify was not run recently
  *
- * Uses Pi's ctx.ui.confirm() for interactive confirmation (better than Kimi Code's
- * exit 2 blocking, which gives user no choice).
+ * Uses Pi's ctx.ui.confirm() for interactive confirmation.
+ * Uses shared verify-state module for reliable verify detection.
  */
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
+import { hasRecentVerify } from "./verify-state.js";
 
 /**
  * High-risk patterns that should always trigger confirmation.
@@ -79,52 +80,6 @@ function detectDestructiveCommand(cmd: string): { level: "HIGH" | "MEDIUM"; patt
 }
 
 /**
- * Check if shazam_verify was called recently in this session.
- * Uses the tool-logger's audit log or checks in-memory state.
- */
-function hasRecentVerify(): boolean {
-	// Check if shazam_verify appears in recent tool results
-	// We can't directly access the tool history, so we check the audit log
-	try {
-		const { readFileSync, statSync } = require("node:fs");
-		const { join } = require("node:path");
-		const { homedir } = require("node:os");
-
-		const logFile = join(homedir(), ".pi", "hooks", "audit", "shazam-calls.log");
-
-		// Check if log file exists and was modified recently (within 5 minutes)
-		try {
-			const stat = statSync(logFile);
-			const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-			if (stat.mtimeMs < fiveMinutesAgo) {
-				return false;
-			}
-		} catch {
-			return false; // File doesn't exist
-		}
-
-		// Read last 20 lines to check for recent shazam_verify calls
-		const content = readFileSync(logFile, "utf-8");
-		const lines = content.trim().split("\n").slice(-20);
-
-		for (const line of lines) {
-			try {
-				const entry = JSON.parse(line);
-				if (entry.tool === "shazam_verify" && entry.event === "result") {
-					return true;
-				}
-			} catch {
-				// Skip malformed lines
-			}
-		}
-	} catch {
-		// If we can't check, assume verify was not run
-	}
-
-	return false;
-}
-
-/**
  * Register the safety hooks.
  *
  * Intercepts bash tool_call events to:
@@ -141,7 +96,7 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 
 		if (!cmd || typeof cmd !== "string") return;
 
-		// ── Check 1: Destructive command detection ──
+		// -- Check 1: Destructive command detection --
 		const destructive = detectDestructiveCommand(cmd);
 		if (destructive) {
 			const emoji = destructive.level === "HIGH" ? "!!!" : "!";
@@ -166,7 +121,7 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 				}
 
 				// User confirmed, allow the command
-				ctx.ui.notify?.(`Proceeding with ${destructive.level}-risk command...`, "warning");
+				ctx.ui.notify(`Proceeding with ${destructive.level}-risk command...`, "warning");
 			} catch {
 				// If confirm dialog fails (e.g., non-interactive mode), block high-risk
 				if (destructive.level === "HIGH") {
@@ -181,14 +136,14 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 			return;
 		}
 
-		// ── Check 2: Pre-commit gate ──
+		// -- Check 2: Pre-commit gate --
 		if (GIT_COMMIT_PATTERN.test(cmd)) {
 			// Skip if --no-verify flag is present
 			if (cmd.includes("--no-verify")) {
 				return;
 			}
 
-			// Check if shazam_verify was run recently
+			// Check if shazam_verify was run recently (via shared state)
 			if (!hasRecentVerify()) {
 				try {
 					const choice = await ctx.ui.select("Pre-Commit Gate", [
@@ -198,7 +153,6 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 					]);
 
 					if (choice === "Run shazam_verify first (Recommended)") {
-						// Block the commit and suggest running verify
 						return {
 							block: true,
 							reason: "Run shazam_verify first, then try committing again.",
@@ -212,7 +166,7 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 					// "Skip verification" — allow the commit
 				} catch {
 					// Non-interactive mode: just warn but allow
-					ctx.ui.notify?.(
+					ctx.ui.notify(
 						"[shazam] Tip: Run shazam_verify before committing to catch errors early.",
 						"warning",
 					);

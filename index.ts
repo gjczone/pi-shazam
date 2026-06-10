@@ -53,7 +53,9 @@ export default function (pi: ExtensionAPI): void {
 	// Share LspManager with tools via global reference
 	setLspManager(lspManager);
 
-	// Auto-initialize LSP on agent start (with overall 15s timeout guard)
+	// Auto-initialize LSP on agent start (with overall 15s timeout guard).
+	// IMPORTANT: This handler MUST be registered before registerBeforeStartHook.
+	// Only the before-start handler returns { systemPrompt }; ordering matters.
 	pi.on("before_agent_start", async (_event, _ctx) => {
 		try {
 			await awaitPreviousShutdown();

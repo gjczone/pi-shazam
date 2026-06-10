@@ -5,8 +5,8 @@
  * - before_agent_start: inject shazam tool list into system prompt
  * - tool_result (write/edit): auto-format + suggest running shazam_verify
  * - tool_result (shazam_symbol): suggest call_chain when symbol has many callers
- * - tool_call (search/grep/find): suggest shazam_codesearch
- * - tool_call (write/edit): suggest shazam_impact for multi-file edits
+ * - tool_call (shazam_impact): suggest running shazam_verify first
+ * - tool_call (shazam_rename_symbol): suggest running shazam_call_chain first
  *
  * Auto-format feature (v0.6.4):
  * - After write/edit, detect file type and run native formatter
@@ -90,7 +90,7 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 				existsSync(join(projectRoot, "pyproject.toml"));
 			if (hasRuff) {
 				execSync(`ruff format "${absPath}"`, { cwd: projectRoot, timeout: 10000, stdio: "pipe" });
-				ctx.ui?.notify?.(`[auto-format] Formatted ${filePath} with ruff`, "info");
+				ctx.ui.notify(`[auto-format] Formatted ${filePath} with ruff`, "info");
 				return true;
 			}
 		}
@@ -105,7 +105,7 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 				existsSync(join(projectRoot, "prettier.config.mjs"));
 			if (hasPrettier) {
 				execSync(`npx prettier --write "${absPath}"`, { cwd: projectRoot, timeout: 15000, stdio: "pipe" });
-				ctx.ui?.notify?.(`[auto-format] Formatted ${filePath} with prettier`, "info");
+				ctx.ui.notify(`[auto-format] Formatted ${filePath} with prettier`, "info");
 				return true;
 			}
 
@@ -115,7 +115,7 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 				existsSync(join(projectRoot, "biome.jsonc"));
 			if (hasBiome) {
 				execSync(`npx biome format --write "${absPath}"`, { cwd: projectRoot, timeout: 15000, stdio: "pipe" });
-				ctx.ui?.notify?.(`[auto-format] Formatted ${filePath} with biome`, "info");
+				ctx.ui.notify(`[auto-format] Formatted ${filePath} with biome`, "info");
 				return true;
 			}
 		}
@@ -123,19 +123,19 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 		// Go: gofmt
 		if (ext === ".go") {
 			execSync(`gofmt -w "${absPath}"`, { cwd: projectRoot, timeout: 10000, stdio: "pipe" });
-			ctx.ui?.notify?.(`[auto-format] Formatted ${filePath} with gofmt`, "info");
+			ctx.ui.notify(`[auto-format] Formatted ${filePath} with gofmt`, "info");
 			return true;
 		}
 
 		// Rust: rustfmt
 		if (ext === ".rs") {
 			execSync(`rustfmt "${absPath}"`, { cwd: projectRoot, timeout: 10000, stdio: "pipe" });
-			ctx.ui?.notify?.(`[auto-format] Formatted ${filePath} with rustfmt`, "info");
+			ctx.ui.notify(`[auto-format] Formatted ${filePath} with rustfmt`, "info");
 			return true;
 		}
 	} catch (err) {
 		// Formatter failed — warn but don't block
-		ctx.ui?.notify?.(
+		ctx.ui.notify(
 			`[auto-format] Formatter failed for ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
 			"warning",
 		);
@@ -172,7 +172,7 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 
 			// If no native formatter found, suggest shazam_fix
 			if (!formatted) {
-				ctx.ui?.notify?.(
+				ctx.ui.notify(
 					"run shazam_fix to auto-format (prettier/ruff/gofmt/rustfmt)",
 					"info",
 				);
@@ -180,7 +180,7 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 
 			// Check if multi-file edit was done — suggest impact analysis
 			if (hasMultiFileEdit(event.content)) {
-				ctx.ui?.notify?.(
+				ctx.ui.notify(
 					"suggestion: you edited multiple files — shazam_impact assesses blast radius before continuing",
 					"info",
 				);
@@ -192,7 +192,7 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 		if (event.toolName === "shazam_symbol") {
 			const symbolName = hasManyCallers(event.content);
 			if (symbolName && !event.isError) {
-				ctx.ui?.notify?.(
+				ctx.ui.notify(
 					`recommended: shazam_call_chain --symbol ${symbolName} traces all callers before changing this symbol`,
 					"info",
 				);
@@ -210,9 +210,9 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 			}
 			const combined = texts.join("\n");
 			if (combined.includes("[FAIL]")) {
-				ctx.ui?.notify?.("shazam_verify reported FAIL — fix errors before proceeding", "warning");
+				ctx.ui.notify("shazam_verify reported FAIL — fix errors before proceeding", "warning");
 			} else if (combined.includes("[WARN]")) {
-				ctx.ui?.notify?.("shazam_verify reported WARN — review warnings, then run shazam_fix if needed", "info");
+				ctx.ui.notify("shazam_verify reported WARN — review warnings, then run shazam_fix if needed", "info");
 			}
 			return;
 		}
@@ -223,13 +223,13 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 
 		// Before impact: suggest verifying first if there are uncommitted changes
 		if (name === "shazam_impact") {
-			ctx.ui?.notify?.("tip: run shazam_verify first to establish a baseline before assessing impact", "info");
+			ctx.ui.notify("tip: run shazam_verify first to establish a baseline before assessing impact", "info");
 			return;
 		}
 
 		// Before rename_symbol: suggest call_chain first
 		if (name === "shazam_rename_symbol") {
-			ctx.ui?.notify?.("tip: run shazam_call_chain first to verify all references before renaming", "info");
+			ctx.ui.notify("tip: run shazam_call_chain first to verify all references before renaming", "info");
 			return;
 		}
 	});

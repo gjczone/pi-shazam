@@ -115,7 +115,8 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
     ├── shazam-guide.ts     ← Auto-format + contextual tool suggestions
     ├── stop-verify.ts      ← Remind to verify before ending turn
     ├── failure-recovery.ts ← Detect consecutive failures, suggest alternatives
-    └── tool-logger.ts      ← Log shazam calls to ~/.pi/hooks/audit/shazam-calls.log
+    ├── tool-logger.ts      ← Log shazam calls to ~/.pi/hooks/audit/shazam-calls.log
+    └── verify-state.ts     ← Shared verify tracking state for safety + stop-verify
 mcp/                        ← MCP server for non-Pi clients
 ├── entry.ts                ← McpServer + StdioServerTransport init
 ├── tools.ts                ← 14 MCP tool registrations wrapping core
@@ -134,7 +135,7 @@ mcp/                        ← MCP server for non-Pi clients
 | `safety`           | `tool_call` (bash)          | YES   | Destructive command confirmation + pre-commit gate                      | HIGH — prevents data loss and unverified commits        |
 | `pre-edit`         | `tool_call` (write/edit)    | YES   | Detects multi-file edits, warns about blast radius                      | MEDIUM — prevents accidental multi-file breaks          |
 | `shazam-guide`     | `tool_result`               | YES   | Auto-format + suggests related shazam tools                             | HIGH — auto-formats code, helps LLM discover tools      |
-| `stop-verify`      | `turn_end`                  | YES   | Reminds to verify before ending turn                                    | HIGH — prevents unverified edits                        |
+| `stop-verify`      | `tool_result` + `tool_call` + `turn_end` | YES | Reminds to verify before ending turn, resets on new edits          | HIGH — prevents unverified edits                        |
 | `failure-recovery` | `tool_result`               | YES   | Detects consecutive failures, suggests alternatives                     | MEDIUM — prevents LLM loops                             |
 | `tool-logger`      | `tool_call` + `tool_result` | YES   | Logs all shazam tool calls to JSONL file                                | LOW — debugging only, no LLM impact                     |
 

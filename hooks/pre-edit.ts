@@ -11,13 +11,14 @@
  */
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
+import { resolve } from "node:path";
 
 /** Maximum number of edited files tracked in the set. */
 const MAX_EDITED_FILES = 100;
 
 /**
  * Track files edited in the current session for multi-edit detection.
- * Key: file path, Value: insertion order timestamp.
+ * Key: normalized file path, Value: insertion order timestamp.
  */
 const _editedFiles = new Map<string, number>();
 let _editCounter = 0;
@@ -26,6 +27,14 @@ let _editCounter = 0;
  * Track tentative file additions from tool_call for removal on failed tool_result.
  */
 const _tentativeFiles = new Map<string, Set<string>>();
+
+/**
+ * Normalize a file path to prevent duplicate tracking of the same file
+ * under different path representations (e.g. "./src/foo.ts" vs "src/foo.ts").
+ */
+export function normalizeEditedPath(filePath: string, cwd: string): string {
+	return resolve(cwd, filePath);
+}
 
 /**
  * Get the list of files that have been edited so far in this session.
@@ -105,8 +114,11 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 
 		const input = "input" in event ? (event as unknown as Record<string, unknown>).input : {};
 
-		const files = extractFilesFromInput(input);
-		if (files.length === 0) return;
+		const rawFiles = extractFilesFromInput(input);
+		if (rawFiles.length === 0) return;
+
+		// Normalize paths to avoid duplicate tracking
+		const files = rawFiles.map((f) => normalizeEditedPath(f, ctx.cwd));
 
 		// Track tentatively for this tool call (for removal on failure).
 		// Also schedule TTL-based eviction in case tool_result never arrives.
@@ -143,12 +155,8 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 			reasons.push(`This session has touched ${allFiles.length} files`);
 		}
 
-		// Condition 2: Shared/exported module check is deferred to graph availability.
-		// Formerly used blocking execSync("grep -r ..."); now relies on multi-file
-		// detection (Condition 1) which catches most risky edit patterns.
-
 		if (reasons.length > 0) {
-			ctx.ui?.notify?.(
+			ctx.ui.notify(
 				`[shazam] Caution: ${reasons.join("; ")}. Run \`shazam_impact --files ${allFiles.join(" ")}\` to assess blast radius before editing.`,
 				"warning",
 			);
@@ -178,5 +186,3 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 		clearEditedFiles();
 	});
 }
-
-

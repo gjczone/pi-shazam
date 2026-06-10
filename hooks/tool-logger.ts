@@ -37,6 +37,7 @@ function write(entry: Record<string, unknown>): void {
 	try {
 		ensureDir();
 		appendFileSync(LOG_FILE, JSON.stringify(entry) + "\n", "utf-8");
+		_writeFailed = false;
 	} catch (err) {
 		if (!_writeFailed) {
 			_writeFailed = true;
@@ -61,6 +62,11 @@ function summarize(v: unknown): unknown {
 		return s;
 	}
 	return v;
+}
+
+function cleanupState(): void {
+	_starts.clear();
+	_writeFailed = false;
 }
 
 export function registerToolLogger(pi: ExtensionAPI): void {
@@ -108,5 +114,14 @@ export function registerToolLogger(pi: ExtensionAPI): void {
 			error: event.isError ? (texts[0]?.slice(0, 300) ?? null) : null,
 			result: truncated,
 		});
+	});
+
+	// Clean up orphaned entries on session boundaries
+	pi.on("session_start", () => {
+		cleanupState();
+	});
+
+	pi.on("session_shutdown", () => {
+		cleanupState();
 	});
 }
