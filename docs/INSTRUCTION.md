@@ -510,9 +510,13 @@ function write(line: string) {
 | Hook | Event | Purpose |
 |------|-------|---------|
 | `before-start.ts` | `before_agent_start` | Inject project structure overview into system prompt |
-| `pre-edit.ts` | `tool_call` | Detect multi-file edits, warn about blast radius |
-| `shazam-guide.ts` | `tool_result` + `tool_call` | Nudge agent to use shazam tools |
+| `pre-edit.ts` | `tool_call` + `tool_result` | Detect multi-file edits, warn about blast radius |
+| `shazam-guide.ts` | `tool_result` + `tool_call` | Auto-format + nudge agent to use shazam tools |
 | `tool-logger.ts` | `tool_call` + `tool_result` | Log shazam calls to audit dir |
+| `safety.ts` | `tool_call` (bash) | Destructive command confirmation + pre-commit gate |
+| `stop-verify.ts` | `tool_result` + `turn_end` | Remind to verify before ending turn |
+| `failure-recovery.ts` | `tool_result` | Detect consecutive failures, suggest alternatives |
+| `verify-state.ts` | (shared module) | Shared verify tracking state for safety + stop-verify |
 
 ### 3.10 MCP Server — Non-Pi Client Wrapping
 
@@ -809,8 +813,8 @@ printf '{"jsonrpc":"2.0","id":0,"method":"initialize",...}\n{"jsonrpc":"2.0","id
 
 ```bash
 # Verify hooks registered in built dist
-grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerAfterWrite" dist/index.js
-# Should output: 4
+grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerSafetyHooks\|registerStopVerify\|registerPreEditGuard\|registerFailureRecovery" dist/index.js
+# Should output: 7
 ```
 
 ### 6.7 After Every Change (MANDATORY)

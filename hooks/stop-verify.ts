@@ -8,56 +8,39 @@
  * to check for errors before declaring "done".
  *
  * Uses turn_end event to detect when the agent is about to finish.
- * Tracks verify calls in memory for reliable detection.
+ * Tracks verify calls via shared verify-state module.
  */
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
-import { getEditedFiles } from "./pre-edit.js";
-
-/**
- * Track whether shazam_verify was called in this session.
- * More reliable than checking audit log file.
- */
-let _verifyCalledInSession = false;
-let _lastVerifyTimestamp = 0;
-
-/**
- * Mark that shazam_verify was called.
- */
-function markVerifyCalled(): void {
-	_verifyCalledInSession = true;
-	_lastVerifyTimestamp = Date.now();
-}
-
-/**
- * Check if shazam_verify was called recently (within 5 minutes).
- */
-function hasRecentVerify(): boolean {
-	if (!_verifyCalledInSession) return false;
-
-	// Also check if it was recent (within 5 minutes)
-	const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-	return _lastVerifyTimestamp > fiveMinutesAgo;
-}
+import { getEditedFiles, clearEditedFiles } from "./pre-edit.js";
+import { markVerifyCalled, hasRecentVerify, onNewEdit, resetVerifyState } from "./verify-state.js";
 
 /**
  * Register the stop-verify hook.
  *
- * On tool_result for shazam_verify, marks verify as called.
+ * On tool_result for shazam_verify, marks verify as called and clears edit tracker.
+ * On tool_call for write/edit after verify, resets verify flag (post-verify edit detection).
  * On turn_end, checks if there were file edits that haven't been verified.
  */
 export function registerStopVerify(pi: ExtensionAPI): void {
-	// Track shazam_verify calls
+	// Track shazam_verify calls and clear edit history (edits are now verified)
 	pi.on("tool_result", (event) => {
 		if (event.toolName === "shazam_verify" && !event.isError) {
 			markVerifyCalled();
+			clearEditedFiles();
+		}
+	});
+
+	// Reset verify flag when new edits happen after verify
+	pi.on("tool_call", (event) => {
+		if (event.toolName === "write" || event.toolName === "edit") {
+			onNewEdit();
 		}
 	});
 
 	// Reset on session start
 	pi.on("session_start", () => {
-		_verifyCalledInSession = false;
-		_lastVerifyTimestamp = 0;
+		resetVerifyState();
 	});
 
 	// Check on turn end

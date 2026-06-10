@@ -13,6 +13,10 @@
  * - buildProactiveRecommendations: builds context-aware recommendations
  * - buildSessionBaselineSection: builds baseline summary
  * - generateOverviewForPrompt: orchestrates all parts
+ *
+ * NOTE: This handler MUST be registered AFTER the LSP init handler in index.ts.
+ * Only this handler returns { systemPrompt }. If ordering changes, the system
+ * prompt injection could be silently lost.
  */
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
@@ -20,7 +24,7 @@ import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { executeOverview } from "../tools/overview.js";
 import { hasTestFiles, hasHierarchyKinds } from "../core/output.js";
-import { createBaseline, clearBaseline, getBaseline, formatBaselineSummary } from "../core/baseline.js";
+import { createBaseline, getBaseline, formatBaselineSummary } from "../core/baseline.js";
 import { execSync } from "node:child_process";
 
 /**
@@ -98,8 +102,8 @@ function buildSessionBaselineSection(_projectRoot: string, graph: RepoGraph): st
 		const branch = execSync("git branch --show-current 2>/dev/null", { encoding: "utf-8", timeout: 3000 }).trim();
 		const commit = execSync("git rev-parse HEAD 2>/dev/null", { encoding: "utf-8", timeout: 3000 }).trim();
 
-		// Clear any previous baseline and capture current state
-		clearBaseline();
+		// createBaseline immediately reassigns _baseline and _previousOrphans,
+		// so no explicit clearBaseline() is needed here.
 		createBaseline(graph, 0, 0, branch || "unknown", commit || "unknown");
 
 		const baseline = getBaseline();
