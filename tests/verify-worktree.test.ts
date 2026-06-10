@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -123,10 +123,11 @@ describe("getGitChangedFiles — worktree awareness (issue #226)", () => {
 
 		// The resolved dir should be the worktree directory itself
 		// (since worktree root IS the worktree directory)
+		// Use realpathSync to handle macOS /private/var symlink
 		const resolved = execSync("git rev-parse --show-toplevel", {
 			cwd: worktreeDir,
 			encoding: "utf-8",
 		}).trim();
-		expect(resolved).toBe(worktreeDir);
+		expect(realpathSync(resolved)).toBe(realpathSync(worktreeDir));
 	});
 });
