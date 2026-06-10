@@ -516,11 +516,31 @@ interface RiskResult {
 	reason: string;
 }
 
+/**
+ * Resolve the actual git working directory for the given path.
+ * Uses `git rev-parse --show-toplevel` which correctly returns the worktree
+ * root when called from within a git worktree (issue #226).
+ *
+ * Falls back to `cwd` when the path is not inside a git repository.
+ */
+export function resolveGitWorkdir(cwd: string): string {
+	try {
+		return execSync("git rev-parse --show-toplevel", {
+			cwd,
+			encoding: "utf-8",
+			timeout: 5000,
+		}).trim();
+	} catch {
+		return cwd;
+	}
+}
+
 function getGitChangedFiles(projectRoot: string): string[] {
 	try {
+		const gitDir = resolveGitWorkdir(projectRoot);
 		const output = execSync(
 			"git diff --name-only --diff-filter=ACMR 2>/dev/null; git diff --cached --name-only --diff-filter=ACMR 2>/dev/null",
-			{ cwd: projectRoot, encoding: "utf-8", timeout: 5000 },
+			{ cwd: gitDir, encoding: "utf-8", timeout: 5000 },
 		).trim();
 		if (!output) return [];
 		return [...new Set(output.split("\n").filter(Boolean))];
@@ -571,7 +591,7 @@ function assessRisk(
 /**
  * Synchronous verify (no LSP, graph-only).
  */
-export function executeVerify(graph: RepoGraph, _projectRoot: string, options: VerifyOptions = {}): string {
+export function executeVerify(graph: RepoGraph, projectRoot: string, options: VerifyOptions = {}): string {
 	const lines: string[] = [];
 	const quick = options.quick ?? false;
 	const lspOnly = options.lspOnly ?? false;
@@ -595,7 +615,7 @@ export function executeVerify(graph: RepoGraph, _projectRoot: string, options: V
 
 	if (lspOnly) return lines.join("\n");
 
-	const gitChangedFiles = getGitChangedFiles(".");
+	const gitChangedFiles = getGitChangedFiles(projectRoot);
 	lines.push("### Git Working Tree Changes");
 	if (gitChangedFiles.length > 0) {
 		lines.push(`Files changed: ${gitChangedFiles.length}`);
@@ -605,8 +625,8 @@ export function executeVerify(graph: RepoGraph, _projectRoot: string, options: V
 	}
 	lines.push("");
 
-	const baseline = loadBaseline(".");
-	const diff = diffBaseline(graph, ".");
+	const baseline = loadBaseline(projectRoot);
+	const diff = diffBaseline(graph, projectRoot);
 	if (baseline && diff) {
 		const totalChanges =
 			(diff.addedSymbols?.length ?? 0) + (diff.removedSymbols?.length ?? 0) + (diff.modifiedSymbols?.length ?? 0);
