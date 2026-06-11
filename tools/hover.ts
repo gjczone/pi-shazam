@@ -10,6 +10,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { getLspManager } from "./_context.js";
+import { lspSignatureHelp } from "./lsp_enrich.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { getNextForTool, formatNextSection } from "../core/output.js";
@@ -51,6 +52,7 @@ interface HoverResult {
 	lspHover?: string;
 	docstring?: string;
 	contextLines?: string[];
+	signatureHelp?: string;
 }
 
 /**
@@ -326,6 +328,42 @@ export async function executeHover(graph: RepoGraph, name: string, file?: string
 		result.contextLines = extractContextLines(filePath, symbol.line);
 	}
 
+	// Try LSP signatureHelp for function call context (fixes #236)
+	if (lspManager) {
+		try {
+			const sh = await lspSignatureHelp(lspManager, symbol.file, symbol.line - 1, 0);
+			if (sh?.signatures && sh.signatures.length > 0) {
+				const sig = sh.signatures[0]!;
+				const activeIdx = sh.activeSignature ?? 0;
+				const activeSig = sh.signatures[activeIdx] ?? sig;
+				const parts: string[] = [];
+				parts.push(`\`${activeSig.label}\``);
+				if (activeSig.documentation) {
+					const doc =
+						typeof activeSig.documentation === "string"
+							? activeSig.documentation
+							: (activeSig.documentation as { value: string }).value;
+					if (doc) parts.push(doc);
+				}
+				if (activeSig.parameters && sh.activeParameter !== undefined && sh.activeParameter !== null) {
+					const param = activeSig.parameters[sh.activeParameter];
+					if (param) {
+						const paramDoc =
+							typeof param.documentation === "string"
+								? param.documentation
+								: param.documentation
+									? (param.documentation as { value: string }).value
+									: "";
+						parts.push(`Current param: \`${param.label}\`${paramDoc ? ` — ${paramDoc}` : ""}`);
+					}
+				}
+				result.signatureHelp = parts.join("\n");
+			}
+		} catch {
+			// signatureHelp failed — silent fallback
+		}
+	}
+
 	return result;
 }
 
@@ -354,6 +392,13 @@ export function formatHoverResult(result: HoverResult, name: string): string {
 		lines.push("### Signature");
 		lines.push("");
 		lines.push(`\`${result.signature}\``);
+		lines.push("");
+	}
+
+	if (result.signatureHelp) {
+		lines.push("### Signature Help (current call)");
+		lines.push("");
+		lines.push(result.signatureHelp);
 		lines.push("");
 	}
 

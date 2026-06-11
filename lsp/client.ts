@@ -46,6 +46,13 @@ import type {
 	FoldingRangeParams,
 	FoldingRange,
 	WorkspaceEdit,
+	CodeActionParams,
+	CodeAction,
+	SignatureHelpParams,
+	SignatureHelp,
+	ImplementationParams,
+	CodeLensParams,
+	CodeLens,
 } from "vscode-languageserver-protocol";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -278,6 +285,10 @@ export class LspClient {
 					definition: {},
 					references: {},
 					hover: {},
+					codeAction: {},
+					signatureHelp: {},
+					implementation: {},
+					codeLens: {},
 					documentSymbol: {
 						hierarchicalDocumentSymbolSupport: true,
 					},
@@ -636,6 +647,129 @@ export class LspClient {
 			const msg = err instanceof Error ? err.message : String(err);
 			const isTimeout = msg.includes("timed out");
 			this._log(`[lsp] rename failed: ${msg}`);
+			return { status: "error", reason: msg, timeout: isTimeout };
+		}
+	}
+
+	async codeAction(
+		filePath: string,
+		startLine: number,
+		startChar: number,
+		endLine: number,
+		endChar: number,
+	): Promise<LspResult<(CodeAction | import("vscode-languageserver-protocol").Command)[]>> {
+		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
+		const cap = this._serverCapabilities;
+		if (!cap || !(cap as Record<string, unknown>).codeActionProvider) {
+			return { status: "error", reason: "codeAction provider not supported", timeout: false };
+		}
+
+		const params: CodeActionParams = {
+			textDocument: { uri: pathToUri(filePath) },
+			range: {
+				start: { line: startLine, character: startChar },
+				end: { line: endLine, character: endChar },
+			},
+			context: { diagnostics: [] },
+		};
+
+		try {
+			const result = await this.withTimeout(
+				this.connection!.sendRequest<(CodeAction | import("vscode-languageserver-protocol").Command)[] | null>(
+					"textDocument/codeAction",
+					params,
+				),
+			);
+			return { status: "ok", data: result ?? null };
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			const isTimeout = msg.includes("timed out");
+			this._log(`[lsp] codeAction failed: ${msg}`);
+			return { status: "error", reason: msg, timeout: isTimeout };
+		}
+	}
+
+	async signatureHelp(
+		filePath: string,
+		line: number,
+		character: number,
+	): Promise<LspResult<SignatureHelp>> {
+		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
+		const cap = this._serverCapabilities;
+		if (!cap || !(cap as Record<string, unknown>).signatureHelpProvider) {
+			return { status: "error", reason: "signatureHelp provider not supported", timeout: false };
+		}
+
+		const params: SignatureHelpParams = {
+			textDocument: { uri: pathToUri(filePath) },
+			position: { line, character },
+		};
+
+		try {
+			const result = await this.withTimeout(
+				this.connection!.sendRequest<SignatureHelp | null>("textDocument/signatureHelp", params),
+			);
+			return { status: "ok", data: result ?? null };
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			const isTimeout = msg.includes("timed out");
+			this._log(`[lsp] signatureHelp failed: ${msg}`);
+			return { status: "error", reason: msg, timeout: isTimeout };
+		}
+	}
+
+	async implementation(
+		filePath: string,
+		line: number,
+		character: number,
+	): Promise<LspResult<Location | Location[]>> {
+		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
+		const cap = this._serverCapabilities;
+		if (!cap || !(cap as Record<string, unknown>).implementationProvider) {
+			return { status: "error", reason: "implementation provider not supported", timeout: false };
+		}
+
+		const params: ImplementationParams = {
+			textDocument: { uri: pathToUri(filePath) },
+			position: { line, character },
+		};
+
+		try {
+			const result = await this.withTimeout(
+				this.connection!.sendRequest<Location | Location[] | null>(
+					"textDocument/implementation",
+					params,
+				),
+			);
+			return { status: "ok", data: result ?? null };
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			const isTimeout = msg.includes("timed out");
+			this._log(`[lsp] implementation failed: ${msg}`);
+			return { status: "error", reason: msg, timeout: isTimeout };
+		}
+	}
+
+	async codeLens(filePath: string): Promise<LspResult<CodeLens[]>> {
+		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
+		const cap = this._serverCapabilities;
+		if (!cap || !(cap as Record<string, unknown>).codeLensProvider) {
+			return { status: "error", reason: "codeLens provider not supported", timeout: false };
+		}
+
+		const params: CodeLensParams = {
+			textDocument: { uri: pathToUri(filePath) },
+		};
+
+		try {
+			const result = await this.withTimeout(
+				this.connection!.sendRequest<CodeLens[] | null>("textDocument/codeLens", params),
+			);
+			return { status: "ok", data: result ?? null };
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			const isTimeout = msg.includes("timed out");
+			this._log(`[lsp] codeLens failed: ${msg}`);
 			return { status: "error", reason: msg, timeout: isTimeout };
 		}
 	}
