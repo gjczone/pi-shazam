@@ -77,14 +77,14 @@ All tools use the `shazam_` prefix for consistency with the Pi extension.
 | `shazam_impact`         | Blast radius analysis before multi-file edits                          |
 | `shazam_codesearch`     | BM25 symbol search (use instead of grep)                               |
 | `shazam_symbol`         | Symbol lookup with definition, callers, callees, state map             |
-| `shazam_file_detail`    | File structural analysis (symbols, PageRank, hierarchy)                |
+| `shazam_file_detail`    | File structural analysis (symbols, PageRank, hierarchy, codeLens refs) |
 | `shazam_call_chain`     | Upstream callers and downstream callees                                |
-| `shazam_hover`          | Type signatures and documentation via LSP                              |
+| `shazam_hover`          | Type signatures, documentation, signatureHelp via LSP                  |
 | `shazam_find_tests`     | Discover test files for a module                                       |
 | `shazam_hotspots`       | Complexity hotspots ranked by blast radius                             |
-| `shazam_verify`         | Post-edit verification (LSP diagnostics + graph analysis)              |
+| `shazam_verify`         | Post-edit verification (LSP diagnostics + codeAction fixes + graph)    |
 | `shazam_fix`            | Auto-fix format/lint errors (prettier, eslint, biome)                  |
-| `shazam_type_hierarchy` | Class/interface inheritance chain                                      |
+| `shazam_type_hierarchy` | Class/interface inheritance chain + implementation locations           |
 | `shazam_rename_symbol`  | Safe symbol rename with reference verification                         |
 | `shazam_safe_delete`    | Safe symbol deletion with reference check                              |
 
