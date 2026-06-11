@@ -79,20 +79,20 @@ When you need to look up a symbol before importing or calling it.
 
 ### shazam_hover
 
-After finding a symbol with shazam_symbol, use this to get its full type signature and documentation.
+After finding a symbol with shazam_symbol, use this to get its full type signature and documentation. When position is inside a function call, also returns signatureHelp with active parameter info.
 
 **Parameters**: `{ name: string, file? }`
 
 - `name`: symbol name
 - `file`: optional file path to scope lookup
 
-**Returns**: type signatures, documentation comments, JSDoc from LSP hover providers. Falls back to graph metadata when LSP unavailable.
+**Returns**: type signatures, documentation comments, JSDoc from LSP hover providers, and signatureHelp for function call context. Falls back to graph metadata when LSP unavailable.
 
-**When to use**: understanding a symbol's type signature, checking parameter types, getting API documentation.
+**When to use**: understanding a symbol's type signature, checking parameter types, getting API documentation, seeing function parameter info when making calls.
 
 ### shazam_file_detail
 
-When you are about to edit a file you have not read before — this shows structure, not just syntax.
+When you are about to edit a file you have not read before — this shows structure, not just syntax. Also shows reference counts via LSP codeLens when available.
 
 **Parameters**: `{ file: string }`
 
@@ -143,14 +143,14 @@ Without this, you optimize the wrong files. Returns files where bugs have the hi
 
 ### shazam_type_hierarchy
 
-When working with classes, interfaces, or abstract types — use this to see the full inheritance chain.
+When working with classes, interfaces, or abstract types — use this to see the full inheritance chain and implementations.
 
 **Parameters**: `{ name: string, file? }`
 
 - `name`: symbol name
 - `file`: optional file path
 
-**Returns**: supertypes (parents, interfaces) and subtypes (children, implementations). Uses LSP 3.17 typeHierarchy protocol with graph fallback.
+**Returns**: supertypes (parents, interfaces), subtypes (children, implementations), and implementation locations for interface/trait types via LSP textDocument/implementation. Uses LSP 3.17 typeHierarchy protocol with graph fallback.
 
 **When to use**: understanding class inheritance before refactoring, finding all interface implementations, checking subtype relationships.
 
@@ -160,7 +160,7 @@ These tools modify files or verify changes.
 
 ### shazam_verify
 
-After every write or edit, run this to confirm no errors were introduced.
+After every write or edit, run this to confirm no errors were introduced. When diagnostics are found, fetches LSP codeAction suggested fixes.
 
 **Parameters**: `{ quick?, lspOnly?, preCommit? }`
 
@@ -168,7 +168,7 @@ After every write or edit, run this to confirm no errors were introduced.
 - `lspOnly`: LSP diagnostics only, skip graph analysis
 - `preCommit`: stricter thresholds for pre-commit gate
 
-**Returns**: Verdict (PASS / WARN / FAIL), LSP diagnostics, risk level, orphan detection, graph diffs.
+**Returns**: Verdict (PASS / WARN / FAIL), LSP diagnostics with suggested fixes, risk level, orphan detection, graph diffs.
 
 **When to use**: after every non-trivial edit, before git commit, when CI is red.
 

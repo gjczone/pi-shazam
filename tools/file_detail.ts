@@ -12,7 +12,7 @@ import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 import { getLspManager } from "./_context.js";
-import { lspDocumentSymbols } from "./lsp_enrich.js";
+import { lspDocumentSymbols, lspCodeLens } from "./lsp_enrich.js";
 import type { DocumentSymbol } from "vscode-languageserver-protocol";
 import { createTool } from "./_factory.js";
 
@@ -71,8 +71,9 @@ export function registerFileDetail(pi: ExtensionAPI): void {
 			);
 			const lspManager = getLspManager();
 			const hierarchyPromise = lspDocumentSymbols(lspManager, file, 5000);
+			const codeLensPromise = lspCodeLens(lspManager, file, 5000);
 
-			const [detailText, lspSymbols] = await Promise.all([detailPromise, hierarchyPromise]);
+			const [detailText, lspSymbols, codeLens] = await Promise.all([detailPromise, hierarchyPromise, codeLensPromise]);
 
 			let text = detailText;
 			if (!json && Array.isArray(lspSymbols) && lspSymbols.length > 0 && isDocumentSymbols(lspSymbols)) {
@@ -89,6 +90,25 @@ export function registerFileDetail(pi: ExtensionAPI): void {
 				// Append tree-sitter-only note if not already present
 				if (!text.includes("(tree-sitter only)")) {
 					text = text + "\n\n*Symbol hierarchy unavailable (tree-sitter only, LSP unavailable).*";
+				}
+			}
+
+			// Inject codeLens reference counts
+			if (!json && codeLens && codeLens.length > 0) {
+				const refLines: string[] = [];
+				for (const cl of codeLens) {
+					const line = cl.range.start.line + 1;
+					const title = cl.command?.title || "";
+					refLines.push(`- L${line}: ${title}`);
+				}
+				if (refLines.length > 0) {
+					const section = `\n### Reference Counts (LSP CodeLens)\n\n${refLines.join("\n")}\n`;
+					const nextIdx = text.indexOf("\n### Next");
+					if (nextIdx >= 0) {
+						text = text.slice(0, nextIdx) + section + text.slice(nextIdx);
+					} else {
+						text = text + "\n" + section;
+					}
 				}
 			}
 

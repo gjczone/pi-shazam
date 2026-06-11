@@ -27,6 +27,7 @@ import { readFileAdaptive } from "../core/encoding.js";
 import { resolve } from "node:path";
 import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 import { getLspManager } from "./_context.js";
+import { lspCodeActions } from "./lsp_enrich.js";
 import { createTool } from "./_factory.js";
 
 export function registerVerify(pi: ExtensionAPI): void {
@@ -219,12 +220,22 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 				const sevLabel = d.severity.toUpperCase();
 				const code = d.code ? ` (${d.code})` : "";
 				lines.push(`- [${sevLabel}] ${d.file}:${d.line}:${d.col}${code} — ${d.message}`);
+				if (d.suggestedFixes && d.suggestedFixes.length > 0) {
+					for (const fix of d.suggestedFixes.slice(0, 3)) {
+						lines.push(`    ${fix}`);
+					}
+				}
 			}
 			// Show first 10 warnings (warnings are less critical)
 			for (const d of warnings.slice(0, 10)) {
 				const sevLabel = d.severity.toUpperCase();
 				const code = d.code ? ` (${d.code})` : "";
 				lines.push(`- [${sevLabel}] ${d.file}:${d.line}:${d.col}${code} — ${d.message}`);
+				if (d.suggestedFixes && d.suggestedFixes.length > 0) {
+					for (const fix of d.suggestedFixes.slice(0, 3)) {
+						lines.push(`    ${fix}`);
+					}
+				}
 			}
 			if (warnings.length > 10) {
 				lines.push(`... and ${warnings.length - 10} more warnings`);
@@ -350,9 +361,12 @@ interface LspDiagEntry {
 	file: string;
 	line: number;
 	col: number;
+	endLine: number;
+	endCol: number;
 	severity: string;
 	code: string;
 	message: string;
+	suggestedFixes?: string[];
 }
 
 interface LspDiagResult {
@@ -416,10 +430,40 @@ async function runLspDiagnostics(
 					file: filePath,
 					line: diag.range.start.line + 1,
 					col: diag.range.start.character + 1,
+					endLine: diag.range.end.line + 1,
+					endCol: diag.range.end.character + 1,
 					severity: sev === 1 ? "error" : sev === 2 ? "warning" : sev === 3 ? "info" : "hint",
 					code: String(diag.code ?? ""),
 					message: typeof diag.message === "object" ? (diag.message as { value: string }).value || "" : diag.message,
 				});
+			}
+		}
+	}
+
+	// Fetch code actions for error/warning diagnostics (fixes #235)
+	// lspManager already declared above
+	const errorsAndWarnings = diagnostics.filter((d) => d.severity === "error" || d.severity === "warning");
+	if (lspManager && errorsAndWarnings.length > 0) {
+		for (const diag of errorsAndWarnings.slice(0, 10)) {
+			try {
+				const actions = await lspCodeActions(
+					lspManager,
+					diag.file,
+					diag.line - 1,
+					diag.col - 1,
+					diag.endLine ? diag.endLine - 1 : diag.line - 1,
+					diag.endCol ? diag.endCol - 1 : diag.col,
+				);
+				if (actions && actions.length > 0) {
+					diag.suggestedFixes = actions
+						.map((a) => {
+							if ("title" in a && a.title) return `Fix: ${a.title}`;
+							return null;
+						})
+						.filter(Boolean) as string[];
+				}
+			} catch {
+				// codeAction fetch failed — silent fallback
 			}
 		}
 	}
@@ -487,6 +531,8 @@ async function runSubprocessDiagnostics(projectRoot: string): Promise<LspDiagRes
 						file: "",
 						line: 0,
 						col: 0,
+						endLine: 0,
+						endCol: 0,
 						severity: "info",
 						code: "",
 						message: line.trim().slice(0, 200),
@@ -500,6 +546,8 @@ async function runSubprocessDiagnostics(projectRoot: string): Promise<LspDiagRes
 			file: "",
 			line: 0,
 			col: 0,
+			endLine: 0,
+			endCol: 0,
 			severity: "warning",
 			code: "",
 			message: `Subprocess diagnostics failed: ${errMsg.slice(0, 200)}`,

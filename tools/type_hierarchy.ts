@@ -12,6 +12,7 @@ import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { createTool } from "./_factory.js";
 import { getLspManager } from "./_context.js";
+import { lspImplementation } from "./lsp_enrich.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -58,6 +59,7 @@ interface TypeHierarchyResult {
 	symbol: TypeHierarchyEntry;
 	supertypes: TypeHierarchyEntry[];
 	subtypes: TypeHierarchyEntry[];
+	implementations: TypeHierarchyEntry[];
 }
 
 export async function executeTypeHierarchy(
@@ -78,6 +80,7 @@ export async function executeTypeHierarchy(
 		symbol: { name, kind: "unknown", file: "", line: 0, signature: "" },
 		supertypes: [],
 		subtypes: [],
+		implementations: [],
 	};
 
 	if (!symbol) return empty;
@@ -92,6 +95,7 @@ export async function executeTypeHierarchy(
 		},
 		supertypes: [],
 		subtypes: [],
+		implementations: [],
 	};
 
 	// Try LSP typeHierarchy (fixes #123)
@@ -154,6 +158,33 @@ export async function executeTypeHierarchy(
 			} catch (e) {
 				// Fall through to graph-based
 				console.warn(`[pi-shazam] LSP typeHierarchy failed for ${name}: ${e instanceof Error ? e.message : String(e)}`);
+			}
+
+			// Fetch implementations for interface/trait types (fixes #237)
+			const implKinds = new Set(["interface", "type_alias"]);
+			if (implKinds.has(symbol.kind)) {
+				try {
+					const implLocs = await lspImplementation(
+						lspManager,
+						symbol.file,
+						symbol.line - 1,
+						symbol.col || 0,
+					);
+					if (implLocs && implLocs.length > 0) {
+						for (const loc of implLocs) {
+							const relFile = loc.uri.replace("file://", "");
+							result.implementations.push({
+								name: "",
+								kind: "implementation",
+								file: relFile,
+								line: loc.range.start.line + 1,
+								signature: "",
+							});
+						}
+					}
+				} catch {
+					// implementation lookup failed — silent fallback
+				}
 			}
 		}
 	}
@@ -254,6 +285,15 @@ export function formatTypeHierarchy(result: TypeHierarchyResult, name: string): 
 			lines.push("");
 		} else {
 			lines.push("No subtypes found.", "");
+		}
+
+		// Show implementations for interface/trait types
+		if (result.implementations.length > 0) {
+			lines.push(`### Implementations (${result.implementations.length})`);
+			for (const s of result.implementations) {
+				lines.push(`- \`${s.file}:${s.line}\``);
+			}
+			lines.push("");
 		}
 	}
 

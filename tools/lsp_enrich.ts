@@ -21,7 +21,11 @@ import type {
 	WorkspaceSymbol,
 	DocumentSymbol,
 	Location,
+	CodeAction,
+	SignatureHelp,
+	CodeLens,
 } from "vscode-languageserver-protocol";
+import type { Command } from "vscode-languageserver-protocol";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -286,6 +290,125 @@ export async function lspDocumentSymbols(
  */
 export function resetLspEnrichState(): void {
 	_openedFileMtimes.clear();
+}
+
+// ── codeAction ──────────────────────────────────────────────────────────────
+
+/**
+ * Fetch LSP code actions for a diagnostic range.
+ * Returns null on timeout, no server, or file not opened.
+ */
+export async function lspCodeActions(
+	ctx: LspEnrichContext | null,
+	filePath: string,
+	startLine: number,
+	startChar: number,
+	endLine: number,
+	endChar: number,
+	timeoutMs: number = DEFAULT_LSP_ENRICH_TIMEOUT_MS,
+): Promise<(CodeAction | Command)[] | null> {
+	if (!ctx) return null;
+	const opened = await ensureFileOpened(ctx, filePath);
+	if (!opened) return null;
+	const cap = opened.client.serverCapabilities;
+	if (!cap || !(cap as Record<string, unknown>).codeActionProvider) {
+		return null;
+	}
+	const result = await withEnrichTimeout(
+		opened.client
+			.codeAction(filePath, startLine, startChar, endLine, endChar)
+			.then((r) => (r.status === "ok" ? r.data : null)),
+		timeoutMs,
+	);
+	return result;
+}
+
+// ── signatureHelp ───────────────────────────────────────────────────────────
+
+/**
+ * Fetch LSP signature help at a position.
+ * Returns null on timeout, no server, or file not opened.
+ */
+export async function lspSignatureHelp(
+	ctx: LspEnrichContext | null,
+	filePath: string,
+	line: number,
+	character: number,
+	timeoutMs: number = DEFAULT_LSP_ENRICH_TIMEOUT_MS,
+): Promise<SignatureHelp | null> {
+	if (!ctx) return null;
+	const opened = await ensureFileOpened(ctx, filePath);
+	if (!opened) return null;
+	const cap = opened.client.serverCapabilities;
+	if (!cap || !(cap as Record<string, unknown>).signatureHelpProvider) {
+		return null;
+	}
+	const result = await withEnrichTimeout(
+		opened.client
+			.signatureHelp(filePath, line, character)
+			.then((r) => (r.status === "ok" ? r.data : null)),
+		timeoutMs,
+	);
+	return result;
+}
+
+// ── implementation ──────────────────────────────────────────────────────────
+
+/**
+ * Fetch LSP implementation locations for a symbol at a position.
+ * Returns null on timeout, no server, or file not opened.
+ */
+export async function lspImplementation(
+	ctx: LspEnrichContext | null,
+	filePath: string,
+	line: number,
+	character: number,
+	timeoutMs: number = DEFAULT_LSP_ENRICH_TIMEOUT_MS,
+): Promise<Location[] | null> {
+	if (!ctx) return null;
+	const opened = await ensureFileOpened(ctx, filePath);
+	if (!opened) return null;
+	const cap = opened.client.serverCapabilities;
+	if (!cap || !(cap as Record<string, unknown>).implementationProvider) {
+		return null;
+	}
+	const result = await withEnrichTimeout(
+		opened.client
+			.implementation(filePath, line, character)
+			.then((r) => {
+				if (r.status !== "ok" || !r.data) return null;
+				return Array.isArray(r.data) ? r.data : [r.data];
+			}),
+		timeoutMs,
+	);
+	return result;
+}
+
+// ── codeLens ────────────────────────────────────────────────────────────────
+
+/**
+ * Fetch LSP codeLens for a file (reference counts, test status, etc.).
+ * Returns null on timeout, no server, or file not opened.
+ */
+export async function lspCodeLens(
+	ctx: LspEnrichContext | null,
+	filePath: string,
+	timeoutMs: number = DEFAULT_LSP_ENRICH_TIMEOUT_MS,
+): Promise<CodeLens[] | null> {
+	if (!ctx) return null;
+	const opened = await ensureFileOpened(ctx, filePath);
+	if (!opened) return null;
+	const cap = opened.client.serverCapabilities;
+	if (!cap || !(cap as Record<string, unknown>).codeLensProvider) {
+		return null;
+	}
+	const result = await withEnrichTimeout(
+		opened.client
+			.codeLens(filePath)
+			.then((r) => (r.status === "ok" ? r.data : null)),
+		timeoutMs,
+	);
+	return result;
 }
 
 
