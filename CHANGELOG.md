@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-06-12
+
+### Features
+
+- **feat(#235): integrate codeAction into shazam_verify** (#240)
+  - When diagnostics are found, fetches LSP codeAction suggested fixes
+  - Shows fix suggestions inline with error/warning messages
+
+- **feat(#236): integrate signatureHelp into shazam_hover** (#240)
+  - When position is inside a function call, shows parameter info
+  - Displays active parameter with documentation
+
+- **feat(#237): integrate implementation lookup into shazam_type_hierarchy** (#240)
+  - For interface/trait types, shows implementation locations
+  - Uses LSP textDocument/implementation
+
+- **feat(#238): integrate codeLens into shazam_file_detail** (#240)
+  - Shows reference counts per symbol from LSP codeLens
+
 ## [0.9.1] - 2026-06-10
 
 ### Bug Fixes
@@ -20,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **fix(#233): divergent verify detection between safety.ts and stop-verify.ts** (#234)
   - Unified into shared `hooks/verify-state.ts` module with single source of truth
 
-- **fix(#233): tool-logger _starts Map never cleaned on session boundaries** (#234)
+- **fix(#233): tool-logger \_starts Map never cleaned on session boundaries** (#234)
   - Added `session_start`/`session_shutdown` handlers to clear orphaned entries
   - Reset `_writeFailed` flag on successful write (was permanently disabling logging)
 
