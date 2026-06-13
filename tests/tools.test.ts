@@ -93,6 +93,28 @@ describe("Tool: codesearch", () => {
 		expect(result[0]).toHaveProperty("score");
 		expect(result[0]!.score).toBeGreaterThan(0);
 	});
+
+	it("should support fulltext search with explicit projectRoot (issue #251)", async () => {
+		const { executeFulltextSearch } = await import("../tools/codesearch.js");
+		const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+		const { join: pathJoin } = await import("node:path");
+		const { tmpdir } = await import("node:os");
+
+		// Create a temp directory with a known file
+		const tmpDir = mkdtempSync(pathJoin(tmpdir(), "shazam-test-251-"));
+		try {
+			writeFileSync(pathJoin(tmpDir, "sample.ts"), "export function uniqueShazamTestFn() { return 42; }\n");
+
+			// Search with explicit projectRoot should find the known function
+			const results = executeFulltextSearch("uniqueShazamTestFn", 10, tmpDir);
+			expect(results).toBeDefined();
+			expect(Array.isArray(results)).toBe(true);
+			expect(results.length).toBeGreaterThan(0);
+			expect(results[0]!.text).toContain("uniqueShazamTestFn");
+		} finally {
+			rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
 });
 
 describe("Tool: symbol", () => {

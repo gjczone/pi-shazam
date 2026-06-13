@@ -109,7 +109,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		},
 		withLogging("shazam_codesearch", async ({ query, target }) => {
 			if (target === "code") {
-				const results = executeFulltextSearch(query as string);
+				const results = executeFulltextSearch(query as string, undefined, projectRoot);
 				return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
 			}
 			const scored = executeCodesearch(graph, query as string);
