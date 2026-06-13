@@ -16,7 +16,7 @@ For non-Pi agents, pi-shazam also exposes the same tools via **MCP (Model Contex
 
 - **Tree-sitter parsing** — 6 programming languages (Python, TypeScript, JavaScript, Go, Rust, JSON), full symbol dependency graph
 - **PageRank ranking** — Identify core files and key symbols
-- **LSP integration** — Type checking, diagnostics, type hierarchy (5 languages)
+- **LSP integration** — Type checking, diagnostics, type hierarchy (6 languages)
 - **Incremental analysis** — Baseline comparison, focus on changes
 - **Smart verification** — Post-edit verification with PASS/WARN/FAIL verdict
 
@@ -57,7 +57,7 @@ Compatible with any MCP-capable client. Same analysis engine, JSON-based tool in
 | ----------------------- | ---------------------------------------------------------------------------------- |
 | `shazam_overview`       | Project structure, top-10 core files by PageRank, key dependencies, recent commits |
 | `shazam_impact`         | Change impact analysis: affected files, symbols, tests                             |
-| `shazam_codesearch`     | BM25 symbol search — ranked alternative to grep                                    |
+| `shazam_codesearch`     | BM25 symbol search + ripgrep full-text search (target=symbol/code) — ranked alternative to grep                                    |
 | `shazam_symbol`         | Symbol definition, signature, callers, callees                                     |
 | `shazam_hover`          | Type signatures, JSDoc, signatureHelp for function call context                    |
 | `shazam_file_detail`    | File structure: symbols, PageRank, call counts, LSP hierarchy, codeLens refs       |
@@ -88,10 +88,12 @@ Compatible with any MCP-capable client. Same analysis engine, JSON-based tool in
 | `failure-recovery` | `tool_result`               | Detect consecutive failures (3x/5x) and suggest alternatives                                 |
 | `pre-edit`         | `tool_call`                 | Detect multi-file edits, warn about blast radius                                             |
 | `tool-logger`      | `tool_call` + `tool_result` | Log all shazam tool calls to `~/.pi/hooks/audit/shazam-calls.log`                            |
+| `issue-guard`      | `tool_call` (bash) + `tool_result` | Detects `gh issue create`, blocks edits until `shazam_impact` runs                   |
+| `agent-context-guard` | `tool_call` (agent)       | Blocks agent spawn without structural context for review tasks                              |
 
 **Auto-format support**: ruff (Python), prettier (JS/TS/JSON/MD), gofmt (Go), rustfmt (Rust), biome (JS/TS)
 
-Additional commands: `/shazam-setup`, `/shazam-doctor`, `/shazam-install-git-hooks`, etc.
+Additional commands: `/shazam-setup`, `/shazam-doctor`, `/shazam-install-git-hooks`, `/shazam-remove-git-hooks`, `/shazam-pre-commit-verify`
 
 ### MCP Client Support
 
@@ -145,7 +147,11 @@ pi-shazam (npm package)
 │   ├── shazam-guide.ts                 Auto-format + tool usage guidance
 │   ├── stop-verify.ts                  Turn-end verification reminder
 │   ├── failure-recovery.ts             Consecutive failure detection
-│   └── tool-logger.ts                  Usage analytics
+│   ├── tool-logger.ts                  Usage analytics
+│   ├── verify-state.ts                 Shared verify tracking state for safety + stop-verify
+│   ├── impact-state.ts                 Shared impact tracking state for issue-guard + pre-edit
+│   ├── issue-guard.ts                  Detect gh issue create, set pending impact flag
+│   └── agent-context-guard.ts          Block agent spawn without structural context
 │
 ├── tools/                              Pi tool wrappers (tools → core + lsp)
 │   ├── definitions.ts                  Shared tool definitions (names, descriptions, schemas)
@@ -205,6 +211,7 @@ npm run build        # tsc → dist/
 | Go                    | gopls                      | Supported |
 | Rust                  | rust-analyzer              | Supported |
 | YAML                  | yaml-language-server       | Supported |
+| JSON                  | vscode-json-languageserver | Supported |
 
 When LSP servers are unavailable, tools automatically fall back to tree-sitter mode.
 

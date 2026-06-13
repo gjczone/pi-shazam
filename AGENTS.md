@@ -73,7 +73,7 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 ```
 index.ts                    ← Pi extension entry, default export(pi: ExtensionAPI)
 ├── core/                   ← Pure analysis logic, no Pi dependency
-│   ├── treesitter.ts       ← AST parsing + symbol extraction (5 languages)
+│   ├── treesitter.ts       ← AST parsing + symbol extraction (6 languages)
 │   ├── treesitter-queries.ts ← Tree-sitter query patterns for all languages
 │   ├── graph.ts            ← Symbol dependency graph (imports, calls, references)
 │   ├── pagerank.ts         ← PageRank symbol importance scoring
@@ -144,95 +144,6 @@ mcp/                        ← MCP server for non-Pi clients
 | `issue-guard`      | `tool_call` (bash) + `tool_result`       | YES   | Detects `gh issue create`, sets pending impact flag                     | MEDIUM — blocks edits until shazam_impact runs          |
 | `agent-context-guard` | `tool_call` (agent)                   | YES   | Blocks agent spawn without structural context for review tasks          | MEDIUM — prevents contextless agent waste               |
 
-### Hook Details
-
-**before-start** (HIGH value):
-
-- Runs on `before_agent_start` event
-- Scans project with tree-sitter (cached)
-- Generates overview: module map, key files, git history
-- Injects proactive recommendations based on project state
-- Creates session baseline for diff-aware verify
-- Effect: LLM starts with full project awareness
-
-**safety** (HIGH value):
-
-- Runs on `tool_call` for bash commands
-- Destructive command detection: shows interactive confirmation dialog for dangerous commands (rm -rf, dd, mkfs, etc.)
-- Pre-commit gate: blocks git commit if shazam_verify was not run recently
-- Uses Pi's `ctx.ui.confirm()` and `ctx.ui.select()` for user interaction
-- Effect: Prevents data loss and unverified commits
-
-**pre-edit** (MEDIUM value):
-
-- Runs on `tool_call` for write/edit
-- Tracks files edited in session
-- Warns when editing multiple files or shared modules
-- Effect: Prevents accidental multi-file breaks
-
-**shazam-guide** (HIGH value):
-
-- Runs on `tool_result`
-- Auto-format: detects file type and runs native formatter (ruff, prettier, gofmt, rustfmt)
-- Falls back to suggesting `shazam_fix` if no native formatter found
-- Suggests related tools based on context:
-  - After symbol lookup → suggest `shazam_call_chain`
-  - After grep/find → suggest `shazam_codesearch`
-- Effect: Auto-formats code, helps LLM discover the right tool
-
-**stop-verify** (HIGH value):
-
-- Runs on `turn_end` event
-- Checks if there were unverified file edits
-- Sends reminder to run `shazam_verify` before ending turn
-- Effect: Prevents unverified edits from being committed
-
-**failure-recovery** (MEDIUM value):
-
-- Runs on `tool_result` with `isError` flag
-- Tracks consecutive failures per tool
-- After 3 failures: suggests alternative approaches
-- After 5 failures: suggests reorienting with `shazam_overview`
-- Effect: Prevents LLM loops where it keeps trying the same failing approach
-
-**tool-logger** (LOW value):
-
-- Runs on `tool_call` + `tool_result`
-- Logs to `~/.pi/hooks/audit/shazam-calls.log`
-- JSONL format with timestamps, duration, result
-- Effect: Debugging only, no impact on LLM
-
-## Tools (LLM-Callable)
-
-### High Value Tools
-
-| Tool                | Value | When to Use                         | Auto-called?                |
-| ------------------- | ----- | ----------------------------------- | --------------------------- |
-| `shazam_overview`   | HIGH  | First time in project               | YES (via before-start hook) |
-| `shazam_verify`     | HIGH  | After every edit                    | NO (LLM calls manually)     |
-| `shazam_impact`     | HIGH  | Before editing 2+ files             | NO (LLM calls manually)     |
-| `shazam_call_chain` | HIGH  | Before changing function signature  | NO (LLM calls manually)     |
-| `shazam_codesearch` | HIGH  | Instead of grep                     | NO (LLM calls manually)     |
-| `shazam_hover`      | HIGH  | After finding symbol, get type info | NO (LLM calls manually)     |
-
-### Medium Value Tools
-
-| Tool                    | Value  | When to Use                     | Auto-called? |
-| ----------------------- | ------ | ------------------------------- | ------------ |
-| `shazam_symbol`         | MEDIUM | Look up symbol before importing | NO           |
-| `shazam_file_detail`    | MEDIUM | Before editing unfamiliar file  | NO           |
-| `shazam_find_tests`     | MEDIUM | When adding tests               | NO           |
-| `shazam_type_hierarchy` | MEDIUM | For OOP/interface types         | NO           |
-| `shazam_hotspots`       | MEDIUM | Find high-risk files            | NO           |
-| `shazam_fix`            | MEDIUM | Auto-fix format/lint errors     | NO           |
-
-### Low Value Tools
-
-| Tool                   | Value | Why                                           |
-| ---------------------- | ----- | --------------------------------------------- |
-| `shazam_rename_symbol` | LOW   | Rarely used, LLM can use IDE or manual rename |
-| `shazam_safe_delete`   | LOW   | Rarely used, LLM can delete manually          |
-
 ## Core Flows
 
 - **Overview injection**: `before_agent_start` event → `core/treesitter` scan (with persistent disk cache) → `core/pagerank` → format summary → inject into `systemPrompt` array
@@ -263,22 +174,22 @@ mcp/                        ← MCP server for non-Pi clients
 
 ### Registered Tools (LLM-visible)
 
-| Tool                    | Style            | Description                                                                                                        |
-| ----------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `shazam_overview`       | Scenario trigger | When you first enter a project — see structure, deps, git history before reading a single file                     |
-| `shazam_impact`         | Prerequisite     | Required before editing 2+ files or any shared/exported module                                                     |
-| `shazam_codesearch`     | Anti-pattern     | Don't reach for grep — this ranks results by relevance with BM25                                                   |
-| `shazam_symbol`         | Scenario trigger | When you need to look up a symbol before importing or calling it                                                   |
-| `shazam_hover`          | Action binding   | After finding a symbol, get its full type signature, documentation, and signatureHelp for function call context    |
-| `shazam_file_detail`    | Scenario trigger | When about to edit an unfamiliar file — shows structure, not just syntax; also shows reference counts via codeLens |
-| `shazam_call_chain`     | Consequence hint | Without this you ship bugs — traces ALL upstream callers and downstream callees                                    |
-| `shazam_verify`         | Action binding   | After every write or edit — confirm no errors (PASS/WARN/FAIL)                                                     |
-| `shazam_find_tests`     | Scenario trigger | When adding tests — discover test files and coverage for a module                                                  |
-| `shazam_hotspots`       | Consequence hint | Without this you optimize the wrong files — ranked by blast radius                                                 |
-| `shazam_fix`            | Action binding   | When verify reports format/lint errors — auto-fix with nearest-wins formatters                                     |
-| `shazam_type_hierarchy` | Scenario trigger | When working with OOP types — see the full inheritance chain                                                       |
-| `shazam_rename_symbol`  | Prerequisite     | Safety gate before renaming — verify references first, then rename                                                 |
-| `shazam_safe_delete`    | Prerequisite     | Safety gate before removal — verify zero incoming references first                                                 |
+| Tool                    | Value  | Style            | Description                                                                                                        |
+| ----------------------- | ------ | ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `shazam_overview`       | HIGH   | Scenario trigger | When you first enter a project — see structure, deps, git history before reading a single file                     |
+| `shazam_impact`         | HIGH   | Prerequisite     | Required before editing 2+ files or any shared/exported module                                                     |
+| `shazam_codesearch`     | HIGH   | Anti-pattern     | Don't reach for grep — this ranks results by relevance with BM25                                                   |
+| `shazam_call_chain`     | HIGH   | Consequence hint | Without this you ship bugs — traces ALL upstream callers and downstream callees                                    |
+| `shazam_verify`         | HIGH   | Action binding   | After every write or edit — confirm no errors (PASS/WARN/FAIL)                                                     |
+| `shazam_hover`          | HIGH   | Action binding   | After finding a symbol, get its full type signature, documentation, and signatureHelp for function call context    |
+| `shazam_symbol`         | MEDIUM | Scenario trigger | When you need to look up a symbol before importing or calling it                                                   |
+| `shazam_file_detail`    | MEDIUM | Scenario trigger | When about to edit an unfamiliar file — shows structure, not just syntax; also shows reference counts via codeLens |
+| `shazam_find_tests`     | MEDIUM | Scenario trigger | When adding tests — discover test files and coverage for a module                                                  |
+| `shazam_hotspots`       | MEDIUM | Consequence hint | Without this you optimize the wrong files — ranked by blast radius                                                 |
+| `shazam_fix`            | MEDIUM | Action binding   | When verify reports format/lint errors — auto-fix with nearest-wins formatters                                     |
+| `shazam_type_hierarchy` | MEDIUM | Scenario trigger | When working with OOP types — see the full inheritance chain                                                       |
+| `shazam_rename_symbol`  | LOW    | Prerequisite     | Safety gate before renaming — verify references first, then rename                                                 |
+| `shazam_safe_delete`    | LOW    | Prerequisite     | Safety gate before removal — verify zero incoming references first                                                 |
 
 All tools follow the same pattern:
 
@@ -327,60 +238,6 @@ All tools follow the same pattern:
 
 When fixing open issues, follow this workflow **without exception**. Pushing directly
 to `main` is forbidden — every fix goes through a PR.
-
-### Step-by-Step
-
-```bash
-# 1. Start from a clean main
-git checkout main
-git pull origin main
-
-# 2. Create a feature branch named after the issues being fixed
-git checkout -b fix/issue-<NUM>   # single issue
-git checkout -b fix/issue-<A>-<B> # multiple related issues
-
-# 3. Implement the fix (edit files, write tests, verify locally)
-npm run typecheck
-npm test
-npm run build
-
-# 4. Commit with referencing issue numbers in the message
-git add -A
-git commit -m "fix(#<A>,#<B>): concise description of the fix"
-
-# 5. Push the branch
-git push origin fix/issue-<NUM>
-
-# 6. Create a PR
-gh pr create \
-  --title "fix(#<A>,#<B>): concise description" \
-  --body "Closes #<A>, closes #<B>.
-
-## Problem
-...
-
-## Fix
-...
-
-## Verification
-- [ ] typecheck passes
-- [ ] tests pass
-- [ ] build succeeds" \
-  --base main
-
-# 7. Wait for CI to pass on the PR
-#    - typecheck job must be green
-#    - test job must be green (ubuntu + macos)
-#    - build job must be green
-#    - security job must be green
-gh pr checks fix/issue-<NUM>
-
-# 8. Once CI is green, merge the PR
-gh pr merge fix/issue-<NUM> --squash --delete-branch
-
-# 9. Close the issues (if not auto-closed by the PR merge)
-gh issue close <NUM> -r completed -c "Fixed in PR #<PR_NUM>."
-```
 
 ### Branch Naming Convention
 
@@ -559,26 +416,9 @@ Manual workflow:
    pi update
    ```
 
-### What the Publish CI Does
+> See `.github/workflows/publish.yml` for publish CI details.
 
-`.github/workflows/publish.yml`：
-
-- `npm ci --legacy-peer-deps`
-- `npx tsc --noEmit` (type checking)
-- `npm test` (unit tests)
-- `npm run build` (compile)
-- `npm publish` (authenticated with `secrets.NPM_TOKEN`)
-- Wait 15 seconds then verify with `npm view pi-shazam`
-
-**NOTE**: `secrets.NPM_TOKEN` is a GitHub repository secret, configured in Settings → Secrets and variables → Actions. The value is an npm Automation Token (no 2FA).
-
-### Tool Parameter Schema Notes
-
-- **Use `import { Type } from "typebox"`**, do not use `pi.typebox`
-  - Pi runtime's `ExtensionAPI.typebox` may not exist, `pi.typebox.Object()` will cause `Cannot read properties of undefined (reading 'Object')`
-  - Other Pi extensions (like `pi-smart-fetch`) import `@sinclair/typebox` or `typebox` directly
-- `typebox` package version is pinned at `1.1.39` (`sinclairzx81`'s package of the same name)
-- API: `Type.Object({...})`, `Type.Optional(...)`, `Type.String()`, `Type.Number()`, `Type.Boolean()`, `Type.Array(...)`
+> See [INSTRUCTION.md](./docs/INSTRUCTION.md) section 1.4 for tool parameter schema notes.
 
 ## Verification Matrix
 
@@ -587,7 +427,7 @@ Manual workflow:
 | Step | Command                                | What it checks            |
 | ---- | -------------------------------------- | ------------------------- |
 | 1    | `npm run typecheck`                    | Type safety               |
-| 2    | `npm test`                             | 224 tests                 |
+| 2    | `npm test`                             | all tests pass          |
 | 3    | `npm run build`                        | Compile output            |
 | 4    | `pi -p "call shazam_overview briefly"` | Pi integration smoke test |
 
@@ -617,8 +457,8 @@ printf '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion
 
 ```bash
 # Verify all hooks registered in built dist
-grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerAfterWrite" dist/index.js
-# Should output: 4
+grep -c "registerBeforeStartHook\|registerToolLogger\|registerShazamGuide\|registerPreEditGuard\|registerSafetyHooks\|registerStopVerify\|registerFailureRecovery\|registerIssueGuard\|registerAgentContextGuard" dist/index.js
+# Should output: 9
 
 # Verify system prompt injection works (no crash)
 pi -p "call shazam_overview" 2>&1 | grep -q "Extension error" && echo "FAIL" || echo "OK"
@@ -637,12 +477,7 @@ Refer to `docs/INSTRUCTION.md` §1 for the complete contract documentation.
 □ grep "systemPrompt:" dist/hooks/   # Returns string, not Array
 ```
 
-### Debugging Guide
-
-- **Extension load failure** → Check `docs/INSTRUCTION.md` §1, compare with runtime API version
-- **`text.replace is not a function`** → Check if sendMessage content is string
-- **`Cannot read properties of undefined`** → Check if directly accessing pi.logger/pi.typebox/ctx.ui
-- **Tool not appearing** → Check if register\* is called in index.ts
+> See [INSTRUCTION.md](./docs/INSTRUCTION.md) section 6.8 for debugging guide.
 
 ## First Places to Inspect
 
@@ -657,27 +492,6 @@ Refer to `docs/INSTRUCTION.md` §1 for the complete contract documentation.
 - `tools/overview.ts` — representative tool using the factory (others follow same shape)
 - `hooks/before-start.ts` — system prompt injection pattern
 
-## Key Directories
-
-- `core/` — Pure analysis logic + git hook integration (no Pi/LSP imports)
-- `lsp/` — External process management (language servers)
-- `tools/` — Pi tool registration wrappers (one file per tool)
-- `hooks/` — Automatic event handlers (not LLM-callable). See `docs/INSTRUCTION.md` §3.9
-- `mcp/` — MCP server for non-Pi clients. See `docs/INSTRUCTION.md` §3.10
-- `tests/` — vitest suite. See `docs/INSTRUCTION.md` §6
-
-## Important Files
-
-- `index.ts` — extension entry point and registration coordinator
-- `core/output.ts` — standardized tool output formatting + Next recommendation rules
-- `core/git-hooks.ts` — git pre-commit hook install/remove/verify
-- `SKILL.md` — Pi agent skill file documenting all 14 tools for LLM discovery
-- `AGENTS.md` — this file: architecture, conventions, workflows
-- `README.md` — user-facing: Pi + MCP setup, tool list, language support
-- `package.json` — npm manifest, dependencies, `bin` field for MCP entry
-- `tsconfig.json` — TypeScript compiler configuration (must include `mcp/`)
-- `types/pi-extension.d.ts` — self-contained ExtensionAPI type stub
-
 ## Docs Directory
 
 Project documentation lives under `docs/`. Each guide covers a specific topic —
@@ -688,12 +502,7 @@ when working on that topic, read the corresponding guide first.
 | `docs/INSTRUCTION.md`     | **Single source of truth** for all development, maintenance, and release. Covers Pi ExtensionAPI contract (§1), architecture layers and design principles (§2), development workflow including tool/hook/MCP creation (§3), release & publish process (§4), tech stack management (§5), testing patterns and verification gates (§6), key files reference (§7). Read before any change. |
 | `docs/kimi-code-hooks.md` | How to write Kimi Code hooks (shell scripts triggered by lifecycle events). Covers `config.toml` `[[hooks]]` setup, stdin JSON protocol, exit codes, all 15 lifecycle events. Use when adding hooks to Kimi Code's config.toml (external system, not pi-shazam).                                                                                                                        |
 
-## Key Conventions
-
-- **systemPrompt in hooks**: `before_agent_start.systemPrompt` may be `string` or `string[]` at runtime. Always check with `Array.isArray()` before calling `.some()` or `.push()`.
-- **ctx.ui?.notify?.()**: Pi's `ExtensionUIContext` may not have `notify` in all modes. Always use optional chaining.
-- **Hook return values**: `before_agent_start` handler returns `{ systemPrompt: string }` to replace. `tool_call` handler returns `{ block: true, reason: "..." }` to block.
-- **Log directory**: All audit logs go to `~/.pi/hooks/audit/` (Pi) or `~/.kimi-code/audit/` (Kimi Code).
+> See [INSTRUCTION.md](./docs/INSTRUCTION.md) sections 1.3 and 3.9 for hook API conventions.
 
 <general-project-rules>
 
@@ -733,7 +542,6 @@ when working on that topic, read the corresponding guide first.
 
 ## Project-Specific Rules
 
-- **Language: English only.** All source code, code comments, JSDoc, commit messages, PR titles/descriptions, GitHub Issue content, and GitHub Release notes MUST be written in English. No Chinese or any other non-English language in any artifact that goes into the repository.
 - **No emoji or decorative symbols.** Emoji (✅❌🔴🟡🟢🆕⚠️💡 etc.), Unicode decorative characters, and ASCII art are forbidden in all source files, tool output, code comments, and commit messages. The only allowed symbols are standard ASCII punctuation and Markdown formatting characters. This rule applies to all repository artifacts except `AGENTS.md` itself (this file) and `SKILL.md`.
 - **Tool output must be clean.** Tool output text returned to the LLM must be minimal, structured, and free of noise. Specifically:
   - No emoji, no decorative Unicode, no ANSI escape codes
