@@ -46,10 +46,13 @@ export function registerCodesearch(pi: ExtensionAPI): void {
 			if (!query) {
 				return { content: [{ type: "text", text: "Error: query parameter is required" }] };
 			}
-			const graph = scanProject(".");
 
 			if (target === "code") {
-				const result = executeFulltextSearch(query, params.topN as number | undefined);
+				// Use the extension context's cwd for fulltext search (fixes #251:
+				// process.cwd() is wrong in MCP context where the server process
+				// cwd differs from the project root).
+				const projectRoot = _ctx?.cwd || process.cwd();
+				const result = executeFulltextSearch(query, params.topN as number | undefined, projectRoot);
 				let text = json
 					? JSON.stringify({
 							schema_version: "1.0",
@@ -72,6 +75,7 @@ export function registerCodesearch(pi: ExtensionAPI): void {
 			}
 
 			// BM25 + LSP workspace/symbol in parallel
+			const graph = scanProject(".");
 			const bm25Results = executeCodesearch(graph, query, params.topN as number | undefined);
 			const lspManager = getLspManager();
 			const lspResults = await lspWorkspaceSearch(lspManager, query, 5000);
@@ -295,8 +299,9 @@ interface FulltextMatch {
 	text: string;
 }
 
-export function executeFulltextSearch(query: string, topN?: number): FulltextMatch[] {
+export function executeFulltextSearch(query: string, topN?: number, projectRoot?: string): FulltextMatch[] {
 	const limit = topN ?? 20;
+	const root = projectRoot ?? process.cwd();
 
 	// Try ripgrep first (fastest, respects .gitignore)
 	const rgPath = findRipgrep();
@@ -306,11 +311,11 @@ export function executeFulltextSearch(query: string, topN?: number): FulltextMat
 				rgPath,
 				[
 					"--no-heading", "-n", "--max-count", "20",
-					"--context", "1", "-i",
+					"--context", "1", "-i", "-F",
 					"-g", "!.git", "-g", "!node_modules", "-g", "!dist",
 					"-g", "!*.lock", "-g", "!package-lock.json",
 					"-g", "!yarn.lock", "-g", "!pnpm-lock.yaml",
-					"--", query,
+					"--", query, root,
 				],
 				{ encoding: "utf-8", timeout: 5000, maxBuffer: 10 * 1024 * 1024 },
 			);
@@ -325,7 +330,7 @@ export function executeFulltextSearch(query: string, topN?: number): FulltextMat
 	}
 
 	// Fallback: built-in file scan
-	return builtinFulltextSearch(query, limit);
+	return builtinFulltextSearch(query, limit, root);
 }
 
 /** Find ripgrep binary on the system, returning its path or null. */
@@ -374,10 +379,9 @@ function parseRipgrepOutput(output: string, query: string, limit: number): Fullt
 	return results;
 }
 
-function builtinFulltextSearch(query: string, limit: number): FulltextMatch[] {
+function builtinFulltextSearch(query: string, limit: number, projectRoot: string): FulltextMatch[] {
 	const results: FulltextMatch[] = [];
 	const lower = query.toLowerCase();
-	const projectRoot = process.cwd();
 
 	// Directories to skip
 	const skipDirs = new Set([".git", "node_modules", "dist", "build", ".next", ".cache", "target", "__pycache__"]);

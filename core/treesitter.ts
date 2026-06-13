@@ -581,6 +581,14 @@ export class TreeSitterAdapter {
 			if (ancestor.type.includes("export")) {
 				return true;
 			}
+			// Rust: check for visibility_modifier (pub, pub(crate), pub(super), etc.)
+			// The visibility_modifier is a sibling/child of the definition node in
+			// Rust's tree-sitter grammar, not an ancestor wrapper.
+			for (const child of ancestor.children) {
+				if (child.type === "visibility_modifier" && child.text.startsWith("pub")) {
+					return true;
+				}
+			}
 			ancestor = ancestor.parent;
 		}
 		return false;

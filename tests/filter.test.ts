@@ -165,4 +165,64 @@ describe("core/filter findOrphans", () => {
 		expect(names).not.toContain("Modal");
 		expect(names).toContain("lowerCaseHelper");
 	});
+
+	// ── Rust-specific orphan filtering (issue #252) ──────────────────────
+
+	it("should NOT report Rust pub fn as orphan (exported visibility)", () => {
+		// pub fn symbols should be marked as "exported" by the tree-sitter
+		// adapter and thus excluded from orphan detection.
+		const graph = buildGraph([
+			sym("src/lib.rs::process_data::1", "src/lib.rs", "process_data", "function", "exported"),
+		]);
+		const result = findOrphans(graph);
+		expect(result.internal).toHaveLength(0);
+	});
+
+	it("should NOT report impl blocks as orphans (issue #252)", () => {
+		// impl blocks are structural declarations — never called by name.
+		const graph = buildGraph([
+			sym("src/model.rs::MyStruct::1", "src/model.rs", "MyStruct", "impl", "internal"),
+			sym("src/model.rs::OtherType::5", "src/model.rs", "OtherType", "impl", "internal"),
+		]);
+		const result = findOrphans(graph);
+		expect(result.internal).toHaveLength(0);
+	});
+
+	it("should NOT report Rust standard trait impls as orphans (issue #252)", () => {
+		// Standard trait impls (Clone, Debug, Display, etc.) are dispatched
+		// by the compiler, never referenced by name in user code.
+		const graph = buildGraph([
+			sym("src/model.rs::Clone::1", "src/model.rs", "Clone", "impl", "internal"),
+			sym("src/model.rs::Debug::5", "src/model.rs", "Debug", "impl", "internal"),
+			sym("src/model.rs::Display::10", "src/model.rs", "Display", "impl", "internal"),
+			sym("src/model.rs::From::15", "src/model.rs", "From", "impl", "internal"),
+			sym("src/model.rs::Serialize::20", "src/model.rs", "Serialize", "impl", "internal"),
+		]);
+		const result = findOrphans(graph);
+		expect(result.internal).toHaveLength(0);
+	});
+
+	it("should NOT report Rust framework handler functions as orphans (issue #252)", () => {
+		// Functions like new(), run(), serve() in .rs files are called
+		// by framework dispatch, not by name.
+		const graph = buildGraph([
+			sym("src/server.rs::new::1", "src/server.rs", "new", "function", "internal"),
+			sym("src/server.rs::run::5", "src/server.rs", "run", "function", "internal"),
+			sym("src/handler.rs::from_request::1", "src/handler.rs", "from_request", "function", "internal"),
+			sym("src/handler.rs::into_response::5", "src/handler.rs", "into_response", "function", "internal"),
+		]);
+		const result = findOrphans(graph);
+		expect(result.internal).toHaveLength(0);
+	});
+
+	it("should still report private Rust functions with no callers as orphans", () => {
+		// A private (non-pub) function in a .rs file with zero callers
+		// is genuinely orphaned and should be reported.
+		const graph = buildGraph([
+			sym("src/util.rs::unused_helper::1", "src/util.rs", "unused_helper", "function", "internal"),
+		]);
+		const result = findOrphans(graph);
+		expect(result.internal).toHaveLength(1);
+		expect(result.internal[0].name).toBe("unused_helper");
+	});
 });

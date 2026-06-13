@@ -168,6 +168,22 @@ function isEntryPointSymbol(name: string, kind: string): boolean {
 	if (name === "main" && kind === "function") return true;
 	if (name === "Default" && kind === "trait") return true;
 	if (name === "Drop" && kind === "trait") return true;
+	// Rust standard trait implementations — these are dispatched by the
+	// compiler or standard library, never called by name in user code.
+	// Without this, every `impl Clone for Foo` etc. is a false orphan.
+	if (kind === "impl" || kind === "trait") {
+		const RUST_STD_TRAITS = new Set([
+			"From", "Into", "TryFrom", "TryInto",
+			"Display", "Debug", "Clone", "Copy",
+			"Hash", "Eq", "PartialEq", "Ord", "PartialOrd",
+			"Serialize", "Deserialize",
+			"Iterator", "IntoIterator", "FromStr",
+			"AsRef", "AsMut", "Deref", "DerefMut",
+			"Fn", "FnMut", "FnOnce",
+			"Send", "Sync", "Error", "Default", "Drop",
+		]);
+		if (RUST_STD_TRAITS.has(name)) return true;
+	}
 	// Go entry points
 	if (name === "main" && kind === "function") return true;
 	if (name === "init" && kind === "function") return true;
@@ -176,12 +192,21 @@ function isEntryPointSymbol(name: string, kind: string): boolean {
 	return false;
 }
 
-function isFrameworkHandler(name: string): boolean {
+function isFrameworkHandler(name: string, file?: string, kind?: string): boolean {
 	// Flask/FastAPI/Django route handlers and middleware
 	if (name.startsWith("test_") || name.startsWith("Test")) return true;
 	if (name.startsWith("handle_") || name.startsWith("on_")) return true;
 	if (name.startsWith("middleware")) return true;
 	if (name.endsWith("_handler") || name.endsWith("Handler")) return true;
+	// Rust framework entry points (axum, actix, tower, tonic, etc.)
+	// These are called by framework dispatch, not by name in user code.
+	if (file?.endsWith(".rs") && kind === "function") {
+		const RUST_FRAMEWORK_FNS = new Set([
+			"new", "run", "serve", "from_request", "into_response",
+			"call", "poll_ready", "handle", "next",
+		]);
+		if (RUST_FRAMEWORK_FNS.has(name)) return true;
+	}
 	return false;
 }
 
@@ -267,6 +292,9 @@ export function findOrphans(graph: RepoGraph): {
 		if (!incoming || incoming.length === 0) {
 			// Skip anonymous functions
 			if (sym.kind === "anonymous_function") continue;
+			// Skip impl blocks — they are structural declarations (impl Foo { ... })
+			// and are never referenced by name in the call graph (fixes #252).
+			if (sym.kind === "impl") continue;
 			// Skip test files
 			if (sym.file.includes("tests/") || sym.file.includes(".test.") || sym.file.includes("test_") || sym.file.includes("_test.") || sym.file.includes("/test/")) continue;
 			// Skip registration functions called dynamically by frameworks
@@ -274,7 +302,7 @@ export function findOrphans(graph: RepoGraph): {
 			// Skip language-specific entry point symbols
 			if (isEntryPointSymbol(sym.name, sym.kind)) continue;
 			// Skip framework handler patterns
-			if (isFrameworkHandler(sym.name)) continue;
+			if (isFrameworkHandler(sym.name, sym.file, sym.kind)) continue;
 
 			const orphan = { name: sym.name, kind: sym.kind, file: sym.file, line: sym.line };
 			all.push({ ...orphan, isExported: false });
