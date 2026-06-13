@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-06-14
+
+### Features & Enhancements
+
+- **feat(#253): add issue-guard hook** (#257)
+  - New `hooks/issue-guard.ts`: detects `gh issue create` in bash commands, classifies severity (serious vs trivial), sets pending impact flag
+  - New `hooks/impact-state.ts`: shared state module for impact tracking (set/clear/has/reset)
+
+- **feat(#254): upgrade pre-edit.ts to block edits when impact is pending** (#257)
+  - Modified `hooks/pre-edit.ts`: blocks `write`/`edit` tool calls when pending impact exists
+  - Issue created -> edit blocked -> shazam_impact run -> edit allowed
+
+- **feat(#255): add agent-context-guard hook** (#257)
+  - New `hooks/agent-context-guard.ts`: intercepts agent-like tool calls (agent, agent_swarm, subagent)
+  - Review/audit tasks with insufficient structural context are blocked
+  - Coding tasks with insufficient context get a non-blocking warning
+  - Short prompts (< 30 words) are skipped
+
+### Bug Fixes
+
+- **fix(#251): shazam_codesearch target="code" returns empty results** (#256)
+  - Added `projectRoot` parameter to `executeFulltextSearch()`, passed to ripgrep as search directory
+  - Added `-F` flag to ripgrep for literal string matching (no regex interpretation)
+  - Moved `scanProject(".")` inside the symbol-search branch to avoid unnecessary scanning
+  - Forwarded `projectRoot` from MCP `tools.ts` to `executeFulltextSearch`
+
+- **fix(#252): shazam_verify returns 529 false positive orphan symbols for Rust** (#256)
+  - Added Rust `pub` visibility detection in `_isExported` (walks AST children for `visibility_modifier` nodes)
+  - Added 30 Rust standard trait names to entry point filter (From, Into, Clone, Debug, Serialize, etc.)
+  - Added Rust framework function patterns to `isFrameworkHandler` (new, run, serve, from_request, etc.)
+  - Skip `impl` block symbols from orphan detection (structural declarations, never called by name)
+
+### Tests
+
+- Added 26 new tests: full-text search with projectRoot, Rust orphan detection, impact state, issue guard, agent context guard. Full suite: 301 passed.
+
 ## [0.9.5] - 2026-06-13
 
 ### Bug Fixes
