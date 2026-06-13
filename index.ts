@@ -23,6 +23,8 @@ import { registerPreEditGuard } from "./hooks/pre-edit.js";
 import { registerSafetyHooks } from "./hooks/safety.js";
 import { registerStopVerify } from "./hooks/stop-verify.js";
 import { registerFailureRecovery } from "./hooks/failure-recovery.js";
+import { registerIssueGuard } from "./hooks/issue-guard.js";
+import { registerAgentContextGuard } from "./hooks/agent-context-guard.js";
 
 // ── Tool registrations ────────────────────────────────────────────────────
 import { registerOverview } from "./tools/overview.js";
@@ -112,6 +114,8 @@ export default function (pi: ExtensionAPI): void {
 	registerSafetyHooks(pi);
 	registerStopVerify(pi);
 	registerFailureRecovery(pi);
+	registerIssueGuard(pi);
+	registerAgentContextGuard(pi);
 
 	// ── /shazam-setup command ───────────────────────────────────────────────
 

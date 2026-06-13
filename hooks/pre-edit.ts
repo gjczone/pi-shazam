@@ -10,9 +10,10 @@
  * shazam_impact first to assess blast radius.
  */
 
-import type { ExtensionAPI } from "../types/pi-extension.js";
+import type { ExtensionAPI, ToolCallEventResult } from "../types/pi-extension.js";
 import { resolve } from "node:path";
 import { isTrackableEditedPath } from "../core/filter.js";
+import { hasPendingImpact } from "./impact-state.js";
 
 /** Maximum number of edited files tracked in the set. */
 const MAX_EDITED_FILES = 100;
@@ -110,8 +111,18 @@ function extractFilesFromInput(input: unknown): string[] {
  * On tool_result for failed writes, removes tentatively tracked files.
  */
 export function registerPreEditGuard(pi: ExtensionAPI): void {
-	pi.on("tool_call", (event, ctx) => {
+	pi.on("tool_call", (event, ctx): ToolCallEventResult | void => {
 		if (event.toolName !== "write" && event.toolName !== "edit") return;
+
+		// Block edits when a GitHub issue was created but impact analysis
+		// has not been run yet (set by hooks/issue-guard.ts)
+		if (hasPendingImpact()) {
+			return {
+				block: true,
+				reason:
+					"GitHub issue created but shazam_impact not run yet. Run shazam_impact first to assess blast radius, then retry editing.",
+			};
+		}
 
 		const input = "input" in event ? (event as unknown as Record<string, unknown>).input : {};
 
