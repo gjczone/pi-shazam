@@ -101,4 +101,36 @@ describe("core/filter findOrphans", () => {
 		const result = findOrphans(graph);
 		expect(result.internal).toHaveLength(0);
 	});
+
+	it("should skip symbols in side-effect-imported modules (issue #243)", () => {
+		const graph = buildGraph([
+			sym("src/polyfill.ts::patchArray::1", "src/polyfill.ts", "patchArray", "function", "internal"),
+			sym("src/polyfill.ts::install::1", "src/polyfill.ts", "install", "function", "internal"),
+			sym("src/main.ts::main::1", "src/main.ts", "main", "function", "internal"),
+		]);
+		// main.ts does `import './polyfill'` — file-level edge only
+		graph.fileImports.set("src/main.ts", ["src/polyfill.ts"]);
+		const result = findOrphans(graph);
+		const names = result.internal.map((s) => s.name);
+		expect(names).not.toContain("patchArray");
+		expect(names).not.toContain("install");
+	});
+
+	it("should still report orphans in files that are NOT imported by anyone (issue #243)", () => {
+		const graph = buildGraph([
+			sym("src/stray.ts::unused::1", "src/stray.ts", "unused", "function", "internal"),
+		]);
+		const result = findOrphans(graph);
+		expect(result.internal).toHaveLength(1);
+		expect(result.internal[0].name).toBe("unused");
+	});
+
+	it("should skip symbols in .d.ts ambient declaration files (issue #244)", () => {
+		const graph = buildGraph([
+			sym("types/api.d.ts::ApiShape::1", "types/api.d.ts", "ApiShape", "interface", "internal"),
+			sym("types/global.d.ts::Window::1", "types/global.d.ts", "Window", "interface", "internal"),
+		]);
+		const result = findOrphans(graph);
+		expect(result.internal).toHaveLength(0);
+	});
 });

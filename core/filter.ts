@@ -159,6 +159,11 @@ function isFrameworkHandler(name: string): boolean {
  * Returns symbols with zero incoming references, excluding:
  *  - Non-source files (config, lockfiles, node_modules, dist)
  *  - ALL exported symbols (consumers are external to the scanned graph)
+ *  - .d.ts ambient declaration files (issue #244 — ambient types are consumed
+ *    via global scope or type-only imports invisible to symbol-level refs)
+ *  - Files that appear in any other file's fileImports list (issue #243 —
+ *    side-effect modules are consumed by `import './x'` which creates a
+ *    file-level edge but no symbol-level binding)
  *  - Anonymous functions (no name to reference)
  *  - Test files
  *  - Registration functions (register*, createTool) called by MCP/extension frameworks
@@ -177,11 +182,26 @@ export function findOrphans(graph: RepoGraph): {
 	const internal: { name: string; kind: string; file: string; line: number }[] = [];
 	const exported: { name: string; kind: string; file: string; line: number }[] = [];
 
+	// Pre-compute the set of files imported by at least one other file.
+	// Any such file may be a side-effect module (consumed by `import './x'`
+	// without named bindings), so its internal symbols should not be
+	// reported as orphans (issue #243).
+	const importedFiles = new Set<string>();
+	for (const targets of graph.fileImports.values()) {
+		for (const t of targets) importedFiles.add(t);
+	}
+
 	for (const sym of graph.symbols.values()) {
 		if (isNonSourceFile(sym.file)) continue;
+		// Skip .d.ts ambient declaration files — by design, their symbols
+		// are consumed via global scope or type-only imports, neither of
+		// which produces a symbol-level reference in the graph (issue #244).
+		if (sym.file.endsWith(".d.ts")) continue;
 		// Skip ALL exported symbols — external consumers are invisible to
 		// tree-sitter scan, so zero internal refs does not mean dead code.
 		if (sym.visibility === "exported") continue;
+		// Skip symbols in side-effect-imported modules (issue #243).
+		if (importedFiles.has(sym.file)) continue;
 		const incoming = graph.incoming.get(sym.id);
 		if (!incoming || incoming.length === 0) {
 			// Skip anonymous functions
