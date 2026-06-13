@@ -528,7 +528,7 @@ Wraps pi-shazam core tools as MCP server at `npx pi-shazam-mcp`.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-const server = new McpServer({ name: "pi-shazam", version: "0.9.3" });
+const server = new McpServer({ name: "pi-shazam", version: "0.9.4" });
 const graph = scanProject(projectRoot);
 registerAllTools(server, graph, projectRoot);
 await server.connect(new StdioServerTransport());
