@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.5] - 2026-06-13
+
+### Bug Fixes
+
+- **fix(#246): findOrphans namespace-import regression** (#250)
+  - Refined side-effect skip from v0.9.4 to apply only when the importer has NO binding targeting the file. Unused internal symbols in `import * as Utils from './utils'` modules are now correctly reported.
+  - Added `resolveModulePath` / `moduleMatchesFile` helpers mirroring `core/scanner.ts` `resolveImport` for specifier-to-file matching.
+
+- **fix(#248): findOrphans Python `__all__` symbols reported as orphans** (#250)
+  - Added `extractPythonAllNames` in `core/scanner.ts`. After symbol extraction for Python files, scans for top-level `__all__ = [...]` and flips listed symbols to `visibility=exported`.
+  - Handles direct lists and `["a"] + ["b"]` concatenation.
+
+- **fix(#249): findOrphans React PascalCase components in .tsx/.jsx** (#250)
+  - PascalCase functions/classes in `.tsx` / `.jsx` files are now skipped (consumed via JSX, no symbol-level ref in the graph).
+  - Decorator detection and DI reflection deferred (require tree-sitter parent-chain walking / LSP semantic tokens).
+
+### Not Fixed (Documented)
+
+- **#247**: CJS `module.exports = fn` detection deferred — requires extending tree-sitter query patterns; CJS is increasingly rare in modern ESM projects.
+
+### Tests
+
+- Added 3 new tests (namespace import, Python `__all__`, PascalCase React). Full suite: 274 passed (was 271).
+
 ## [0.9.4] - 2026-06-13
 
 ### Bug Fixes
