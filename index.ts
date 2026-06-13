@@ -41,7 +41,7 @@ import { registerRenameSymbol } from "./tools/rename_symbol.js";
 import { registerSafeDelete } from "./tools/safe_delete.js";
 
 export default function (pi: ExtensionAPI): void {
-	const projectRoot = process.cwd();
+	let projectRoot = process.cwd();
 	const log = (msg: string) => {
 		if (pi.logger?.info) pi.logger.info(`[pi-shazam] ${msg}`);
 	};
@@ -56,8 +56,18 @@ export default function (pi: ExtensionAPI): void {
 	// Auto-initialize LSP on agent start (with overall 15s timeout guard).
 	// IMPORTANT: This handler MUST be registered before registerBeforeStartHook.
 	// Only the before-start handler returns { systemPrompt }; ordering matters.
-	pi.on("before_agent_start", async (_event, _ctx) => {
+	pi.on("before_agent_start", async (_event, ctx) => {
 		try {
+			// Update projectRoot from Pi's detected project directory when it
+			// differs from process.cwd(). Handles the case where pi is started
+			// from a parent directory but detects the project in a subdirectory
+			// (issue #241).
+			if (ctx.cwd && ctx.cwd !== projectRoot) {
+				projectRoot = ctx.cwd;
+				lspManager.setProjectRoot(ctx.cwd);
+				log(`Project root updated from Pi context: ${ctx.cwd}`);
+			}
+
 			await awaitPreviousShutdown();
 			const languages = lspManager.detectLanguages();
 			if (languages.length > 0) {

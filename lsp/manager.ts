@@ -310,6 +310,21 @@ export class LspManager {
 		this.log = log ?? (() => {});
 	}
 
+	/**
+	 * Update the project root after construction. Used by the extension
+	 * entry when Pi's detected project directory (ctx.cwd) differs from
+	 * the process CWD at load time (issue #241).
+	 *
+	 * No-op if the resolved path is unchanged.
+	 */
+	setProjectRoot(newRoot: string): void {
+		const resolved = resolve(newRoot);
+		if (resolved !== this.projectRoot) {
+			this.projectRoot = resolved;
+			this.log?.(`Project root updated to ${this.projectRoot}`);
+		}
+	}
+
 	// ── Detection ──────────────────────────────────────────────────────────────
 
 	/**

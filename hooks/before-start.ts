@@ -162,10 +162,13 @@ export function registerBeforeStartHook(pi: ExtensionAPI): void {
 		_hasShownOverview = false;
 	});
 
-	pi.on("before_agent_start", async (event, _ctx) => {
+	pi.on("before_agent_start", async (event, ctx) => {
 		try {
-			// Use module-level flag to detect continuation (fixes #117, #118)
-			const overviewText = generateOverviewForPrompt(".", _hasShownOverview);
+			// Use ctx.cwd (Pi's detected project root) instead of "." so the
+			// overview scans the right directory when pi is started from a
+			// parent directory (issue #241).
+			const projectRoot = ctx.cwd || ".";
+			const overviewText = generateOverviewForPrompt(projectRoot, _hasShownOverview);
 			// Append overview to the existing system prompt (AGENTS.md, skills, etc.)
 			// NOT replace — returning systemPrompt alone would wipe global rules and skill descriptions
 			const existing = event.systemPrompt ?? [];

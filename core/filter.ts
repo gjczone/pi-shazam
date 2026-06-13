@@ -21,8 +21,11 @@ const NON_SOURCE_FILE_PATTERNS: readonly RegExp[] = [
 	/package-lock\.json$/,
 	/^package\.json$/,
 	/(?:^|\/)tsconfig[^/]*\.json$/,
-	/node_modules\//,
-	/\/dist\//,
+	/node_modules(?:\/|$)/,
+	/(?:^|\/)dist(?:\/|$)/,
+	/(?:^|\/)build(?:\/|$)/,
+	/(?:^|\/)out(?:\/|$)/,
+	/(?:^|\/)target(?:\/|$)/,
 	/\.json$/,
 ];
 
@@ -68,18 +71,27 @@ export function isNonSourceFile(file: string): boolean {
 }
 
 /**
- * Check if a file path is in an MCP/tools registration directory.
- * These files export functions that are called dynamically by frameworks.
+ * Check whether a normalized absolute path should be tracked by the
+ * pre-edit guard. Returns false for paths inside non-source trees
+ * (SKIP_DIRS, dot-directories not in SKIP_DIRS, node_modules, dist, etc.).
+ *
+ * Single source of truth mirroring scanner.ts's directory filtering so
+ * pre-edit.ts does not flag writes to /tmp/, ~/.pi/, or build outputs
+ * as "unverified edits".
  */
-function isRegistrationFile(file: string): boolean {
-	return (
-		file.includes("/mcp/") ||
-		file.includes("/hooks/") ||
-		file.endsWith("_factory.ts") ||
-		file.endsWith("_factory.js") ||
-		file.endsWith("index.ts") ||
-		file.endsWith("index.js")
-	);
+export function isTrackableEditedPath(normalizedPath: string): boolean {
+	// Fast path: reject non-source files by pattern (node_modules, dist, *.json)
+	if (isNonSourceFile(normalizedPath)) return false;
+
+	// Segment-based check: reject any path that traverses a skipped directory
+	// or a dot-directory not in SKIP_DIRS (e.g. .pi, .git, .cache)
+	const segments = normalizedPath.split("/").filter(Boolean);
+	for (const seg of segments) {
+		if (SKIP_DIRS.has(seg)) return false;
+		if (seg.startsWith(".") && !SKIP_DIRS.has(seg)) return false;
+	}
+
+	return true;
 }
 
 /**
@@ -146,15 +158,15 @@ function isFrameworkHandler(name: string): boolean {
  *
  * Returns symbols with zero incoming references, excluding:
  *  - Non-source files (config, lockfiles, node_modules, dist)
- *  - High-PageRank exported symbols (likely public API)
+ *  - ALL exported symbols (consumers are external to the scanned graph)
  *  - Anonymous functions (no name to reference)
  *  - Test files
  *  - Registration functions (register*, createTool) called by MCP/extension frameworks
- *  - Exported symbols in registration/entry-point files (called externally)
  *  - Language-specific entry point symbols (dunder methods, main, traits)
  *  - Framework handler patterns (handle_*, on_*, middleware, *_handler)
  *
  * Returns structured result with separate lists for internal and exported orphans.
+ * The exported list is always empty under the current policy (all exports excluded).
  */
 export function findOrphans(graph: RepoGraph): {
 	all: { name: string; kind: string; file: string; line: number; isExported: boolean }[];
@@ -167,10 +179,11 @@ export function findOrphans(graph: RepoGraph): {
 
 	for (const sym of graph.symbols.values()) {
 		if (isNonSourceFile(sym.file)) continue;
+		// Skip ALL exported symbols — external consumers are invisible to
+		// tree-sitter scan, so zero internal refs does not mean dead code.
+		if (sym.visibility === "exported") continue;
 		const incoming = graph.incoming.get(sym.id);
 		if (!incoming || incoming.length === 0) {
-			// Skip high-PageRank exported symbols (public API)
-			if (sym.visibility === "exported" && sym.pagerank > 0.01) continue;
 			// Skip anonymous functions
 			if (sym.kind === "anonymous_function") continue;
 			// Skip test files
@@ -181,17 +194,10 @@ export function findOrphans(graph: RepoGraph): {
 			if (isEntryPointSymbol(sym.name, sym.kind)) continue;
 			// Skip framework handler patterns
 			if (isFrameworkHandler(sym.name)) continue;
-			// Skip exported symbols in registration/entry-point files
-			if (sym.visibility === "exported" && isRegistrationFile(sym.file)) continue;
 
-			const isExported = sym.visibility === "exported";
 			const orphan = { name: sym.name, kind: sym.kind, file: sym.file, line: sym.line };
-			all.push({ ...orphan, isExported });
-			if (isExported) {
-				exported.push(orphan);
-			} else {
-				internal.push(orphan);
-			}
+			all.push({ ...orphan, isExported: false });
+			internal.push(orphan);
 		}
 	}
 

@@ -12,6 +12,7 @@
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { resolve } from "node:path";
+import { isTrackableEditedPath } from "../core/filter.js";
 
 /** Maximum number of edited files tracked in the set. */
 const MAX_EDITED_FILES = 100;
@@ -117,8 +118,13 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 		const rawFiles = extractFilesFromInput(input);
 		if (rawFiles.length === 0) return;
 
-		// Normalize paths to avoid duplicate tracking
-		const files = rawFiles.map((f) => normalizeEditedPath(f, ctx.cwd));
+		// Normalize paths to avoid duplicate tracking, then drop paths that
+		// point outside the project tree (tmp, dot-dirs, node_modules, dist,
+		// json files). Tracking those would trigger spurious verify reminders.
+		const files = rawFiles
+			.map((f) => normalizeEditedPath(f, ctx.cwd))
+			.filter(isTrackableEditedPath);
+		if (files.length === 0) return;
 
 		// Track tentatively for this tool call (for removal on failure).
 		// Also schedule TTL-based eviction in case tool_result never arrives.

@@ -137,40 +137,21 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 		}
 
 		// -- Check 2: Pre-commit gate --
+		// Auto-block commit when shazam_verify was not run recently.
+		// The stop-verify hook already sends LLM reminders about unverified
+		// edits, so we do not need an interactive selector here. Popups
+		// would also break non-interactive (print/RPC) modes.
 		if (GIT_COMMIT_PATTERN.test(cmd)) {
 			// Skip if --no-verify flag is present
 			if (cmd.includes("--no-verify")) {
 				return;
 			}
 
-			// Check if shazam_verify was run recently (via shared state)
 			if (!hasRecentVerify()) {
-				try {
-					const choice = await ctx.ui.select("Pre-Commit Gate", [
-						"Run shazam_verify first (Recommended)",
-						"Skip verification",
-						"Cancel commit",
-					]);
-
-					if (choice === "Run shazam_verify first (Recommended)") {
-						return {
-							block: true,
-							reason: "Run shazam_verify first, then try committing again.",
-						};
-					} else if (choice === "Cancel commit") {
-						return {
-							block: true,
-							reason: "Commit cancelled by user.",
-						};
-					}
-					// "Skip verification" — allow the commit
-				} catch {
-					// Non-interactive mode: just warn but allow
-					ctx.ui.notify(
-						"[shazam] Tip: Run shazam_verify before committing to catch errors early.",
-						"warning",
-					);
-				}
+				return {
+					block: true,
+					reason: "Run shazam_verify first, then try committing again.",
+				};
 			}
 		}
 
