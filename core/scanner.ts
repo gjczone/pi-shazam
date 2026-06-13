@@ -207,6 +207,60 @@ function removeFileData(graph: RepoGraph, relPath: string): void {
 }
 
 /**
+ * Extract names listed in a Python `__all__ = [...]` declaration at module
+ * scope. Used to mark those symbols as exported (issue #248).
+ *
+ * Returns an empty set when no __all__ is found or when the value cannot
+ * be statically parsed (e.g. non-literal expressions).
+ *
+ * Tree types are `any` here because tree-sitter's Tree/SyntaxNode are
+ * local to core/treesitter.ts and not re-exported.
+ */
+function extractPythonAllNames(tree: unknown): Set<string> {
+	const names = new Set<string>();
+	const rootNode = (tree as { rootNode: { namedChildren: { type: string; children: unknown[] }[] } }).rootNode;
+	if (!rootNode) return names;
+	for (const top of rootNode.namedChildren) {
+		// Module-level statements are either `expression_statement`
+		// wrapping an `assignment`, or (in some grammar versions) a
+		// direct `assignment` node.
+		let assignment: { children: unknown[] } | null = null;
+		if (top.type === "expression_statement") {
+			assignment = (top.children[0] ?? null) as { children: unknown[] } | null;
+		} else if (top.type === "assignment") {
+			assignment = top as unknown as { children: unknown[] };
+		}
+		if (!assignment) continue;
+
+		const children = assignment.children as { type: string; text: string; namedChildren: unknown[] }[];
+		const lhs = children.find((c) => c.type === "identifier" && c.text === "__all__");
+		if (!lhs) continue;
+
+		// RHS may be a direct `list` or a `binary_operator` for
+		// `__all__ = ["a"] + ["b"]` concatenation.
+		const rhs = children.find((c) => c.type === "list" || c.type === "binary_operator");
+		if (!rhs) continue;
+		collectStringsFromNode(rhs, names);
+		return names;
+	}
+	return names;
+}
+
+function collectStringsFromNode(node: { type: string; text: string; namedChildren?: unknown[] }, out: Set<string>): void {
+	if (node.type === "string") {
+		const text = node.text;
+		// Strip quotes: 'x', "x", '''x''', """x"""
+		const inner = text.replace(/^([fruUbB]*)(["'])/, "").replace(/["']$/, "");
+		out.add(inner);
+		return;
+	}
+	if (!node.namedChildren) return;
+	for (const child of node.namedChildren as { type: string; text: string; namedChildren?: unknown[] }[]) {
+		collectStringsFromNode(child, out);
+	}
+}
+
+/**
  * Parse a single file and extract symbols, imports, calls, and JS/TS import bindings.
  * Returns a FileCacheEntry with all extracted data.
  */
@@ -222,6 +276,18 @@ function parseFile(adapter: TreeSitterAdapter, root: string, relPath: string, mt
 		if (!tree) return null;
 
 		const symbols = adapter.extractSymbols(tree, lang, relPath);
+		// For Python files, scan for `__all__ = [...]` at module scope and
+		// mark listed symbols as exported. Symbols in __all__ are the
+		// module's public API; consumers import them by name from outside
+		// the scanned graph, so without this they appear orphaned (#248).
+		if (lang === "python") {
+			const allNames = extractPythonAllNames(tree);
+			if (allNames.size > 0) {
+				for (const sym of symbols) {
+					if (allNames.has(sym.name)) sym.visibility = "exported";
+				}
+			}
+		}
 		const imports = adapter.extractImports(tree, lang);
 		const calls = adapter.extractCalls(tree, lang);
 		const jsImportBindings = adapter.extractJsTsImportBindings(tree, lang);

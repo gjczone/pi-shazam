@@ -7,6 +7,42 @@
  */
 
 import type { RepoGraph } from "./graph.js";
+import { dirname, join } from "node:path";
+
+/**
+ * Resolve an import specifier to a normalized file path, mirroring
+ * core/scanner.ts resolveImport. Used to match raw import specifiers
+ * (e.g. "./utils") against symbol file paths (e.g. "src/utils.ts").
+ *
+ * Tries common TypeScript/JavaScript extensions when the specifier
+ * does not include one.
+ */
+function resolveModulePath(importPath: string, fromFile: string): string {
+	if (!importPath.startsWith(".")) return importPath;
+	const fromDir = dirname(fromFile);
+	let resolved = join(fromDir, importPath);
+	resolved = resolved.replace(/\\/g, "/");
+	// Normalize leading "./" for consistency with RepoGraph symbol files
+	if (resolved.startsWith("./")) resolved = resolved.slice(2);
+	return resolved;
+}
+
+/**
+ * Check if a resolved module path matches a target symbol file.
+ * Supports matches with or without file extensions.
+ */
+function moduleMatchesFile(resolvedModule: string, targetFile: string): boolean {
+	if (resolvedModule === targetFile) return true;
+	const EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs"];
+	for (const ext of EXTENSIONS) {
+		if (resolvedModule + ext === targetFile) return true;
+	}
+	// Handle /index.* default imports
+	for (const ext of EXTENSIONS) {
+		if (resolvedModule + "/index" + ext === targetFile) return true;
+	}
+	return false;
+}
 
 /**
  * Config files, generated files, and lockfiles — excluded from source-file
@@ -161,9 +197,11 @@ function isFrameworkHandler(name: string): boolean {
  *  - ALL exported symbols (consumers are external to the scanned graph)
  *  - .d.ts ambient declaration files (issue #244 — ambient types are consumed
  *    via global scope or type-only imports invisible to symbol-level refs)
- *  - Files that appear in any other file's fileImports list (issue #243 —
- *    side-effect modules are consumed by `import './x'` which creates a
- *    file-level edge but no symbol-level binding)
+ *  - Files imported purely for side effects (no named/namespace binding from
+ *    any importer — issue #243). Files with bindings retain full detection
+ *    so unused internals in namespace-imported modules still surface (#246).
+ *  - PascalCase functions/classes in .tsx/.jsx files (React components
+ *    consumed via JSX, which does not create a symbol-level ref — #249)
  *  - Anonymous functions (no name to reference)
  *  - Test files
  *  - Registration functions (register*, createTool) called by MCP/extension frameworks
@@ -182,13 +220,25 @@ export function findOrphans(graph: RepoGraph): {
 	const internal: { name: string; kind: string; file: string; line: number }[] = [];
 	const exported: { name: string; kind: string; file: string; line: number }[] = [];
 
-	// Pre-compute the set of files imported by at least one other file.
-	// Any such file may be a side-effect module (consumed by `import './x'`
-	// without named bindings), so its internal symbols should not be
-	// reported as orphans (issue #243).
-	const importedFiles = new Set<string>();
-	for (const targets of graph.fileImports.values()) {
-		for (const t of targets) importedFiles.add(t);
+	// Pre-compute the set of files that are imported purely for side effects
+	// (i.e. appear in fileImports but the importer has NO import binding
+	// resolving to that file). Side-effect imports (`import './polyfill'`)
+	// create file-level edges but no symbol-level bindings, so their
+	// symbols would otherwise be reported as orphans.
+	//
+	// Files imported via named/namespace imports are NOT in this set —
+	// they have bindings and their unused internal symbols should still be
+	// reported (issue #246).
+	const sideEffectOnlyFiles = new Set<string>();
+	for (const [importer, targets] of graph.fileImports) {
+		const bindings = graph.fileImportBindings.get(importer) ?? [];
+		for (const target of targets) {
+			const hasBinding = bindings.some((b) => {
+				const resolved = resolveModulePath(b.module, importer);
+				return moduleMatchesFile(resolved, target);
+			});
+			if (!hasBinding) sideEffectOnlyFiles.add(target);
+		}
 	}
 
 	for (const sym of graph.symbols.values()) {
@@ -200,8 +250,19 @@ export function findOrphans(graph: RepoGraph): {
 		// Skip ALL exported symbols — external consumers are invisible to
 		// tree-sitter scan, so zero internal refs does not mean dead code.
 		if (sym.visibility === "exported") continue;
-		// Skip symbols in side-effect-imported modules (issue #243).
-		if (importedFiles.has(sym.file)) continue;
+		// Skip symbols in side-effect-only imported modules (issue #243).
+		if (sideEffectOnlyFiles.has(sym.file)) continue;
+		// Skip PascalCase functions/classes in .tsx/.jsx files — they are
+		// almost certainly React components consumed via `<Component />`
+		// JSX syntax, which does not create a symbol-level reference
+		// in the graph (issue #249).
+		if (
+			(sym.file.endsWith(".tsx") || sym.file.endsWith(".jsx")) &&
+			(sym.kind === "function" || sym.kind === "class") &&
+			/^[A-Z]/.test(sym.name)
+		) {
+			continue;
+		}
 		const incoming = graph.incoming.get(sym.id);
 		if (!incoming || incoming.length === 0) {
 			// Skip anonymous functions

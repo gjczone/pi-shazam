@@ -35,6 +35,50 @@ describe("scanProject", () => {
 		expect(totalEdges).toBeGreaterThan(0);
 	});
 
+	it("should treat Python __all__ listed symbols as exported (issue #248)", () => {
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-test-"));
+		try {
+			writeFileSync(
+				join(tmpDir, "mod.py"),
+				`__all__ = ["public_fn", "PublicClass"]
+
+def public_fn():
+    pass
+
+class PublicClass:
+    pass
+
+def unlisted_fn():
+    pass
+
+def _private_fn():
+    pass
+`,
+			);
+
+			const graph = scanProject(tmpDir);
+			const publicFn = [...graph.symbols.values()].find((s) => s.name === "public_fn");
+			const publicClass = [...graph.symbols.values()].find((s) => s.name === "PublicClass");
+			const unlisted = [...graph.symbols.values()].find((s) => s.name === "unlisted_fn");
+			const priv = [...graph.symbols.values()].find((s) => s.name === "_private_fn");
+
+			expect(publicFn).toBeDefined();
+			expect(publicFn?.visibility).toBe("exported");
+			expect(publicClass).toBeDefined();
+			expect(publicClass?.visibility).toBe("exported");
+			expect(unlisted).toBeDefined();
+			expect(unlisted?.visibility).not.toBe("exported");
+			// _private_fn may or may not be extracted (leading underscore = private in tree-sitter-python)
+			if (priv) expect(priv.visibility).not.toBe("exported");
+		} finally {
+			try {
+				rmSync(tmpDir, { recursive: true, force: true });
+			} catch {
+				/* ok */
+			}
+		}
+	});
+
 	it("should scan a small TypeScript file in a temp directory", () => {
 		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-test-"));
 		try {

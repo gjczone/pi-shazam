@@ -133,4 +133,36 @@ describe("core/filter findOrphans", () => {
 		const result = findOrphans(graph);
 		expect(result.internal).toHaveLength(0);
 	});
+
+	it("should still report orphans in namespace-imported files (issue #246)", () => {
+		// main.ts does `import * as Utils from './utils'` — bindings exist
+		const graph = buildGraph([
+			sym("src/utils.ts::used::1", "src/utils.ts", "used", "function", "internal"),
+			sym("src/utils.ts::unused::1", "src/utils.ts", "unused", "function", "internal"),
+			sym("src/main.ts::main::1", "src/main.ts", "main", "function", "internal"),
+		]);
+		graph.fileImports.set("src/main.ts", ["src/utils.ts"]);
+		graph.fileImportBindings.set("src/main.ts", [
+			{ kind: "namespace", localName: "Utils", importedName: "*", module: "./utils", line: 1 },
+		]);
+		// Simulate `used` being referenced via `Utils.used`
+		graph.incoming.set("src/utils.ts::used::1", [{ from: "src/main.ts::main::1", weight: 1 }]);
+		const result = findOrphans(graph);
+		const names = result.internal.map((s) => s.name);
+		expect(names).not.toContain("used");
+		expect(names).toContain("unused");
+	});
+
+	it("should skip PascalCase functions in .tsx/.jsx files (issue #249 React)", () => {
+		const graph = buildGraph([
+			sym("src/Button.tsx::Button::1", "src/Button.tsx", "Button", "function", "internal"),
+			sym("src/Modal.jsx::Modal::1", "src/Modal.jsx", "Modal", "function", "internal"),
+			sym("src/utils.tsx::lowerCaseHelper::1", "src/utils.tsx", "lowerCaseHelper", "function", "internal"),
+		]);
+		const result = findOrphans(graph);
+		const names = result.internal.map((s) => s.name);
+		expect(names).not.toContain("Button");
+		expect(names).not.toContain("Modal");
+		expect(names).toContain("lowerCaseHelper");
+	});
 });
