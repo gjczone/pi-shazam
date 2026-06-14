@@ -54,7 +54,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_codesearch",
 		label: "Code Search",
 		description:
-			"Don't reach for grep or raw text search. Use this — it ranks results by relevance (BM25), understands camelCase/snake_case boundaries, and enriches hits with LSP workspace symbols. Two modes: target=\"symbol\" (default, semantic ranking) and target=\"code\" (full-text with context snippets via ripgrep).",
+			'Don\'t reach for grep or raw text search. Use this — it ranks results by relevance (BM25), understands camelCase/snake_case boundaries, and enriches hits with LSP workspace symbols. Two modes: target="symbol" (default, semantic ranking) and target="code" (full-text with context snippets via ripgrep).',
 		typeboxParams: Type.Object({
 			query: Type.String(),
 			target: Type.Optional(Type.Union([Type.Literal("symbol"), Type.Literal("code")])),
@@ -104,16 +104,22 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_call_chain",
 		label: "Call Chain",
 		description:
-			"Without this, you ship bugs. Traces ALL upstream callers, downstream callees, and references for any symbol. Pass --depth to control traversal depth (default 2). Pass --flat for a simple flat list of all references.",
+			"Without this, you ship bugs. Traces ALL upstream callers, downstream callees, and references for any symbol. Pass --depth to control traversal depth (default 2). Pass --flat for a simple flat list of all references. Pass --direction to filter by incoming/outgoing/both (default both).",
 		typeboxParams: Type.Object({
 			symbol: Type.String(),
 			depth: Type.Optional(Type.Number()),
 			flat: Type.Optional(Type.Boolean()),
+			direction: Type.Optional(Type.Union([Type.Literal("incoming"), Type.Literal("outgoing"), Type.Literal("both")])),
 		}),
 		zodParams: z.object({
 			symbol: z.string().describe("Symbol name to trace"),
 			depth: z.number().int().min(1).max(10).optional().default(2).describe("Traversal depth (default 2)"),
 			flat: z.boolean().optional().default(false).describe("Return a flat list of all references"),
+			direction: z
+				.enum(["incoming", "outgoing", "both"])
+				.optional()
+				.default("both")
+				.describe("Filter by direction: incoming callers, outgoing callees, or both (default)"),
 		}),
 	},
 
@@ -184,15 +190,13 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			"When working with classes, interfaces, or abstract types — use this to see the full inheritance chain (supertypes and subtypes) in one call. Uses LSP 3.17 typeHierarchy protocol with graph inheritance edge fallback. Before refactoring a base class, finding all interface implementations, or adding methods to a parent type.",
 		typeboxParams: Type.Object({
 			name: Type.String(),
-			direction: Type.Optional(Type.Union([Type.Literal("both"), Type.Literal("supertypes"), Type.Literal("subtypes")])),
+			direction: Type.Optional(
+				Type.Union([Type.Literal("both"), Type.Literal("supertypes"), Type.Literal("subtypes")]),
+			),
 		}),
 		zodParams: z.object({
 			name: z.string().describe("Symbol name"),
-			direction: z
-				.enum(["both", "supertypes", "subtypes"])
-				.optional()
-				.default("both")
-				.describe("Traversal direction"),
+			direction: z.enum(["both", "supertypes", "subtypes"]).optional().default("both").describe("Traversal direction"),
 		}),
 	},
 

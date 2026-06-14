@@ -47,15 +47,18 @@ describe("MCP: tool schemas", () => {
 		expect(() => schema.parse({})).toThrow();
 	});
 
-	it("call_chain schema should accept symbol with optional depth and flat", () => {
+	it("call_chain schema should accept symbol with optional depth, flat, and direction", () => {
 		const schema = z.object({
 			symbol: z.string(),
 			depth: z.number().int().min(1).max(10).optional(),
 			flat: z.boolean().optional(),
+			direction: z.enum(["incoming", "outgoing", "both"]).optional(),
 		});
 		expect(() => schema.parse({ symbol: "main" })).not.toThrow();
 		expect(() => schema.parse({ symbol: "main", depth: 3 })).not.toThrow();
 		expect(() => schema.parse({ symbol: "main", flat: true })).not.toThrow();
+		expect(() => schema.parse({ symbol: "main", direction: "incoming" })).not.toThrow();
+		expect(() => schema.parse({ symbol: "main", direction: "outgoing" })).not.toThrow();
 	});
 
 	it("hover schema should accept name with optional file", () => {

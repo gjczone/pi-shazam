@@ -16,28 +16,38 @@ export function registerCallChain(pi: ExtensionAPI): void {
 		function signature is a runtime error. Traces ALL upstream callers,
 		downstream callees, and references for any symbol. Pass --depth to
 		control traversal depth (default 2). Pass --flat for a simple flat
-		list of all references.`,
+		list of all references. Pass --direction to filter by
+		incoming/outgoing/both (default both).`,
 		params: Type.Object({
 			symbol: Type.String(),
 			depth: Type.Optional(Type.Number()),
 			flat: Type.Optional(Type.Boolean()),
+			direction: Type.Optional(Type.Union([Type.Literal("incoming"), Type.Literal("outgoing"), Type.Literal("both")])),
 		}),
 		execute(graph, params) {
 			const json = params.json ?? false;
 			const flat = (params.flat as boolean) ?? false;
 			const depth = (params.depth as number) ?? 2;
+			const direction = (params.direction as string) ?? "both";
 			const symbolName = typeof params.symbol === "string" ? params.symbol : "";
 			if (!symbolName) return "Error: symbol parameter is required";
 			if (flat) {
-				const refs = getFlatReferences(graph, symbolName);
+				const refs = getFlatReferences(graph, symbolName, direction as "incoming" | "outgoing" | "both");
 				return json ? JSON.stringify(refs, null, 2) : formatFlatReferences(refs, symbolName);
 			}
-			return json ? executeCallChainJson(graph, symbolName, depth) : executeCallChain(graph, symbolName, depth);
+			return json
+				? executeCallChainJson(graph, symbolName, depth, direction as "incoming" | "outgoing" | "both")
+				: executeCallChain(graph, symbolName, depth, direction as "incoming" | "outgoing" | "both");
 		},
 	});
 }
 
-export function executeCallChain(graph: RepoGraph, symbolName: string, depth: number = 2): string {
+export function executeCallChain(
+	graph: RepoGraph,
+	symbolName: string,
+	depth: number = 2,
+	direction: "incoming" | "outgoing" | "both" = "both",
+): string {
 	const targets = findSymbolsByName(graph, symbolName);
 	if (targets.length === 0) {
 		return `Symbol not found: ${symbolName}`;
@@ -49,23 +59,27 @@ export function executeCallChain(graph: RepoGraph, symbolName: string, depth: nu
 		lines.push("");
 
 		// Incoming callers (upstream) — BFS
-		const incomingChain = traceIncoming(graph, target.id, depth);
-		if (incomingChain.length > 0) {
-			lines.push(`### Incoming Calls (${incomingChain.length} callers in ${depth} levels)`);
-			for (const [level, sym, edge] of incomingChain) {
-				const indent = "  ".repeat(level);
-				lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (${edge.kind})`);
+		if (direction !== "outgoing") {
+			const incomingChain = traceIncoming(graph, target.id, depth);
+			if (incomingChain.length > 0) {
+				lines.push(`### Incoming Calls (${incomingChain.length} callers in ${depth} levels)`);
+				for (const [level, sym, edge] of incomingChain) {
+					const indent = "  ".repeat(level);
+					lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (${edge.kind})`);
+				}
 			}
 		}
 
 		// Outgoing callees (downstream) — BFS
-		const outgoingChain = traceOutgoing(graph, target.id, depth);
-		if (outgoingChain.length > 0) {
-			lines.push("");
-			lines.push(`### Outgoing Calls (${outgoingChain.length} callees in ${depth} levels)`);
-			for (const [level, sym, edge] of outgoingChain) {
-				const indent = "  ".repeat(level);
-				lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (${edge.kind})`);
+		if (direction !== "incoming") {
+			const outgoingChain = traceOutgoing(graph, target.id, depth);
+			if (outgoingChain.length > 0) {
+				lines.push("");
+				lines.push(`### Outgoing Calls (${outgoingChain.length} callees in ${depth} levels)`);
+				for (const [level, sym, edge] of outgoingChain) {
+					const indent = "  ".repeat(level);
+					lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (${edge.kind})`);
+				}
 			}
 		}
 
@@ -82,22 +96,33 @@ export function executeCallChain(graph: RepoGraph, symbolName: string, depth: nu
 	return lines.join("\n").trim();
 }
 
-export function executeCallChainJson(graph: RepoGraph, symbolName: string, depth: number): string {
+export function executeCallChainJson(
+	graph: RepoGraph,
+	symbolName: string,
+	depth: number,
+	direction: "incoming" | "outgoing" | "both" = "both",
+): string {
 	const targets = findSymbolsByName(graph, symbolName);
 	const result = targets.map((target) => ({
 		symbol: { id: target.id, name: target.name, kind: target.kind, file: target.file, line: target.line },
-		incoming: traceIncoming(graph, target.id, depth).map(([level, sym, edge]) => ({
-			level,
-			symbol: sym.name,
-			file: sym.file,
-			kind: edge.kind,
-		})),
-		outgoing: traceOutgoing(graph, target.id, depth).map(([level, sym, edge]) => ({
-			level,
-			symbol: sym.name,
-			file: sym.file,
-			kind: edge.kind,
-		})),
+		incoming:
+			direction !== "outgoing"
+				? traceIncoming(graph, target.id, depth).map(([level, sym, edge]) => ({
+						level,
+						symbol: sym.name,
+						file: sym.file,
+						kind: edge.kind,
+					}))
+				: [],
+		outgoing:
+			direction !== "incoming"
+				? traceOutgoing(graph, target.id, depth).map(([level, sym, edge]) => ({
+						level,
+						symbol: sym.name,
+						file: sym.file,
+						kind: edge.kind,
+					}))
+				: [],
 	}));
 
 	return JSON.stringify({
@@ -176,7 +201,11 @@ interface FlatReference {
 	direction: string;
 }
 
-export function getFlatReferences(graph: RepoGraph, symbolName: string): FlatReference[] {
+export function getFlatReferences(
+	graph: RepoGraph,
+	symbolName: string,
+	direction: "incoming" | "outgoing" | "both" = "both",
+): FlatReference[] {
 	const targets = findSymbolsByName(graph, symbolName);
 	if (targets.length === 0) return [];
 
@@ -185,40 +214,44 @@ export function getFlatReferences(graph: RepoGraph, symbolName: string): FlatRef
 
 	for (const target of targets) {
 		// Incoming references (who calls this symbol)
-		const incoming = graph.incoming.get(target.id);
-		if (incoming) {
-			for (const edge of incoming) {
-				const src = graph.symbols.get(edge.source);
-				if (!src) continue;
-				const key = `${src.name}:${src.file}:${src.line}`;
-				if (seen.has(key)) continue;
-				seen.add(key);
-				refs.push({
-					symbol: src.name,
-					file: src.file,
-					line: src.line,
-					kind: src.kind,
-					direction: "incoming",
-				});
+		if (direction !== "outgoing") {
+			const incoming = graph.incoming.get(target.id);
+			if (incoming) {
+				for (const edge of incoming) {
+					const src = graph.symbols.get(edge.source);
+					if (!src) continue;
+					const key = `${src.name}:${src.file}:${src.line}`;
+					if (seen.has(key)) continue;
+					seen.add(key);
+					refs.push({
+						symbol: src.name,
+						file: src.file,
+						line: src.line,
+						kind: src.kind,
+						direction: "incoming",
+					});
+				}
 			}
 		}
 
 		// Outgoing references (what this symbol calls)
-		const outgoing = graph.outgoing.get(target.id);
-		if (outgoing) {
-			for (const edge of outgoing) {
-				const tgt = graph.symbols.get(edge.target);
-				if (!tgt) continue;
-				const key = `${tgt.name}:${tgt.file}:${tgt.line}`;
-				if (seen.has(key)) continue;
-				seen.add(key);
-				refs.push({
-					symbol: tgt.name,
-					file: tgt.file,
-					line: tgt.line,
-					kind: tgt.kind,
-					direction: "outgoing",
-				});
+		if (direction !== "incoming") {
+			const outgoing = graph.outgoing.get(target.id);
+			if (outgoing) {
+				for (const edge of outgoing) {
+					const tgt = graph.symbols.get(edge.target);
+					if (!tgt) continue;
+					const key = `${tgt.name}:${tgt.file}:${tgt.line}`;
+					if (seen.has(key)) continue;
+					seen.add(key);
+					refs.push({
+						symbol: tgt.name,
+						file: tgt.file,
+						line: tgt.line,
+						kind: tgt.kind,
+						direction: "outgoing",
+					});
+				}
 			}
 		}
 	}
