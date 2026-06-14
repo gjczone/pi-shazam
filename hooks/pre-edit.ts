@@ -181,7 +181,11 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 	// On tool_result: remove tentatively tracked files if the tool call failed
 	pi.on("tool_result", (event) => {
 		if (event.toolName !== "write" && event.toolName !== "edit") return;
-		if (!event.isError) return;
+		if (!event.isError) {
+			const toolId = (event as unknown as Record<string, unknown>).toolCallId as string | undefined;
+			if (toolId) _tentativeFiles.delete(toolId);
+			return;
+		}
 
 		const toolId = (event as unknown as Record<string, unknown>).toolCallId as string | undefined;
 		if (toolId && _tentativeFiles.has(toolId)) {

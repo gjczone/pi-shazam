@@ -53,10 +53,11 @@ Required before editing 2+ files or any shared/exported module.
 
 Don't reach for grep or raw text search across the codebase. Use this instead — it ranks results by relevance.
 
-**Parameters**: `{ query: string, target?, topN? }`
+**Parameters**: `{ query: string, target?, mode?, topN? }`
 
 - `query`: search text
 - `target`: `"symbol"` (default, BM25 semantic ranking) or `"code"` (full-text via ripgrep)
+- `mode`: search mode for `target=code`: `"literal"` (exact), `"regex"` (tokenized), `"smart"` (auto-detect NL)
 - `topN`: limit results count
 
 **Returns**: ranked symbol matches or full-text snippets with context.
@@ -106,11 +107,12 @@ When you are about to edit a file you have not read before — this shows struct
 
 Without this, you ship bugs. Every caller you miss when changing a function signature is a runtime error.
 
-**Parameters**: `{ symbol: string, depth?, flat? }`
+**Parameters**: `{ symbol: string, depth?, flat?, direction? }`
 
 - `symbol`: symbol name to trace
 - `depth`: traversal depth (default 2)
 - `flat`: return simple flat list of all references
+- `direction`: filter by `"incoming"`, `"outgoing"`, or `"both"` (default)
 
 **Returns**: incoming calls, outgoing calls, full reference list.
 
@@ -145,10 +147,10 @@ Without this, you optimize the wrong files. Returns files where bugs have the hi
 
 When working with classes, interfaces, or abstract types — use this to see the full inheritance chain and implementations.
 
-**Parameters**: `{ name: string, file? }`
+**Parameters**: `{ name: string, direction? }`
 
 - `name`: symbol name
-- `file`: optional file path
+- `direction`: traversal direction — `"both"` (default), `"supertypes"`, or `"subtypes"`
 
 **Returns**: supertypes (parents, interfaces), subtypes (children, implementations), and implementation locations for interface/trait types via LSP textDocument/implementation. Uses LSP 3.17 typeHierarchy protocol with graph fallback.
 
@@ -162,11 +164,15 @@ These tools modify files or verify changes.
 
 After every write or edit, run this to confirm no errors were introduced. When diagnostics are found, fetches LSP codeAction suggested fixes.
 
-**Parameters**: `{ quick?, lspOnly?, preCommit? }`
+**Parameters**: `{ quick?, lspOnly?, preCommit?, delta?, maxFiles?, noCascade?, noSecrets? }`
 
 - `quick`: git changes + risk only (~2s)
 - `lspOnly`: LSP diagnostics only, skip graph analysis
 - `preCommit`: stricter thresholds for pre-commit gate
+- `delta`: only check changed files
+- `maxFiles`: max files to check
+- `noCascade`: skip cascade analysis
+- `noSecrets`: skip secrets detection
 
 **Returns**: Verdict (PASS / WARN / FAIL), LSP diagnostics with suggested fixes, risk level, orphan detection, graph diffs.
 
@@ -189,11 +195,11 @@ When shazam_verify reports format or lint errors, use this to auto-fix them.
 
 Required safety gate before renaming any symbol. This is a WRITE operation.
 
-**Parameters**: `{ name: string, file: string, newName: string }`
+**Parameters**: `{ symbol: string, newName: string, dryRun? }`
 
-- `name`: current symbol name
-- `file`: file containing the symbol
+- `symbol`: current symbol name
 - `newName`: new symbol name
+- `dryRun`: preview only, do not modify files
 
 **Safety workflow**: call shazam_call_chain first to review references, then rename, then verify with shazam_verify.
 
@@ -203,10 +209,10 @@ Required safety gate before renaming any symbol. This is a WRITE operation.
 
 Required safety gate before removing any symbol. This is a WRITE operation.
 
-**Parameters**: `{ name: string, file: string }`
+**Parameters**: `{ symbol: string, dryRun? }`
 
-- `name`: symbol name to delete
-- `file`: file containing the symbol
+- `symbol`: symbol name to delete
+- `dryRun`: preview only, do not modify files
 
 **Safety workflow**: verifies zero incoming references, reports outgoing references, provides deletion guidance.
 

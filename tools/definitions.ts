@@ -165,7 +165,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		description:
 			"Without this, you optimize the wrong files. Returns files ranked by (symbol density x PageRank) — these are the files where bugs have the highest blast radius. Use to prioritize code review, decide where to write tests first, and understand which files form the project's core.",
 		typeboxParams: Type.Object({}),
-		zodParams: z.object({}),
+		zodParams: z.object({ topN: z.number().optional().describe("Max results to return") }),
 	},
 
 	shazam_verify: {

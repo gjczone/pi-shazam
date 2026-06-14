@@ -25,17 +25,17 @@ import { scanProject } from "../core/scanner.js";
 import { executeOverview } from "../tools/overview.js";
 import { hasTestFiles, hasHierarchyKinds } from "../core/output.js";
 import { createBaseline, getBaseline, formatBaselineSummary } from "../core/baseline.js";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 /**
  * Get the number of uncommitted changes in the working tree.
  */
 function getUncommittedChangeCount(projectRoot: string): number {
 	try {
-		const output = execSync(
-			"git diff --name-only --diff-filter=ACMR 2>/dev/null; git diff --cached --name-only --diff-filter=ACMR 2>/dev/null",
-			{ cwd: projectRoot, encoding: "utf-8", timeout: 3000 },
-		).trim();
+		let output = "";
+		try { output += execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMR"], { cwd: projectRoot, encoding: "utf-8", timeout: 3000 }); } catch { /* no unstaged */ }
+		try { output += execFileSync("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMR"], { cwd: projectRoot, encoding: "utf-8", timeout: 3000 }); } catch { /* no staged */ }
+		output = output.trim();
 		if (!output) return 0;
 		return new Set(output.split("\n").filter(Boolean)).size;
 	} catch {
@@ -98,13 +98,19 @@ function buildProactiveRecommendations(projectRoot: string, graph: RepoGraph): s
  * Accepts an already-scanned graph to avoid redundant re-scanning (fixes #95).
  */
 function buildSessionBaselineSection(_projectRoot: string, graph: RepoGraph): string {
+	let branch = "unknown";
+	let commit = "unknown";
 	try {
-		const branch = execSync("git branch --show-current 2>/dev/null", { encoding: "utf-8", timeout: 3000 }).trim();
-		const commit = execSync("git rev-parse HEAD 2>/dev/null", { encoding: "utf-8", timeout: 3000 }).trim();
+		branch = execFileSync("git", ["branch", "--show-current"], { encoding: "utf-8", timeout: 3000 }).trim() || "unknown";
+	} catch { /* git not available or not a repo */ }
+	try {
+		commit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf-8", timeout: 3000 }).trim() || "unknown";
+	} catch { /* git not available or not a repo */ }
 
+	try {
 		// createBaseline immediately reassigns _baseline and _previousOrphans,
 		// so no explicit clearBaseline() is needed here.
-		createBaseline(graph, 0, 0, branch || "unknown", commit || "unknown");
+		createBaseline(graph, 0, 0, branch, commit);
 
 		const baseline = getBaseline();
 		return baseline ? formatBaselineSummary(baseline) : "";

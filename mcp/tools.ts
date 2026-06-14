@@ -94,8 +94,8 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: impactDef.description,
 			inputSchema: impactDef.zodParams,
 		},
-		withLogging("shazam_impact", async ({ files }) => {
-			const text = executeImpact(getGraph(), files as string[]);
+		withLogging("shazam_impact", async ({ files, withSymbols, compact }) => {
+			const text = executeImpact(getGraph(), files as string[], { withSymbols: (withSymbols as boolean) ?? false, compact: (compact as boolean) ?? false });
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -107,12 +107,12 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: codesearchDef.description,
 			inputSchema: codesearchDef.zodParams,
 		},
-		withLogging("shazam_codesearch", async ({ query, target, mode }) => {
+		withLogging("shazam_codesearch", async ({ query, target, mode, topN }) => {
 			if (target === "code") {
-				const results = executeFulltextSearch(query as string, undefined, projectRoot, mode as string | undefined);
+				const results = executeFulltextSearch(query as string, topN as number | undefined, projectRoot, mode as string | undefined);
 				return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
 			}
-			const scored = executeCodesearch(getGraph(), query as string);
+			const scored = executeCodesearch(getGraph(), query as string, topN as number | undefined);
 			const results = scored.map(({ sym, score }) => ({ ...sym, score }));
 			return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
 		}),
@@ -207,8 +207,8 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: hotspotsDef.description,
 			inputSchema: hotspotsDef.zodParams,
 		},
-		withLogging("shazam_hotspots", async () => {
-			const text = executeHotspots(getGraph());
+		withLogging("shazam_hotspots", async ({ topN }) => {
+			const text = executeHotspots(getGraph(), topN as number | undefined);
 			return { content: [{ type: "text", text }] };
 		}),
 	);

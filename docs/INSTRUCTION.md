@@ -248,7 +248,7 @@ The `pi.typebox` property does NOT exist at runtime. The Pi runtime resolves
 ```
 index.ts                    <- Pi extension entry, default export(pi: ExtensionAPI)
   ├── core/                 <- Pure analysis logic, no Pi dependency
-  │   ├── treesitter.ts     <- AST parsing + symbol extraction (14 languages)
+  │   ├── treesitter.ts     <- AST parsing + symbol extraction (6 languages)
   │   ├── graph.ts          <- Symbol dependency graph (imports, calls, references)
   │   ├── pagerank.ts       <- PageRank symbol importance scoring
   │   ├── scanner.ts        <- Project file scanning + graph building
@@ -271,12 +271,8 @@ index.ts                    <- Pi extension entry, default export(pi: ExtensionA
   │   ├── file_detail.ts    <- Single file deep analysis
   │   ├── call_chain.ts     <- Call graph traversal
   │   ├── symbol.ts         <- Symbol lookup
-  │   ├── routes.ts         <- HTTP route inventory
-  │   ├── state_map.ts      <- State definition discovery
   │   ├── verify.ts         <- Post-edit diagnostics gate
   │   ├── fix.ts            <- Auto-fix lint/format
-  │   ├── ready.ts          <- Pre-commit readiness
-  │   ├── check.ts          <- Compiler/lint diagnostics
   │   ├── hotspots.ts       <- Complexity hotspot ranking
   │   ├── hover.ts          <- Symbol type/documentation hover
   │   ├── find_tests.ts     <- Test file discovery
@@ -285,7 +281,14 @@ index.ts                    <- Pi extension entry, default export(pi: ExtensionA
   │   └── safe_delete.ts    <- Safe symbol deletion
   ├── hooks/                <- Automatic (not LLM-visible)
   │   ├── before-start.ts   <- Inject overview into system prompt
-  │   └── after-write.ts    <- Auto verify + fix after write/edit
+  │   ├── pre-edit.ts       <- Detect multi-file edits, warn about blast radius
+  │   ├── shazam-guide.ts   <- Auto-format + contextual tool suggestions
+  │   ├── safety.ts         <- Destructive command confirmation + pre-commit gate
+  │   ├── stop-verify.ts    <- Remind to verify before ending turn
+  │   ├── failure-recovery.ts <- Detect consecutive failures, suggest alternatives
+  │   ├── tool-logger.ts    <- Log shazam calls to audit dir
+  │   ├── issue-guard.ts    <- Detect gh issue create, set pending impact flag
+  │   └── agent-context-guard.ts <- Block agent spawn without structural context
   └── mcp/                  <- MCP server for non-Pi clients
       ├── entry.ts          <- McpServer + StdioServerTransport init
       └── tools.ts          <- 14 MCP tool registrations wrapping core
@@ -491,7 +494,7 @@ pi.on("before_agent_start", (_event, _ctx) => {
 
 **Critical**: `systemPrompt` may be `string` or `string[]` at runtime. Always check with `Array.isArray()`.
 
-**Logging pattern** — follow audit-guard.ts convention, write to `~/.pi/hooks/audit/`:
+**Logging pattern** — follow tool-logger.ts convention, write to `~/.pi/hooks/audit/`:
 
 ```typescript
 import { appendFileSync, mkdirSync } from "node:fs";
@@ -530,7 +533,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 const server = new McpServer({ name: "pi-shazam", version: "0.10.4" });
 const graph = scanProject(projectRoot);
-registerAllTools(server, graph, projectRoot);
+registerAllTools(server, getGraph, projectRoot);
 await server.connect(new StdioServerTransport());
 ```
 
@@ -753,7 +756,7 @@ pi -p "call shazam_overview"      # smoke test
 
 ### 6.1 Test Framework
 
-vitest, 426 tests across 36 test files. Run: `npm test`
+vitest, 301 tests across 27 test files. Run: `npm test`
 
 ### 6.2 Graph Mock Pattern
 
@@ -813,8 +816,8 @@ printf '{"jsonrpc":"2.0","id":0,"method":"initialize",...}\n{"jsonrpc":"2.0","id
 
 ```bash
 # Verify hooks registered in built dist
-grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerSafetyHooks\|registerStopVerify\|registerPreEditGuard\|registerFailureRecovery" dist/index.js
-# Should output: 7
+grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerSafetyHooks\|registerStopVerify\|registerPreEditGuard\|registerFailureRecovery\|registerIssueGuard\|registerAgentContextGuard" dist/index.js
+# Should output: 9
 ```
 
 ### 6.7 After Every Change (MANDATORY)

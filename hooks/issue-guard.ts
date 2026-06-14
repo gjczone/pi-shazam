@@ -48,7 +48,7 @@ export function registerIssueGuard(pi: ExtensionAPI): void {
 
 	// Clear pending impact when shazam_impact completes
 	pi.on("tool_result", (event) => {
-		if (event.toolName === "shazam_impact") {
+		if (event.toolName === "shazam_impact" && !event.isError) {
 			clearPendingImpact();
 		}
 	});
