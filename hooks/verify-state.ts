@@ -12,13 +12,29 @@ const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 let _verifyCalled = false;
 let _lastVerifyTimestamp = 0;
+let _lastVerifyPassed = false;
 
 /**
- * Record that shazam_verify completed successfully.
+ * Record that shazam_verify completed, with optional content for verdict parsing.
+ * The content parameter is the concatenated text from the tool result's content blocks.
  */
-export function markVerifyCalled(): void {
+export function markVerifyCalled(content?: string): void {
 	_verifyCalled = true;
 	_lastVerifyTimestamp = Date.now();
+
+	// Parse verdict from the verify output text.
+	// FAIL indicators: risk "**high**", "[FAIL] NOT READY", "Errors: N" (N>0).
+	// PASS indicators: "[PASS] READY" or no FAIL indicators.
+	if (content) {
+		const isFail =
+			/\[FAIL\]\s+NOT\s+READY/i.test(content) ||
+			/risk\s*[:=]\s*['"]?\*{0,2}high\*{0,2}/i.test(content) ||
+			/Errors:\s*([1-9]\d*)/.test(content);
+		_lastVerifyPassed = !isFail;
+	} else {
+		// No content to parse — assume passed (backward compatibility)
+		_lastVerifyPassed = true;
+	}
 }
 
 /**
@@ -31,11 +47,22 @@ export function hasRecentVerify(): boolean {
 }
 
 /**
+ * Check if the most recent verify within the last 5 minutes passed
+ * (verdict was not FAIL). Returns false if verify was not run or failed.
+ */
+export function hasRecentPassingVerify(): boolean {
+	if (!_verifyCalled) return false;
+	if (!_lastVerifyPassed) return false;
+	return _lastVerifyTimestamp > Date.now() - FIVE_MINUTES_MS;
+}
+
+/**
  * Signal that a new write/edit occurred after the last verify.
  * Resets the verify flag so reminders re-trigger for unverified edits.
  */
 export function onNewEdit(): void {
 	_verifyCalled = false;
+	_lastVerifyPassed = false;
 }
 
 /**
@@ -44,4 +71,5 @@ export function onNewEdit(): void {
 export function resetVerifyState(): void {
 	_verifyCalled = false;
 	_lastVerifyTimestamp = 0;
+	_lastVerifyPassed = false;
 }

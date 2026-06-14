@@ -26,7 +26,15 @@ export function registerStopVerify(pi: ExtensionAPI): void {
 	// Track shazam_verify calls and clear edit history (edits are now verified)
 	pi.on("tool_result", (event) => {
 		if (event.toolName === "shazam_verify" && !event.isError) {
-			markVerifyCalled();
+			// Extract text from content blocks to parse PASS/FAIL verdict
+			const text =
+				"content" in event && Array.isArray(event.content)
+					? event.content
+							.filter((c): c is { type: "text"; text: string } => c.type === "text")
+							.map((c) => c.text)
+							.join("\n")
+					: undefined;
+			markVerifyCalled(text);
 			clearEditedFiles();
 		}
 	});
