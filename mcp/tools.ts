@@ -107,9 +107,9 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			description: codesearchDef.description,
 			inputSchema: codesearchDef.zodParams,
 		},
-		withLogging("shazam_codesearch", async ({ query, target }) => {
+		withLogging("shazam_codesearch", async ({ query, target, mode }) => {
 			if (target === "code") {
-				const results = executeFulltextSearch(query as string, undefined, projectRoot);
+				const results = executeFulltextSearch(query as string, undefined, projectRoot, mode as string | undefined);
 				return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
 			}
 			const scored = executeCodesearch(graph, query as string);
@@ -151,13 +151,14 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			description: callChainDef.description,
 			inputSchema: callChainDef.zodParams,
 		},
-		withLogging("shazam_call_chain", async ({ symbol, depth, flat }) => {
+		withLogging("shazam_call_chain", async ({ symbol, depth, flat, direction }) => {
+			const dir = (direction as "incoming" | "outgoing" | "both") ?? "both";
 			if (flat) {
-				const refs = getFlatReferences(graph, symbol as string);
+				const refs = getFlatReferences(graph, symbol as string, dir);
 				const text = formatFlatReferences(refs, symbol as string);
 				return { content: [{ type: "text", text }] };
 			}
-			const text = executeCallChain(graph, symbol as string, (depth as number) ?? 2);
+			const text = executeCallChain(graph, symbol as string, (depth as number) ?? 2, dir);
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -188,7 +189,14 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 				sourceFile: sourceFile as string | undefined,
 				module: mod as string | undefined,
 			});
-			return { content: [{ type: "text", text: formatFindTestsResult(result, sourceFile as string | undefined, mod as string | undefined) }] };
+			return {
+				content: [
+					{
+						type: "text",
+						text: formatFindTestsResult(result, sourceFile as string | undefined, mod as string | undefined),
+					},
+				],
+			};
 		}),
 	);
 
@@ -244,7 +252,11 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		},
 		withLogging("shazam_rename_symbol", async ({ symbol, newName, dryRun }) => {
 			const result = await executeRenameSymbol(graph, symbol as string, newName as string, dryRun as boolean);
-			return { content: [{ type: "text", text: formatRenameResult(result, symbol as string, newName as string, dryRun as boolean) }] };
+			return {
+				content: [
+					{ type: "text", text: formatRenameResult(result, symbol as string, newName as string, dryRun as boolean) },
+				],
+			};
 		}),
 	);
 

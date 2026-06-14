@@ -22,6 +22,40 @@ import { createTool } from "./_factory.js";
 
 const LSP_BOOST = 50;
 
+// ── Stop words for natural language query tokenization ──────────────────
+const STOP_WORDS = new Set([
+	"a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+	"have", "has", "had", "do", "does", "did", "will", "would", "could",
+	"should", "may", "might", "can", "shall", "to", "of", "in", "for",
+	"on", "with", "at", "by", "from", "as", "into", "through", "during",
+	"before", "after", "above", "below", "between", "and", "but", "or",
+	"not", "no", "if", "then", "else", "when", "where", "why", "how",
+	"all", "each", "every", "both", "few", "more", "most", "other",
+	"some", "such", "only", "own", "same", "so", "than", "too", "very",
+	"just", "about", "also", "it", "its", "this", "that", "these",
+	"those", "i", "you", "he", "she", "we", "they", "me", "him", "her",
+	"us", "them", "my", "your", "his", "our", "their", "what", "which",
+	"who", "whom", "whose",
+]);
+
+/** True when query has spaces and >= 2 words (looks like natural language). */
+function isNaturalLanguageQuery(query: string): boolean {
+	const trimmed = query.trim();
+	return trimmed.includes(" ") && trimmed.split(/\s+/).length >= 2;
+}
+
+/** Split a NL query into meaningful tokens (min length 2, stop words removed). */
+function tokenizeForSearch(query: string): string[] {
+	const lower = query.toLowerCase();
+	const tokens = lower.split(/[^a-z0-9_]+/).filter(t => t.length >= 2 && !STOP_WORDS.has(t));
+	return [...new Set(tokens)];
+}
+
+/** Escape regex special characters in a literal string. */
+function escapeRegex(str: string): string {
+	return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function registerCodesearch(pi: ExtensionAPI): void {
 	createTool(pi, {
 		name: "shazam_codesearch",
@@ -37,6 +71,7 @@ export function registerCodesearch(pi: ExtensionAPI): void {
 			query: Type.String(),
 			target: Type.Optional(Type.Union([Type.Literal("symbol"), Type.Literal("code")])),
 			topN: Type.Optional(Type.Number()),
+			mode: Type.Optional(Type.Union([Type.Literal("literal"), Type.Literal("regex"), Type.Literal("smart")])),
 		}),
 		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
@@ -52,7 +87,8 @@ export function registerCodesearch(pi: ExtensionAPI): void {
 				// process.cwd() is wrong in MCP context where the server process
 				// cwd differs from the project root).
 				const projectRoot = _ctx?.cwd || process.cwd();
-				const result = executeFulltextSearch(query, params.topN as number | undefined, projectRoot);
+				const searchMode = (params.mode as string) ?? "literal";
+				const result = executeFulltextSearch(query, params.topN as number | undefined, projectRoot, searchMode);
 				let text = json
 					? JSON.stringify({
 							schema_version: "1.0",
@@ -299,11 +335,46 @@ interface FulltextMatch {
 	text: string;
 }
 
-export function executeFulltextSearch(query: string, topN?: number, projectRoot?: string): FulltextMatch[] {
+export function executeFulltextSearch(
+	query: string,
+	topN?: number,
+	projectRoot?: string,
+	mode?: string,
+): FulltextMatch[] {
 	const limit = topN ?? 20;
 	const root = projectRoot ?? process.cwd();
+	const searchMode = mode ?? "literal";
 
-	// Try ripgrep first (fastest, respects .gitignore)
+	// regex mode: pass tokenized query directly as regex alternation
+	if (searchMode === "regex") {
+		const tokens = tokenizeForSearch(query);
+		const pattern =
+			tokens.length > 0
+				? tokens.map((t) => escapeRegex(t)).join("|")
+				: escapeRegex(query);
+		return executeRegexSearch(query, limit, root, pattern);
+	}
+
+	// literal or smart: try literal first
+	const literalResults = executeLiteralSearch(query, limit, root);
+
+	// smart mode: fall back to tokenized regex when literal yields few results
+	if (searchMode === "smart" && literalResults.length < 3 && isNaturalLanguageQuery(query)) {
+		const tokens = tokenizeForSearch(query);
+		if (tokens.length > 0) {
+			const pattern = tokens.map((t) => escapeRegex(t)).join("|");
+			const regexResults = executeRegexSearch(query, limit, root, pattern);
+			if (regexResults.length > literalResults.length) {
+				return regexResults;
+			}
+		}
+	}
+
+	return literalResults;
+}
+
+/** Run ripgrep with -F (literal) matching. Extracted from executeFulltextSearch. */
+function executeLiteralSearch(query: string, limit: number, projectRoot: string): FulltextMatch[] {
 	const rgPath = findRipgrep();
 	if (rgPath) {
 		try {
@@ -315,7 +386,7 @@ export function executeFulltextSearch(query: string, topN?: number, projectRoot?
 					"-g", "!.git", "-g", "!node_modules", "-g", "!dist",
 					"-g", "!*.lock", "-g", "!package-lock.json",
 					"-g", "!yarn.lock", "-g", "!pnpm-lock.yaml",
-					"--", query, root,
+					"--", query, projectRoot,
 				],
 				{ encoding: "utf-8", timeout: 5000, maxBuffer: 10 * 1024 * 1024 },
 			);
@@ -325,12 +396,111 @@ export function executeFulltextSearch(query: string, topN?: number, projectRoot?
 			if (!msg.includes("not found") && !msg.includes("No such file")) {
 				console.warn(`[pi-shazam] ripgrep fulltext search failed: ${msg}`);
 			}
-			// ripgrep found nothing or errored — fall through to built-in
 		}
 	}
+	return builtinFulltextSearch(query, limit, projectRoot);
+}
 
-	// Fallback: built-in file scan
-	return builtinFulltextSearch(query, limit, root);
+/** Run ripgrep with -P (PCRE2) regex alternation from tokenized query. */
+function executeRegexSearch(
+	query: string,
+	limit: number,
+	projectRoot: string,
+	pattern: string,
+): FulltextMatch[] {
+	const rgPath = findRipgrep();
+	if (rgPath) {
+		try {
+			const output = execFileSync(
+				rgPath,
+				[
+					"--no-heading", "-n", "--max-count", "50",
+					"-i", "-P",
+					"-g", "!.git", "-g", "!node_modules", "-g", "!dist",
+					"-g", "!*.lock", "-g", "!package-lock.json",
+					"-g", "!yarn.lock", "-g", "!pnpm-lock.yaml",
+					"-e", pattern, projectRoot,
+				],
+				{ encoding: "utf-8", timeout: 10000, maxBuffer: 10 * 1024 * 1024 },
+			);
+			const parsed = parseRipgrepOutputNoContext(output, query);
+			return scoreAndRankRegexResults(parsed, query, limit);
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			if (!msg.includes("not found") && !msg.includes("No such file")) {
+				console.warn(`[pi-shazam] ripgrep regex search failed: ${msg}`);
+			}
+			return [];
+		}
+	}
+	return builtinRegexSearch(query, limit, projectRoot, pattern);
+}
+
+/** Score results by how many query tokens appear in each line, then rank. */
+function scoreAndRankRegexResults(
+	results: FulltextMatch[],
+	query: string,
+	limit: number,
+): FulltextMatch[] {
+	const tokens = tokenizeForSearch(query).map((t) => t.toLowerCase());
+	if (tokens.length === 0) return results.slice(0, limit);
+
+	const scored = results.map((r) => {
+		const lowerText = r.text.toLowerCase();
+		let matchCount = 0;
+		for (const t of tokens) {
+			if (lowerText.includes(t)) matchCount++;
+		}
+		return { ...r, matchCount };
+	});
+
+	scored.sort((a, b) => b.matchCount - a.matchCount);
+	return scored.slice(0, limit).map(({ matchCount: _, ...r }) => r);
+}
+
+/** Parse rg output without --context (no context lines to skip). */
+function parseRipgrepOutputNoContext(output: string, query: string): FulltextMatch[] {
+	const results: FulltextMatch[] = [];
+	const lines = output.split("\n").filter(Boolean);
+	const tokens = tokenizeForSearch(query);
+
+	for (const line of lines) {
+		const match = line.match(/^(.+?):(\d+):(.+)/);
+		if (match) {
+			const text = match[3]!;
+			let col = 1;
+			const lowerText = text.toLowerCase();
+			for (const t of tokens) {
+				const idx = lowerText.indexOf(t.toLowerCase());
+				if (idx !== -1) {
+					col = idx + 1;
+					break;
+				}
+			}
+			if (col === 1 && tokens.length > 0) {
+				const firstChar = tokens[0]!.charAt(0);
+				const ci = lowerText.indexOf(firstChar);
+				if (ci !== -1) col = ci + 1;
+			}
+			results.push({
+				file: match[1]!,
+				line: parseInt(match[2]!, 10),
+				column: col,
+				text: text.trim(),
+			});
+		}
+	}
+	return results;
+}
+
+/** Built-in file scan for regex search (no ripgrep available). */
+function builtinRegexSearch(
+	_query: string,
+	limit: number,
+	projectRoot: string,
+	_pattern: string,
+): FulltextMatch[] {
+	return builtinFulltextSearch(_query, limit, projectRoot);
 }
 
 /** Find ripgrep binary on the system, returning its path or null. */
