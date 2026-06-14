@@ -7,6 +7,7 @@ import type { RepoGraph, Symbol } from "../core/graph.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool } from "./_factory.js";
 import { executeFindTests } from "./find_tests.js";
+import { isNonSourceFile } from "../core/filter.js";
 
 export function registerImpact(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -69,7 +70,7 @@ export function executeImpact(
 			if (incoming) {
 				for (const edge of incoming) {
 					const callerSym = graph.symbols.get(edge.source);
-					if (callerSym && !files.includes(callerSym.file)) {
+					if (callerSym && !files.includes(callerSym.file) && !isNonSourceFile(callerSym.file)) {
 						affectedFiles.add(callerSym.file);
 						if (opts.withSymbols) {
 							affectedSymbols.push({ symbol: callerSym, direction: "upstream" });
@@ -83,7 +84,7 @@ export function executeImpact(
 			if (outgoing) {
 				for (const edge of outgoing) {
 					const calleeSym = graph.symbols.get(edge.target);
-					if (calleeSym && !files.includes(calleeSym.file)) {
+					if (calleeSym && !files.includes(calleeSym.file) && !isNonSourceFile(calleeSym.file)) {
 						affectedFiles.add(calleeSym.file);
 						if (opts.withSymbols) {
 							affectedSymbols.push({ symbol: calleeSym, direction: "downstream" });
@@ -215,7 +216,7 @@ export function executeImpactJson(graph: RepoGraph, files: string[]): string {
 			if (incoming) {
 				for (const edge of incoming) {
 					const callerSym = graph.symbols.get(edge.source);
-					if (callerSym && !files.includes(callerSym.file)) {
+					if (callerSym && !files.includes(callerSym.file) && !isNonSourceFile(callerSym.file)) {
 						affectedFiles.add(callerSym.file);
 						affectedSymbols.push({ symbol: callerSym, direction: "upstream" });
 					}
@@ -227,7 +228,7 @@ export function executeImpactJson(graph: RepoGraph, files: string[]): string {
 			if (outgoing) {
 				for (const edge of outgoing) {
 					const calleeSym = graph.symbols.get(edge.target);
-					if (calleeSym && !files.includes(calleeSym.file)) {
+					if (calleeSym && !files.includes(calleeSym.file) && !isNonSourceFile(calleeSym.file)) {
 						affectedFiles.add(calleeSym.file);
 						affectedSymbols.push({ symbol: calleeSym, direction: "downstream" });
 					}
