@@ -73,7 +73,7 @@ function withLogging(
 
 // ── Registration ─────────────────────────────────────────────────
 
-export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoot: string): void {
+export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, projectRoot: string): void {
 	const overviewDef = getToolDefinition("shazam_overview")!;
 	server.registerTool(
 		"shazam_overview",
@@ -82,7 +82,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			inputSchema: overviewDef.zodParams,
 		},
 		withLogging("shazam_overview", async ({ filter }) => {
-			const text = executeOverview(graph, projectRoot, filter as string | undefined);
+			const text = executeOverview(getGraph(), projectRoot, filter as string | undefined);
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -95,7 +95,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			inputSchema: impactDef.zodParams,
 		},
 		withLogging("shazam_impact", async ({ files }) => {
-			const text = executeImpact(graph, files as string[]);
+			const text = executeImpact(getGraph(), files as string[]);
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -112,7 +112,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 				const results = executeFulltextSearch(query as string, undefined, projectRoot, mode as string | undefined);
 				return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
 			}
-			const scored = executeCodesearch(graph, query as string);
+			const scored = executeCodesearch(getGraph(), query as string);
 			const results = scored.map(({ sym, score }) => ({ ...sym, score }));
 			return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
 		}),
@@ -126,7 +126,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			inputSchema: symbolDef.zodParams,
 		},
 		withLogging("shazam_symbol", async ({ name, mode, file }) => {
-			const text = executeSymbolWithMode(graph, name as string, mode as string | undefined, file as string | undefined);
+			const text = executeSymbolWithMode(getGraph(), name as string, mode as string | undefined, file as string | undefined);
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -139,7 +139,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			inputSchema: fileDetailDef.zodParams,
 		},
 		withLogging("shazam_file_detail", async ({ file }) => {
-			const text = executeFileDetail(graph, file as string);
+			const text = executeFileDetail(getGraph(), file as string);
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -154,11 +154,11 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		withLogging("shazam_call_chain", async ({ symbol, depth, flat, direction }) => {
 			const dir = (direction as "incoming" | "outgoing" | "both") ?? "both";
 			if (flat) {
-				const refs = getFlatReferences(graph, symbol as string, dir);
+				const refs = getFlatReferences(getGraph(), symbol as string, dir);
 				const text = formatFlatReferences(refs, symbol as string);
 				return { content: [{ type: "text", text }] };
 			}
-			const text = executeCallChain(graph, symbol as string, (depth as number) ?? 2, dir);
+			const text = executeCallChain(getGraph(), symbol as string, (depth as number) ?? 2, dir);
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -171,7 +171,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			inputSchema: hoverDef.zodParams,
 		},
 		withLogging("shazam_hover", async ({ name, file }) => {
-			const result = await executeHover(graph, name as string, file as string | undefined);
+			const result = await executeHover(getGraph(), name as string, file as string | undefined);
 			const text = formatHoverResult(result, name as string);
 			return { content: [{ type: "text", text }] };
 		}),
@@ -185,7 +185,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			inputSchema: findTestsDef.zodParams,
 		},
 		withLogging("shazam_find_tests", async ({ sourceFile, module: mod }) => {
-			const result = executeFindTests(graph, projectRoot, {
+			const result = executeFindTests(getGraph(), projectRoot, {
 				sourceFile: sourceFile as string | undefined,
 				module: mod as string | undefined,
 			});
@@ -208,7 +208,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			inputSchema: hotspotsDef.zodParams,
 		},
 		withLogging("shazam_hotspots", async () => {
-			const text = executeHotspots(graph);
+			const text = executeHotspots(getGraph());
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -220,8 +220,16 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			description: verifyDef.description,
 			inputSchema: verifyDef.zodParams,
 		},
-		withLogging("shazam_verify", async ({ quick, lspOnly }) => {
-			const text = executeVerify(graph, projectRoot, { quick: quick as boolean, lspOnly: lspOnly as boolean });
+		withLogging("shazam_verify", async ({ quick, lspOnly, preCommit, delta, maxFiles, noCascade, noSecrets }) => {
+			const text = executeVerify(getGraph(), projectRoot, {
+				quick: quick as boolean,
+				lspOnly: lspOnly as boolean,
+				preCommit: preCommit as boolean,
+				delta: delta as boolean,
+				maxFiles: maxFiles as number,
+				noCascade: noCascade as boolean,
+				noSecrets: noSecrets as boolean,
+			});
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -235,7 +243,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 		},
 		withLogging("shazam_type_hierarchy", async ({ name, direction }) => {
 			const result = await executeTypeHierarchy(
-				graph,
+				getGraph(),
 				name as string,
 				(direction as "both" | "supertypes" | "subtypes") ?? "both",
 			);
@@ -251,7 +259,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			inputSchema: renameSymbolDef.zodParams,
 		},
 		withLogging("shazam_rename_symbol", async ({ symbol, newName, dryRun }) => {
-			const result = await executeRenameSymbol(graph, symbol as string, newName as string, dryRun as boolean);
+			const result = await executeRenameSymbol(getGraph(), symbol as string, newName as string, dryRun as boolean);
 			return {
 				content: [
 					{ type: "text", text: formatRenameResult(result, symbol as string, newName as string, dryRun as boolean) },
@@ -268,7 +276,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			inputSchema: safeDeleteDef.zodParams,
 		},
 		withLogging("shazam_safe_delete", async ({ symbol, dryRun }) => {
-			const result = executeSafeDelete(graph, symbol as string, dryRun as boolean);
+			const result = executeSafeDelete(getGraph(), symbol as string, dryRun as boolean);
 			return { content: [{ type: "text", text: formatSafeDeleteResult(result, symbol as string) }] };
 		}),
 	);
@@ -281,7 +289,7 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			inputSchema: fixDef.zodParams,
 		},
 		withLogging("shazam_fix", async ({ dryRun, file }) => {
-			const text = executeFix(graph, projectRoot, { dryRun: dryRun as boolean, file: file as string | undefined });
+			const text = executeFix(getGraph(), projectRoot, { dryRun: dryRun as boolean, file: file as string | undefined });
 			return { content: [{ type: "text", text }] };
 		}),
 	);

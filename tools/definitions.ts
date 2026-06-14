@@ -186,6 +186,10 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			quick: z.boolean().optional().default(false).describe("Fast git-change-only check (~2s)"),
 			lspOnly: z.boolean().optional().default(false).describe("LSP diagnostics only, skip graph analysis"),
 			preCommit: z.boolean().optional().default(false).describe("Stricter thresholds for pre-commit gate"),
+			delta: z.boolean().optional().default(false).describe("Only check changed files"),
+			maxFiles: z.number().optional().describe("Max files to check"),
+			noCascade: z.boolean().optional().default(false).describe("Skip cascade analysis"),
+			noSecrets: z.boolean().optional().default(false).describe("Skip secrets detection"),
 		}),
 	},
 
