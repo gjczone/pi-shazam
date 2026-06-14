@@ -63,10 +63,10 @@ const NON_SOURCE_FILE_PATTERNS: readonly RegExp[] = [
 	/(?:^|\/)out(?:\/|$)/,
 	/(?:^|\/)target(?:\/|$)/,
 	/\.json$/,
-	/(?:^|\/)vendor(?:\/|$)/,           // vendor directories
-	/\.min\.(?:js|css|mjs|cjs)$/,       // minified files
-	/\.generated\./,                     // generated files
-	/\.bundle\.(?:js|css|mjs)$/,         // bundle artifacts
+	/(?:^|\/)vendor(?:\/|$)/, // vendor directories
+	/\.min\.(?:js|css|mjs|cjs)$/, // minified files
+	/\.generated\./, // generated files
+	/\.bundle\.(?:js|css|mjs)$/, // bundle artifacts
 ];
 
 /**
@@ -319,6 +319,13 @@ export function findOrphans(graph: RepoGraph): {
 		) {
 			continue;
 		}
+		// Skip TypeScript interfaces and type aliases unconditionally.
+		// These are structural type declarations consumed by the type system
+		// (type annotations, extends, implements, generics). They may have
+		// incoming import edges (from module-level imports) but never have
+		// meaningful runtime callers, so they should never be flagged as
+		// orphans regardless of incoming edge count (issue #262).
+		if (sym.kind === "interface" || sym.kind === "type_alias") continue;
 		const incoming = graph.incoming.get(sym.id);
 		if (!incoming || incoming.length === 0) {
 			// Skip anonymous functions
@@ -326,11 +333,6 @@ export function findOrphans(graph: RepoGraph): {
 			// Skip impl blocks — they are structural declarations (impl Foo { ... })
 			// and are never referenced by name in the call graph (fixes #252).
 			if (sym.kind === "impl") continue;
-			// Skip TypeScript interfaces and type aliases. These are structural
-			// type declarations consumed by the type system (type annotations,
-			// extends, implements, generics). They never produce runtime call
-			// edges in the symbol graph, so zero incoming refs is expected.
-			if (sym.kind === "interface" || sym.kind === "type_alias") continue;
 			// Skip test files
 			if (
 				sym.file.includes("tests/") ||
