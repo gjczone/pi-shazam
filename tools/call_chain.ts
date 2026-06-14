@@ -134,11 +134,8 @@ export function executeCallChainJson(
 }
 
 function findSymbolsByName(graph: RepoGraph, name: string): Symbol[] {
-	const results: Symbol[] = [];
-	for (const sym of graph.symbols.values()) {
-		if (sym.name === name) results.push(sym);
-	}
-	return results;
+	// 使用 nameIndex 进行 O(1) 查找，避免遍历全部符号
+	return graph.nameIndex.get(name) ?? [];
 }
 
 function traceIncoming(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, { kind: string }][] {

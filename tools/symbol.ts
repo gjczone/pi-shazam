@@ -175,14 +175,9 @@ function locateInHierarchy(
 }
 
 function findSymbols(graph: RepoGraph, name: string, file?: string): Symbol[] {
-	const results: Symbol[] = [];
-	for (const sym of graph.symbols.values()) {
-		if (sym.name === name) {
-			if (!file || sym.file === file) {
-				results.push(sym);
-			}
-		}
-	}
+	// 使用 nameIndex 进行 O(1) 查找，避免遍历全部符号
+	const candidates = graph.nameIndex.get(name) ?? [];
+	const results = file ? candidates.filter((sym) => sym.file === file) : [...candidates];
 	return results.sort((a, b) => b.pagerank - a.pagerank);
 }
 

@@ -945,8 +945,11 @@ export function executeReadyJson(graph: RepoGraph, projectRoot: string): string 
 
 	const riskLevel = verifyData.result?.riskLevel ?? "unknown";
 	const orphanCount = verifyData.result?.orphanCount ?? 0;
+	const internalOrphanCount = ((verifyData.result as Record<string, unknown>)?.internalOrphanCount as number) ?? 0;
 	const failedFiles = checkData.result?.failedFiles ?? 0;
-	const isReady = riskLevel === "low" && orphanCount === 0 && failedFiles === 0;
+	// 与 executeReady 保持一致：使用 internalOrphanCount（仅计内部孤立符号）
+	// orphanCount 包含导出孤立符号，会导致误判 NOT READY
+	const isReady = riskLevel === "low" && internalOrphanCount === 0 && failedFiles === 0;
 
 	return JSON.stringify({
 		schema_version: "1.0",
@@ -958,6 +961,7 @@ export function executeReadyJson(graph: RepoGraph, projectRoot: string): string 
 			verify: {
 				riskLevel,
 				orphanCount,
+				internalOrphanCount,
 				symbolCount: verifyData.result?.symbolCount ?? 0,
 				fileCount: verifyData.result?.fileCount ?? 0,
 			},
