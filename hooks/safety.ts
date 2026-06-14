@@ -10,7 +10,7 @@
  */
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
-import { hasRecentVerify } from "./verify-state.js";
+import { hasRecentPassingVerify } from "./verify-state.js";
 
 /**
  * High-risk patterns that should always trigger confirmation.
@@ -147,10 +147,17 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 				return;
 			}
 
-			if (!hasRecentVerify()) {
+			if (!hasRecentPassingVerify()) {
 				return {
 					block: true,
-					reason: "Run shazam_verify first, then try committing again.",
+					reason: [
+						"Commit blocked: shazam_verify --preCommit has not passed.",
+						"",
+						"Run: shazam_verify --preCommit",
+						"If it FAILs: fix the reported issues (type errors, new orphans, lint), then re-run verify.",
+						"Once verify reports [PASS] READY: retry your commit.",
+						"To skip this check: git commit --no-verify",
+					].join("\n"),
 				};
 			}
 		}
