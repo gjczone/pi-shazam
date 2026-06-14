@@ -611,7 +611,7 @@ function runFormatters(projectRoot: string, formatters: string[], targetFile?: s
 function runFormatterCommand(args: string[], cwd: string): void {
 	const [cmd, ...cmdArgs] = args;
 	try {
-		execFileSync(cmd, cmdArgs, { cwd, stdio: "pipe", timeout: 30000, shell: true });
+		execFileSync(cmd, cmdArgs, { cwd, stdio: "pipe", timeout: 30000 });
 	} catch {
 		// Formatter may fail on individual files — non-fatal
 	}

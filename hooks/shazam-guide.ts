@@ -14,7 +14,7 @@
  * - Falls back to shazam_fix suggestion if no native formatter found
  */
 import type { ExtensionAPI, ExtensionContext } from "../types/pi-extension.js";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, extname } from "node:path";
 
@@ -89,7 +89,7 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 				existsSync(join(projectRoot, "ruff.toml")) ||
 				existsSync(join(projectRoot, "pyproject.toml"));
 			if (hasRuff) {
-				execSync(`ruff format "${absPath}"`, { cwd: projectRoot, timeout: 10000, stdio: "pipe" });
+				execFileSync("ruff", ["format", absPath], { cwd: projectRoot, timeout: 10000, stdio: "pipe" });
 				ctx.ui.notify(`[auto-format] Formatted ${filePath} with ruff`, "info");
 				return true;
 			}
@@ -104,7 +104,7 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 				existsSync(join(projectRoot, "prettier.config.js")) ||
 				existsSync(join(projectRoot, "prettier.config.mjs"));
 			if (hasPrettier) {
-				execSync(`npx prettier --write "${absPath}"`, { cwd: projectRoot, timeout: 15000, stdio: "pipe" });
+				execFileSync("npx", ["prettier", "--write", absPath], { cwd: projectRoot, timeout: 15000, stdio: "pipe" });
 				ctx.ui.notify(`[auto-format] Formatted ${filePath} with prettier`, "info");
 				return true;
 			}
@@ -114,7 +114,7 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 				existsSync(join(projectRoot, "biome.json")) ||
 				existsSync(join(projectRoot, "biome.jsonc"));
 			if (hasBiome) {
-				execSync(`npx biome format --write "${absPath}"`, { cwd: projectRoot, timeout: 15000, stdio: "pipe" });
+				execFileSync("npx", ["biome", "format", "--write", absPath], { cwd: projectRoot, timeout: 15000, stdio: "pipe" });
 				ctx.ui.notify(`[auto-format] Formatted ${filePath} with biome`, "info");
 				return true;
 			}
@@ -122,14 +122,14 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 
 		// Go: gofmt
 		if (ext === ".go") {
-			execSync(`gofmt -w "${absPath}"`, { cwd: projectRoot, timeout: 10000, stdio: "pipe" });
+			execFileSync("gofmt", ["-w", absPath], { cwd: projectRoot, timeout: 10000, stdio: "pipe" });
 			ctx.ui.notify(`[auto-format] Formatted ${filePath} with gofmt`, "info");
 			return true;
 		}
 
 		// Rust: rustfmt
 		if (ext === ".rs") {
-			execSync(`rustfmt "${absPath}"`, { cwd: projectRoot, timeout: 10000, stdio: "pipe" });
+			execFileSync("rustfmt", [absPath], { cwd: projectRoot, timeout: 10000, stdio: "pipe" });
 			ctx.ui.notify(`[auto-format] Formatted ${filePath} with rustfmt`, "info");
 			return true;
 		}

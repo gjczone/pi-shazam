@@ -90,9 +90,6 @@ export function getProjectGraph(projectRoot: string = ".", log?: (msg: string) =
 // ── Scanner ──────────────────────────────────────────────────────────────────
 
 /**
- * Remove all symbols, edges, and file-level mappings for a given file from the graph.
- */
-/**
  * Remove only the edges for a single file (not symbols).
  * Used during incremental edge rebuild to clear old edges before
  * rebuilding only what changed.
@@ -100,8 +97,23 @@ export function getProjectGraph(projectRoot: string = ".", log?: (msg: string) =
 function removeEdgesForFile(graph: RepoGraph, relPath: string): void {
 	const symIds = new Set(graph.fileSymbols.get(relPath) ?? []);
 
-	// Remove outgoing edges from this file's symbols
+	// Clean incoming entries on targets of this file's outgoing edges
+	// before deleting the outgoing map (Bug #4: prevent stale incoming refs)
 	for (const id of symIds) {
+		const outEdges = graph.outgoing.get(id);
+		if (outEdges) {
+			for (const edge of outEdges) {
+				const targetIncoming = graph.incoming.get(edge.target);
+				if (targetIncoming) {
+					const filtered = targetIncoming.filter((e) => e.source !== id);
+					if (filtered.length > 0) {
+						graph.incoming.set(edge.target, filtered);
+					} else {
+						graph.incoming.delete(edge.target);
+					}
+				}
+			}
+		}
 		graph.outgoing.delete(id);
 	}
 	// Remove incoming edges to this file's symbols from other files
@@ -113,12 +125,12 @@ function removeEdgesForFile(graph: RepoGraph, relPath: string): void {
 	graph.fileCalls.delete(relPath);
 	graph.fileImportBindings.delete(relPath);
 
-	// 使用反向边索引清理跨文件引用：O(K) 而非 O(E)
+	// Use reverse edge index to clean cross-file references: O(K) not O(E)
 	for (const targetId of symIds) {
 		const sourceIds = graph.targetToSources.get(targetId);
 		if (!sourceIds) continue;
 		for (const sourceId of sourceIds) {
-			// 从 source 的 outgoing 中移除指向 targetId 的边
+			// Remove edges pointing to targetId from source's outgoing
 			const edges = graph.outgoing.get(sourceId);
 			if (edges) {
 				const filtered = edges.filter((e) => e.target !== targetId);
@@ -128,8 +140,7 @@ function removeEdgesForFile(graph: RepoGraph, relPath: string): void {
 					graph.outgoing.delete(sourceId);
 				}
 			}
-			// 从 source 的 incoming 中移除来自 targetId 的边（targetId 作为 source 的边）
-			// 注意：incoming[targetId] 已在上面删除，这里清理 incoming[sourceId] 中 source 为 targetId 的边
+			// incoming[targetId] already deleted above; clean incoming[sourceId] for edges with source=targetId
 			const incomingEdges = graph.incoming.get(sourceId);
 			if (incomingEdges) {
 				const filtered = incomingEdges.filter((e) => e.source !== targetId);
@@ -148,14 +159,30 @@ function removeFileData(graph: RepoGraph, relPath: string): void {
 	const symIds = graph.fileSymbols.get(relPath) || [];
 	const symIdSet = new Set(symIds);
 
-	// 在删除符号前先收集名称，用于清理 nameIndex
+	// Collect names before deleting symbols, for nameIndex cleanup
 	const symNames: string[] = [];
 	for (const id of symIds) {
 		const sym = graph.symbols.get(id);
 		if (sym) symNames.push(sym.name);
 	}
 
+	// Clean incoming entries on targets of this file's outgoing edges
+	// before deleting the outgoing map (Bug #4: prevent stale incoming refs)
 	for (const id of symIds) {
+		const outEdges = graph.outgoing.get(id);
+		if (outEdges) {
+			for (const edge of outEdges) {
+				const targetIncoming = graph.incoming.get(edge.target);
+				if (targetIncoming) {
+					const filtered = targetIncoming.filter((e) => e.source !== id);
+					if (filtered.length > 0) {
+						graph.incoming.set(edge.target, filtered);
+					} else {
+						graph.incoming.delete(edge.target);
+					}
+				}
+			}
+		}
 		graph.symbols.delete(id);
 		graph.outgoing.delete(id);
 		graph.incoming.delete(id);
@@ -165,7 +192,7 @@ function removeFileData(graph: RepoGraph, relPath: string): void {
 	graph.fileCalls.delete(relPath);
 	graph.fileImportBindings.delete(relPath);
 
-	// 使用反向边索引清理跨文件引用：O(K) 而非 O(E)
+	// Use reverse edge index to clean cross-file references: O(K) not O(E)
 	for (const targetId of symIdSet) {
 		const sourceIds = graph.targetToSources.get(targetId);
 		if (!sourceIds) continue;
@@ -192,7 +219,7 @@ function removeFileData(graph: RepoGraph, relPath: string): void {
 		graph.targetToSources.delete(targetId);
 	}
 
-	// 从 nameIndex 中移除该文件的符号
+	// Remove this file's symbols from nameIndex
 	for (const name of symNames) {
 		const named = graph.nameIndex.get(name);
 		if (named) {
@@ -312,9 +339,11 @@ function buildEdgesForFile(graph: RepoGraph, root: string, relPath: string, entr
 
 	// Import edges
 	if (entry.imports.length > 0) {
+		// Store resolved file paths (not raw module specifiers) so
+		// incrementalScanProject can match them against relPath for dependent detection
 		graph.fileImports.set(
 			relPath,
-			entry.imports.map(([m]) => m),
+			entry.imports.map(([m]) => resolveImport(m, relPath, root, graph)),
 		);
 		for (const [importedModule] of entry.imports) {
 			const resolvedImport = resolveImport(importedModule, relPath, root, graph);
@@ -332,7 +361,7 @@ function buildEdgesForFile(graph: RepoGraph, root: string, relPath: string, entr
 		graph.fileCalls.set(relPath, entry.calls);
 		for (const [calledName, callLine] of entry.calls) {
 			const callerSyms = findCallerSymbols(thisFileSymIds, graph.symbols, callLine);
-			const calleeSyms = findCalleeSymbols(calledName, graph.symbols);
+			const calleeSyms = findCalleeSymbols(calledName, graph);
 			for (const caller of callerSyms) {
 				for (const callee of calleeSyms) {
 					if (caller.id !== callee.id) {
@@ -347,10 +376,10 @@ function buildEdgesForFile(graph: RepoGraph, root: string, relPath: string, entr
 	if (entry.jsImportBindings.length > 0) {
 		graph.fileImportBindings.set(relPath, entry.jsImportBindings);
 		for (const binding of entry.jsImportBindings) {
-			const localSym = findSymbolByNameInFile(binding.localName, relPath, graph.symbols);
+			const localSym = findSymbolByNameInFile(binding.localName, relPath, graph);
 			if (!localSym) continue;
 			const resolvedModule = resolveImport(binding.module, relPath, root, graph);
-			const sourceSym = findSymbolByNameInFile(binding.importedName, resolvedModule, graph.symbols);
+			const sourceSym = findSymbolByNameInFile(binding.importedName, resolvedModule, graph);
 			if (sourceSym) {
 				addEdge(graph, createEdge(localSym.id, sourceSym.id, 0.8, "import-binding", 1.0));
 			}
@@ -600,12 +629,18 @@ function scanIncremental(
 		cachedFiles.delete(relPath);
 	}
 
-	// Snapshot old symbol IDs for changed files BEFORE modifying graph,
-	// so edge rebuild can trace callers across non-import edges (issue #93).
+	// Snapshot old symbol IDs AND their incoming edges for changed files
+	// BEFORE modifying graph, so edge rebuild can trace callers across
+	// non-import edges (issue #93) and cross-file calls (issue #284).
 	const oldSymIdsByFile = new Map<string, Set<string>>();
+	const oldIncomingBySymId = new Map<string, Edge[]>();
 	for (const relPath of changedFiles) {
 		const oldIds = new Set(graph.fileSymbols.get(relPath) ?? []);
 		oldSymIdsByFile.set(relPath, oldIds);
+		for (const id of oldIds) {
+			const incoming = graph.incoming.get(id);
+			if (incoming) oldIncomingBySymId.set(id, incoming);
+		}
 	}
 
 	// Re-parse changed files — delay removeFileData until after parse succeeds
@@ -636,10 +671,10 @@ function scanIncremental(
 			graph.fileSymbols.set(relPath, fileSyms);
 		}
 
-			// Ensure file is in graph even with 0 symbols (e.g., test files with no exports)
-			if (!graph.fileSymbols.has(relPath)) {
-				graph.fileSymbols.set(relPath, []);
-			}
+		// Ensure file is in graph even with 0 symbols (e.g., test files with no exports)
+		if (!graph.fileSymbols.has(relPath)) {
+			graph.fileSymbols.set(relPath, []);
+		}
 	}
 
 	// Rebuild edges only for changed files and files that depend on them.
@@ -661,11 +696,12 @@ function scanIncremental(
 		}
 	}
 
-	// Also trace cross-file call edges: files whose symbols had incoming
-	// edges from the changed file's old symbols need their edges rebuilt.
+	// Trace cross-file call edges using the snapshot (Bug #2 fix):
+	// files whose symbols had incoming edges from the changed file's old
+	// symbols need their edges rebuilt.
 	for (const [, oldIds] of oldSymIdsByFile) {
 		for (const oldId of oldIds) {
-			const incoming = graph.incoming.get(oldId);
+			const incoming = oldIncomingBySymId.get(oldId);
 			if (!incoming) continue;
 			for (const edge of incoming) {
 				const callerSym = graph.symbols.get(edge.source);
@@ -676,12 +712,13 @@ function scanIncremental(
 		}
 	}
 
-	// Also remove edges for deleted files (already handled by removeFileData above)
-
-	// Rebuild edges only for changed + dependent files
+	// Rebuild edges only for changed + dependent files.
+	// Clear edges for dependent files first (Bug #3 fix) to prevent
+	// duplicate edge accumulation across incremental scans.
 	for (const relPath of dependentFiles) {
 		const entry = cachedFiles.get(relPath);
 		if (entry) {
+			removeEdgesForFile(graph, relPath);
 			buildEdgesForFile(graph, root, relPath, entry);
 		}
 	}
@@ -721,7 +758,7 @@ function collectSourceFiles(root: string, maxFiles: number): string[] {
 
 			if (entry.isDirectory()) {
 				if (SKIP_DIRS.has(entry.name)) continue;
-				if (entry.name.startsWith(".") && !SKIP_DIRS.has(entry.name)) continue;
+				if (entry.name.startsWith(".")) continue;
 				walk(join(dir, entry.name));
 			} else if (entry.isSymbolicLink()) {
 				// Symlinks are silently skipped to avoid cycles and
@@ -750,7 +787,7 @@ function addEdge(graph: RepoGraph, edge: Edge): void {
 	incoming.push(edge);
 	graph.incoming.set(edge.target, incoming);
 
-	// 维护反向边索引
+	// Maintain reverse edge index
 	const sources = graph.targetToSources.get(edge.target);
 	if (sources) {
 		sources.add(edge.source);
@@ -827,16 +864,14 @@ function findCallerSymbols(fileSymIds: string[], symbols: Map<string, Symbol>, c
 	return candidates.length > 0 ? [candidates[0]!] : [];
 }
 
-function findCalleeSymbols(name: string, symbols: Map<string, Symbol>): Symbol[] {
-	// 使用 nameIndex 做 O(1) 查找，兼容传入无索引 graph 的场景
-	const graph = symbols as unknown as RepoGraph;
-	const index = graph.nameIndex;
-	if (index && index.size > 0) {
-		return index.get(name) ?? [];
+function findCalleeSymbols(name: string, graph: RepoGraph): Symbol[] {
+	// Use nameIndex for O(1) lookup
+	if (graph.nameIndex.size > 0) {
+		return graph.nameIndex.get(name) ?? [];
 	}
-	// 回退到 O(N) 扫描（反序列化后索引尚未构建时）
+	// Fallback to O(N) scan (e.g., after deserialization before index is built)
 	const results: Symbol[] = [];
-	for (const sym of symbols.values()) {
+	for (const sym of graph.symbols.values()) {
 		if (sym.name === name) {
 			results.push(sym);
 		}
@@ -844,11 +879,9 @@ function findCalleeSymbols(name: string, symbols: Map<string, Symbol>): Symbol[]
 	return results;
 }
 
-function findSymbolByNameInFile(name: string, file: string, symbols: Map<string, Symbol>): Symbol | undefined {
-	const graph = symbols as unknown as RepoGraph;
-	const index = graph.nameIndex;
-	if (index && index.size > 0) {
-		const candidates = index.get(name);
+function findSymbolByNameInFile(name: string, file: string, graph: RepoGraph): Symbol | undefined {
+	if (graph.nameIndex.size > 0) {
+		const candidates = graph.nameIndex.get(name);
 		if (candidates) {
 			for (const sym of candidates) {
 				if (sym.file === file) return sym;
@@ -856,8 +889,8 @@ function findSymbolByNameInFile(name: string, file: string, symbols: Map<string,
 		}
 		return undefined;
 	}
-	// 回退到 O(N) 扫描
-	for (const sym of symbols.values()) {
+	// Fallback to O(N) scan
+	for (const sym of graph.symbols.values()) {
 		if (sym.file === file && sym.name === name) {
 			return sym;
 		}

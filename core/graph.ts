@@ -42,9 +42,9 @@ export interface RepoGraph {
 	fileImports: Map<string, string[]>;
 	fileCalls: Map<string, [string, number, string][]>;
 	fileImportBindings: Map<string, JSImportBinding[]>;
-	/** 按符号名索引，加速 findCalleeSymbols / findSymbolByNameInFile 的 O(1) 查找 */
+	/** Index symbols by name for O(1) lookup in findCalleeSymbols / findSymbolByNameInFile */
 	nameIndex: Map<string, Symbol[]>;
-	/** 反向边索引：target symbol ID → 指向它的 source symbol ID 集合，加速 removeEdgesForFile 的跨文件边清理 */
+	/** Reverse edge index: target symbol ID → set of source symbol IDs pointing to it, speeds up cross-file edge cleanup in removeEdgesForFile */
 	targetToSources: Map<string, Set<string>>;
 }
 
@@ -248,7 +248,7 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 			pagerank: s.pagerank,
 		};
 		graph.symbols.set(s.id, sym);
-		// 重建 nameIndex
+		// Rebuild nameIndex
 		const named = graph.nameIndex.get(sym.name);
 		if (named) {
 			named.push(sym);
@@ -273,7 +273,7 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 		incoming.push(edge);
 		graph.incoming.set(e.target, incoming);
 
-		// 重建 targetToSources 索引
+		// Rebuild targetToSources index
 		const sources = graph.targetToSources.get(e.target);
 		if (sources) {
 			sources.add(e.source);
