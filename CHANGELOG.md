@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.3] - 2026-06-14
+
+### Bug Fixes
+
+- **fix(#276): unify executeReady and executeReadyJson isReady logic** (#283)
+  - `tools/verify.ts`: `executeReadyJson` now uses `internalOrphanCount` instead of `orphanCount` for readiness check, matching `executeReady` behavior
+  - Previously, exported orphan symbols caused inconsistent READY/NOT READY results between the two functions
+
+- **fix(#277): use nameIndex for O(1) symbol lookup** (#283)
+  - `tools/symbol.ts`: `findSymbols()` now uses `graph.nameIndex.get(name)` instead of linear scan over all symbols
+  - `tools/call_chain.ts`: `findSymbolsByName()` same optimization
+  - Significant performance improvement for projects with large symbol counts
+
+### Documentation
+
+- Added Claude Code hooks reference guide (`docs/claude-code-hooks.md`)
+
 ## [0.10.2] - 2026-06-14
 
 ### Bug Fixes
