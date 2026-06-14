@@ -217,8 +217,6 @@ export class TreeSitterAdapter {
 	}
 
 	extractSymbols(tree: Tree, lang: string, file: string): Symbol[] {
-		if (lang === "html") return this._extractHtmlSymbols(tree, file);
-		if (lang === "css") return this._extractCssSymbols(tree, file);
 		if (lang === "json") return this._extractJsonSymbols(tree, file);
 		return this._extractStandardSymbols(tree, lang, file);
 	}
@@ -309,85 +307,7 @@ export class TreeSitterAdapter {
 		});
 	}
 
-	// ── HTML / CSS / JSON symbol extraction ────────────────────────────────────
-
-	private _extractHtmlSymbols(tree: Tree, file: string): Symbol[] {
-		const symbolsById = new Map<string, Symbol>();
-		const seen = new Map<string, number>();
-
-		for (const node of this._walkTree(tree.rootNode)) {
-			if (node.type !== "element") continue;
-			const startTag = this._firstChildOfType(node, "start_tag");
-			if (!startTag) continue;
-
-			let tagName = "";
-			for (const child of startTag.children) {
-				if (child.type === "tag_name") {
-					tagName = child.text;
-					break;
-				}
-			}
-			if (!tagName) continue;
-
-			const line = node.startPosition.row + 1;
-			const key = `<${tagName}>:${line}`;
-			const count = (seen.get(key) || 0) + 1;
-			seen.set(key, count);
-			const visibleName = count > 1 ? `<${tagName}>#${count}` : `<${tagName}>`;
-
-			const symId = `${file}::${visibleName}::${line}`;
-			symbolsById.set(
-				symId,
-				createSymbol(symId, visibleName, "element", file, line, {
-					endLine: node.endPosition.row + 1,
-					col: node.startPosition.column,
-					visibility: "public",
-					signature: visibleName,
-				}),
-			);
-		}
-
-		return [...symbolsById.values()].sort(
-			(a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.col - b.col || a.name.localeCompare(b.name),
-		);
-	}
-
-	private _extractCssSymbols(tree: Tree, file: string): Symbol[] {
-		const symbolsById = new Map<string, Symbol>();
-		const seen = new Map<string, number>();
-		const selTypes = ["class_selector", "id_selector", "tag_name", "nesting_selector"];
-
-		for (const node of this._walkTree(tree.rootNode)) {
-			if (!selTypes.includes(node.type)) continue;
-			const rawName = node.text.trim();
-			if (!rawName) continue;
-
-			const line = node.startPosition.row + 1;
-			let kind = "selector";
-			if (rawName.startsWith(".")) kind = "class_selector";
-			else if (rawName.startsWith("#")) kind = "id_selector";
-
-			const key = `${rawName}:${line}`;
-			const count = (seen.get(key) || 0) + 1;
-			seen.set(key, count);
-			const visibleName = count > 1 ? `${rawName}#${count}` : rawName;
-
-			const symId = `${file}::${visibleName}::${line}`;
-			symbolsById.set(
-				symId,
-				createSymbol(symId, visibleName, kind, file, line, {
-					endLine: node.endPosition.row + 1,
-					col: node.startPosition.column,
-					visibility: "public",
-					signature: rawName,
-				}),
-			);
-		}
-
-		return [...symbolsById.values()].sort(
-			(a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.col - b.col || a.name.localeCompare(b.name),
-		);
-	}
+	// ── JSON symbol extraction ───────────────────────────────────────────────────
 
 	private _extractJsonSymbols(tree: Tree, file: string): Symbol[] {
 		const symbolsById = new Map<string, Symbol>();
