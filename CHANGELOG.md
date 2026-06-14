@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.4] - 2026-06-14
+
+### Security Fixes
+
+- **fix(#286): command injection via file path in shazam-guide.ts** (#287)
+  - Replaced `execSync` with `execFileSync` for all 5 formatter calls (ruff, prettier, biome, gofmt, rustfmt)
+  - Prevents shell injection via malicious file paths
+- **fix(#286): shell: true in tools/fix.ts formatter execution** (#287)
+  - Removed `shell: true` from `execFileSync` to prevent metacharacter interpretation
+
+### Bug Fixes
+
+- **fix(#284): incremental scan produces incorrect graph** (#287)
+  - Bug #1: `fileImports` now stores resolved file paths instead of raw module specifiers
+  - Bug #2: Cross-file call-edge tracing now uses snapshot of incoming edges before `removeFileData`
+  - Bug #3: Dependent file edges are cleared before rebuild to prevent duplicate accumulation
+  - Bug #4: Incoming entries on targets are cleaned before deleting outgoing edges
+- **fix(#285): MCP stale graph never refreshed** (#288)
+  - MCP server now uses TTL-based graph cache (30s) instead of static one-time scan
+- **fix(#285): verify params silently dropped in MCP** (#288)
+  - Forward all 7 verify params instead of only `quick` + `lspOnly`
+
+### Refactoring
+
+- **fix(#286): findCalleeSymbols/findSymbolByNameInFile type safety** (#287)
+  - Changed to accept `RepoGraph` directly instead of unsafe `Map→RepoGraph` cast
+- **fix(#286): remove dead code in treesitter.ts** (#287)
+  - Removed unreachable `_extractHtmlSymbols`/`_extractCssSymbols` methods
+- **fix(#286): translate Chinese comments to English** (#287)
+  - 15 Chinese comments in `core/scanner.ts` and `core/graph.ts` translated
+
+### Other
+
+- **fix(#286): code quality improvements** (#287)
+  - Removed orphaned duplicate JSDoc block, simplified redundant condition
+- **fix(#285): add missing verify params to Zod schema** (#288)
+
 ## [0.10.3] - 2026-06-14
 
 ### Bug Fixes
