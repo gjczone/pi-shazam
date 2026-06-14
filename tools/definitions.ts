@@ -58,14 +58,19 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		typeboxParams: Type.Object({
 			query: Type.String(),
 			target: Type.Optional(Type.Union([Type.Literal("symbol"), Type.Literal("code")])),
+			mode: Type.Optional(Type.Union([Type.Literal("literal"), Type.Literal("regex"), Type.Literal("smart")])),
 			topN: Type.Optional(Type.Number()),
 			maxTokens: Type.Optional(Type.Number()),
 		}),
 		zodParams: z.object({
 			query: z.string().describe("Search query text"),
 			target: z.enum(["symbol", "code"]).optional().default("symbol").describe("symbol or code"),
+			mode: z
+				.enum(["literal", "regex", "smart"])
+				.optional()
+				.default("literal")
+				.describe("Search mode for target=code: literal (exact), regex (tokenized), smart (auto-detect NL)"),
 			topN: z.number().optional().describe("Max results to return"),
-			mode: z.enum(["literal", "regex", "smart"]).optional().default("literal").describe("Search mode for target=code: literal (exact -F), regex (tokenized alternation), smart (auto-detect NL)"),
 		}),
 	},
 
@@ -105,22 +110,16 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_call_chain",
 		label: "Call Chain",
 		description:
-			"Without this, you ship bugs. Traces ALL upstream callers, downstream callees, and references for any symbol. Pass --depth to control traversal depth (default 2). Pass --flat for a simple flat list of all references. Pass --direction to filter by incoming/outgoing/both (default both).",
+			"Without this, you ship bugs. Traces ALL upstream callers, downstream callees, and references for any symbol. Pass --depth to control traversal depth (default 2). Pass --flat for a simple flat list of all references.",
 		typeboxParams: Type.Object({
 			symbol: Type.String(),
 			depth: Type.Optional(Type.Number()),
 			flat: Type.Optional(Type.Boolean()),
-			direction: Type.Optional(Type.Union([Type.Literal("incoming"), Type.Literal("outgoing"), Type.Literal("both")])),
 		}),
 		zodParams: z.object({
 			symbol: z.string().describe("Symbol name to trace"),
 			depth: z.number().int().min(1).max(10).optional().default(2).describe("Traversal depth (default 2)"),
 			flat: z.boolean().optional().default(false).describe("Return a flat list of all references"),
-			direction: z
-				.enum(["incoming", "outgoing", "both"])
-				.optional()
-				.default("both")
-				.describe("Filter by direction: incoming callers, outgoing callees, or both (default)"),
 		}),
 	},
 

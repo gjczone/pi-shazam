@@ -151,14 +151,13 @@ export function registerAllTools(server: McpServer, graph: RepoGraph, projectRoo
 			description: callChainDef.description,
 			inputSchema: callChainDef.zodParams,
 		},
-		withLogging("shazam_call_chain", async ({ symbol, depth, flat, direction }) => {
-			const dir = (direction as "incoming" | "outgoing" | "both") ?? "both";
+		withLogging("shazam_call_chain", async ({ symbol, depth, flat }) => {
 			if (flat) {
-				const refs = getFlatReferences(graph, symbol as string, dir);
+				const refs = getFlatReferences(graph, symbol as string);
 				const text = formatFlatReferences(refs, symbol as string);
 				return { content: [{ type: "text", text }] };
 			}
-			const text = executeCallChain(graph, symbol as string, (depth as number) ?? 2, dir);
+			const text = executeCallChain(graph, symbol as string, (depth as number) ?? 2);
 			return { content: [{ type: "text", text }] };
 		}),
 	);
