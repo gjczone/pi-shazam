@@ -947,8 +947,8 @@ export function executeReadyJson(graph: RepoGraph, projectRoot: string): string 
 	const orphanCount = verifyData.result?.orphanCount ?? 0;
 	const internalOrphanCount = ((verifyData.result as Record<string, unknown>)?.internalOrphanCount as number) ?? 0;
 	const failedFiles = checkData.result?.failedFiles ?? 0;
-	// 与 executeReady 保持一致：使用 internalOrphanCount（仅计内部孤立符号）
-	// orphanCount 包含导出孤立符号，会导致误判 NOT READY
+	// Consistent with executeReady: use internalOrphanCount (internal orphans only)
+	// orphanCount includes exported orphans, which would incorrectly mark NOT READY
 	const isReady = riskLevel === "low" && internalOrphanCount === 0 && failedFiles === 0;
 
 	return JSON.stringify({

@@ -134,7 +134,7 @@ export function executeCallChainJson(
 }
 
 function findSymbolsByName(graph: RepoGraph, name: string): Symbol[] {
-	// 使用 nameIndex 进行 O(1) 查找，避免遍历全部符号
+	// Use nameIndex for O(1) lookup, avoid traversing all symbols
 	return graph.nameIndex.get(name) ?? [];
 }
 

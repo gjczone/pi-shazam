@@ -3,8 +3,6 @@
  *
  * Intercepts tool_call events for write/edit and detects when:
  *   1. Multiple files are about to be edited in a single turn
- *   2. A shared/exported module is being modified
- *   3. A function signature is being changed
  *
  * When triggered, it sends a warning message suggesting the user run
  * shazam_impact first to assess blast radius.

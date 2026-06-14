@@ -2,7 +2,6 @@
  * Guide the agent to use shazam tools at the right moments.
  *
  * Injects context reminders at key lifecycle points:
- * - before_agent_start: inject shazam tool list into system prompt
  * - tool_result (write/edit): auto-format + suggest running shazam_verify
  * - tool_result (shazam_symbol): suggest call_chain when symbol has many callers
  * - tool_call (shazam_impact): suggest running shazam_verify first
@@ -15,7 +14,7 @@
  */
 import type { ExtensionAPI, ExtensionContext } from "../types/pi-extension.js";
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, extname } from "node:path";
 
 /**
@@ -87,7 +86,8 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 		if (ext === ".py") {
 			const hasRuff =
 				existsSync(join(projectRoot, "ruff.toml")) ||
-				existsSync(join(projectRoot, "pyproject.toml"));
+				(existsSync(join(projectRoot, "pyproject.toml")) &&
+				 readFileSync(join(projectRoot, "pyproject.toml"), "utf-8").includes("[tool.ruff"));
 			if (hasRuff) {
 				execFileSync("ruff", ["format", absPath], { cwd: projectRoot, timeout: 10000, stdio: "pipe" });
 				ctx.ui.notify(`[auto-format] Formatted ${filePath} with ruff`, "info");
@@ -114,7 +114,7 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 				existsSync(join(projectRoot, "biome.json")) ||
 				existsSync(join(projectRoot, "biome.jsonc"));
 			if (hasBiome) {
-				execFileSync("npx", ["biome", "format", "--write", absPath], { cwd: projectRoot, timeout: 15000, stdio: "pipe" });
+				execFileSync("npx", ["biome", "check", "--write", absPath], { cwd: projectRoot, timeout: 15000, stdio: "pipe" });
 				ctx.ui.notify(`[auto-format] Formatted ${filePath} with biome`, "info");
 				return true;
 			}
