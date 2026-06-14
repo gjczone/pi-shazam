@@ -33,7 +33,7 @@ function getGraph(): RepoGraph {
 async function main(): Promise<void> {
 	const server = new McpServer({
 		name: "pi-shazam",
-		version: "0.10.4",
+		version: "0.10.5",
 	});
 
 	// Register all analysis tools (graph is lazily scanned on first call)
