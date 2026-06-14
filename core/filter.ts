@@ -63,6 +63,10 @@ const NON_SOURCE_FILE_PATTERNS: readonly RegExp[] = [
 	/(?:^|\/)out(?:\/|$)/,
 	/(?:^|\/)target(?:\/|$)/,
 	/\.json$/,
+	/(?:^|\/)vendor(?:\/|$)/,           // vendor directories
+	/\.min\.(?:js|css|mjs|cjs)$/,       // minified files
+	/\.generated\./,                     // generated files
+	/\.bundle\.(?:js|css|mjs)$/,         // bundle artifacts
 ];
 
 /**
