@@ -135,12 +135,7 @@ export function isTrackableEditedPath(normalizedPath: string): boolean {
  * Registration functions are typically called dynamically by frameworks.
  */
 function isRegistrationSymbol(name: string): boolean {
-	return (
-		name.startsWith("register") ||
-		name.startsWith("createTool") ||
-		name === "execute" ||
-		name === "handler"
-	);
+	return name.startsWith("register") || name.startsWith("createTool") || name === "execute" || name === "handler";
 }
 
 function isEntryPointSymbol(name: string, kind: string): boolean {
@@ -173,20 +168,45 @@ function isEntryPointSymbol(name: string, kind: string): boolean {
 	// Without this, every `impl Clone for Foo` etc. is a false orphan.
 	if (kind === "impl" || kind === "trait") {
 		const RUST_STD_TRAITS = new Set([
-			"From", "Into", "TryFrom", "TryInto",
-			"Display", "Debug", "Clone", "Copy",
-			"Hash", "Eq", "PartialEq", "Ord", "PartialOrd",
-			"Serialize", "Deserialize",
-			"Iterator", "IntoIterator", "FromStr",
-			"AsRef", "AsMut", "Deref", "DerefMut",
-			"Fn", "FnMut", "FnOnce",
-			"Send", "Sync", "Error", "Default", "Drop",
+			"From",
+			"Into",
+			"TryFrom",
+			"TryInto",
+			"Display",
+			"Debug",
+			"Clone",
+			"Copy",
+			"Hash",
+			"Eq",
+			"PartialEq",
+			"Ord",
+			"PartialOrd",
+			"Serialize",
+			"Deserialize",
+			"Iterator",
+			"IntoIterator",
+			"FromStr",
+			"AsRef",
+			"AsMut",
+			"Deref",
+			"DerefMut",
+			"Fn",
+			"FnMut",
+			"FnOnce",
+			"Send",
+			"Sync",
+			"Error",
+			"Default",
+			"Drop",
 		]);
 		if (RUST_STD_TRAITS.has(name)) return true;
 	}
 	// Go entry points
 	if (name === "main" && kind === "function") return true;
 	if (name === "init" && kind === "function") return true;
+	// Rust module declarations are structural — they namespace items but
+	// are never referenced by name at runtime.
+	if (kind === "module") return true;
 	// Common framework entry points
 	if (name.startsWith("test_") || name.startsWith("Test")) return true;
 	return false;
@@ -202,8 +222,15 @@ function isFrameworkHandler(name: string, file?: string, kind?: string): boolean
 	// These are called by framework dispatch, not by name in user code.
 	if (file?.endsWith(".rs") && kind === "function") {
 		const RUST_FRAMEWORK_FNS = new Set([
-			"new", "run", "serve", "from_request", "into_response",
-			"call", "poll_ready", "handle", "next",
+			"new",
+			"run",
+			"serve",
+			"from_request",
+			"into_response",
+			"call",
+			"poll_ready",
+			"handle",
+			"next",
 		]);
 		if (RUST_FRAMEWORK_FNS.has(name)) return true;
 	}
@@ -295,8 +322,20 @@ export function findOrphans(graph: RepoGraph): {
 			// Skip impl blocks — they are structural declarations (impl Foo { ... })
 			// and are never referenced by name in the call graph (fixes #252).
 			if (sym.kind === "impl") continue;
+			// Skip TypeScript interfaces and type aliases. These are structural
+			// type declarations consumed by the type system (type annotations,
+			// extends, implements, generics). They never produce runtime call
+			// edges in the symbol graph, so zero incoming refs is expected.
+			if (sym.kind === "interface" || sym.kind === "type_alias") continue;
 			// Skip test files
-			if (sym.file.includes("tests/") || sym.file.includes(".test.") || sym.file.includes("test_") || sym.file.includes("_test.") || sym.file.includes("/test/")) continue;
+			if (
+				sym.file.includes("tests/") ||
+				sym.file.includes(".test.") ||
+				sym.file.includes("test_") ||
+				sym.file.includes("_test.") ||
+				sym.file.includes("/test/")
+			)
+				continue;
 			// Skip registration functions called dynamically by frameworks
 			if (isRegistrationSymbol(sym.name)) continue;
 			// Skip language-specific entry point symbols
