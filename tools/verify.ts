@@ -17,6 +17,7 @@ import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { getGraphEdgeCount } from "../core/graph.js";
 import { diffBaseline, loadBaseline } from "../core/cache.js";
+import { diffFromBaseline } from "../core/baseline.js";
 import { isNonSourceFile, findOrphans } from "../core/filter.js";
 import { execSync, exec } from "node:child_process";
 import { promisify } from "node:util";
@@ -158,7 +159,9 @@ async function executeVerifyJsonAsync(projectRoot: string, options: VerifyOption
 		riskLevel: risk.level,
 		riskReason: risk.reason,
 		orphanCount: orphans.length,
-		orphans: orphans.slice(0, 20).map((s) => ({ name: s.name, kind: s.kind, file: s.file, line: s.line, isExported: s.isExported })),
+		orphans: orphans
+			.slice(0, 20)
+			.map((s) => ({ name: s.name, kind: s.kind, file: s.file, line: s.line, isExported: s.isExported })),
 		internalOrphanCount: internalOrphans.length,
 		exportedOrphanCount: exportedOrphans.length,
 		gitChangedFiles: gitChangedFiles.slice(0, 50),
@@ -207,7 +210,9 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 			if (lspResult.errorMessage) {
 				lines.push(`  Reason: ${lspResult.errorMessage}`);
 			}
-			lines.push("  To fix: Install language servers (e.g., typescript-language-server, pyright, gopls, rust-analyzer)");
+			lines.push(
+				"  To fix: Install language servers (e.g., typescript-language-server, pyright, gopls, rust-analyzer)",
+			);
 		} else if (lspResult.diagnostics.length === 0) {
 			lines.push("[PASS] No diagnostics found.");
 		} else {
@@ -281,15 +286,15 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 	const internalOrphans = orphanResult.internal;
 	const exportedOrphans = orphanResult.exported;
 	const delta = options.delta ?? false;
-	
+
 	// Filter orphans based on delta mode (fixes #115)
 	let displayOrphans = orphans;
 	if (delta && diff) {
 		// In delta mode, only show orphans that are new (added symbols with no incoming refs)
-		const addedSymbolNames = new Set((diff.addedSymbols ?? []).map(s => s.name));
-		displayOrphans = orphans.filter(o => addedSymbolNames.has(o.name));
+		const addedSymbolNames = new Set((diff.addedSymbols ?? []).map((s) => s.name));
+		displayOrphans = orphans.filter((o) => addedSymbolNames.has(o.name));
 	}
-	
+
 	if (displayOrphans.length > 0) {
 		const deltaLabel = delta ? " (new since baseline)" : "";
 		lines.push("### Potential Orphan Symbols");
@@ -329,9 +334,7 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 	if (preCommit) {
 		// Reuse the LSP result from above — do NOT call runLspDiagnostics again
 		// (collectDiagnostics is destructive, second call returns empty results)
-		const hasLspErrors = lspResult.diagnostics.some(
-			(d) => d.severity === "error",
-		);
+		const hasLspErrors = lspResult.diagnostics.some((d) => d.severity === "error");
 		const isReady = !hasLspErrors && risk.level === "low" && internalOrphans.length === 0;
 		lines.push("### Pre-Commit Verdict");
 		lines.push(`**Status:** ${isReady ? "[PASS] READY" : "[FAIL] NOT READY"}`);
@@ -341,7 +344,8 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 			lines.push("");
 			if (hasLspErrors) lines.push("- LSP errors found — fix type errors before commit");
 			if (risk.level !== "low") lines.push(`- Risk level is **${risk.level}** — review affected files`);
-			if (internalOrphans.length > 0) lines.push(`- ${internalOrphans.length} internal orphan symbol(s) — review for dead code`);
+			if (internalOrphans.length > 0)
+				lines.push(`- ${internalOrphans.length} internal orphan symbol(s) — review for dead code`);
 			lines.push("");
 		}
 	}
@@ -388,7 +392,7 @@ async function runLspDiagnostics(
 	const lspManager = getLspManager();
 	if (!lspManager) {
 		// Log fallback to subprocess diagnostics (fixes #149)
-		console.warn('[pi-shazam] LSP manager not available, falling back to subprocess diagnostics');
+		console.warn("[pi-shazam] LSP manager not available, falling back to subprocess diagnostics");
 		return runSubprocessDiagnostics(projectRoot);
 	}
 
@@ -470,10 +474,16 @@ async function runLspDiagnostics(
 
 	// Annotate output if files failed to open
 	if (failedOpens.length > 0) {
-		console.warn(`[pi-shazam] LSP didOpen failed for ${failedOpens.length} file(s): ${failedOpens.slice(0, 5).join(", ")}${failedOpens.length > 5 ? "..." : ""}`);
+		console.warn(
+			`[pi-shazam] LSP didOpen failed for ${failedOpens.length} file(s): ${failedOpens.slice(0, 5).join(", ")}${failedOpens.length > 5 ? "..." : ""}`,
+		);
 	}
 
-	return { diagnostics, available: serversUsed.size > 0, errorMessage: serversUsed.size === 0 ? "No LSP servers available for detected file types" : undefined };
+	return {
+		diagnostics,
+		available: serversUsed.size > 0,
+		errorMessage: serversUsed.size === 0 ? "No LSP servers available for detected file types" : undefined,
+	};
 }
 
 // ── Subprocess fallback diagnostics ─────────────────────────────────────────
@@ -607,32 +617,36 @@ function assessRisk(
 	const baselineChanges =
 		(diff?.addedSymbols?.length ?? 0) + (diff?.removedSymbols?.length ?? 0) + (diff?.modifiedSymbols?.length ?? 0);
 	const gitFileCount = gitChangedFiles?.length ?? 0;
-	const totalImpact = baselineChanges + gitFileCount + internalOrphans.length;
 
-	if (totalImpact === 0) return { level: "low", reason: "No changes detected, no internal orphan symbols." };
+	// Compute orphan delta from session baseline (not absolute count)
+	const baselineDiff = diffFromBaseline(_graph, 0, 0);
+	const orphanDelta = baselineDiff?.orphanSymbols ?? internalOrphans.length;
+	const newOrphanCount = baselineDiff?.newOrphans?.length ?? internalOrphans.length;
+
+	const totalImpact = baselineChanges + gitFileCount + orphanDelta;
+
+	if (totalImpact === 0) return { level: "low", reason: "No changes detected, no new orphan symbols." };
 
 	const highThreshold = preCommit ? 30 : 60;
 	const mediumThreshold = preCommit ? 10 : 20;
 
-	if (internalOrphans.length > 10 || totalImpact > highThreshold) {
+	if (newOrphanCount > 10 || totalImpact > highThreshold) {
 		return {
 			level: "high",
-			reason: `${internalOrphans.length} internal orphans, ${baselineChanges} graph changes, ${gitFileCount} git-modified files.`,
+			reason: `${newOrphanCount} new orphans, ${baselineChanges} graph changes, ${gitFileCount} git-modified files.`,
 		};
 	}
-	if (internalOrphans.length > 0 || totalImpact > mediumThreshold) {
+	if (newOrphanCount > 0 || totalImpact > mediumThreshold) {
 		return {
 			level: "medium",
-			reason: `${internalOrphans.length} internal orphans, ${baselineChanges} graph changes, ${gitFileCount} modified files — review recommended.`,
+			reason: `${newOrphanCount} new orphans, ${baselineChanges} graph changes, ${gitFileCount} modified files — review recommended.`,
 		};
 	}
 	return {
 		level: "low",
-		reason: `${internalOrphans.length} internal orphans, ${baselineChanges} changes, ${gitFileCount} modified files — acceptable.`,
+		reason: `${newOrphanCount} new orphans, ${baselineChanges} changes, ${gitFileCount} modified files — acceptable.`,
 	};
 }
-
-
 
 // ── Synchronous execute functions (for test compatibility) ──────────────────
 
@@ -758,7 +772,9 @@ export function executeVerifyJson(graph: RepoGraph, projectRoot: string, options
 			riskLevel: risk.level,
 			riskReason: risk.reason,
 			orphanCount: orphans.length,
-			orphans: orphans.slice(0, 20).map((s) => ({ name: s.name, kind: s.kind, file: s.file, line: s.line, isExported: s.isExported })),
+			orphans: orphans
+				.slice(0, 20)
+				.map((s) => ({ name: s.name, kind: s.kind, file: s.file, line: s.line, isExported: s.isExported })),
 			internalOrphanCount: internalOrphans.length,
 			exportedOrphanCount: exportedOrphans.length,
 			baselineDiff: diff
@@ -879,7 +895,7 @@ export function executeReady(graph: RepoGraph, projectRoot: string): string {
 
 	const riskLevel = verifyData.result?.riskLevel ?? "unknown";
 	const orphanCount = verifyData.result?.orphanCount ?? 0;
-	const internalOrphanCount = (verifyData.result as Record<string, unknown>)?.internalOrphanCount as number ?? 0;
+	const internalOrphanCount = ((verifyData.result as Record<string, unknown>)?.internalOrphanCount as number) ?? 0;
 	const failedFiles = checkData.result?.failedFiles ?? 0;
 	const parsedFiles = checkData.result?.parsedFiles ?? 0;
 	const isReady = riskLevel === "low" && internalOrphanCount === 0 && failedFiles === 0;
@@ -904,7 +920,8 @@ export function executeReady(graph: RepoGraph, projectRoot: string): string {
 		lines.push("### Issues to Fix Before Commit");
 		lines.push("");
 		if (riskLevel !== "low") lines.push(`- Risk level is **${riskLevel}** — run \`shazam_verify\` for details`);
-		if (internalOrphanCount > 0) lines.push(`- ${internalOrphanCount} internal orphan symbol(s) — run \`shazam_verify\` for detailed review`);
+		if (internalOrphanCount > 0)
+			lines.push(`- ${internalOrphanCount} internal orphan symbol(s) — run \`shazam_verify\` for detailed review`);
 		if (failedFiles > 0) lines.push(`- ${failedFiles} file(s) failed parse — run \`shazam_verify\` for details`);
 		lines.push("");
 	} else {
