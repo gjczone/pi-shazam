@@ -1,76 +1,77 @@
 {
-	"name": "pi-shazam",
-	"version": "0.10.6",
-	"description": "Pi coding agent native codebase awareness toolkit — 14 structural analysis tools. Also supports MCP (Cursor, Claude Desktop, Windsurf, etc.)",
-	"type": "module",
-	"main": "dist/index.js",
-	"types": "dist/index.d.ts",
-	"bin": {
-		"pi-shazam-mcp": "dist/mcp/entry.js"
-	},
-	"files": [
-		"dist/**/*"
-	],
-	"scripts": {
-		"prebuild": "rm -rf dist",
-		"build": "tsc",
-		"typecheck": "tsc --noEmit",
-		"dev": "tsc --watch",
-		"prepublishOnly": "npm run build",
-		"test": "vitest run",
-		"test:watch": "vitest"
-	},
-	"keywords": [
-		"pi-package",
-		"pi-coding-agent",
-		"extension",
-		"codebase-analysis",
-		"tree-sitter",
-		"lsp",
-		"pagerank"
-	],
-	"pi": {
-		"extensions": [
-			"./dist"
-		]
-	},
-	"author": "gjczone",
-	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/gjczone/pi-shazam.git"
-	},
-	"dependencies": {
-		"@modelcontextprotocol/sdk": "^1.29.0",
-		"iconv-lite": "^0.7.2",
-		"tree-sitter": "^0.22.4",
-		"tree-sitter-go": "0.23.4",
-		"tree-sitter-json": "0.24.8",
-		"tree-sitter-python": "0.23.6",
-		"tree-sitter-rust": "0.24.0",
-		"tree-sitter-typescript": "0.23.2",
-		"typebox": "*",
-		"vscode-jsonrpc": "^9.0.0",
-		"vscode-languageserver-protocol": "^3.18.0",
-		"zod": "^4.4.3"
-	},
-	"peerDependencies": {
-		"typebox": "*"
-	},
-	"devDependencies": {
-		"@types/node": "^22.0.0",
-		"prettier": "^3.8.3",
-		"typescript": "^6.0.3",
-		"vitest": "^4.1.8"
-	},
-	"overrides": {
-		"tree-sitter": "^0.22.4"
-	},
-	"engines": {
-		"node": ">=18.0.0"
-	},
-	"os": [
-		"linux",
-		"darwin"
-	]
+  "name": "pi-shazam",
+  "version": "0.10.6",
+  "description": "Pi coding agent native codebase awareness toolkit \u2014 14 structural analysis tools. Also supports MCP (Cursor, Claude Desktop, Windsurf, etc.)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "pi-shazam-mcp": "dist/mcp/entry.js"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-coding-agent",
+    "extension",
+    "codebase-analysis",
+    "tree-sitter",
+    "lsp",
+    "pagerank"
+  ],
+  "pi": {
+    "extensions": [
+      "./dist"
+    ]
+  },
+  "author": "gjczone",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gjczone/pi-shazam.git"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "iconv-lite": "^0.7.2",
+    "tree-sitter": "^0.22.4",
+    "tree-sitter-go": "0.23.4",
+    "tree-sitter-json": "0.24.8",
+    "tree-sitter-python": "0.23.6",
+    "tree-sitter-rust": "0.24.0",
+    "tree-sitter-typescript": "0.23.2",
+    "typebox": "*",
+    "vscode-jsonrpc": "^9.0.0",
+    "vscode-languageserver-protocol": "^3.18.0",
+    "zod": "^4.4.3",
+    "tree-sitter-javascript": "^0.23.1"
+  },
+  "peerDependencies": {
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "overrides": {
+    "tree-sitter": "^0.22.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "os": [
+    "linux",
+    "darwin"
+  ]
 }

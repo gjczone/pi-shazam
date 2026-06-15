@@ -21,6 +21,7 @@ import { createTool } from "./_factory.js";
  * Key: file path, Value: { text, timestamp, mtimeMs }
  * Cache is invalidated when file mtime changes or TTL expires.
  */
+const MAX_DETAIL_CACHE_SIZE = 200;
 const fileDetailCache = new Map<string, { text: string; timestamp: number; mtimeMs: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -66,9 +67,7 @@ export function registerFileDetail(pi: ExtensionAPI): void {
 			const graph = scanProject(".");
 
 			// Fetch LSP hierarchy in parallel with graph-based detail
-			const detailPromise = Promise.resolve(
-				json ? executeFileDetailJson(graph, file) : executeFileDetail(graph, file),
-			);
+			const detailPromise = Promise.resolve(json ? executeFileDetailJson(graph, file) : executeFileDetail(graph, file));
 			const lspManager = getLspManager();
 			const hierarchyPromise = lspDocumentSymbols(lspManager, file, 5000);
 			const codeLensPromise = lspCodeLens(lspManager, file, 5000);
@@ -123,6 +122,10 @@ export function registerFileDetail(pi: ExtensionAPI): void {
 			} catch {
 				// File may not exist — cache with mtime 0
 			}
+			if (fileDetailCache.size >= MAX_DETAIL_CACHE_SIZE) {
+				const firstKey = fileDetailCache.keys().next().value;
+				if (firstKey !== undefined) fileDetailCache.delete(firstKey);
+			}
 			fileDetailCache.set(cacheKey, { text, timestamp: Date.now(), mtimeMs });
 
 			return {
@@ -161,7 +164,7 @@ function formatHierarchy(syms: DocumentSymbol[], depth: number): string[] {
 	for (const s of syms) {
 		// Skip local variables and constants (implementation details)
 		if (depth > 0 && LOCAL_KINDS.has(s.kind)) continue;
-		
+
 		const startLine = s.range.start.line + 1;
 		const endLine = s.range.end.line + 1;
 		out.push(`${indent}- \`${s.name}\` L${startLine}-${endLine}`);
@@ -216,7 +219,7 @@ export function executeFileDetail(graph: RepoGraph, file: string): string {
 	lines.push("");
 
 	const CONTAINER_KINDS = new Set(["class", "interface", "struct", "impl", "module", "namespace", "object"]);
-	const containers: { sym: typeof symbols[0]; members: typeof symbols }[] = [];
+	const containers: { sym: (typeof symbols)[0]; members: typeof symbols }[] = [];
 	const standalone: typeof symbols = [];
 
 	for (const sym of symbols) {
@@ -300,9 +303,7 @@ export function executeFileDetail(graph: RepoGraph, file: string): string {
 	}
 
 	// Add Next recommendations
-	const hasHierarchyTypes = symbols.some((s) =>
-		["class", "interface", "struct", "impl"].includes(s.kind),
-	);
+	const hasHierarchyTypes = symbols.some((s) => ["class", "interface", "struct", "impl"].includes(s.kind));
 	const nextItems = getNextForTool("file_detail", {
 		topFile: file,
 		topSymbol: symbols[0]?.name,
