@@ -28,12 +28,12 @@ chaining or avoid them entirely.
 
 **pi-shazam MUST NOT depend on these non-existent properties:**
 
-| Property     | Status                                |
-| ------------ | ------------------------------------- |
-| `pi.logger`  | Does not exist (defended with `?.`)   |
-| `pi.typebox` | Does not exist (use direct `import`)  |
-| `pi.zod`     | Does not exist (not used)             |
-| `pi.pi`      | Does not exist (not used)             |
+| Property     | Status                               |
+| ------------ | ------------------------------------ |
+| `pi.logger`  | Does not exist (defended with `?.`)  |
+| `pi.typebox` | Does not exist (use direct `import`) |
+| `pi.zod`     | Does not exist (not used)            |
+| `pi.pi`      | Does not exist (not used)            |
 
 ### 1.2 ExtensionAPI Reference
 
@@ -41,13 +41,13 @@ The complete `ExtensionAPI` interface (from `types/pi-extension.d.ts`):
 
 #### 1.2.1 Core Properties
 
-| Property                          | Type     | Description                  |
-| --------------------------------- | -------- | ---------------------------- |
-| `on(event, handler)`              | Method   | Subscribe to lifecycle event |
-| `registerTool(tool)`              | Method   | Register LLM-visible tool    |
-| `registerCommand(name, opts)`     | Method   | Register `/command`          |
-| `sendMessage(msg, opts?)`         | Method   | Send custom message          |
-| `events`                          | EventBus | Inter-extension communication|
+| Property                      | Type     | Description                   |
+| ----------------------------- | -------- | ----------------------------- |
+| `on(event, handler)`          | Method   | Subscribe to lifecycle event  |
+| `registerTool(tool)`          | Method   | Register LLM-visible tool     |
+| `registerCommand(name, opts)` | Method   | Register `/command`           |
+| `sendMessage(msg, opts?)`     | Method   | Send custom message           |
+| `events`                      | EventBus | Inter-extension communication |
 
 #### 1.2.2 Event Subscription — `pi.on(event, handler)`
 
@@ -297,7 +297,7 @@ index.ts                    <- Pi extension entry, default export(pi: ExtensionA
 ### 2.2 Dependency Direction
 
 `hooks/` -> `tools/` -> `core/` + `lsp/`
-`mcp/`   -> `core/` + `lsp/`
+`mcp/` -> `core/` + `lsp/`
 
 - `core/` has zero Pi or LSP imports.
 - Tools compose core functions and optionally enrich with LSP data.
@@ -369,16 +369,16 @@ import { createTool } from "./tools/_factory.js";
 import { Type } from "typebox";
 
 createTool(pi, {
-  name: "shazam_mytool",
-  label: "My Tool",
-  description: "When to use this tool...",
-  params: Type.Object({
-    query: Type.String(),
-    limit: Type.Optional(Type.Number()),
-  }),
-  execute(graph, params) {
-    return "output string";
-  },
+	name: "shazam_mytool",
+	label: "My Tool",
+	description: "When to use this tool...",
+	params: Type.Object({
+		query: Type.String(),
+		limit: Type.Optional(Type.Number()),
+	}),
+	execute(graph, params) {
+		return "output string";
+	},
 });
 ```
 
@@ -386,13 +386,13 @@ createTool(pi, {
 
 ```typescript
 createTool(pi, {
-  name: "shazam_mytool",
-  // ...
-  customExecute: async (toolCallId, params, signal, onUpdate, ctx) => {
-    const graph = scanProject(".");
-    // async + LSP logic here
-    return { content: [{ type: "text", text: "result" }] };
-  },
+	name: "shazam_mytool",
+	// ...
+	customExecute: async (toolCallId, params, signal, onUpdate, ctx) => {
+		const graph = scanProject(".");
+		// async + LSP logic here
+		return { content: [{ type: "text", text: "result" }] };
+	},
 });
 ```
 
@@ -410,13 +410,13 @@ createTool(pi, {
 
 **Description style rotation** — vary across 5 styles so the LLM sees variety:
 
-| Style | Example |
-|-------|---------|
-| Scenario trigger | "When you first enter a project — use this to..." |
-| Prerequisite | "Required before editing 2+ files or any shared/exported module" |
-| Consequence hint | "Without this you ship bugs — traces ALL upstream callers" |
-| Action binding | "After every write or edit — confirm no errors" |
-| Anti-pattern warning | "Don't reach for grep — this ranks results by relevance" |
+| Style                | Example                                                          |
+| -------------------- | ---------------------------------------------------------------- |
+| Scenario trigger     | "When you first enter a project — use this to..."                |
+| Prerequisite         | "Required before editing 2+ files or any shared/exported module" |
+| Consequence hint     | "Without this you ship bugs — traces ALL upstream callers"       |
+| Action binding       | "After every write or edit — confirm no errors"                  |
+| Anti-pattern warning | "Don't reach for grep — this ranks results by relevance"         |
 
 ### 3.5 Modifying an Existing Tool
 
@@ -464,9 +464,9 @@ registered in `index.ts`. Hooks are NOT LLM-callable — they fire automatically
 import type { ExtensionAPI } from "../types/pi-extension.js";
 
 export function registerMyHook(pi: ExtensionAPI): void {
-  pi.on("tool_call", (event, ctx) => {
-    // event.toolName, event.input, ctx.cwd, ctx.sendMessage(), etc.
-  });
+	pi.on("tool_call", (event, ctx) => {
+		// event.toolName, event.input, ctx.cwd, ctx.sendMessage(), etc.
+	});
 }
 ```
 
@@ -481,14 +481,12 @@ registerMyHook(pi);
 
 ```typescript
 pi.on("before_agent_start", (_event, _ctx) => {
-  const sp = Array.isArray(_event.systemPrompt)
-    ? _event.systemPrompt.join("\n")
-    : String(_event.systemPrompt ?? "");
-  if (sp.includes("my-guide")) return; // avoid double injection
+	const sp = Array.isArray(_event.systemPrompt) ? _event.systemPrompt.join("\n") : String(_event.systemPrompt ?? "");
+	if (sp.includes("my-guide")) return; // avoid double injection
 
-  return {
-    systemPrompt: sp + "\n\nmy guidance text here",
-  };
+	return {
+		systemPrompt: sp + "\n\nmy guidance text here",
+	};
 });
 ```
 
@@ -503,23 +501,23 @@ import { homedir } from "node:os";
 
 const AUDIT_DIR = join(homedir(), ".pi", "hooks", "audit");
 function write(line: string) {
-  mkdirSync(AUDIT_DIR, { recursive: true });
-  appendFileSync(join(AUDIT_DIR, "my-log.log"), line + "\n", "utf-8");
+	mkdirSync(AUDIT_DIR, { recursive: true });
+	appendFileSync(join(AUDIT_DIR, "my-log.log"), line + "\n", "utf-8");
 }
 ```
 
 **Existing hooks in pi-shazam:**
 
-| Hook | Event | Purpose |
-|------|-------|---------|
-| `before-start.ts` | `before_agent_start` | Inject project structure overview into system prompt |
-| `pre-edit.ts` | `tool_call` + `tool_result` | Detect multi-file edits, warn about blast radius |
-| `shazam-guide.ts` | `tool_result` + `tool_call` | Auto-format + nudge agent to use shazam tools |
-| `tool-logger.ts` | `tool_call` + `tool_result` | Log shazam calls to audit dir |
-| `safety.ts` | `tool_call` (bash) | Destructive command confirmation + pre-commit gate |
-| `stop-verify.ts` | `tool_result` + `turn_end` | Remind to verify before ending turn |
-| `failure-recovery.ts` | `tool_result` | Detect consecutive failures, suggest alternatives |
-| `verify-state.ts` | (shared module) | Shared verify tracking state for safety + stop-verify |
+| Hook                  | Event                       | Purpose                                               |
+| --------------------- | --------------------------- | ----------------------------------------------------- |
+| `before-start.ts`     | `before_agent_start`        | Inject project structure overview into system prompt  |
+| `pre-edit.ts`         | `tool_call` + `tool_result` | Detect multi-file edits, warn about blast radius      |
+| `shazam-guide.ts`     | `tool_result` + `tool_call` | Auto-format + nudge agent to use shazam tools         |
+| `tool-logger.ts`      | `tool_call` + `tool_result` | Log shazam calls to audit dir                         |
+| `safety.ts`           | `tool_call` (bash)          | Destructive command confirmation + pre-commit gate    |
+| `stop-verify.ts`      | `tool_result` + `turn_end`  | Remind to verify before ending turn                   |
+| `failure-recovery.ts` | `tool_result`               | Detect consecutive failures, suggest alternatives     |
+| `verify-state.ts`     | (shared module)             | Shared verify tracking state for safety + stop-verify |
 
 ### 3.10 MCP Server — Non-Pi Client Wrapping
 
@@ -531,7 +529,7 @@ Wraps pi-shazam core tools as MCP server at `npx pi-shazam-mcp`.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-const server = new McpServer({ name: "pi-shazam", version: "0.11.1" });
+const server = new McpServer({ name: "pi-shazam", version: "0.12.0" });
 const graph = scanProject(projectRoot);
 registerAllTools(server, getGraph, projectRoot);
 await server.connect(new StdioServerTransport());
@@ -544,13 +542,17 @@ await server.connect(new StdioServerTransport());
 ```typescript
 import { z } from "zod";
 
-server.registerTool("shazam_xxx", {
-  description: "...",
-  inputSchema: z.object({ param: z.string() }),
-}, withLogging("shazam_xxx", async ({ param }) => {
-  const text = executeXxx(graph, param);
-  return { content: [{ type: "text", text }] };
-}));
+server.registerTool(
+	"shazam_xxx",
+	{
+		description: "...",
+		inputSchema: z.object({ param: z.string() }),
+	},
+	withLogging("shazam_xxx", async ({ param }) => {
+		const text = executeXxx(graph, param);
+		return { content: [{ type: "text", text }] };
+	}),
+);
 ```
 
 **`withLogging` wrapper** — logs start/end/duration/error to `~/.kimi-code/audit/shazam-calls.log`.
@@ -568,30 +570,30 @@ When one piece changes, others MUST follow in the same PR.
 
 **Tool changes:**
 
-| Change | AGENTS.md | SKILL.md | README.md | mcp/tools.ts | mcp/README.md |
-|--------|-----------|----------|-----------|-------------|---------------|
-| New tool | Add to table | Add full docs | Add if user-facing | Add registerTool | Add to table |
-| Delete tool | Remove | Remove | Remove | Remove | Remove |
-| Schema change | — | Update params | — | Update Zod | — |
-| Description change | Sync | Sync | — | Sync | Sync |
-| Rename | Update all | Update all | Update if listed | Update | Update |
+| Change             | AGENTS.md    | SKILL.md      | README.md          | mcp/tools.ts     | mcp/README.md |
+| ------------------ | ------------ | ------------- | ------------------ | ---------------- | ------------- |
+| New tool           | Add to table | Add full docs | Add if user-facing | Add registerTool | Add to table  |
+| Delete tool        | Remove       | Remove        | Remove             | Remove           | Remove        |
+| Schema change      | —            | Update params | —                  | Update Zod       | —             |
+| Description change | Sync         | Sync          | —                  | Sync             | Sync          |
+| Rename             | Update all   | Update all    | Update if listed   | Update           | Update        |
 
 **Hook changes:**
 
-| Change | AGENTS.md | AGENTS.md Change Map |
-|--------|-----------|---------------------|
-| New hook | Add to hooks/ tree | Add to architecture |
-| Hook event changed | Update description | — |
-| Delete hook | Remove from tree | — |
+| Change             | AGENTS.md          | AGENTS.md Change Map |
+| ------------------ | ------------------ | -------------------- |
+| New hook           | Add to hooks/ tree | Add to architecture  |
+| Hook event changed | Update description | —                    |
+| Delete hook        | Remove from tree   | —                    |
 
 **Doc changes:**
 
-| Change | Must also update |
-|--------|-----------------|
-| Architecture | AGENTS.md tree + AGENTS.md |
+| Change              | Must also update              |
+| ------------------- | ----------------------------- |
+| Architecture        | AGENTS.md tree + AGENTS.md    |
 | Languages supported | README + AGENTS.md + SKILL.md |
-| Commands | README + SKILL.md |
-| Release | README npm badge auto-updates |
+| Commands            | README + SKILL.md             |
+| Release             | README npm badge auto-updates |
 
 **Before commit checklist:**
 
@@ -625,6 +627,7 @@ NEVER run `npm publish` directly. Local npm tokens expire. All publishing goes t
 After any user-facing change: new tools, new hooks, bugfixes, significant doc updates.
 
 Version strategy:
+
 - **patch** (0.3.0 -> 0.3.1): bugfixes, typos, minor tweaks
 - **minor** (0.2.0 -> 0.3.0): new features (tools, hooks, MCP)
 - **major** (0.x -> 1.0): breaking changes, API removals
@@ -662,6 +665,7 @@ pi -p "call shazam_overview briefly"
 ### 4.4 Publish CI (.github/workflows/publish.yml)
 
 Triggered by GitHub Release event. Runs:
+
 1. `npm ci --legacy-peer-deps`
 2. `npx tsc --noEmit` (typecheck)
 3. `npm test`
@@ -766,8 +770,8 @@ import type { RepoGraph } from "../core/graph.js";
 
 let _graph: RepoGraph | null = null;
 function getGraph(): RepoGraph {
-  if (!_graph) _graph = scanProject(".");
-  return _graph;
+	if (!_graph) _graph = scanProject(".");
+	return _graph;
 }
 ```
 
@@ -777,12 +781,12 @@ Use `scanProject(".")` for real-project tests (cached after first call).
 
 ```typescript
 it("should return project structure summary", async () => {
-  const { executeOverview } = await import("../tools/overview.js");
-  const result = executeOverview(getGraph(), ".");
-  expect(result).toBeDefined();
-  expect(typeof result).toBe("string");
-  expect(result.length).toBeGreaterThan(0);
-  expect(result).toMatch(/index\.ts|Top|PageRank/i);
+	const { executeOverview } = await import("../tools/overview.js");
+	const result = executeOverview(getGraph(), ".");
+	expect(result).toBeDefined();
+	expect(typeof result).toBe("string");
+	expect(result.length).toBeGreaterThan(0);
+	expect(result).toMatch(/index\.ts|Top|PageRank/i);
 });
 ```
 
@@ -790,9 +794,9 @@ it("should return project structure summary", async () => {
 
 ```typescript
 it("overview schema should accept optional filter", () => {
-  const schema = z.object({ filter: z.string().optional() });
-  expect(() => schema.parse({})).not.toThrow();
-  expect(() => schema.parse({ filter: "index" })).not.toThrow();
+	const schema = z.object({ filter: z.string().optional() });
+	expect(() => schema.parse({})).not.toThrow();
+	expect(() => schema.parse({ filter: "index" })).not.toThrow();
 });
 ```
 
@@ -830,43 +834,43 @@ grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerS
 
 ### 6.8 Debugging Guide
 
-| Symptom                               | Check                                               |
-| ------------------------------------- | --------------------------------------------------- |
-| Extension fails to load               | Compare against `docs/INSTRUCTION.md` §1 contract   |
-| `text.replace is not a function`      | Check sendMessage content is string, not array      |
-| `Cannot read properties of undefined` | Check pi.logger/pi.typebox/ctx.ui access            |
-| Tool not appearing                    | Verify register* is called in index.ts              |
-| Tree-sitter parse failure             | Check grammar version compatibility                 |
-| LSP communication error               | Check lsp/client.ts JSON-RPC framing                |
+| Symptom                               | Check                                             |
+| ------------------------------------- | ------------------------------------------------- |
+| Extension fails to load               | Compare against `docs/INSTRUCTION.md` §1 contract |
+| `text.replace is not a function`      | Check sendMessage content is string, not array    |
+| `Cannot read properties of undefined` | Check pi.logger/pi.typebox/ctx.ui access          |
+| Tool not appearing                    | Verify register\* is called in index.ts           |
+| Tree-sitter parse failure             | Check grammar version compatibility               |
+| LSP communication error               | Check lsp/client.ts JSON-RPC framing              |
 
 ---
 
 ## 7. Key Files Reference
 
-| File                      | Role                                   |
-| ------------------------- | -------------------------------------- |
-| `index.ts`                | Extension entry, all registrations     |
-| `types/pi-extension.d.ts` | Self-contained ExtensionAPI type stub  |
-| `AGENTS.md`               | Agent context and project rules        |
-| `SKILL.md`                | Pi agent skill file for LLM discovery  |
-| `package.json`            | npm manifest, dependencies, scripts    |
-| `tsconfig.json`           | TypeScript compiler configuration      |
+| File                      | Role                                        |
+| ------------------------- | ------------------------------------------- |
+| `index.ts`                | Extension entry, all registrations          |
+| `types/pi-extension.d.ts` | Self-contained ExtensionAPI type stub       |
+| `AGENTS.md`               | Agent context and project rules             |
+| `SKILL.md`                | Pi agent skill file for LLM discovery       |
+| `package.json`            | npm manifest, dependencies, scripts         |
+| `tsconfig.json`           | TypeScript compiler configuration           |
 | `docs/INSTRUCTION.md`     | This file — development & maintenance guide |
-| `docs/kimi-code-hooks.md` | Kimi Code hook system reference (external) |
-| `core/treesitter.ts`      | Language support, symbol extraction    |
-| `core/graph.ts`           | Symbol dependency graph                |
-| `core/scanner.ts`         | Project scanning + graph building      |
-| `lsp/client.ts`           | LSP JSON-RPC implementation            |
-| `tools/_factory.ts`       | Tool registration factory              |
-| `tools/_context.ts`       | Shared LspManager holder               |
-| `hooks/before-start.ts`   | System prompt injection                |
+| `docs/kimi-code-hooks.md` | Kimi Code hook system reference (external)  |
+| `core/treesitter.ts`      | Language support, symbol extraction         |
+| `core/graph.ts`           | Symbol dependency graph                     |
+| `core/scanner.ts`         | Project scanning + graph building           |
+| `lsp/client.ts`           | LSP JSON-RPC implementation                 |
+| `tools/_factory.ts`       | Tool registration factory                   |
+| `tools/_context.ts`       | Shared LspManager holder                    |
+| `hooks/before-start.ts`   | System prompt injection                     |
 
 ---
 
 ## 8. Modification Log
 
-| Date       | Version | Change                                                                                                                                                                                     |
-| ---------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 2026-06-06 | 1.0     | Initial version. Merged Pi ExtensionAPI contract, project architecture, dev workflow, release process, tech stack baseline.                                                                |
-| 2026-06-06 | 1.1     | Upgraded iconv-lite (0.6.3 -> 0.7.2), typebox (1.1.39 -> 1.2.1), vscode-languageserver-protocol (3.17.0 -> 3.18.0).                                                                       |
-| 2026-06-08 | 2.0     | Merged all individual SKILL.md files (pi-extension, pi-hooks, mcp-server, testing, release-publish, architecture, sync-discipline) and CONTRACT.md. Flattened docs/ directory.             |
+| Date       | Version | Change                                                                                                                                                                         |
+| ---------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-06-06 | 1.0     | Initial version. Merged Pi ExtensionAPI contract, project architecture, dev workflow, release process, tech stack baseline.                                                    |
+| 2026-06-06 | 1.1     | Upgraded iconv-lite (0.6.3 -> 0.7.2), typebox (1.1.39 -> 1.2.1), vscode-languageserver-protocol (3.17.0 -> 3.18.0).                                                            |
+| 2026-06-08 | 2.0     | Merged all individual SKILL.md files (pi-extension, pi-hooks, mcp-server, testing, release-publish, architecture, sync-discipline) and CONTRACT.md. Flattened docs/ directory. |

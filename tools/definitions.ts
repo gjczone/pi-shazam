@@ -238,7 +238,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		zodParams: z.object({
 			symbol: z.string().describe("Current symbol name to rename"),
 			newName: z.string().describe("New symbol name"),
-			dryRun: z.boolean().optional().default(false).describe("Preview only, do not modify files"),
+			dryRun: z.boolean().optional().default(true).describe("Preview only, do not modify files"),
 		}),
 	},
 
