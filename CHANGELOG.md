@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.6] - 2026-06-15
+
+### Bug Fixes
+
+- **fix(#295): MCP LSP init, incremental cache, log rotation, schema sync** (#296)
+  - **#1**: Initialize LspManager in MCP server — LSP diagnostics, hover, type hierarchy now available in MCP mode
+  - **#2**: Replace 30s TTL cache with scanProject's built-in incremental mtime detection
+  - **#3**: shazam_verify and shazam_fix now have LSP support in MCP mode
+  - **#4**: Add `topN` param to shazam_hotspots TypeBox schema (was MCP-only)
+  - **#5**: Add `maxTokens` to shazam_codesearch Zod schema (was Pi-only)
+  - **#6**: Add `json`/`maxTokens` to shazam_symbol Zod schema (was Pi-only)
+  - **#8**: Add log rotation (10MB threshold, 3 archived files) to MCP logger
+  - **#20**: Schema parity between Pi and MCP modes achieved
+
+### Other
+
+- **docs**: Update AGENTS.md, README.md, kimi-code-hooks.md to reflect MCP LSP support
+
 ## [0.10.5] - 2026-06-14
 
 ### Bug Fixes
