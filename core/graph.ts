@@ -70,6 +70,8 @@ export function getGraphEdgeCount(graph: RepoGraph): number {
 
 // ── Factory ──────────────────────────────────────────────────────────────────
 
+const VALID_VISIBILITY = new Set(["public", "private", "exported"]);
+
 export function createRepoGraph(): RepoGraph {
 	return {
 		symbols: new Map(),
@@ -122,7 +124,6 @@ export function createEdge(
 ): Edge {
 	return { source, target, weight, kind, confidence };
 }
-
 
 export interface SerializedSymbol {
 	id: string;
@@ -240,7 +241,7 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 			line: s.line,
 			endLine: s.endLine,
 			col: s.col,
-			visibility: s.visibility as "public" | "private" | "exported",
+			visibility: VALID_VISIBILITY.has(s.visibility) ? (s.visibility as "public" | "private" | "exported") : "public",
 			docstring: s.docstring,
 			signature: s.signature,
 			returnType: s.returnType,

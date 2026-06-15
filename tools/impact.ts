@@ -31,7 +31,7 @@ export function registerImpact(pi: ExtensionAPI): void {
 				return "Error: --files is required (must be an array of file paths)";
 			}
 			const files = params.files as string[];
-			return json
+					return json
 				? executeImpactJson(graph, files)
 				: executeImpact(graph, files, {
 						withSymbols: (params.withSymbols as boolean) ?? false,
@@ -196,12 +196,21 @@ function assessImpactRisk(affectedFileCount: number, affectedSymbolCount: number
 		return { level: "low", reason: "No external impact detected." };
 	}
 	if (affectedFileCount > 10 || affectedSymbolCount > 30) {
-		return { level: "high", reason: `${affectedFileCount} files, ${affectedSymbolCount} symbols affected — extensive blast radius.` };
+		return {
+			level: "high",
+			reason: `${affectedFileCount} files, ${affectedSymbolCount} symbols affected — extensive blast radius.`,
+		};
 	}
 	if (affectedFileCount > 3 || affectedSymbolCount > 10) {
-		return { level: "medium", reason: `${affectedFileCount} files, ${affectedSymbolCount} symbols affected — moderate blast radius.` };
+		return {
+			level: "medium",
+			reason: `${affectedFileCount} files, ${affectedSymbolCount} symbols affected — moderate blast radius.`,
+		};
 	}
-	return { level: "low", reason: `${affectedFileCount} files, ${affectedSymbolCount} symbols affected — contained blast radius.` };
+	return {
+		level: "low",
+		reason: `${affectedFileCount} files, ${affectedSymbolCount} symbols affected — contained blast radius.`,
+	};
 }
 
 export function executeImpactJson(graph: RepoGraph, files: string[]): string {

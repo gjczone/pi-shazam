@@ -72,7 +72,7 @@ function detectDestructiveCommand(cmd: string): { level: "HIGH" | "MEDIUM"; patt
 	}
 
 	// Check for rm targeting root
-	if (/^rm\s+-(rf|fr|r)\s+\/(\s|$)/.test(cmd)) {
+	if (/^rm\s+-(rf|fr|r)\s+(\/[^\s]*|~\/)/.test(cmd)) {
 		return { level: "HIGH", pattern: "rm -rf /" };
 	}
 

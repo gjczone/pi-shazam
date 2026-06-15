@@ -134,11 +134,11 @@ function isValidUtf8(buffer: Buffer): boolean {
 
 		// Determine sequence length from lead byte
 		let seqLen: number;
-		if ((byte & 0xE0) === 0xC0) {
+		if ((byte & 0xe0) === 0xc0) {
 			seqLen = 2; // 110xxxxx
-		} else if ((byte & 0xF0) === 0xE0) {
+		} else if ((byte & 0xf0) === 0xe0) {
 			seqLen = 3; // 1110xxxx
-		} else if ((byte & 0xF8) === 0xF0) {
+		} else if ((byte & 0xf8) === 0xf0) {
 			seqLen = 4; // 11110xxx
 		} else {
 			// Lone continuation byte (0x80-0xBF) or invalid lead (0xFE-0xFF)
@@ -151,26 +151,23 @@ function isValidUtf8(buffer: Buffer): boolean {
 		// All continuation bytes must match 10xxxxxx
 		for (let j = 1; j < seqLen; j++) {
 			const cb = buffer[i + j]!;
-			if ((cb & 0xC0) !== 0x80) return false;
+			if ((cb & 0xc0) !== 0x80) return false;
 		}
 
 		// Reject overlong encodings and surrogates
 		if (seqLen === 2) {
-			const cp = ((byte & 0x1F) << 6) | (buffer[i + 1]! & 0x3F);
+			const cp = ((byte & 0x1f) << 6) | (buffer[i + 1]! & 0x3f);
 			if (cp < 0x80) return false; // overlong: could fit in 1 byte
 		} else if (seqLen === 3) {
-			const cp =
-				((byte & 0x0F) << 12) |
-				((buffer[i + 1]! & 0x3F) << 6) |
-				(buffer[i + 2]! & 0x3F);
+			const cp = ((byte & 0x0f) << 12) | ((buffer[i + 1]! & 0x3f) << 6) | (buffer[i + 2]! & 0x3f);
 			if (cp < 0x800) return false; // overlong: could fit in 2 bytes
-			if (cp >= 0xD800 && cp <= 0xDFFF) return false; // surrogate
+			if (cp >= 0xd800 && cp <= 0xdfff) return false; // surrogate
 		} else if (seqLen === 4) {
 			const cp =
 				((byte & 0x07) << 18) |
-				((buffer[i + 1]! & 0x3F) << 12) |
-				((buffer[i + 2]! & 0x3F) << 6) |
-				(buffer[i + 3]! & 0x3F);
+				((buffer[i + 1]! & 0x3f) << 12) |
+				((buffer[i + 2]! & 0x3f) << 6) |
+				(buffer[i + 3]! & 0x3f);
 			if (cp < 0x10000) return false; // overlong: could fit in 3 bytes
 			if (cp > 0x10ffff) return false; // beyond Unicode range
 		}
@@ -210,6 +207,10 @@ function tryDecode(buffer: Buffer, encoding: string): string | null {
  * Read a file with specific encoding.
  */
 export function readFileWithEncoding(filePath: string, encoding: string): string {
+	const stat = statSync(filePath);
+	if (stat.size > MAX_FILE_SIZE) {
+		throw new Error(`File too large (${stat.size} bytes > ${MAX_FILE_SIZE}): ${filePath}`);
+	}
 	const buffer = readFileSync(filePath);
 	if (encoding === "utf-8") {
 		return buffer.toString("utf-8");

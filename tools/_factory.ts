@@ -122,7 +122,7 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 				}
 			}
 
-			if (maxTokens && !json) {
+			if (typeof maxTokens === 'number' && maxTokens > 0 && !json) {
 				text = truncateOutput(text.split("\n"), maxTokens);
 			}
 

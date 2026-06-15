@@ -13,7 +13,7 @@ import { getNextForTool, formatNextSection } from "../core/output.js";
 import { readFileAdaptive } from "../core/encoding.js";
 import { getLspManager } from "./_context.js";
 import { ensureFileOpened } from "./lsp_enrich.js";
-import type { WorkspaceEdit } from "vscode-languageserver-protocol";
+import type { WorkspaceEdit, TextEdit } from "vscode-languageserver-protocol";
 import { uriToPath } from "../lsp/client.js";
 import { createTool } from "./_factory.js";
 import { scanProject } from "../core/scanner.js";
@@ -104,7 +104,6 @@ export async function executeRenameSymbol(
 	newName: string,
 	dryRun: boolean = false,
 ): Promise<RenameResult> {
-
 	// Find all matching symbols (fix #216: show all matches, not just first)
 	const matchingSymbols: Symbol[] = [];
 	for (const sym of graph.symbols.values()) {
@@ -124,9 +123,10 @@ export async function executeRenameSymbol(
 
 	// Use the first matching symbol as primary for LSP operations
 	const symbol = matchingSymbols[0];
-	const symbolMatchesMsg = matchingSymbols.length > 1
-		? `Found ${matchingSymbols.length} matching symbols for "${symbolName}":\n${matchingSymbols.map(s => `  - ${s.file}:${s.line}`).join("\n")}`
-		: null;
+	const symbolMatchesMsg =
+		matchingSymbols.length > 1
+			? `Found ${matchingSymbols.length} matching symbols for "${symbolName}":\n${matchingSymbols.map((s) => `  - ${s.file}:${s.line}`).join("\n")}`
+			: null;
 
 	// Aggregate edges from all matching symbols (fix #216: don't miss references)
 	const incoming: { source: string; target: string; kind: string }[] = [];
@@ -225,7 +225,7 @@ export async function executeRenameSymbol(
 	}
 
 	// Call LSP rename
-	const renameResult = await opened.client.rename(symbol.file, symbol.line - 1, symbol.col - 1, newName);
+	const renameResult = await opened.client.rename(symbol.file, symbol.line - 1, symbol.col, newName);
 	const workspaceEdit = renameResult.status === "ok" ? renameResult.data : null;
 
 	if (!workspaceEdit) {
@@ -266,60 +266,77 @@ async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise
 	let totalChanges = 0;
 	const preview: { file: string; line: number; text: string }[] = [];
 
+	// Process edits from either changes (legacy) or documentChanges (LSP 3.16+)
+	const textDocEdits: { uri: string; edits: TextEdit[] }[] = [];
+
 	if (edit.changes) {
 		for (const [uri, textEdits] of Object.entries(edit.changes)) {
-			const filePath = uriToPath(uri);
-			fileCount++;
-			totalChanges += textEdits.length;
-
-			if (dryRun) {
-				// Collect preview info
-				for (const te of textEdits) {
-					preview.push({
-						file: filePath,
-						line: te.range.start.line + 1,
-						text: te.newText,
-					});
-				}
-				continue;
-			}
-
-			// Apply edits: read file, apply edits in reverse order, write back
-			try {
-				const content = readFileAdaptive(filePath);
-				const lines = content.split("\n");
-				const sortedEdits = [...textEdits].sort(
-					(a, b) => b.range.start.line - a.range.start.line || b.range.start.character - a.range.start.character,
-				);
-
-				for (const te of sortedEdits) {
-					const startLine = te.range.start.line;
-					const startChar = te.range.start.character;
-					const endLine = te.range.end.line;
-					const endChar = te.range.end.character;
-
-					if (startLine === endLine) {
-						// Single line edit
-						const line = lines[startLine] || "";
-						lines[startLine] = line.slice(0, startChar) + te.newText + line.slice(endChar);
-					} else {
-						// Multi-line edit
-						const startLineText = lines[startLine] || "";
-						const endLineText = lines[endLine] || "";
-						const newLine = startLineText.slice(0, startChar) + te.newText + endLineText.slice(endChar);
-						lines.splice(startLine, endLine - startLine + 1, newLine);
-					}
-				}
-
-				writeFileSync(filePath, lines.join("\n"), "utf-8");
-			} catch (err) {
-				// Log but continue with other files
-				preview.push({
-					file: filePath,
-					line: 0,
-					text: `Error applying edits: ${err}`,
+			textDocEdits.push({ uri, edits: textEdits });
+		}
+	} else if (edit.documentChanges) {
+		for (const change of edit.documentChanges) {
+			if ("edits" in change) {
+				textDocEdits.push({
+					uri: (change as { textDocument: { uri: string } }).textDocument.uri,
+					edits: (change as { edits: TextEdit[] }).edits,
 				});
 			}
+			// CreateFile/RenameFile/DeleteFile are not applicable to rename operations
+		}
+	}
+
+	for (const { uri, edits: textEdits } of textDocEdits) {
+		const filePath = uriToPath(uri);
+		fileCount++;
+		totalChanges += textEdits.length;
+
+		if (dryRun) {
+			// Collect preview info
+			for (const te of textEdits) {
+				preview.push({
+					file: filePath,
+					line: te.range.start.line + 1,
+					text: te.newText,
+				});
+			}
+			continue;
+		}
+
+		// Apply edits: read file, apply edits in reverse order, write back
+		try {
+			const content = readFileAdaptive(filePath);
+			const lines = content.split("\n");
+			const sortedEdits = [...textEdits].sort(
+				(a, b) => b.range.start.line - a.range.start.line || b.range.start.character - a.range.start.character,
+			);
+
+			for (const te of sortedEdits) {
+				const startLine = te.range.start.line;
+				const startChar = te.range.start.character;
+				const endLine = te.range.end.line;
+				const endChar = te.range.end.character;
+
+				if (startLine === endLine) {
+					// Single line edit
+					const line = lines[startLine] || "";
+					lines[startLine] = line.slice(0, startChar) + te.newText + line.slice(endChar);
+				} else {
+					// Multi-line edit
+					const startLineText = lines[startLine] || "";
+					const endLineText = lines[endLine] || "";
+					const newLine = startLineText.slice(0, startChar) + te.newText + endLineText.slice(endChar);
+					lines.splice(startLine, endLine - startLine + 1, newLine);
+				}
+			}
+
+			writeFileSync(filePath, lines.join("\n"), "utf-8");
+		} catch (err) {
+			// Log but continue with other files
+			preview.push({
+				file: filePath,
+				line: 0,
+				text: `Error applying edits: ${err}`,
+			});
 		}
 	}
 

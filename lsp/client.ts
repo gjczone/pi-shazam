@@ -104,11 +104,7 @@ export interface LspLocation {
 function pathToUri(filePath: string): string {
 	const resolved = path.resolve(filePath);
 	// file:// URI with absolute path, percent-encoding special characters
-	const normalized = resolved
-		.replace(/\\/g, "/")
-		.split("/")
-		.map(encodeURIComponent)
-		.join("/");
+	const normalized = resolved.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/");
 	if (normalized[0] !== "/") {
 		return `file:///${normalized}`;
 	}
@@ -271,7 +267,11 @@ export class LspClient {
 		if (this._initPromise) return this._initPromise;
 
 		this._initPromise = this._doInitialize();
-		await this._initPromise;
+		try {
+			await this._initPromise;
+		} finally {
+			this._initPromise = null;
+		}
 	}
 
 	private async _doInitialize(): Promise<void> {
@@ -390,6 +390,8 @@ export class LspClient {
 		}
 	}
 
+	private _docVersion = 0;
+
 	async didChange(filePath: string, text: string): Promise<void> {
 		if (!this.connection) {
 			this._log("didChange: connection not available");
@@ -410,7 +412,7 @@ export class LspClient {
 		const params: DidChangeTextDocumentParams = {
 			textDocument: {
 				uri,
-				version: Date.now(),
+				version: ++this._docVersion,
 			},
 			contentChanges: [
 				{
@@ -515,9 +517,7 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.withTimeout(
-				this.connection!.sendRequest<Hover | null>("textDocument/hover", params),
-			);
+			const result = await this.withTimeout(this.connection!.sendRequest<Hover | null>("textDocument/hover", params));
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -689,11 +689,7 @@ export class LspClient {
 		}
 	}
 
-	async signatureHelp(
-		filePath: string,
-		line: number,
-		character: number,
-	): Promise<LspResult<SignatureHelp>> {
+	async signatureHelp(filePath: string, line: number, character: number): Promise<LspResult<SignatureHelp>> {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		if (!cap || !(cap as Record<string, unknown>).signatureHelpProvider) {
@@ -718,11 +714,7 @@ export class LspClient {
 		}
 	}
 
-	async implementation(
-		filePath: string,
-		line: number,
-		character: number,
-	): Promise<LspResult<Location | Location[]>> {
+	async implementation(filePath: string, line: number, character: number): Promise<LspResult<Location | Location[]>> {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		if (!cap || !(cap as Record<string, unknown>).implementationProvider) {
@@ -736,10 +728,7 @@ export class LspClient {
 
 		try {
 			const result = await this.withTimeout(
-				this.connection!.sendRequest<Location | Location[] | null>(
-					"textDocument/implementation",
-					params,
-				),
+				this.connection!.sendRequest<Location | Location[] | null>("textDocument/implementation", params),
 			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
@@ -933,11 +922,18 @@ export class LspClient {
 			// 4. Wait for process exit with fallback SIGKILL if it refuses to exit.
 			if (proc && proc.exitCode === null) {
 				await new Promise<void>((resolve) => {
-					proc.once("exit", () => resolve());
-					setTimeout(() => {
-						try { proc.kill("SIGKILL"); } catch { /* ignore */ }
+					const fallbackTimer = setTimeout(() => {
+						try {
+							proc.kill("SIGKILL");
+						} catch {
+							/* ignore */
+						}
 						resolve();
 					}, 2000);
+					proc.once("exit", () => {
+						clearTimeout(fallbackTimer);
+						resolve();
+					});
 				});
 			}
 		} finally {

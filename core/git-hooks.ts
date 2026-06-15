@@ -267,10 +267,11 @@ export function removePreCommitHook(projectRoot: string): boolean {
 export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FAIL" | "WARN"; message: string } {
 	try {
 		// Check for uncommitted changes
-		const changedOutput = execSync(
-			"git diff --cached --name-only --diff-filter=ACMR 2>/dev/null",
-			{ cwd: projectRoot, encoding: "utf-8", timeout: 5000 },
-		).trim();
+		const changedOutput = execSync("git diff --cached --name-only --diff-filter=ACMR 2>/dev/null", {
+			cwd: projectRoot,
+			encoding: "utf-8",
+			timeout: 5000,
+		}).trim();
 
 		if (!changedOutput) {
 			return { verdict: "PASS", message: "No staged changes to verify." };
@@ -282,39 +283,45 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 		// ── TypeScript/JavaScript ──────────────────────────────────────────
 		if (existsSync(join(projectRoot, "tsconfig.json"))) {
 			try {
-				execSync("npx tsc --noEmit 2>/dev/null", {
+				execSync("npx tsc --noEmit", {
 					cwd: projectRoot,
 					encoding: "utf-8",
 					timeout: 60000,
+					stdio: ["ignore", "ignore", "pipe"],
 				});
-			} catch {
-				errors.push("TypeScript typecheck failed");
+			} catch (err) {
+				const stderr = (err as { stderr?: string })?.stderr ?? "";
+				errors.push(`TypeScript typecheck failed: ${String(stderr).slice(0, 500)}`);
 			}
 		}
 
 		// ── Rust ───────────────────────────────────────────────────────────
 		if (existsSync(join(projectRoot, "Cargo.toml"))) {
 			try {
-				execSync("cargo check 2>/dev/null", {
+				execSync("cargo check", {
 					cwd: projectRoot,
 					encoding: "utf-8",
 					timeout: 120000,
+					stdio: ["ignore", "ignore", "pipe"],
 				});
-			} catch {
-				errors.push("cargo check failed");
+			} catch (err) {
+				const stderr = (err as { stderr?: string })?.stderr ?? "";
+				errors.push(`cargo check failed: ${String(stderr).slice(0, 500)}`);
 			}
 		}
 
 		// ── Go ─────────────────────────────────────────────────────────────
 		if (existsSync(join(projectRoot, "go.mod"))) {
 			try {
-				execSync("go vet ./... 2>/dev/null", {
+				execSync("go vet ./...", {
 					cwd: projectRoot,
 					encoding: "utf-8",
 					timeout: 60000,
+					stdio: ["ignore", "ignore", "pipe"],
 				});
-			} catch {
-				errors.push("go vet failed");
+			} catch (err) {
+				const stderr = (err as { stderr?: string })?.stderr ?? "";
+				errors.push(`go vet failed: ${String(stderr).slice(0, 500)}`);
 			}
 		}
 
@@ -323,32 +330,36 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 			// Try pyright first, then mypy
 			let pyrightAvailable = false;
 			try {
-				execSync("pyright . 2>/dev/null", {
+				execSync("pyright .", {
 					cwd: projectRoot,
 					encoding: "utf-8",
 					timeout: 60000,
+					stdio: ["ignore", "ignore", "pipe"],
 				});
 				pyrightAvailable = true;
 			} catch (err: unknown) {
 				const errnoErr = err as NodeJS.ErrnoException;
+				const stderr = (errnoErr as { stderr?: string })?.stderr ?? "";
 				if (errnoErr.code === "ENOENT" || (errnoErr as NodeJS.ErrnoException & { status?: number }).status === 127) {
 					// pyright not installed — try mypy
 				} else {
 					// pyright found type errors
-					errors.push("pyright found type errors");
+					errors.push(`pyright found type errors: ${String(stderr).slice(0, 500)}`);
 					pyrightAvailable = true; // already reported, don't fall through
 				}
 			}
 
 			if (!pyrightAvailable) {
 				try {
-					execSync("mypy . 2>/dev/null", {
+					execSync("mypy .", {
 						cwd: projectRoot,
 						encoding: "utf-8",
 						timeout: 60000,
+						stdio: ["ignore", "ignore", "pipe"],
 					});
-				} catch {
-					errors.push("Python type check failed");
+				} catch (err) {
+					const stderr = (err as { stderr?: string })?.stderr ?? "";
+					errors.push(`Python type check failed: ${String(stderr).slice(0, 500)}`);
 				}
 			}
 		}

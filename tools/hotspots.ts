@@ -72,9 +72,7 @@ export function executeHotspots(graph: RepoGraph, topN: number = 10): string {
 	lines.push("");
 	lines.push("Ranked by symbol density × PageRank score.");
 	lines.push("");
-	lines.push(
-		getExcludeMessage(),
-	);
+	lines.push(getExcludeMessage());
 	lines.push("");
 
 	for (let i = 0; i < hotspots.length; i++) {

@@ -14,7 +14,7 @@ import { setPendingImpact, clearPendingImpact } from "./impact-state.js";
 /**
  * Patterns that indicate a serious issue requiring impact analysis.
  */
-const SERIOUS_PATTERNS = /fix|bug|P0|P1|crash|error|broken|fail/i;
+const SERIOUS_PATTERNS = /\b(fix|bug|P0|P1|crash|error|broken|fail)\b/i;
 
 /**
  * Patterns that indicate a trivial issue not requiring impact analysis.
@@ -35,7 +35,7 @@ export function registerIssueGuard(pi: ExtensionAPI): void {
 		const input = "input" in event ? (event as unknown as Record<string, unknown>).input : {};
 		const command = ((input as Record<string, unknown>).command as string) || "";
 
-		if (!command.includes("gh issue create")) return;
+		if (!/gh\s+.*issue\s+create/.test(command)) return;
 
 		// Classify severity from title/body patterns in the command
 		const isSerious = SERIOUS_PATTERNS.test(command);

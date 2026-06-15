@@ -12,6 +12,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { scanProject } from "../core/scanner.js";
 import type { RepoGraph } from "../core/graph.js";
 import { LspManager, detectProjectLanguages } from "../lsp/manager.js";
+import { setLspManager } from "../tools/_context.js";
 import { registerAllTools } from "./tools.js";
 
 const PROJECT_ROOT = process.argv[2] || ".";
@@ -42,6 +43,9 @@ async function main(): Promise<void> {
 		version: "0.10.6",
 	});
 
+	// Share LspManager with tools layer so LSP enrichment works in MCP mode
+	setLspManager(lspManager);
+
 	// Register all analysis tools with LSP support
 	registerAllTools(server, getGraph, PROJECT_ROOT, lspManager);
 
@@ -49,7 +53,9 @@ async function main(): Promise<void> {
 	const shutdown = async () => {
 		try {
 			await lspManager.shutdown();
-		} catch { /* best effort */ }
+		} catch {
+			/* best effort */
+		}
 	};
 	process.on("SIGTERM", shutdown);
 	process.on("SIGINT", shutdown);

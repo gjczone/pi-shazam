@@ -16,6 +16,7 @@ import { lspImplementation } from "./lsp_enrich.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { uriToPath } from "../lsp/client.js";
 
 export function registerTypeHierarchy(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -131,7 +132,7 @@ export async function executeTypeHierarchy(
 								result.supertypes.push({
 									name: (st.name as string) || '',
 									kind: (st.kind as string) || 'unknown',
-									file: (st.uri as string)?.replace('file://', '') || '',
+									file: uriToPath((st.uri as string) || '') || '',
 									line: ((st.range as Record<string, unknown>)?.start as Record<string, number>)?.line + 1 || 0,
 								signature: (st.detail as string) || '',
 								});
@@ -147,7 +148,7 @@ export async function executeTypeHierarchy(
 								result.subtypes.push({
 									name: (st.name as string) || '',
 									kind: (st.kind as string) || 'unknown',
-									file: (st.uri as string)?.replace('file://', '') || '',
+									file: uriToPath((st.uri as string) || '') || '',
 									line: ((st.range as Record<string, unknown>)?.start as Record<string, number>)?.line + 1 || 0,
 								signature: (st.detail as string) || '',
 								});
@@ -172,7 +173,7 @@ export async function executeTypeHierarchy(
 					);
 					if (implLocs && implLocs.length > 0) {
 						for (const loc of implLocs) {
-							const relFile = loc.uri.replace("file://", "");
+							const relFile = uriToPath(loc.uri);
 							result.implementations.push({
 								name: "",
 								kind: "implementation",

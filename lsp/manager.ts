@@ -119,6 +119,15 @@ export function detectProjectLanguages(projectRoot: string, maxFiles: number = 2
  */
 function detectWorkspaceRoot(projectRoot: string, filePath: string | null, language: string): string {
 	const root = resolve(projectRoot);
+
+	// Ensure filePath is within project root; prevent escaping to parent directories
+	if (filePath) {
+		const resolvedFile = resolve(filePath);
+		if (!resolvedFile.startsWith(root + "/") && resolvedFile !== root) {
+			return root;
+		}
+	}
+
 	const specs = LSP_SERVER_SPECS.filter((s) => s.language === language);
 	const markers = new Set<string>();
 	for (const spec of specs) {
@@ -393,6 +402,7 @@ export class LspManager {
 					await client.initialize();
 				} catch (err) {
 					this.log(`Failed to start/initialize LSP for ${language}: ${err}`);
+					await client.close().catch(() => {});
 					return null;
 				}
 
@@ -410,12 +420,12 @@ export class LspManager {
 				// Re-open previously opened files after server crash/reconnection
 				const prevOpened = this._openedFilePaths.get(language);
 				if (prevOpened && prevOpened.size > 0) {
-					const { readFileSync } = await import('node:fs');
-					const { resolve } = await import('node:path');
+					const { readFileSync } = await import("node:fs");
+					const { resolve } = await import("node:path");
 					for (const filePath of prevOpened) {
 						try {
 							const absPath = resolve(detection.workspaceRoot, filePath);
-							const content = readFileSync(absPath, 'utf-8');
+							const content = readFileSync(absPath, "utf-8");
 							await client.didOpen(filePath, content);
 						} catch {
 							// File may have been deleted; remove from tracking

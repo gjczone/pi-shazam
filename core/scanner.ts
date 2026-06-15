@@ -39,7 +39,9 @@ function enterScan(): void {
 	if (_scanning) throw new Error("Re-entrant scanProject detected — this is a bug");
 	_scanning = true;
 }
-function exitScan(): void { _scanning = false; }
+function exitScan(): void {
+	_scanning = false;
+}
 
 interface FileCacheEntry {
 	mtime: number;
@@ -70,7 +72,7 @@ function getFileMtimes(root: string, files: string[]): Map<string, number> {
 			mtimes.set(relPath, statSync(join(root, relPath)).mtimeMs);
 		} catch (err) {
 			// Log but continue — file may have been deleted between collection and stat
-			if (err instanceof Error && err.message.includes('ENOENT')) continue;
+			if (err instanceof Error && err.message.includes("ENOENT")) continue;
 			console.warn(`[pi-shazam] getFileMtimes: failed to stat ${relPath}: ${err}`);
 		}
 	}
@@ -273,7 +275,10 @@ function extractPythonAllNames(tree: unknown): Set<string> {
 	return names;
 }
 
-function collectStringsFromNode(node: { type: string; text: string; namedChildren?: unknown[] }, out: Set<string>): void {
+function collectStringsFromNode(
+	node: { type: string; text: string; namedChildren?: unknown[] },
+	out: Set<string>,
+): void {
 	if (node.type === "string") {
 		const text = node.text;
 		// Strip quotes: 'x', "x", '''x''', """x"""
@@ -302,27 +307,31 @@ function parseFile(adapter: TreeSitterAdapter, root: string, relPath: string, mt
 		const tree = adapter.parse(source, lang);
 		if (!tree) return null;
 
-		const symbols = adapter.extractSymbols(tree, lang, relPath);
-		// For Python files, scan for `__all__ = [...]` at module scope and
-		// mark listed symbols as exported. Symbols in __all__ are the
-		// module's public API; consumers import them by name from outside
-		// the scanned graph, so without this they appear orphaned (#248).
-		if (lang === "python") {
-			const allNames = extractPythonAllNames(tree);
-			if (allNames.size > 0) {
-				for (const sym of symbols) {
-					if (allNames.has(sym.name)) sym.visibility = "exported";
+		try {
+			const symbols = adapter.extractSymbols(tree, lang, relPath);
+			// For Python files, scan for `__all__ = [...]` at module scope and
+			// mark listed symbols as exported. Symbols in __all__ are the
+			// module's public API; consumers import them by name from outside
+			// the scanned graph, so without this they appear orphaned (#248).
+			if (lang === "python") {
+				const allNames = extractPythonAllNames(tree);
+				if (allNames.size > 0) {
+					for (const sym of symbols) {
+						if (allNames.has(sym.name)) sym.visibility = "exported";
+					}
 				}
 			}
-		}
-		const imports = adapter.extractImports(tree, lang);
-		const calls = adapter.extractCalls(tree, lang);
-		const jsImportBindings = adapter.extractJsTsImportBindings(tree, lang);
+			const imports = adapter.extractImports(tree, lang);
+			const calls = adapter.extractCalls(tree, lang);
+			const jsImportBindings = adapter.extractJsTsImportBindings(tree, lang);
 
-		return { mtime, symbols, imports, calls, jsImportBindings };
+			return { mtime, symbols, imports, calls, jsImportBindings };
+		} finally {
+			(tree as unknown as { delete?: () => void }).delete?.();
+		}
 	} catch (err) {
 		// Log parse failures to aid debugging (fixes #133)
-		if (err instanceof Error && err.message.includes('File too large')) {
+		if (err instanceof Error && err.message.includes("File too large")) {
 			// Expected for large files — skip silently
 			return null;
 		}
@@ -600,6 +609,7 @@ function scanIncremental(
 	const currentFileSet = new Set(files);
 
 	// Determine changed, new, and deleted files
+	// Note: "changedFiles" includes both new files (not in cache) and modified files
 	const changedFiles: string[] = [];
 	const deletedFiles: string[] = [];
 
@@ -742,7 +752,7 @@ function collectSourceFiles(root: string, maxFiles: number): string[] {
 			entries = readdirSync(dir, { withFileTypes: true });
 		} catch (err) {
 			// Log directory read failures (fixes #133, #160)
-			if (err instanceof Error && (err.message.includes('EACCES') || err.message.includes('EPERM'))) {
+			if (err instanceof Error && (err.message.includes("EACCES") || err.message.includes("EPERM"))) {
 				console.warn(`[pi-shazam] collectSourceFiles: permission denied: ${dir}`);
 			} else {
 				const code = (err as NodeJS.ErrnoException)?.code ?? String(err);
