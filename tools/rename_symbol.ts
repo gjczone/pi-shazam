@@ -285,6 +285,10 @@ async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise
 		}
 	}
 
+	// Backup originals before writing — enables atomic rollback on failure
+	const backups: { filePath: string; content: string }[] = [];
+	const written: string[] = [];
+
 	for (const { uri, edits: textEdits } of textDocEdits) {
 		const filePath = uriToPath(uri);
 		fileCount++;
@@ -305,6 +309,9 @@ async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise
 		// Apply edits: read file, apply edits in reverse order, write back
 		try {
 			const content = readFileAdaptive(filePath);
+			// Backup original content before modifying
+			backups.push({ filePath, content });
+
 			const lines = content.split("\n");
 			const sortedEdits = [...textEdits].sort(
 				(a, b) => b.range.start.line - a.range.start.line || b.range.start.character - a.range.start.character,
@@ -330,13 +337,28 @@ async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise
 			}
 
 			writeFileSync(filePath, lines.join("\n"), "utf-8");
+			written.push(filePath);
 		} catch (err) {
-			// Log but continue with other files
-			preview.push({
-				file: filePath,
-				line: 0,
-				text: `Error applying edits: ${err}`,
-			});
+			// Rollback all already-written files to their backups
+			for (const writtenPath of written) {
+				const backup = backups.find((b) => b.filePath === writtenPath);
+				if (backup) {
+					try {
+						writeFileSync(backup.filePath, backup.content, "utf-8");
+					} catch {
+						// Best-effort rollback — log but don't mask the original error
+					}
+				}
+			}
+			return {
+				fileCount,
+				totalChanges,
+				preview: [
+					...preview,
+					{ file: filePath, line: 0, text: `Error applying edits: ${err}` },
+					{ file: "", line: 0, text: `Rolled back ${written.length} file(s) due to failure. No changes were persisted.` },
+				],
+			};
 		}
 	}
 

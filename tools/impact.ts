@@ -18,12 +18,13 @@ export function registerImpact(pi: ExtensionAPI): void {
 		Returns every file, symbol, and test affected by your planned changes.
 		Without this, you are guessing which tests to run and which callers to
 		update. Pass --with-symbols for per-symbol risk breakdown. Pass
-		--compact for concise output (file names only). Supports multiple
-		--files.`,
+		--compact for concise output (file names only). Pass --depth to
+		control BFS traversal depth (default 3). Supports multiple --files.`,
 		params: Type.Object({
 			files: Type.Array(Type.String()),
 			withSymbols: Type.Optional(Type.Boolean()),
 			compact: Type.Optional(Type.Boolean()),
+			depth: Type.Optional(Type.Number()),
 		}),
 		execute(graph, params) {
 			const json = params.json ?? false;
@@ -31,11 +32,13 @@ export function registerImpact(pi: ExtensionAPI): void {
 				return "Error: --files is required (must be an array of file paths)";
 			}
 			const files = params.files as string[];
+			const depth = (params.depth as number) ?? 3;
 					return json
-				? executeImpactJson(graph, files)
+				? executeImpactJson(graph, files, depth)
 				: executeImpact(graph, files, {
 						withSymbols: (params.withSymbols as boolean) ?? false,
 						compact: (params.compact as boolean) ?? false,
+						depth,
 					});
 		},
 	});
@@ -44,6 +47,7 @@ export function registerImpact(pi: ExtensionAPI): void {
 interface ImpactOptions {
 	withSymbols: boolean;
 	compact: boolean;
+	depth: number;
 }
 
 interface AffectedSymbol {
@@ -54,42 +58,67 @@ interface AffectedSymbol {
 export function executeImpact(
 	graph: RepoGraph,
 	files: string[],
-	opts: ImpactOptions = { withSymbols: false, compact: false },
+	opts: ImpactOptions = { withSymbols: false, compact: false, depth: 3 },
 ): string {
 	const affectedFiles = new Set<string>();
 	const affectedSymbols: AffectedSymbol[] = [];
+	const depth = opts.depth ?? 3;
 
-	// For each file, find its symbols and trace outgoing edges
+	// Collect initial symbol IDs from target files
+	const initialSymIds: string[] = [];
 	for (const file of files) {
 		affectedFiles.add(file);
 		const symIds = graph.fileSymbols.get(file) || [];
+		initialSymIds.push(...symIds);
+	}
 
-		// Trace one level outward: what calls/imports symbols from this file?
-		for (const id of symIds) {
-			const incoming = graph.incoming.get(id);
-			if (incoming) {
-				for (const edge of incoming) {
-					const callerSym = graph.symbols.get(edge.source);
-					if (callerSym && !files.includes(callerSym.file) && !isNonSourceFile(callerSym.file)) {
-						affectedFiles.add(callerSym.file);
-						if (opts.withSymbols) {
-							affectedSymbols.push({ symbol: callerSym, direction: "upstream" });
-						}
+	// BFS upstream: what calls/imports symbols from this file (and transitively)?
+	const visitedUp = new Set<string>();
+	const queueUp: { id: string; level: number }[] = initialSymIds.map((id) => ({ id, level: 0 }));
+	for (const id of initialSymIds) visitedUp.add(id);
+
+	while (queueUp.length > 0) {
+		const { id, level } = queueUp.shift()!;
+		if (level >= depth) continue;
+
+		const incoming = graph.incoming.get(id);
+		if (incoming) {
+			for (const edge of incoming) {
+				if (visitedUp.has(edge.source)) continue;
+				visitedUp.add(edge.source);
+				const callerSym = graph.symbols.get(edge.source);
+				if (callerSym && !files.includes(callerSym.file) && !isNonSourceFile(callerSym.file)) {
+					affectedFiles.add(callerSym.file);
+					if (opts.withSymbols) {
+						affectedSymbols.push({ symbol: callerSym, direction: "upstream" });
 					}
+					queueUp.push({ id: edge.source, level: level + 1 });
 				}
 			}
+		}
+	}
 
-			// Also: what does this file's symbols depend on?
-			const outgoing = graph.outgoing.get(id);
-			if (outgoing) {
-				for (const edge of outgoing) {
-					const calleeSym = graph.symbols.get(edge.target);
-					if (calleeSym && !files.includes(calleeSym.file) && !isNonSourceFile(calleeSym.file)) {
-						affectedFiles.add(calleeSym.file);
-						if (opts.withSymbols) {
-							affectedSymbols.push({ symbol: calleeSym, direction: "downstream" });
-						}
+	// BFS downstream: what does this file's symbols depend on (and transitively)?
+	const visitedDown = new Set<string>();
+	const queueDown: { id: string; level: number }[] = initialSymIds.map((id) => ({ id, level: 0 }));
+	for (const id of initialSymIds) visitedDown.add(id);
+
+	while (queueDown.length > 0) {
+		const { id, level } = queueDown.shift()!;
+		if (level >= depth) continue;
+
+		const outgoing = graph.outgoing.get(id);
+		if (outgoing) {
+			for (const edge of outgoing) {
+				if (visitedDown.has(edge.target)) continue;
+				visitedDown.add(edge.target);
+				const calleeSym = graph.symbols.get(edge.target);
+				if (calleeSym && !files.includes(calleeSym.file) && !isNonSourceFile(calleeSym.file)) {
+					affectedFiles.add(calleeSym.file);
+					if (opts.withSymbols) {
+						affectedSymbols.push({ symbol: calleeSym, direction: "downstream" });
 					}
+					queueDown.push({ id: edge.target, level: level + 1 });
 				}
 			}
 		}
@@ -107,6 +136,7 @@ export function executeImpact(
 	lines.push("");
 	lines.push(`Target files: ${files.join(", ")}`);
 	lines.push(`Affected files: ${affectedFiles.size - files.length}`);
+	lines.push(`Traversal depth: ${depth}`);
 	if (opts.withSymbols) {
 		lines.push(`Affected symbols: ${affectedSymbols.length}`);
 	}
@@ -213,34 +243,58 @@ function assessImpactRisk(affectedFileCount: number, affectedSymbolCount: number
 	};
 }
 
-export function executeImpactJson(graph: RepoGraph, files: string[]): string {
+export function executeImpactJson(graph: RepoGraph, files: string[], depth: number = 3): string {
 	const affectedFiles = new Set<string>();
 	const affectedSymbols: AffectedSymbol[] = [];
 
+	// Collect initial symbol IDs from target files
+	const initialSymIds: string[] = [];
 	for (const file of files) {
 		const symIds = graph.fileSymbols.get(file) || [];
-		for (const id of symIds) {
-			// Incoming: what calls/imports symbols from this file?
-			const incoming = graph.incoming.get(id);
-			if (incoming) {
-				for (const edge of incoming) {
-					const callerSym = graph.symbols.get(edge.source);
-					if (callerSym && !files.includes(callerSym.file) && !isNonSourceFile(callerSym.file)) {
-						affectedFiles.add(callerSym.file);
-						affectedSymbols.push({ symbol: callerSym, direction: "upstream" });
-					}
+		initialSymIds.push(...symIds);
+	}
+
+	// BFS upstream
+	const visitedUp = new Set<string>();
+	const queueUp: { id: string; level: number }[] = initialSymIds.map((id) => ({ id, level: 0 }));
+	for (const id of initialSymIds) visitedUp.add(id);
+
+	while (queueUp.length > 0) {
+		const { id, level } = queueUp.shift()!;
+		if (level >= depth) continue;
+		const incoming = graph.incoming.get(id);
+		if (incoming) {
+			for (const edge of incoming) {
+				if (visitedUp.has(edge.source)) continue;
+				visitedUp.add(edge.source);
+				const callerSym = graph.symbols.get(edge.source);
+				if (callerSym && !files.includes(callerSym.file) && !isNonSourceFile(callerSym.file)) {
+					affectedFiles.add(callerSym.file);
+					affectedSymbols.push({ symbol: callerSym, direction: "upstream" });
+					queueUp.push({ id: edge.source, level: level + 1 });
 				}
 			}
+		}
+	}
 
-			// Outgoing: what does this file's symbols depend on?
-			const outgoing = graph.outgoing.get(id);
-			if (outgoing) {
-				for (const edge of outgoing) {
-					const calleeSym = graph.symbols.get(edge.target);
-					if (calleeSym && !files.includes(calleeSym.file) && !isNonSourceFile(calleeSym.file)) {
-						affectedFiles.add(calleeSym.file);
-						affectedSymbols.push({ symbol: calleeSym, direction: "downstream" });
-					}
+	// BFS downstream
+	const visitedDown = new Set<string>();
+	const queueDown: { id: string; level: number }[] = initialSymIds.map((id) => ({ id, level: 0 }));
+	for (const id of initialSymIds) visitedDown.add(id);
+
+	while (queueDown.length > 0) {
+		const { id, level } = queueDown.shift()!;
+		if (level >= depth) continue;
+		const outgoing = graph.outgoing.get(id);
+		if (outgoing) {
+			for (const edge of outgoing) {
+				if (visitedDown.has(edge.target)) continue;
+				visitedDown.add(edge.target);
+				const calleeSym = graph.symbols.get(edge.target);
+				if (calleeSym && !files.includes(calleeSym.file) && !isNonSourceFile(calleeSym.file)) {
+					affectedFiles.add(calleeSym.file);
+					affectedSymbols.push({ symbol: calleeSym, direction: "downstream" });
+					queueDown.push({ id: edge.target, level: level + 1 });
 				}
 			}
 		}

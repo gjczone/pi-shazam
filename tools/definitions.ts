@@ -37,16 +37,18 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_impact",
 		label: "Change Impact Analysis",
 		description:
-			"Required before editing 2+ files or any shared/exported module. Returns every file, symbol, and test affected by your planned changes. Without this, you are guessing which tests to run and which callers to update. Pass --with-symbols for per-symbol risk breakdown. Pass --compact for concise output (file names only). Supports multiple --files.",
+			"Required before editing 2+ files or any shared/exported module. Returns every file, symbol, and test affected by your planned changes. Without this, you are guessing which tests to run and which callers to update. Pass --with-symbols for per-symbol risk breakdown. Pass --compact for concise output (file names only). Pass --depth to control BFS traversal depth (default 3). Supports multiple --files.",
 		typeboxParams: Type.Object({
 			files: Type.Array(Type.String()),
 			withSymbols: Type.Optional(Type.Boolean()),
 			compact: Type.Optional(Type.Boolean()),
+			depth: Type.Optional(Type.Number()),
 		}),
 		zodParams: z.object({
 			files: z.array(z.string()).describe("List of file paths to analyze"),
 			withSymbols: z.boolean().optional().describe("Show per-symbol risk breakdown"),
 			compact: z.boolean().optional().describe("Concise output (file names only)"),
+			depth: z.number().int().min(1).max(10).optional().default(3).describe("BFS traversal depth (default 3)"),
 		}),
 	},
 

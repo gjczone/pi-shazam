@@ -120,8 +120,8 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: impactDef.description,
 			inputSchema: impactDef.zodParams,
 		},
-		withLogging("shazam_impact", async ({ files, withSymbols, compact }) => {
-			const text = executeImpact(getGraph(), files as string[], { withSymbols: (withSymbols as boolean) ?? false, compact: (compact as boolean) ?? false });
+		withLogging("shazam_impact", async ({ files, withSymbols, compact, depth }) => {
+			const text = executeImpact(getGraph(), files as string[], { withSymbols: (withSymbols as boolean) ?? false, compact: (compact as boolean) ?? false, depth: (depth as number) ?? 3 });
 			return { content: [{ type: "text", text }] };
 		}),
 	);

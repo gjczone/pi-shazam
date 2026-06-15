@@ -42,6 +42,9 @@ export function registerCallChain(pi: ExtensionAPI): void {
 	});
 }
 
+/** Maximum number of refs to display per direction before truncating. */
+const MAX_DISPLAY_REFS = 50;
+
 export function executeCallChain(
 	graph: RepoGraph,
 	symbolName: string,
@@ -62,10 +65,14 @@ export function executeCallChain(
 		if (direction !== "outgoing") {
 			const incomingChain = traceIncoming(graph, target.id, depth);
 			if (incomingChain.length > 0) {
+				const shown = incomingChain.slice(0, MAX_DISPLAY_REFS);
 				lines.push(`### Incoming Calls (${incomingChain.length} callers in ${depth} levels)`);
-				for (const [level, sym, edge] of incomingChain) {
+				for (const [level, sym, edge] of shown) {
 					const indent = "  ".repeat(level);
 					lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (${edge.kind})`);
+				}
+				if (incomingChain.length > MAX_DISPLAY_REFS) {
+					lines.push(`  ... and ${incomingChain.length - MAX_DISPLAY_REFS} more (use --maxTokens to see full output)`);
 				}
 			}
 		}
@@ -74,11 +81,15 @@ export function executeCallChain(
 		if (direction !== "incoming") {
 			const outgoingChain = traceOutgoing(graph, target.id, depth);
 			if (outgoingChain.length > 0) {
+				const shown = outgoingChain.slice(0, MAX_DISPLAY_REFS);
 				lines.push("");
 				lines.push(`### Outgoing Calls (${outgoingChain.length} callees in ${depth} levels)`);
-				for (const [level, sym, edge] of outgoingChain) {
+				for (const [level, sym, edge] of shown) {
 					const indent = "  ".repeat(level);
 					lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (${edge.kind})`);
+				}
+				if (outgoingChain.length > MAX_DISPLAY_REFS) {
+					lines.push(`  ... and ${outgoingChain.length - MAX_DISPLAY_REFS} more (use --maxTokens to see full output)`);
 				}
 			}
 		}
@@ -268,16 +279,22 @@ export function formatFlatReferences(refs: FlatReference[], symbolName: string):
 
 	if (incoming.length > 0) {
 		lines.push(`### Incoming (${incoming.length})`);
-		for (const r of incoming) {
+		for (const r of incoming.slice(0, MAX_DISPLAY_REFS)) {
 			lines.push(`- ${r.kind} \`${r.symbol}\` — ${r.file}:${r.line}`);
+		}
+		if (incoming.length > MAX_DISPLAY_REFS) {
+			lines.push(`  ... and ${incoming.length - MAX_DISPLAY_REFS} more (use --maxTokens to see full output)`);
 		}
 		lines.push("");
 	}
 
 	if (outgoing.length > 0) {
 		lines.push(`### Outgoing (${outgoing.length})`);
-		for (const r of outgoing) {
+		for (const r of outgoing.slice(0, MAX_DISPLAY_REFS)) {
 			lines.push(`- ${r.kind} \`${r.symbol}\` — ${r.file}:${r.line}`);
+		}
+		if (outgoing.length > MAX_DISPLAY_REFS) {
+			lines.push(`  ... and ${outgoing.length - MAX_DISPLAY_REFS} more (use --maxTokens to see full output)`);
 		}
 		lines.push("");
 	}

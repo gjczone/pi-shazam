@@ -107,7 +107,7 @@ export function executeSafeDelete(graph: RepoGraph, symbolName: string, dryRun: 
 			dryRun
 				? "DRY RUN: Pass dryRun=false to confirm deletion."
 				: `DELETE: Run \`git rm\` or manually remove the symbol definition in ${filePath}.`
-		}`,
+		}\n⚠️ Static analysis cannot detect dynamic references (eval, dynamic import, Reflect API). Verify manually before deleting.`,
 	};
 }
 
