@@ -6,15 +6,11 @@
  * cache directories. Supports V2 serialization with file-level data.
  */
 
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
-import {
-	serializeGraphV2,
-	deserializeGraphV2,
-	compareGraphSnapshots,
-} from "./graph.js";
+import { serializeGraphV2, deserializeGraphV2, compareGraphSnapshots } from "./graph.js";
 import type { RepoGraph, GraphDiff, Symbol, Edge, SerializedSymbol, SerializedEdge } from "./graph.js";
 
 // ── Cache directory management ───────────────────────────────────────────────
@@ -128,6 +124,12 @@ export interface GraphCacheData {
 export function loadGraphCache(cachePath: string): GraphCacheData | null {
 	if (!existsSync(cachePath)) return null;
 	try {
+		const MAX_CACHE_SIZE = 100 * 1024 * 1024; // 100MB
+		const cacheStat = statSync(cachePath);
+		if (cacheStat.size > MAX_CACHE_SIZE) {
+			console.warn(`[pi-shazam] Cache file too large (${cacheStat.size} bytes), skipping`);
+			return null;
+		}
 		const raw = readFileSync(cachePath, "utf-8");
 		const data = JSON.parse(raw);
 		if (!data || data.version !== 2 || !Array.isArray(data.symbols) || !Array.isArray(data.edges)) return null;

@@ -82,6 +82,8 @@ export function readFileAdaptive(filePath: string): string {
  * Returns one of: "utf-8", "gbk", "gb2312", "unknown".
  */
 export function detectEncoding(buffer: Buffer): string {
+	// Fast path: if UTF-8 is valid, skip other encoding checks
+	if (tryDecode(buffer, "utf-8") !== null) return "utf-8";
 	// UTF-8 BOM check
 	if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
 		return "utf-8";
