@@ -82,6 +82,14 @@ export default function (pi: ExtensionAPI): void {
 				]);
 			}
 		} catch (err) {
+			const isTimeout = err instanceof Error && err.message.includes("timed out");
+			if (isTimeout) {
+				// On timeout, clean up any partially-spawned LSP processes
+				// to prevent orphaned processes until session_shutdown (fixes #312).
+				try {
+					await lspManager.shutdown();
+				} catch { /* best effort cleanup */ }
+			}
 			log(`LSP init error: ${err}`);
 		}
 	});

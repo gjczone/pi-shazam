@@ -26,6 +26,54 @@ import { executeOverview } from "../tools/overview.js";
 import { hasTestFiles, hasHierarchyKinds } from "../core/output.js";
 import { createBaseline, getBaseline, formatBaselineSummary } from "../core/baseline.js";
 import { execFileSync } from "node:child_process";
+import { readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { SKIP_DIRS } from "../core/filter.js";
+import { EXT_TO_LANG } from "../core/treesitter.js";
+
+/** Source file extensions set (mirrors core/scanner.ts SOURCE_EXTS). */
+const SOURCE_EXTS = new Set(Object.keys(EXT_TO_LANG));
+
+/**
+ * File count threshold above which we skip the synchronous scanProject
+ * for the before-start overview. Prevents blocking agent startup on
+ * very large projects (5000+ source files can take 5-10s to scan).
+ */
+const OVERVIEW_FILE_COUNT_THRESHOLD = 5000;
+
+/**
+ * Quickly count source files in a project up to a limit.
+ * Uses only readdirSync (no tree-sitter parsing) so it's fast.
+ * Returns as soon as count >= limit to avoid unnecessary work.
+ */
+function countSourceFilesUpTo(root: string, limit: number): number {
+	let count = 0;
+	const resolvedRoot = resolve(root);
+
+	function walk(dir: string) {
+		if (count >= limit) return;
+		let entries;
+		try {
+			entries = readdirSync(dir, { withFileTypes: true });
+		} catch {
+			return; // permission denied or unreadable directory
+		}
+		for (const entry of entries) {
+			if (count >= limit) return;
+			if (entry.isDirectory()) {
+				if (SKIP_DIRS.has(entry.name)) continue;
+				if (entry.name.startsWith(".")) continue;
+				walk(join(dir, entry.name));
+			} else if (entry.isFile()) {
+				const ext = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();
+				if (SOURCE_EXTS.has(ext)) count++;
+			}
+		}
+	}
+
+	walk(resolvedRoot);
+	return count;
+}
 
 /**
  * Get the number of uncommitted changes in the working tree.
@@ -136,6 +184,18 @@ export function generateOverviewForPrompt(projectRoot: string, isContinuation = 
 	// For continuation sessions, skip the full overview (fixes #117, #118)
 	if (isContinuation && _hasShownOverview) {
 		return "[pi-shazam] Session continuation — use shazam_overview for project structure.";
+	}
+
+	// Pre-check: skip synchronous scanProject on very large projects to
+	// prevent blocking agent startup for 5-10s (fixes #312).
+	const fileCount = countSourceFilesUpTo(projectRoot, OVERVIEW_FILE_COUNT_THRESHOLD + 1);
+	if (fileCount > OVERVIEW_FILE_COUNT_THRESHOLD) {
+		_hasShownOverview = true;
+		return [
+			"[pi-shazam] Project is very large (5000+ source files).",
+			"Full overview scan skipped to avoid blocking startup.",
+			"Run `shazam_overview` manually to get the project structure map.",
+		].join("\n");
 	}
 
 	// Scan once at the top level and pass the graph to all helpers (fixes #95).

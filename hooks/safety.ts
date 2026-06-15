@@ -14,37 +14,36 @@ import { hasRecentPassingVerify } from "./verify-state.js";
 
 /**
  * High-risk patterns that should always trigger confirmation.
- * Matched as substrings in the command.
+ * Regex patterns catch whitespace-bypass variants (extra spaces, tabs, split flags).
  */
-const HIGH_RISK_PATTERNS = [
-	"rm -rf",
-	"rm -fr",
-	"rm --recursive",
-	"dd if=",
-	"mkfs",
-	"mkswap",
-	"fdisk",
-	"parted",
-	"sfdisk",
-	":(){ :|:& };:", // fork bomb
+const HIGH_RISK_PATTERNS: Array<{ regex: RegExp; label: string }> = [
+	{ regex: /rm\s+(-[rRfF]{2,}|-(?:r|f)\s+-(?:r|f)|--recursive)\b/, label: "rm -rf" },
+	{ regex: /dd\s+if=/, label: "dd if=" },
+	{ regex: /\bmkfs\b/, label: "mkfs" },
+	{ regex: /\bmkswap\b/, label: "mkswap" },
+	{ regex: /\bfdisk\b/, label: "fdisk" },
+	{ regex: /\bparted\b/, label: "parted" },
+	{ regex: /\bsfdisk\b/, label: "sfdisk" },
+	{ regex: /:\(\)\s*\{\s*:\|:&\s*\};:/, label: ":(){ :|:& };:" }, // fork bomb
 ];
 
 /**
  * Medium-risk patterns that trigger confirmation.
+ * Regex patterns catch whitespace-bypass variants.
  */
-const MEDIUM_RISK_PATTERNS = [
-	"chmod -R 777",
-	"chmod 777 /",
-	"chown -R",
-	"> /dev/sd",
-	"> /dev/nvme",
-	"> /dev/mmcblk",
-	"pvcreate",
-	"vgcreate",
-	"lvcreate",
-	"iptables -F",
-	"iptables -P",
-	"rm -r /",
+const MEDIUM_RISK_PATTERNS: Array<{ regex: RegExp; label: string }> = [
+	{ regex: /chmod\s+(-R\s+)?777\s+\//, label: "chmod 777 /" },
+	{ regex: /chmod\s+-R\s+777/, label: "chmod -R 777" },
+	{ regex: /chown\s+-R\b/, label: "chown -R" },
+	{ regex: />\s*\/dev\/sd/, label: "> /dev/sd" },
+	{ regex: />\s*\/dev\/nvme/, label: "> /dev/nvme" },
+	{ regex: />\s*\/dev\/mmcblk/, label: "> /dev/mmcblk" },
+	{ regex: /\bpvcreate\b/, label: "pvcreate" },
+	{ regex: /\bvgcreate\b/, label: "vgcreate" },
+	{ regex: /\blvcreate\b/, label: "lvcreate" },
+	{ regex: /iptables\s+-F\b/, label: "iptables -F" },
+	{ regex: /iptables\s+-P\b/, label: "iptables -P" },
+	{ regex: /rm\s+(-[rRfF]{2,}|-(?:r|f)\s+-(?:r|f)|--recursive|-r)\s+\//, label: "rm -r /" },
 ];
 
 /**
@@ -53,27 +52,32 @@ const MEDIUM_RISK_PATTERNS = [
 const GIT_COMMIT_PATTERN = /git\s+commit/;
 
 /**
+ * Normalize whitespace in a command string: collapse tabs and multiple spaces
+ * to a single space, then trim. This prevents bypass via extra spaces or tabs.
+ */
+function normalizeWhitespace(cmd: string): string {
+	return cmd.replace(/[\t\r]+/g, " ").replace(/ {2,}/g, " ").trim();
+}
+
+/**
  * Check if a command matches any destructive pattern.
+ * Normalizes whitespace first, then uses regex patterns for robust matching.
  * Returns the risk level and matched pattern, or null if safe.
  */
 function detectDestructiveCommand(cmd: string): { level: "HIGH" | "MEDIUM"; pattern: string } | null {
-	const lower = cmd.toLowerCase();
+	const normalized = normalizeWhitespace(cmd);
+	const lower = normalized.toLowerCase();
 
-	for (const pattern of HIGH_RISK_PATTERNS) {
-		if (lower.includes(pattern.toLowerCase())) {
-			return { level: "HIGH", pattern };
+	for (const { regex, label } of HIGH_RISK_PATTERNS) {
+		if (regex.test(lower)) {
+			return { level: "HIGH", pattern: label };
 		}
 	}
 
-	for (const pattern of MEDIUM_RISK_PATTERNS) {
-		if (lower.includes(pattern.toLowerCase())) {
-			return { level: "MEDIUM", pattern };
+	for (const { regex, label } of MEDIUM_RISK_PATTERNS) {
+		if (regex.test(lower)) {
+			return { level: "MEDIUM", pattern: label };
 		}
-	}
-
-	// Check for rm targeting root
-	if (/^rm\s+-(rf|fr|r)\s+(\/[^\s]*|~\/)/.test(cmd)) {
-		return { level: "HIGH", pattern: "rm -rf /" };
 	}
 
 	return null;
