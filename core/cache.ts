@@ -6,7 +6,7 @@
  * cache directories. Supports V2 serialization with file-level data.
  */
 
-import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync, renameSync, unlinkSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
@@ -104,11 +104,20 @@ const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 1 day — prevents stale cache 
 
 /**
  * Save the full graph + file mtimes to a persistent cache file.
+ * Uses atomic write (tmp file + rename) to prevent corruption on crash.
  */
 export function saveGraphCache(graph: RepoGraph, fileMtimes: Map<string, number>, cachePath: string): void {
 	const serialized = serializeGraphV2(graph, fileMtimes);
 	mkdirSync(dirname(cachePath), { recursive: true });
-	writeFileSync(cachePath, JSON.stringify(serialized), "utf-8");
+	const tmpPath = cachePath + ".tmp";
+	try {
+		writeFileSync(tmpPath, JSON.stringify(serialized), "utf-8");
+		renameSync(tmpPath, cachePath);
+	} catch (err) {
+		// Clean up tmp file on failure
+		try { unlinkSync(tmpPath); } catch { /* ignore cleanup error */ }
+		throw err;
+	}
 }
 
 export interface GraphCacheData {
