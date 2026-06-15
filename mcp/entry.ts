@@ -11,33 +11,48 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { scanProject } from "../core/scanner.js";
 import type { RepoGraph } from "../core/graph.js";
+import { LspManager, detectProjectLanguages } from "../lsp/manager.js";
 import { registerAllTools } from "./tools.js";
 
 const PROJECT_ROOT = process.argv[2] || ".";
 
-// Graph cache with TTL — re-scans when stale so file edits during a
-// session are reflected in analysis results (fixes #285).
+// Graph cache — uses scanProject's built-in incremental mtime detection.
+// No TTL needed; scanProject already handles per-file change detection.
 let cachedGraph: RepoGraph | null = null;
-let graphTimestamp = 0;
-const GRAPH_CACHE_TTL_MS = 30_000; // 30 seconds
 
 function getGraph(): RepoGraph {
-	const now = Date.now();
-	if (!cachedGraph || now - graphTimestamp > GRAPH_CACHE_TTL_MS) {
-		cachedGraph = scanProject(PROJECT_ROOT);
-		graphTimestamp = now;
-	}
+	cachedGraph = scanProject(PROJECT_ROOT);
 	return cachedGraph;
 }
 
 async function main(): Promise<void> {
+	// Initialize LSP servers for richer analysis (hover, diagnostics, etc.)
+	const lspManager = new LspManager(PROJECT_ROOT);
+	const languages = detectProjectLanguages(PROJECT_ROOT);
+	if (languages.length > 0) {
+		try {
+			await lspManager.initializeAll();
+		} catch {
+			// LSP servers are optional — tools degrade gracefully to tree-sitter only
+		}
+	}
+
 	const server = new McpServer({
 		name: "pi-shazam",
 		version: "0.10.5",
 	});
 
-	// Register all analysis tools (graph is lazily scanned on first call)
-	registerAllTools(server, getGraph, PROJECT_ROOT);
+	// Register all analysis tools with LSP support
+	registerAllTools(server, getGraph, PROJECT_ROOT, lspManager);
+
+	// Graceful shutdown on process exit
+	const shutdown = async () => {
+		try {
+			await lspManager.shutdown();
+		} catch { /* best effort */ }
+	};
+	process.on("SIGTERM", shutdown);
+	process.on("SIGINT", shutdown);
 
 	// Start stdio transport
 	const transport = new StdioServerTransport();

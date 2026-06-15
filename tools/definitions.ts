@@ -71,6 +71,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 				.default("literal")
 				.describe("Search mode for target=code: literal (exact), regex (tokenized), smart (auto-detect NL)"),
 			topN: z.number().optional().describe("Max results to return"),
+			maxTokens: z.number().optional().describe("Max tokens in output"),
 		}),
 	},
 
@@ -90,6 +91,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			name: z.string().describe("Symbol name to look up"),
 			mode: z.enum(["state"]).optional().describe("Use 'state' for enum/state map analysis"),
 			file: z.string().optional().describe("Optional file path to scope the search"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
+			maxTokens: z.number().optional().describe("Max tokens in output"),
 		}),
 	},
 
@@ -164,7 +167,9 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		label: "Code Hotspots",
 		description:
 			"Without this, you optimize the wrong files. Returns files ranked by (symbol density x PageRank) — these are the files where bugs have the highest blast radius. Use to prioritize code review, decide where to write tests first, and understand which files form the project's core.",
-		typeboxParams: Type.Object({}),
+		typeboxParams: Type.Object({
+			topN: Type.Optional(Type.Number()),
+		}),
 		zodParams: z.object({ topN: z.number().optional().describe("Max results to return") }),
 	},
 

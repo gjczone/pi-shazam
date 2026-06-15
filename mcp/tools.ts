@@ -18,19 +18,45 @@ import { executeVerify } from "../tools/verify.js";
 import { executeTypeHierarchy, formatTypeHierarchy } from "../tools/type_hierarchy.js";
 import { executeRenameSymbol, formatRenameResult } from "../tools/rename_symbol.js";
 import { executeSafeDelete, formatSafeDeleteResult } from "../tools/safe_delete.js";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, statSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import type { LspManager } from "../lsp/manager.js";
 import { getToolDefinition } from "../tools/definitions.js";
 
 // ── Logging ──────────────────────────────────────────────────────
 
 // Use pi-shazam-specific audit directory (was .kimi-code/audit for Kimi Code compatibility)
 const LOG_DIR = join(homedir(), ".pi", "hooks", "audit");
+const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_LOG_FILES = 3;
+
+/**
+ * Rotate log files when the current log exceeds MAX_LOG_SIZE.
+ * Keeps up to MAX_LOG_FILES archived logs (shazam-calls.log.1, .2, .3).
+ */
+function rotateLog(): void {
+	try {
+		const logPath = join(LOG_DIR, "shazam-calls.log");
+		const stat = statSync(logPath);
+		if (stat.size > MAX_LOG_SIZE) {
+			// Shift existing rotated files
+			for (let i = MAX_LOG_FILES - 1; i >= 1; i--) {
+				const src = join(LOG_DIR, `shazam-calls.log.${i}`);
+				const dst = join(LOG_DIR, `shazam-calls.log.${i + 1}`);
+				try { renameSync(src, dst); } catch { /* file may not exist */ }
+			}
+			renameSync(logPath, join(LOG_DIR, "shazam-calls.log.1"));
+		}
+	} catch {
+		/* file may not exist yet */
+	}
+}
 
 function logMCP(entry: Record<string, unknown>): void {
 	try {
 		mkdirSync(LOG_DIR, { recursive: true });
+		rotateLog();
 		appendFileSync(
 			join(LOG_DIR, "shazam-calls.log"),
 			JSON.stringify({
@@ -73,7 +99,7 @@ function withLogging(
 
 // ── Registration ─────────────────────────────────────────────────
 
-export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, projectRoot: string): void {
+export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, projectRoot: string, _lspManager?: LspManager): void {
 	const overviewDef = getToolDefinition("shazam_overview")!;
 	server.registerTool(
 		"shazam_overview",
