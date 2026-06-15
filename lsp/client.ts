@@ -22,6 +22,7 @@ const rpc: {
 		writer: import("vscode-jsonrpc").MessageWriter,
 		logger?: import("vscode-jsonrpc").Logger,
 	) => import("vscode-jsonrpc").MessageConnection;
+	CancellationTokenSource: new () => { token: import("vscode-jsonrpc").CancellationToken; cancel(): void; dispose(): void };
 } = _require("vscode-jsonrpc/node");
 
 import type {
@@ -341,10 +342,7 @@ export class LspClient {
 			workspaceFolders: null,
 		};
 
-		const result = await this.withTimeout(
-			this.connection!.sendRequest<InitializeResult>("initialize", initParams),
-			10000,
-		);
+		const result = await this._sendRequest<InitializeResult>("initialize", initParams, 10000);
 
 		this._serverCapabilities = ((result as InitializeResult).capabilities as Record<string, unknown>) ?? {};
 
@@ -448,7 +446,7 @@ export class LspClient {
 			throw new Error("LSP client not started");
 		}
 
-		return this.withTimeout(this.connection.sendRequest(method, params));
+		return this._sendRequest(method, params);
 	}
 
 	// ── Protocol methods ───────────────────────────────────────────────────────
@@ -466,9 +464,7 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.withTimeout(
-				this.connection!.sendRequest<Location | Location[] | null>("textDocument/definition", params),
-			);
+			const result = await this._sendRequest<Location | Location[] | null>("textDocument/definition", params);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -492,9 +488,7 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.withTimeout(
-				this.connection!.sendRequest<Location[] | null>("textDocument/references", params),
-			);
+			const result = await this._sendRequest<Location[] | null>("textDocument/references", params);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -517,7 +511,7 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.withTimeout(this.connection!.sendRequest<Hover | null>("textDocument/hover", params));
+			const result = await this._sendRequest<Hover | null>("textDocument/hover", params);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -539,11 +533,9 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.withTimeout(
-				this.connection!.sendRequest<DocumentSymbol[] | SymbolInformation[] | null>(
-					"textDocument/documentSymbol",
-					params,
-				),
+			const result = await this._sendRequest<DocumentSymbol[] | SymbolInformation[] | null>(
+				"textDocument/documentSymbol",
+				params,
 			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
@@ -564,8 +556,9 @@ export class LspClient {
 		const params: WorkspaceSymbolParams = { query };
 
 		try {
-			const result = await this.withTimeout(
-				this.connection.sendRequest<SymbolInformation[] | WorkspaceSymbol[] | null>("workspace/symbol", params),
+			const result = await this._sendRequest<SymbolInformation[] | WorkspaceSymbol[] | null>(
+				"workspace/symbol",
+				params,
 			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
@@ -589,8 +582,9 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.withTimeout(
-				this.connection!.sendRequest<SemanticTokens | null>("textDocument/semanticTokens/full", params),
+			const result = await this._sendRequest<SemanticTokens | null>(
+				"textDocument/semanticTokens/full",
+				params,
 			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
@@ -613,8 +607,9 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.withTimeout(
-				this.connection!.sendRequest<FoldingRange[] | null>("textDocument/foldingRange", params),
+			const result = await this._sendRequest<FoldingRange[] | null>(
+				"textDocument/foldingRange",
+				params,
 			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
@@ -639,8 +634,9 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.withTimeout(
-				this.connection!.sendRequest<WorkspaceEdit | null>("textDocument/rename", params),
+			const result = await this._sendRequest<WorkspaceEdit | null>(
+				"textDocument/rename",
+				params,
 			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
@@ -674,11 +670,9 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.withTimeout(
-				this.connection!.sendRequest<(CodeAction | import("vscode-languageserver-protocol").Command)[] | null>(
-					"textDocument/codeAction",
-					params,
-				),
+			const result = await this._sendRequest<(CodeAction | import("vscode-languageserver-protocol").Command)[] | null>(
+				"textDocument/codeAction",
+				params,
 			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
@@ -702,8 +696,9 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.withTimeout(
-				this.connection!.sendRequest<SignatureHelp | null>("textDocument/signatureHelp", params),
+			const result = await this._sendRequest<SignatureHelp | null>(
+				"textDocument/signatureHelp",
+				params,
 			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
@@ -727,8 +722,9 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.withTimeout(
-				this.connection!.sendRequest<Location | Location[] | null>("textDocument/implementation", params),
+			const result = await this._sendRequest<Location | Location[] | null>(
+				"textDocument/implementation",
+				params,
 			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
@@ -751,8 +747,9 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this.withTimeout(
-				this.connection!.sendRequest<CodeLens[] | null>("textDocument/codeLens", params),
+			const result = await this._sendRequest<CodeLens[] | null>(
+				"textDocument/codeLens",
+				params,
 			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
@@ -767,8 +764,10 @@ export class LspClient {
 	 * Race a request against a per-request timeout.
 	 * Uses this.timeout (default 8000ms) when no custom timeout is provided.
 	 * Returns null (via rejection caught by caller) when timeout fires first.
+	 * When onCancel is provided, it is called on timeout to cancel the
+	 * underlying request (e.g., CancellationTokenSource.cancel()).
 	 */
-	private withTimeout<T>(promise: Promise<T>, timeoutMs?: number): Promise<T> {
+	private withTimeout<T>(promise: Promise<T>, timeoutMs?: number, onCancel?: () => void): Promise<T> {
 		const ms = timeoutMs ?? this.timeout;
 		return new Promise<T>((resolve, reject) => {
 			this._inFlightRequests.set(promise, reject);
@@ -776,6 +775,14 @@ export class LspClient {
 			const timer = setTimeout(() => {
 				this._inFlightRequests.delete(promise);
 				void promise.catch(() => {});
+				// Cancel the underlying LSP request to free server resources
+				if (onCancel) {
+					try {
+						onCancel();
+					} catch {
+						// ignore cancel errors
+					}
+				}
 				reject(new Error(`LSP request timed out after ${ms}ms`));
 			}, ms);
 			promise
@@ -790,6 +797,17 @@ export class LspClient {
 					reject(err);
 				});
 		});
+	}
+
+	/**
+	 * Send an LSP request with automatic cancellation on timeout.
+	 * Creates a CancellationTokenSource, passes the token to sendRequest,
+	 * and cancels it if the timeout fires — so the server can stop work.
+	 */
+	private _sendRequest<R>(method: string, params: unknown, timeoutMs?: number): Promise<R> {
+		const cts = new rpc.CancellationTokenSource();
+		const promise = this.connection!.sendRequest<R>(method, params, cts.token);
+		return this.withTimeout(promise, timeoutMs, () => cts.cancel());
 	}
 
 	// ── Diagnostics ────────────────────────────────────────────────────────────

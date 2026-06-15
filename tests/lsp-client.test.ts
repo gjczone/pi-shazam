@@ -58,6 +58,13 @@ vi.mock("node:module", async (importOriginal) => {
 						// Return the mock connection prepared for start()
 						return mockConnForStart ?? createMockConnection();
 					}),
+					CancellationTokenSource: class {
+						token = { isCancellationRequested: false, onCancellationRequested: vi.fn() };
+						cancel() {
+							this.token.isCancellationRequested = true;
+						}
+						dispose() {}
+					},
 				};
 			}
 			// For any other dynamic require, use the real createRequire
