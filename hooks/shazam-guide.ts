@@ -21,27 +21,45 @@ import { join, extname } from "node:path";
 const execFileAsync = promisify(execFile);
 
 /**
- * Check if a tool result contains caller count and suggest call_chain for high-risk symbols.
+ * Check if a tool result contains caller count (>= 2, not >= 1) and suggest call_chain.
+ * Parses result.details JSON first, then falls back to text-based detection.
  */
 function hasManyCallers(content: unknown[] | undefined): string | null {
 	if (!content) return null;
 	for (const item of content) {
 		if (item && typeof item === "object" && "text" in item) {
 			const text = (item as { text: string }).text;
+
+			// Try parsing structured JSON first
+			try {
+				const parsed = JSON.parse(text);
+				const details = parsed?.result?.details ?? parsed?.details;
+				if (details && typeof details === "object") {
+					const count =
+						((details as Record<string, unknown>).callerCount as number) ??
+						((details as Record<string, unknown>).incomingCount as number) ??
+						((details as Record<string, unknown>).refCount as number);
+					const name =
+						((details as Record<string, unknown>).symbolName as string) ??
+						((details as Record<string, unknown>).symbol as string);
+					if (typeof count === "number" && count > 1 && typeof name === "string") {
+						return name;
+					}
+				}
+			} catch {
+				// Not JSON — fall back to text-based
+			}
+
 			// Look for caller count patterns: "N callers" or "N references"
 			const callerMatch = text.match(/(\d+) callers?/i);
 			const refMatch = text.match(/(\d+) references?/i);
 			const symbolMatch = text.match(/`([^`]+)`/);
 			const symbolName = symbolMatch ? symbolMatch[1] : null;
 
-			// Extract the actual number (callers is more precise than references)
-			const count = callerMatch
-				? parseInt(callerMatch[1], 10)
-				: refMatch
-					? parseInt(refMatch[1], 10)
-					: 0;
+			const count = callerMatch ? parseInt(callerMatch[1], 10) : refMatch ? parseInt(refMatch[1], 10) : 0;
 
-			if (count >= 5 && symbolName) {
+			// Require count > 1 (not >= 1) to avoid false positives
+			if (count > 1 && symbolName) {
 				return symbolName;
 			}
 		}
@@ -90,7 +108,7 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 			const hasRuff =
 				existsSync(join(projectRoot, "ruff.toml")) ||
 				(existsSync(join(projectRoot, "pyproject.toml")) &&
-				 readFileSync(join(projectRoot, "pyproject.toml"), "utf-8").includes("[tool.ruff"));
+					readFileSync(join(projectRoot, "pyproject.toml"), "utf-8").includes("[tool.ruff"));
 			if (hasRuff) {
 				await execFileAsync("ruff", ["format", absPath], { cwd: projectRoot, timeout: 10000 });
 				ctx.ui.notify(`[auto-format] Formatted ${filePath} with ruff`, "info");
@@ -99,7 +117,23 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 		}
 
 		// JS/TS/JSON/MD/CSS: prettier
-		if ([".ts", ".tsx", ".js", ".jsx", ".json", ".md", ".css", ".scss", ".html", ".yaml", ".yml", ".vue", ".svelte"].includes(ext)) {
+		if (
+			[
+				".ts",
+				".tsx",
+				".js",
+				".jsx",
+				".json",
+				".md",
+				".css",
+				".scss",
+				".html",
+				".yaml",
+				".yml",
+				".vue",
+				".svelte",
+			].includes(ext)
+		) {
 			const hasPrettier =
 				existsSync(join(projectRoot, ".prettierrc")) ||
 				existsSync(join(projectRoot, ".prettierrc.json")) ||
@@ -113,9 +147,7 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 			}
 
 			// Biome
-			const hasBiome =
-				existsSync(join(projectRoot, "biome.json")) ||
-				existsSync(join(projectRoot, "biome.jsonc"));
+			const hasBiome = existsSync(join(projectRoot, "biome.json")) || existsSync(join(projectRoot, "biome.jsonc"));
 			if (hasBiome) {
 				await execFileAsync("npx", ["biome", "check", "--write", absPath], { cwd: projectRoot, timeout: 15000 });
 				ctx.ui.notify(`[auto-format] Formatted ${filePath} with biome`, "info");
@@ -175,10 +207,7 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 
 			// If no native formatter found, suggest shazam_fix
 			if (!formatted) {
-				ctx.ui.notify(
-					"run shazam_fix to auto-format (prettier/ruff/gofmt/rustfmt)",
-					"info",
-				);
+				ctx.ui.notify("run shazam_fix to auto-format (prettier/ruff/gofmt/rustfmt)", "info");
 			}
 
 			// Check if multi-file edit was done — suggest impact analysis

@@ -59,8 +59,12 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			'Don\'t reach for grep or raw text search. Use this — it ranks results by relevance (BM25), understands camelCase/snake_case boundaries, and enriches hits with LSP workspace symbols. Two modes: target="symbol" (default, semantic ranking) and target="code" (full-text with context snippets via ripgrep).',
 		typeboxParams: Type.Object({
 			query: Type.String(),
-			target: Type.Optional(Type.Union([Type.Literal("symbol"), Type.Literal("code")])),
-			mode: Type.Optional(Type.Union([Type.Literal("literal"), Type.Literal("regex"), Type.Literal("smart")])),
+			target: Type.Optional(Type.Union([Type.Literal("symbol"), Type.Literal("code")], { default: "symbol" })),
+			mode: Type.Optional(
+				Type.Union([Type.Literal("literal"), Type.Literal("regex"), Type.Literal("smart")], {
+					default: "literal",
+				}),
+			),
 			topN: Type.Optional(Type.Number()),
 			maxTokens: Type.Optional(Type.Number()),
 		}),
@@ -120,7 +124,11 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			symbol: Type.String(),
 			depth: Type.Optional(Type.Number()),
 			flat: Type.Optional(Type.Boolean()),
-			direction: Type.Optional(Type.Union([Type.Literal("incoming"), Type.Literal("outgoing"), Type.Literal("both")])),
+			direction: Type.Optional(
+				Type.Union([Type.Literal("incoming"), Type.Literal("outgoing"), Type.Literal("both")], {
+					default: "both",
+				}),
+			),
 		}),
 		zodParams: z.object({
 			symbol: z.string().describe("Symbol name to trace"),
@@ -225,7 +233,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		typeboxParams: Type.Object({
 			symbol: Type.String(),
 			newName: Type.String(),
-			dryRun: Type.Optional(Type.Boolean()),
+			dryRun: Type.Optional(Type.Boolean({ default: true })),
 		}),
 		zodParams: z.object({
 			symbol: z.string().describe("Current symbol name to rename"),
@@ -241,7 +249,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			"Required safety gate before removing any symbol. Automatically verifies zero incoming references before providing deletion instructions. This is a WRITE operation. Safety workflow: checks incoming references (must be 0), reports outgoing references, provides deletion guidance. Do not delete based on intuition — a symbol that looks unused may be called dynamically.",
 		typeboxParams: Type.Object({
 			symbol: Type.String(),
-			dryRun: Type.Optional(Type.Boolean()),
+			dryRun: Type.Optional(Type.Boolean({ default: true })),
 		}),
 		zodParams: z.object({
 			symbol: z.string().describe("Symbol name to delete"),
@@ -255,7 +263,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		description:
 			"When shazam_verify reports format or lint errors, use this to auto-fix them. Runs nearest-wins formatters (prettier, biome, eslint --fix, ruff, cargo fmt, gofmt). Format only — never touches logic. Always run with --dry-run first to preview changes before applying.",
 		typeboxParams: Type.Object({
-			dryRun: Type.Optional(Type.Boolean()),
+			dryRun: Type.Optional(Type.Boolean({ default: true })),
 			file: Type.Optional(Type.String()),
 		}),
 		zodParams: z.object({

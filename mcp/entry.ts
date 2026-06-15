@@ -33,14 +33,14 @@ async function main(): Promise<void> {
 	if (languages.length > 0) {
 		try {
 			await lspManager.initializeAll();
-		} catch {
-			// LSP servers are optional — tools degrade gracefully to tree-sitter only
+		} catch (err) {
+			console.error("[pi-shazam mcp] lsp init failed:", err);
 		}
 	}
 
 	const server = new McpServer({
 		name: "pi-shazam",
-		version: "0.11.1",
+		version: "0.12.0",
 	});
 
 	// Share LspManager with tools layer so LSP enrichment works in MCP mode
@@ -57,11 +57,21 @@ async function main(): Promise<void> {
 			/* best effort */
 		}
 	};
-	process.on("SIGTERM", shutdown);
-	process.on("SIGINT", shutdown);
+	process.on("SIGTERM", () => {
+		shutdown().finally(() => process.exit(0));
+	});
+	process.on("SIGINT", () => {
+		shutdown().finally(() => process.exit(0));
+	});
 
 	// Start stdio transport
 	const transport = new StdioServerTransport();
+	transport.onclose = () => {
+		lspManager.shutdown().catch(() => {});
+	};
+	process.stdin.on("end", () => {
+		lspManager.shutdown().catch(() => {});
+	});
 	await server.connect(transport);
 }
 

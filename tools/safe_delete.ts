@@ -1,8 +1,8 @@
 /**
- * pi-shazam tools/safe_delete — Safe symbol/file deletion with call_chain verification.
+ * pi-shazam tools/safe_delete — READ-ONLY safety check before deleting.
  *
- * Confirms zero references via call_chain before allowing deletion.
- * This is a WRITE operation — it modifies files on disk.
+ * Use this BEFORE manual deletion to verify zero incoming references.
+ * This tool does NOT delete; it returns instructions for the agent.
  */
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
@@ -15,12 +15,12 @@ export function registerSafeDelete(pi: ExtensionAPI): void {
 		name: "shazam_safe_delete",
 		label: "Safe Delete",
 		description: `\
-		Required safety gate before removing any symbol. Automatically
-		verifies zero incoming references before providing deletion
-		instructions. This is a WRITE operation. Safety workflow: checks
-		incoming references (must be 0), reports outgoing references,
-		provides deletion guidance. Do not delete based on intuition — a
-		symbol that looks unused may be called dynamically.`,
+		READ-ONLY safety check before deleting. Use this BEFORE manual
+		deletion to verify zero incoming references. This tool does NOT
+		delete; it returns instructions for the agent. Safety workflow:
+		checks incoming references (must be 0), reports outgoing
+		references, provides deletion guidance. Do not delete based on
+		intuition — a symbol that looks unused may be called dynamically.`,
 		params: Type.Object({
 			symbol: Type.String(),
 			dryRun: Type.Optional(Type.Boolean()),
@@ -107,7 +107,7 @@ export function executeSafeDelete(graph: RepoGraph, symbolName: string, dryRun: 
 			dryRun
 				? "DRY RUN: Pass dryRun=false to confirm deletion."
 				: `DELETE: Run \`git rm\` or manually remove the symbol definition in ${filePath}.`
-		}\n⚠️ Static analysis cannot detect dynamic references (eval, dynamic import, Reflect API). Verify manually before deleting.`,
+		}\nNote: Static analysis cannot detect dynamic references (eval, dynamic import, Reflect API). Verify manually before deleting.`,
 	};
 }
 

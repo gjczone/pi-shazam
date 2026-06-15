@@ -19,23 +19,113 @@ import { getNextForTool, formatNextSection, truncateOutput } from "../core/outpu
 import { getLspManager } from "./_context.js";
 import { lspWorkspaceSearch, type EnrichedSymbolHit } from "./lsp_enrich.js";
 import { createTool } from "./_factory.js";
+import { buildEnvelope } from "./_factory.js";
 
 const LSP_BOOST = 50;
 
 // ── Stop words for natural language query tokenization ──────────────────
 const STOP_WORDS = new Set([
-	"a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
-	"have", "has", "had", "do", "does", "did", "will", "would", "could",
-	"should", "may", "might", "can", "shall", "to", "of", "in", "for",
-	"on", "with", "at", "by", "from", "as", "into", "through", "during",
-	"before", "after", "above", "below", "between", "and", "but", "or",
-	"not", "no", "if", "then", "else", "when", "where", "why", "how",
-	"all", "each", "every", "both", "few", "more", "most", "other",
-	"some", "such", "only", "own", "same", "so", "than", "too", "very",
-	"just", "about", "also", "it", "its", "this", "that", "these",
-	"those", "i", "you", "he", "she", "we", "they", "me", "him", "her",
-	"us", "them", "my", "your", "his", "our", "their", "what", "which",
-	"who", "whom", "whose",
+	"a",
+	"an",
+	"the",
+	"is",
+	"are",
+	"was",
+	"were",
+	"be",
+	"been",
+	"being",
+	"have",
+	"has",
+	"had",
+	"do",
+	"does",
+	"did",
+	"will",
+	"would",
+	"could",
+	"should",
+	"may",
+	"might",
+	"can",
+	"shall",
+	"to",
+	"of",
+	"in",
+	"for",
+	"on",
+	"with",
+	"at",
+	"by",
+	"from",
+	"as",
+	"into",
+	"through",
+	"during",
+	"before",
+	"after",
+	"above",
+	"below",
+	"between",
+	"and",
+	"but",
+	"or",
+	"not",
+	"no",
+	"if",
+	"then",
+	"else",
+	"when",
+	"where",
+	"why",
+	"how",
+	"all",
+	"each",
+	"every",
+	"both",
+	"few",
+	"more",
+	"most",
+	"other",
+	"some",
+	"such",
+	"only",
+	"own",
+	"same",
+	"so",
+	"than",
+	"too",
+	"very",
+	"just",
+	"about",
+	"also",
+	"it",
+	"its",
+	"this",
+	"that",
+	"these",
+	"those",
+	"i",
+	"you",
+	"he",
+	"she",
+	"we",
+	"they",
+	"me",
+	"him",
+	"her",
+	"us",
+	"them",
+	"my",
+	"your",
+	"his",
+	"our",
+	"their",
+	"what",
+	"which",
+	"who",
+	"whom",
+	"whose",
 ]);
 
 /** True when query has spaces and >= 2 words (looks like natural language). */
@@ -47,7 +137,7 @@ function isNaturalLanguageQuery(query: string): boolean {
 /** Split a NL query into meaningful tokens (min length 2, stop words removed). */
 function tokenizeForSearch(query: string): string[] {
 	const lower = query.toLowerCase();
-	const tokens = lower.split(/[^a-z0-9_]+/).filter(t => t.length >= 2 && !STOP_WORDS.has(t));
+	const tokens = lower.split(/[^a-z0-9_]+/).filter((t) => t.length >= 2 && !STOP_WORDS.has(t));
 	return [...new Set(tokens)];
 }
 
@@ -90,12 +180,7 @@ export function registerCodesearch(pi: ExtensionAPI): void {
 				const searchMode = (params.mode as string) ?? "literal";
 				const result = executeFulltextSearch(query, params.topN as number | undefined, projectRoot, searchMode);
 				let text = json
-					? JSON.stringify({
-							schema_version: "1.0",
-							command: "codesearch",
-							status: "ok",
-							result: { query, target: "code", results: result.length },
-						})
+					? buildEnvelope("shazam_codesearch", projectRoot, "ok", { query, target: "code", results: result.length })
 					: formatFulltextResult(result, query);
 				if (maxTokens && !json) {
 					text = truncateOutput(text.split("\n"), maxTokens as number);
@@ -196,22 +281,22 @@ export function executeCodesearch(graph: RepoGraph, query: string, topN?: number
 
 function tokenize(query: string): string[] {
 	const tokens: string[] = [];
-	
+
 	// Split camelCase
 	const camelTokens = query.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
 	// Split snake_case and other separators
 	const parts = camelTokens.split(/[\s_\-.:/]+/);
-	
+
 	for (const p of parts) {
 		if (p.length >= 2) tokens.push(p);
 	}
-	
+
 	// Also add the whole query as a token for exact matching
 	const wholeQuery = query.toLowerCase().trim();
 	if (wholeQuery.length >= 2 && !tokens.includes(wholeQuery)) {
 		tokens.push(wholeQuery);
 	}
-	
+
 	return tokens;
 }
 
@@ -348,10 +433,7 @@ export function executeFulltextSearch(
 	// regex mode: pass tokenized query directly as regex alternation
 	if (searchMode === "regex") {
 		const tokens = tokenizeForSearch(query);
-		const pattern =
-			tokens.length > 0
-				? tokens.map((t) => escapeRegex(t)).join("|")
-				: escapeRegex(query);
+		const pattern = tokens.length > 0 ? tokens.map((t) => escapeRegex(t)).join("|") : escapeRegex(query);
 		return executeRegexSearch(query, limit, root, pattern);
 	}
 
@@ -381,12 +463,31 @@ function executeLiteralSearch(query: string, limit: number, projectRoot: string)
 			const output = execFileSync(
 				rgPath,
 				[
-					"--no-heading", "-n", "--max-count", "20",
-					"--context", "1", "-i", "-F",
-					"-g", "!.git", "-g", "!node_modules", "-g", "!dist",
-					"-g", "!*.lock", "-g", "!package-lock.json",
-					"-g", "!yarn.lock", "-g", "!pnpm-lock.yaml",
-					"--", query, projectRoot,
+					"--no-heading",
+					"-n",
+					"--max-count",
+					"20",
+					"--context",
+					"1",
+					"-i",
+					"-F",
+					"-g",
+					"!.git",
+					"-g",
+					"!node_modules",
+					"-g",
+					"!dist",
+					"-g",
+					"!*.lock",
+					"-g",
+					"!package-lock.json",
+					"-g",
+					"!yarn.lock",
+					"-g",
+					"!pnpm-lock.yaml",
+					"--",
+					query,
+					projectRoot,
 				],
 				{ encoding: "utf-8", timeout: 5000, maxBuffer: 10 * 1024 * 1024 },
 			);
@@ -402,24 +503,36 @@ function executeLiteralSearch(query: string, limit: number, projectRoot: string)
 }
 
 /** Run ripgrep with -P (PCRE2) regex alternation from tokenized query. */
-function executeRegexSearch(
-	query: string,
-	limit: number,
-	projectRoot: string,
-	pattern: string,
-): FulltextMatch[] {
+function executeRegexSearch(query: string, limit: number, projectRoot: string, pattern: string): FulltextMatch[] {
 	const rgPath = findRipgrep();
 	if (rgPath) {
 		try {
 			const output = execFileSync(
 				rgPath,
 				[
-					"--no-heading", "-n", "--max-count", "50",
-					"-i", "-P",
-					"-g", "!.git", "-g", "!node_modules", "-g", "!dist",
-					"-g", "!*.lock", "-g", "!package-lock.json",
-					"-g", "!yarn.lock", "-g", "!pnpm-lock.yaml",
-					"-e", pattern, projectRoot,
+					"--no-heading",
+					"-n",
+					"--max-count",
+					"50",
+					"-i",
+					"-P",
+					"-g",
+					"!.git",
+					"-g",
+					"!node_modules",
+					"-g",
+					"!dist",
+					"-g",
+					"!*.lock",
+					"-g",
+					"!package-lock.json",
+					"-g",
+					"!yarn.lock",
+					"-g",
+					"!pnpm-lock.yaml",
+					"-e",
+					pattern,
+					projectRoot,
 				],
 				{ encoding: "utf-8", timeout: 10000, maxBuffer: 10 * 1024 * 1024 },
 			);
@@ -437,11 +550,7 @@ function executeRegexSearch(
 }
 
 /** Score results by how many query tokens appear in each line, then rank. */
-function scoreAndRankRegexResults(
-	results: FulltextMatch[],
-	query: string,
-	limit: number,
-): FulltextMatch[] {
+function scoreAndRankRegexResults(results: FulltextMatch[], query: string, limit: number): FulltextMatch[] {
 	const tokens = tokenizeForSearch(query).map((t) => t.toLowerCase());
 	if (tokens.length === 0) return results.slice(0, limit);
 
@@ -494,12 +603,7 @@ function parseRipgrepOutputNoContext(output: string, query: string): FulltextMat
 }
 
 /** Built-in file scan for regex search (no ripgrep available). */
-function builtinRegexSearch(
-	_query: string,
-	limit: number,
-	projectRoot: string,
-	_pattern: string,
-): FulltextMatch[] {
+function builtinRegexSearch(_query: string, limit: number, projectRoot: string, _pattern: string): FulltextMatch[] {
 	return builtinFulltextSearch(_query, limit, projectRoot);
 }
 

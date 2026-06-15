@@ -351,6 +351,15 @@ export const NEXT_RULES: NextRule[] = [
 			level: "recommended",
 		}),
 	},
+	{
+		forTools: ["verify"],
+		condition: (ctx) => Boolean(ctx.hasErrors || ctx.hasFixes),
+		recommendation: () => ({
+			tool: "fix",
+			label: "Auto-fix format errors",
+			level: "recommended",
+		}),
+	},
 
 	// fix
 	{
@@ -405,7 +414,7 @@ export const NEXT_RULES: NextRule[] = [
  */
 export function formatNextSection(nextItems: NextRecommendation[]): string {
 	// Filter to only show required-level recommendations
-	const requiredItems = nextItems.filter(item => item.level === "required");
+	const requiredItems = nextItems.filter((item) => item.level === "required");
 	if (requiredItems.length === 0) return "";
 
 	const lines: string[] = ["### Next (Required)", ""];

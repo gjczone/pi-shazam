@@ -63,6 +63,9 @@ function computeContextScore(prompt: string): number {
  *
  * Blocks review tasks that lack structural context and warns on
  * coding tasks with insufficient context.
+ * When shazam_ tools are already referenced in the prompt,
+ * the review threshold is lowered to 1 and self-referential
+ * prompts (prompts that are about shazam itself) are allowed.
  */
 export function registerAgentContextGuard(pi: ExtensionAPI): void {
 	pi.on("tool_call", (event, ctx): ToolCallEventResult | void => {
@@ -80,9 +83,17 @@ export function registerAgentContextGuard(pi: ExtensionAPI): void {
 		const isReview = REVIEW_PATTERNS.test(prompt);
 		const isCoding = CODING_PATTERNS.test(prompt);
 		const contextScore = computeContextScore(prompt);
+		const hasShazam = /shazam_/i.test(prompt);
+
+		// When prompt already references shazam tools, lower review threshold to 1
+		const reviewThreshold = hasShazam ? 1 : REVIEW_CONTEXT_THRESHOLD;
+
+		// Allow self-referential prompts (prompts about shazam itself)
+		const isSelfReferential = hasShazam && /pi-shazam|shazam_\w+/i.test(prompt);
+		if (isSelfReferential) return;
 
 		// Block review tasks without sufficient context
-		if (isReview && contextScore < REVIEW_CONTEXT_THRESHOLD) {
+		if (isReview && contextScore < reviewThreshold) {
 			return {
 				block: true,
 				reason:

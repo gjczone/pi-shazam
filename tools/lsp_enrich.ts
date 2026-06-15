@@ -21,6 +21,7 @@ import type {
 	WorkspaceSymbol,
 	DocumentSymbol,
 	Location,
+	LocationLink,
 	CodeAction,
 	SignatureHelp,
 	CodeLens,
@@ -40,10 +41,7 @@ export const FIRST_ENRICH_TIMEOUT_MS = 10000;
  * request after didOpen (when justOpened is true), unless the caller provided
  * an explicit non-default timeout.
  */
-function effectiveTimeout(
-	justOpened: boolean,
-	timeoutMs: number,
-): number {
+function effectiveTimeout(justOpened: boolean, timeoutMs: number): number {
 	if (justOpened && timeoutMs === DEFAULT_LSP_ENRICH_TIMEOUT_MS) {
 		return FIRST_ENRICH_TIMEOUT_MS;
 	}
@@ -85,13 +83,24 @@ export interface EnrichedSymbolHit {
 
 /**
  * Race a promise against a timeout. Returns null on timeout.
+ * Accepts an optional CancellationTokenSource; on timeout the CTS is
+ * cancelled so the underlying LSP request can free server resources.
  */
 function withEnrichTimeout<T>(
 	promise: Promise<T | null | undefined>,
 	ms: number = DEFAULT_LSP_ENRICH_TIMEOUT_MS,
+	cts?: { cancel(): void },
 ): Promise<T | null> {
 	return new Promise<T | null>((resolve) => {
 		const timer = setTimeout(() => {
+			// Cancel the CTS so the server stops work
+			if (cts) {
+				try {
+					cts.cancel();
+				} catch {
+					/* ignore */
+				}
+			}
 			// Silence the original promise to prevent unhandled rejections
 			// if it resolves/rejects after timeout.
 			void promise.catch(() => {});
@@ -367,9 +376,7 @@ export async function lspSignatureHelp(
 		return null;
 	}
 	const result = await withEnrichTimeout(
-		opened.client
-			.signatureHelp(filePath, line, character)
-			.then((r) => (r.status === "ok" ? r.data : null)),
+		opened.client.signatureHelp(filePath, line, character).then((r) => (r.status === "ok" ? r.data : null)),
 		effectiveTimeout(opened.justOpened, timeoutMs),
 	);
 	return result;
@@ -380,6 +387,7 @@ export async function lspSignatureHelp(
 /**
  * Fetch LSP implementation locations for a symbol at a position.
  * Returns null on timeout, no server, or file not opened.
+ * Handles both Location[] and LocationLink[] responses.
  */
 export async function lspImplementation(
 	ctx: LspEnrichContext | null,
@@ -396,12 +404,61 @@ export async function lspImplementation(
 		return null;
 	}
 	const result = await withEnrichTimeout(
-		opened.client
-			.implementation(filePath, line, character)
-			.then((r) => {
-				if (r.status !== "ok" || !r.data) return null;
-				return Array.isArray(r.data) ? r.data : [r.data];
-			}),
+		opened.client.implementation(filePath, line, character).then((r) => {
+			if (r.status !== "ok" || !r.data) return null;
+			const arr = Array.isArray(r.data) ? r.data : [r.data];
+			// Detect LocationLink[] by checking for "targetUri" property
+			if (arr.length > 0 && "targetUri" in arr[0]!) {
+				return (arr as unknown as LocationLink[]).map(
+					(ll) =>
+						({
+							uri: ll.targetUri,
+							range: ll.targetRange,
+						}) as Location,
+				);
+			}
+			return arr as Location[];
+		}),
+		effectiveTimeout(opened.justOpened, timeoutMs),
+	);
+	return result;
+}
+
+/**
+ * Fetch LSP references for a symbol at a position.
+ * Returns null on timeout, no server, or file not opened.
+ * Handles both Location[] and LocationLink[] responses.
+ */
+export async function lspReferences(
+	ctx: LspEnrichContext | null,
+	filePath: string,
+	line: number,
+	character: number,
+	timeoutMs: number = DEFAULT_LSP_ENRICH_TIMEOUT_MS,
+): Promise<Location[] | null> {
+	if (!ctx) return null;
+	const opened = await ensureFileOpened(ctx, filePath);
+	if (!opened) return null;
+	const cap = opened.client.serverCapabilities;
+	if (!cap || !(cap as Record<string, unknown>).referencesProvider) {
+		return null;
+	}
+	const result = await withEnrichTimeout(
+		opened.client.references(filePath, line, character).then((r) => {
+			if (r.status !== "ok" || !r.data) return null;
+			const arr = Array.isArray(r.data) ? r.data : [r.data];
+			// Detect LocationLink[] by checking for "targetUri" property
+			if (arr.length > 0 && "targetUri" in arr[0]!) {
+				return (arr as unknown as LocationLink[]).map(
+					(ll) =>
+						({
+							uri: ll.targetUri,
+							range: ll.targetRange,
+						}) as Location,
+				);
+			}
+			return arr as Location[];
+		}),
 		effectiveTimeout(opened.justOpened, timeoutMs),
 	);
 	return result;
@@ -426,12 +483,8 @@ export async function lspCodeLens(
 		return null;
 	}
 	const result = await withEnrichTimeout(
-		opened.client
-			.codeLens(filePath)
-			.then((r) => (r.status === "ok" ? r.data : null)),
+		opened.client.codeLens(filePath).then((r) => (r.status === "ok" ? r.data : null)),
 		effectiveTimeout(opened.justOpened, timeoutMs),
 	);
 	return result;
 }
-
-

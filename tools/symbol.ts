@@ -20,6 +20,7 @@ import { getLspManager } from "./_context.js";
 import { lspDocumentSymbols } from "./lsp_enrich.js";
 import type { DocumentSymbol } from "vscode-languageserver-protocol";
 import { createTool } from "./_factory.js";
+import { buildEnvelope } from "./_factory.js";
 
 // ── State map (absorbed from tools/state_map.ts) ────────────────────────
 
@@ -59,12 +60,7 @@ export function registerSymbol(pi: ExtensionAPI): void {
 				const graph = scanProject(".");
 				const result = executeStateMap(graph, name);
 				let text = json
-					? JSON.stringify({
-							schema_version: "1.0",
-							command: "symbol",
-							status: "ok",
-							result: { symbol: name, mode: "state", text: result },
-						})
+					? buildEnvelope("shazam_symbol", process.cwd(), "ok", { symbol: name, mode: "state", text: result })
 					: result;
 				if (maxTokens && !json) {
 					text = truncateOutput(text.split("\n"), maxTokens as number);
@@ -106,11 +102,11 @@ export function registerSymbol(pi: ExtensionAPI): void {
 			});
 
 			let text = json
-				? JSON.stringify({
-						schema_version: "1.0",
-						command: "symbol",
-						status: "ok",
-						result: enriched.map((e) => ({
+				? buildEnvelope(
+						"shazam_symbol",
+						process.cwd(),
+						"ok",
+						enriched.map((e) => ({
 							id: e.sym.id,
 							name: e.sym.name,
 							kind: e.sym.kind,
@@ -123,7 +119,7 @@ export function registerSymbol(pi: ExtensionAPI): void {
 							container: e.container,
 							source: e.source,
 						})),
-					})
+					)
 				: formatSymbolResult(enriched, params.name as string);
 
 			if (maxTokens && !json) {
@@ -212,11 +208,11 @@ export function executeSymbolWithMode(graph: RepoGraph, name: string, mode?: str
  */
 export function executeSymbolJson(graph: RepoGraph, name: string, file?: string): string {
 	const matches = findSymbols(graph, name, file);
-	return JSON.stringify({
-		schema_version: "1.0",
-		command: "symbol",
-		status: "ok",
-		result: matches.map((s) => ({
+	return buildEnvelope(
+		"shazam_symbol",
+		process.cwd(),
+		"ok",
+		matches.map((s) => ({
 			id: s.id,
 			name: s.name,
 			kind: s.kind,
@@ -229,7 +225,7 @@ export function executeSymbolJson(graph: RepoGraph, name: string, file?: string)
 			container: null,
 			source: "tree-sitter",
 		})),
-	});
+	);
 }
 
 function formatSymbolResult(matches: EnrichedMatch[], name: string): string {

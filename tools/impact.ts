@@ -6,6 +6,7 @@ import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool } from "./_factory.js";
+import { buildEnvelope } from "./_factory.js";
 import { executeFindTests } from "./find_tests.js";
 import { isNonSourceFile } from "../core/filter.js";
 
@@ -33,7 +34,7 @@ export function registerImpact(pi: ExtensionAPI): void {
 			}
 			const files = params.files as string[];
 			const depth = (params.depth as number) ?? 3;
-					return json
+			return json
 				? executeImpactJson(graph, files, depth)
 				: executeImpact(graph, files, {
 						withSymbols: (params.withSymbols as boolean) ?? false,
@@ -313,24 +314,19 @@ export function executeImpactJson(graph: RepoGraph, files: string[], depth: numb
 
 	const risk = assessImpactRisk(affectedFiles.size - files.length, affectedSymbols.length);
 
-	return JSON.stringify({
-		schema_version: "1.0",
-		command: "impact",
-		status: "ok",
-		result: {
-			targetFiles: files,
-			affectedFileCount: affectedFiles.size - files.length,
-			affectedFiles: [...affectedFiles].filter((f) => !files.includes(f)).sort(),
-			affectedSymbols: affectedSymbols.slice(0, 50).map((a) => ({
-				id: a.symbol.id,
-				name: a.symbol.name,
-				kind: a.symbol.kind,
-				file: a.symbol.file,
-				line: a.symbol.line,
-				direction: a.direction,
-			})),
-			risk: risk,
-			discoveredTests: discoveredTests,
-		},
+	return buildEnvelope("shazam_impact", process.cwd(), "ok", {
+		targetFiles: files,
+		affectedFileCount: affectedFiles.size - files.length,
+		affectedFiles: [...affectedFiles].filter((f) => !files.includes(f)).sort(),
+		affectedSymbols: affectedSymbols.slice(0, 50).map((a) => ({
+			id: a.symbol.id,
+			name: a.symbol.name,
+			kind: a.symbol.kind,
+			file: a.symbol.file,
+			line: a.symbol.line,
+			direction: a.direction,
+		})),
+		risk: risk,
+		discoveredTests: discoveredTests,
 	});
 }

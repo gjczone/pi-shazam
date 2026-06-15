@@ -15,6 +15,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool } from "./_factory.js";
+import { buildEnvelope } from "./_factory.js";
 import { TreeSitterAdapter } from "../core/treesitter.js";
 
 export function registerHover(pi: ExtensionAPI): void {
@@ -36,7 +37,7 @@ export function registerHover(pi: ExtensionAPI): void {
 			const file = params.file as string | undefined;
 			const result = await executeHover(graph, name, file);
 			return json
-				? JSON.stringify({ schema_version: "1.0", command: "hover", status: "ok", result }, null, 2)
+				? buildEnvelope("shazam_hover", (params.project as string) ?? process.cwd(), "ok", result)
 				: formatHoverResult(result, name);
 		},
 	});
@@ -150,14 +151,14 @@ function extractDocstringFromAst(root: AstNode, symbolLine: number): string | un
 function extractDocstringTextFallback(content: string, symbolLine: number): string | undefined {
 	const lines = content.split("\n");
 	const lineIdx = symbolLine - 1; // Convert to 0-based
-	
+
 	// Look backwards for JSDoc comment
 	const docLines: string[] = [];
 	let i = lineIdx - 1;
-	
+
 	// Skip empty lines above the symbol
 	while (i >= 0 && lines[i]?.trim() === "") i--;
-	
+
 	// Check if we have a */ (end of JSDoc)
 	if (i >= 0 && lines[i]?.trim().endsWith("*/")) {
 		// Collect JSDoc lines backwards
@@ -167,16 +168,21 @@ function extractDocstringTextFallback(content: string, symbolLine: number): stri
 			if (line.trim().startsWith("/**")) break;
 			i--;
 		}
-		
+
 		// Clean up JSDoc comment
 		if (docLines.length > 0) {
 			return docLines
-				.map(l => l.replace(/^\s*\/\*\*?\s?/, "").replace(/\s*\*\/\s*$/, "").replace(/^\s*\*\s?/, ""))
-				.filter(l => l.length > 0)
+				.map((l) =>
+					l
+						.replace(/^\s*\/\*\*?\s?/, "")
+						.replace(/\s*\*\/\s*$/, "")
+						.replace(/^\s*\*\s?/, ""),
+				)
+				.filter((l) => l.length > 0)
 				.join("\n");
 		}
 	}
-	
+
 	// Check for single-line comment above
 	if (i >= 0 && lines[i]?.trim().startsWith("//")) {
 		while (i >= 0 && lines[i]?.trim().startsWith("//")) {
@@ -201,12 +207,14 @@ function extractDocstringTextFallback(content: string, symbolLine: number): stri
 				i--;
 			}
 			return docLines
-				.map(l => l.replace(new RegExp(`^\\s*${startChars}\\s?`), "").replace(new RegExp(`\\s*${closeChars}\\s*$`), ""))
-				.filter(l => l.length > 0)
+				.map((l) =>
+					l.replace(new RegExp(`^\\s*${startChars}\\s?`), "").replace(new RegExp(`\\s*${closeChars}\\s*$`), ""),
+				)
+				.filter((l) => l.length > 0)
 				.join("\n");
 		}
 	}
-	
+
 	return undefined;
 }
 
@@ -219,10 +227,10 @@ function extractContextLines(filePath: string, symbolLine: number, contextSize: 
 		const content = readFileSync(filePath, "utf-8");
 		const lines = content.split("\n");
 		const lineIdx = symbolLine - 1; // Convert to 0-based
-		
+
 		const start = Math.max(0, lineIdx);
 		const end = Math.min(lines.length, lineIdx + contextSize);
-		
+
 		const context: string[] = [];
 		for (let i = start; i < end; i++) {
 			const lineNum = i + 1;
@@ -320,7 +328,7 @@ export async function executeHover(graph: RepoGraph, name: string, file?: string
 			}
 		}
 	}
-	
+
 	// If LSP hover unavailable, extract from source (fixes #109)
 	if (!result.lspHover) {
 		const filePath = resolve(process.cwd(), symbol.file);
@@ -410,14 +418,14 @@ export function formatHoverResult(result: HoverResult, name: string): string {
 		// Show source-extracted info when LSP unavailable (fixes #109)
 		lines.push("*LSP hover unavailable — showing source-extracted info.*");
 		lines.push("");
-		
+
 		if (result.docstring) {
 			lines.push("### Documentation (from source)");
 			lines.push("");
 			lines.push(result.docstring);
 			lines.push("");
 		}
-		
+
 		if (result.contextLines && result.contextLines.length > 0) {
 			lines.push("### Context (source lines)");
 			lines.push("");

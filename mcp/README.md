@@ -102,7 +102,7 @@ The MCP server shares the same `core/` and `lsp/` layers as the Pi extension. No
 
 ## Language Support
 
-- **Parsing (tree-sitter):** 14 languages — Python, TypeScript/TSX, JavaScript/JSX, Go, Rust, HTML, CSS, JSON, C, C++, Java, C#, Ruby
-- **LSP (didOpen):** 7 languages — Python, TypeScript, JavaScript, Go, Rust, JSON, YAML
+- **Parsing (tree-sitter):** 6 languages — Python, TypeScript/TSX, JavaScript/JSX, Go, Rust, JSON
+- **LSP (didOpen):** 6 languages — Python, TypeScript, JavaScript, Go, Rust, JSON
 
-> **Design note:** LSP `didOpen` is intentionally scoped to 7 languages with well-tested language server coverage. Remaining languages (C/C++, Java, C#, Ruby, HTML, CSS) use tree-sitter parsing only. We will not add more LSP languages unless a specific language server integration is fully verified. See `lsp/client.ts` `_detectLanguage` for the authoritative mapping.
+> **Design note:** pi-shazam supports 6 languages with both tree-sitter parsing and LSP diagnostics. The 6 languages are Python, TypeScript, JavaScript, Go, Rust, and JSON. These were selected for having well-tested, reliable language server coverage. YAML LSP support is available but not counted in the core 6 because it is diagnostic-only (no tree-sitter symbol extraction). See `lsp/client.ts` `_detectLanguage` for the authoritative mapping.

@@ -13,6 +13,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { createTool } from "./_factory.js";
+import { buildEnvelope } from "./_factory.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 
@@ -38,7 +39,7 @@ export function registerFindTests(pi: ExtensionAPI): void {
 			const module = params.module as string | undefined;
 			const result = executeFindTests(graph, ".", { sourceFile, module });
 			return json
-				? JSON.stringify({ schema_version: "1.0", command: "find_tests", status: "ok", result }, null, 2)
+				? buildEnvelope("shazam_find_tests", (params.project as string) ?? process.cwd(), "ok", result)
 				: formatFindTestsResult(result, sourceFile, module);
 		},
 	});

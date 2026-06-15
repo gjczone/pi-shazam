@@ -68,9 +68,23 @@ export function shouldSkipPath(filePath: string): boolean {
 export function detectProjectLanguages(projectRoot: string, maxFiles: number = 2000): string[] {
 	const langs = new Set<string>();
 	let seen = 0;
+	const MAX_DEPTH = 50;
+	const visited = new Map<string, true>();
 
-	function walk(dir: string): void {
-		if (seen >= maxFiles) return;
+	function walk(dir: string, depth: number = 0): void {
+		if (seen >= maxFiles || depth > MAX_DEPTH) return;
+		// Cycle detection via realpath
+		let real: string;
+		try {
+			real = (statSync as (p: string) => { isDirectory(): boolean }).call ? dir : dir;
+			// Use resolve to normalize; rely on visited map for cycle detection
+			real = resolve(dir);
+		} catch {
+			return;
+		}
+		if (visited.has(real)) return;
+		visited.set(real, true);
+
 		let entries: string[];
 		try {
 			entries = readdirSync(dir);
@@ -97,7 +111,7 @@ export function detectProjectLanguages(projectRoot: string, maxFiles: number = 2
 				continue;
 			}
 			if (st.isDirectory()) {
-				walk(fullPath);
+				walk(fullPath, depth + 1);
 			} else if (st.isFile()) {
 				seen++;
 				const ext = entry!.substring(entry!.lastIndexOf(".")).toLowerCase();
@@ -313,6 +327,8 @@ export class LspManager {
 	// Track opened file paths per language for re-open after server crash
 	private _openedFilePaths = new Map<string, Set<string>>();
 	private _initPromises = new Map<string, Promise<LspServerInfo | null>>();
+	private _restartBudget = new Map<string, { failures: number; nextRetryAt: number }>();
+	private _shuttingDown = false;
 
 	constructor(projectRoot: string, log?: (msg: string) => void) {
 		this.projectRoot = resolve(projectRoot);
@@ -371,6 +387,12 @@ export class LspManager {
 	 * Get or create an LSP client for a language.
 	 */
 	async getServerForLanguage(language: string, filePath?: string): Promise<LspServerInfo | null> {
+		if (this._shuttingDown) return null;
+
+		// Honor restart budget: if server previously failed, wait for backoff
+		const budget = this._restartBudget.get(language);
+		if (budget && Date.now() < budget.nextRetryAt) return null;
+
 		// Deduplicate concurrent initialization for the same language
 		const existingInit = this._initPromises.get(language);
 		if (existingInit) return existingInit;
@@ -400,8 +422,15 @@ export class LspManager {
 					client.start();
 					// Initialize immediately so tools get a ready client
 					await client.initialize();
+					// Successful init — reset restart budget
+					this._restartBudget.delete(language);
 				} catch (err) {
 					this.log(`Failed to start/initialize LSP for ${language}: ${err}`);
+					// Track failures and set backoff
+					const cur = this._restartBudget.get(language) ?? { failures: 0, nextRetryAt: 0 };
+					cur.failures++;
+					cur.nextRetryAt = Date.now() + Math.min(2 ** cur.failures * 1000, 60_000);
+					this._restartBudget.set(language, cur);
 					await client.close().catch(() => {});
 					return null;
 				}
@@ -446,10 +475,11 @@ export class LspManager {
 	/**
 	 * Initialize all detected LSP servers.
 	 */
-	async initializeAll(): Promise<void> {
+	async initializeAll(signal?: AbortSignal): Promise<void> {
 		const languages = this.detectLanguages();
 
 		const promises = languages.map(async (language) => {
+			if (signal?.aborted) return;
 			const info = await this.getServerForLanguage(language);
 			if (info) {
 				this.log(`LSP initialized: ${language} (${info.serverName})`);
@@ -482,8 +512,14 @@ export class LspManager {
 	}
 
 	async shutdown(): Promise<void> {
-		// Parallel shutdown: close all servers concurrently via Promise.allSettled
-		const closePromises = [...this.servers.entries()].map(async ([language, info]) => {
+		this._shuttingDown = true;
+		// Snapshot entries before clearing the map to avoid mutation during iteration
+		const snapshot = [...this.servers.entries()];
+		this.servers.clear();
+		this._openedFilePaths.clear();
+		this._initPromises.clear();
+
+		const closePromises = snapshot.map(async ([language, info]) => {
 			try {
 				await info.client.close();
 				this.log(`LSP shutdown: ${language}`);
@@ -492,8 +528,5 @@ export class LspManager {
 			}
 		});
 		await Promise.allSettled(closePromises);
-		this.servers.clear();
-		this._openedFilePaths.clear();
-		this._initPromises.clear();
 	}
 }

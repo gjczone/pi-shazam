@@ -16,7 +16,6 @@ import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { getGraphEdgeCount } from "../core/graph.js";
-import { diffBaseline, loadBaseline } from "../core/cache.js";
 import { diffFromBaseline } from "../core/baseline.js";
 import { isNonSourceFile, findOrphans } from "../core/filter.js";
 import { execSync, exec } from "node:child_process";
@@ -30,6 +29,9 @@ import { getNextForTool, formatNextSection, truncateOutput } from "../core/outpu
 import { getLspManager } from "./_context.js";
 import { lspCodeActions } from "./lsp_enrich.js";
 import { createTool } from "./_factory.js";
+
+/** Time in ms to wait for LSP servers to publish diagnostics after didOpen. */
+const LSP_DIAGNOSTIC_SETTLE_MS = 500;
 
 export function registerVerify(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -103,7 +105,6 @@ async function executeVerifyJsonAsync(projectRoot: string, options: VerifyOption
 
 	const edgeCount = getGraphEdgeCount(graph);
 
-	const diff = diffBaseline(graph, projectRoot);
 	const orphanResult = findOrphans(graph);
 	const orphans = orphanResult.all;
 	const internalOrphans = orphanResult.internal;
@@ -141,7 +142,7 @@ async function executeVerifyJsonAsync(projectRoot: string, options: VerifyOption
 		};
 	}
 
-	const risk = assessRisk(graph, diff, internalOrphans, gitChangedFiles, preCommit);
+	const risk = assessRisk(graph, internalOrphans, gitChangedFiles, preCommit);
 
 	let verdict = "PASS";
 	if (lspDiagnostics.some((d) => d.severity === "error")) {
@@ -165,13 +166,7 @@ async function executeVerifyJsonAsync(projectRoot: string, options: VerifyOption
 		internalOrphanCount: internalOrphans.length,
 		exportedOrphanCount: exportedOrphans.length,
 		gitChangedFiles: gitChangedFiles.slice(0, 50),
-		baselineDiff: diff
-			? {
-					addedSymbols: diff.addedSymbols?.length ?? 0,
-					removedSymbols: diff.removedSymbols?.length ?? 0,
-					modifiedSymbols: diff.modifiedSymbols?.length ?? 0,
-				}
-			: null,
+		baselineDiff: null,
 		lspDiagnostics,
 		lspAvailable,
 		verdict,
@@ -267,19 +262,7 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 	}
 	lines.push("");
 
-	const baseline = loadBaseline(projectRoot);
-	const diff = diffBaseline(graph, projectRoot);
-	if (baseline && diff) {
-		const totalChanges =
-			(diff.addedSymbols?.length ?? 0) + (diff.removedSymbols?.length ?? 0) + (diff.modifiedSymbols?.length ?? 0);
-		lines.push("### Baseline Diff");
-		lines.push(
-			totalChanges > 0
-				? `Changes since baseline: +${diff.addedSymbols?.length ?? 0} added, -${diff.removedSymbols?.length ?? 0} removed, ~${diff.modifiedSymbols?.length ?? 0} modified`
-				: "No changes since baseline snapshot.",
-		);
-		lines.push("");
-	}
+	// Baseline diff removed (issue #319)
 
 	const orphanResult = findOrphans(graph);
 	const orphans = orphanResult.all;
@@ -287,13 +270,8 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 	const exportedOrphans = orphanResult.exported;
 	const delta = options.delta ?? false;
 
-	// Filter orphans based on delta mode (fixes #115)
+	// Filter orphans (delta mode disabled — diffBaseline removed, issue #319)
 	let displayOrphans = orphans;
-	if (delta && diff) {
-		// In delta mode, only show orphans that are new (added symbols with no incoming refs)
-		const addedSymbolNames = new Set((diff.addedSymbols ?? []).map((s) => s.name));
-		displayOrphans = orphans.filter((o) => addedSymbolNames.has(o.name));
-	}
 
 	if (displayOrphans.length > 0) {
 		const deltaLabel = delta ? " (new since baseline)" : "";
@@ -324,7 +302,7 @@ async function executeVerifyTextAsync(projectRoot: string, options: VerifyOption
 		lines.push("### Orphan Symbols: None detected", "");
 	}
 
-	const risk = assessRisk(graph, diff, internalOrphans, gitChangedFiles, preCommit);
+	const risk = assessRisk(graph, internalOrphans, gitChangedFiles, preCommit);
 	lines.push("### Risk Level");
 	lines.push(`**${risk.level}** — ${risk.reason}`);
 	lines.push("");
@@ -420,7 +398,7 @@ async function runLspDiagnostics(
 	// Servers push diagnostics asynchronously after parsing — calling
 	// collectDiagnostics immediately returns empty/stale results.
 	if (serversUsed.size > 0) {
-		await new Promise((r) => setTimeout(r, 500));
+		await new Promise((r) => setTimeout(r, LSP_DIAGNOSTIC_SETTLE_MS));
 	}
 
 	for (const filePath of targetFiles) {
@@ -609,19 +587,17 @@ function getGitChangedFiles(projectRoot: string): string[] {
 
 function assessRisk(
 	_graph: RepoGraph,
-	diff: ReturnType<typeof diffBaseline>,
-	internalOrphans: { name: string; kind: string; file: string; line: number }[],
+	_internalOrphans: { name: string; kind: string; file: string; line: number }[],
 	gitChangedFiles?: string[],
 	preCommit?: boolean,
 ): RiskResult {
-	const baselineChanges =
-		(diff?.addedSymbols?.length ?? 0) + (diff?.removedSymbols?.length ?? 0) + (diff?.modifiedSymbols?.length ?? 0);
+	const baselineChanges = 0; // diffBaseline removed (issue #319)
 	const gitFileCount = gitChangedFiles?.length ?? 0;
 
 	// Compute orphan delta from session baseline (not absolute count)
 	const baselineDiff = diffFromBaseline(_graph, 0, 0);
-	const orphanDelta = baselineDiff?.orphanSymbols ?? internalOrphans.length;
-	const newOrphanCount = baselineDiff?.newOrphans?.length ?? internalOrphans.length;
+	const orphanDelta = baselineDiff?.orphanSymbols ?? _internalOrphans.length;
+	const newOrphanCount = baselineDiff?.newOrphans?.length ?? _internalOrphans.length;
 
 	const totalImpact = baselineChanges + gitFileCount + orphanDelta;
 
@@ -687,19 +663,7 @@ export function executeVerify(graph: RepoGraph, projectRoot: string, options: Ve
 	}
 	lines.push("");
 
-	const baseline = loadBaseline(projectRoot);
-	const diff = diffBaseline(graph, projectRoot);
-	if (baseline && diff) {
-		const totalChanges =
-			(diff.addedSymbols?.length ?? 0) + (diff.removedSymbols?.length ?? 0) + (diff.modifiedSymbols?.length ?? 0);
-		lines.push("### Baseline Diff");
-		lines.push(
-			totalChanges > 0
-				? `Changes since baseline: +${diff.addedSymbols?.length ?? 0} added, -${diff.removedSymbols?.length ?? 0} removed, ~${diff.modifiedSymbols?.length ?? 0} modified`
-				: "No changes since baseline snapshot.",
-		);
-		lines.push("");
-	}
+	// Baseline diff removed (issue #319)
 
 	const orphanResult = findOrphans(graph);
 	const orphans = orphanResult.all;
@@ -733,7 +697,7 @@ export function executeVerify(graph: RepoGraph, projectRoot: string, options: Ve
 		lines.push("### Orphan Symbols: None detected", "");
 	}
 
-	const risk = assessRisk(graph, diff, internalOrphans, gitChangedFiles, options.preCommit);
+	const risk = assessRisk(graph, internalOrphans, gitChangedFiles, options.preCommit);
 	lines.push("### Risk Level");
 	lines.push(`**${risk.level}** — ${risk.reason}`);
 	lines.push("");
@@ -754,9 +718,8 @@ export function executeVerifyJson(graph: RepoGraph, projectRoot: string, options
 	const orphans = orphanResult.all;
 	const internalOrphans = orphanResult.internal;
 	const exportedOrphans = orphanResult.exported;
-	const diff = diffBaseline(graph, projectRoot);
 	const gitChangedFiles = getGitChangedFiles(projectRoot);
-	const risk = assessRisk(graph, diff, internalOrphans, gitChangedFiles, options.preCommit);
+	const risk = assessRisk(graph, internalOrphans, gitChangedFiles, options.preCommit);
 
 	const edgeCount = getGraphEdgeCount(graph);
 
@@ -777,13 +740,7 @@ export function executeVerifyJson(graph: RepoGraph, projectRoot: string, options
 				.map((s) => ({ name: s.name, kind: s.kind, file: s.file, line: s.line, isExported: s.isExported })),
 			internalOrphanCount: internalOrphans.length,
 			exportedOrphanCount: exportedOrphans.length,
-			baselineDiff: diff
-				? {
-						addedSymbols: diff.addedSymbols?.length ?? 0,
-						removedSymbols: diff.removedSymbols?.length ?? 0,
-						modifiedSymbols: diff.modifiedSymbols?.length ?? 0,
-					}
-				: null,
+			baselineDiff: null,
 			gitChangedFiles: gitChangedFiles.slice(0, 50),
 			lspDiagnostics: [],
 			lspAvailable: false,

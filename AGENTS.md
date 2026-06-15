@@ -22,7 +22,7 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 ## Project Snapshot
 
 - **Runtime**: TypeScript on Node.js ≥18, ES2022 target, NodeNext module resolution, ESM (`"type": "module"`)
-- **Package**: npm `pi-shazam`, entry `dist/index.js` (default export function receiving `ExtensionAPI`)
+- **Package**: npm `pi-shazam` (v0.12.0), entry `dist/index.js` (default export function receiving `ExtensionAPI`)
 - **Primary user flow**: LLM calls analysis tools (`overview`, `impact`, `codesearch`, etc.) to understand code structure, change impact, and call chains before making edits
 - **Architecture**: 4 layers — `core/` (parsing, graph, ranking), `lsp/` (language server management), `tools/` (Pi tool wrappers), `hooks/` (automatic verification)
 - **External dependency**: Language servers (pyright, tsserver, rust-analyzer, gopls) are user-installed; pi-shazam manages process lifecycle
@@ -132,17 +132,17 @@ mcp/                        ← MCP server for non-Pi clients (with LSP support)
 
 ## Hooks (Automatic Event Handlers)
 
-| Hook               | Event                                    | Auto? | Effect                                                                  | Value                                                   |
-| ------------------ | ---------------------------------------- | ----- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
-| `before-start`     | `before_agent_start`                     | YES   | Injects project overview + proactive recommendations into system prompt | HIGH — LLM has structural awareness before reading code |
-| `safety`           | `tool_call` (bash)                       | YES   | Destructive command confirmation + pre-commit gate                      | HIGH — prevents data loss and unverified commits        |
-| `pre-edit`         | `tool_call` (write/edit)                 | YES   | Detects multi-file edits, warns about blast radius                      | MEDIUM — prevents accidental multi-file breaks          |
-| `shazam-guide`     | `tool_result`                            | YES   | Auto-format + suggests related shazam tools                             | HIGH — auto-formats code, helps LLM discover tools      |
-| `stop-verify`      | `tool_result` + `tool_call` + `turn_end` | YES   | Reminds to verify before ending turn, resets on new edits               | HIGH — prevents unverified edits                        |
-| `failure-recovery` | `tool_result`                            | YES   | Detects consecutive failures, suggests alternatives                     | MEDIUM — prevents LLM loops                             |
-| `tool-logger`      | `tool_call` + `tool_result`              | YES   | Logs all shazam tool calls to JSONL file                                | LOW — debugging only, no LLM impact                     |
-| `issue-guard`      | `tool_call` (bash) + `tool_result`       | YES   | Detects `gh issue create`, sets pending impact flag                     | MEDIUM — blocks edits until shazam_impact runs          |
-| `agent-context-guard` | `tool_call` (agent)                   | YES   | Blocks agent spawn without structural context for review tasks          | MEDIUM — prevents contextless agent waste               |
+| Hook                  | Event                                    | Auto? | Effect                                                                  | Value                                                   |
+| --------------------- | ---------------------------------------- | ----- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
+| `before-start`        | `before_agent_start`                     | YES   | Injects project overview + proactive recommendations into system prompt | HIGH — LLM has structural awareness before reading code |
+| `safety`              | `tool_call` (bash)                       | YES   | Destructive command confirmation + pre-commit gate                      | HIGH — prevents data loss and unverified commits        |
+| `pre-edit`            | `tool_call` (write/edit)                 | YES   | Detects multi-file edits, warns about blast radius                      | MEDIUM — prevents accidental multi-file breaks          |
+| `shazam-guide`        | `tool_result`                            | YES   | Auto-format + suggests related shazam tools                             | HIGH — auto-formats code, helps LLM discover tools      |
+| `stop-verify`         | `tool_result` + `tool_call` + `turn_end` | YES   | Reminds to verify before ending turn, resets on new edits               | HIGH — prevents unverified edits                        |
+| `failure-recovery`    | `tool_result`                            | YES   | Detects consecutive failures, suggests alternatives                     | MEDIUM — prevents LLM loops                             |
+| `tool-logger`         | `tool_call` + `tool_result`              | YES   | Logs all shazam tool calls to JSONL file                                | LOW — debugging only, no LLM impact                     |
+| `issue-guard`         | `tool_call` (bash) + `tool_result`       | YES   | Detects `gh issue create`, sets pending impact flag                     | MEDIUM — blocks edits until shazam_impact runs          |
+| `agent-context-guard` | `tool_call` (agent)                      | YES   | Blocks agent spawn without structural context for review tasks          | MEDIUM — prevents contextless agent waste               |
 
 ## Core Flows
 
@@ -427,7 +427,7 @@ Manual workflow:
 | Step | Command                                | What it checks            |
 | ---- | -------------------------------------- | ------------------------- |
 | 1    | `npm run typecheck`                    | Type safety               |
-| 2    | `npm test`                             | all tests pass          |
+| 2    | `npm test`                             | all tests pass            |
 | 3    | `npm run build`                        | Compile output            |
 | 4    | `pi -p "call shazam_overview briefly"` | Pi integration smoke test |
 

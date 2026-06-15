@@ -17,23 +17,55 @@ let _lastVerifyPassed = false;
 /**
  * Record that shazam_verify completed, with optional content for verdict parsing.
  * The content parameter is the concatenated text from the tool result's content blocks.
+ *
+ * Parses the structured envelope (verdict/riskLevel/errors).
+ * When content is undefined or unparseable, defaults to fail-closed (not PASS).
  */
 export function markVerifyCalled(content?: string): void {
 	_verifyCalled = true;
 	_lastVerifyTimestamp = Date.now();
 
-	// Parse verdict from the verify output text.
-	// FAIL indicators: risk "**high**", "[FAIL] NOT READY", "Errors: N" (N>0).
-	// PASS indicators: "[PASS] READY" or no FAIL indicators.
 	if (content) {
+		// Try parsing structured JSON envelope first
+		try {
+			const parsed = JSON.parse(content);
+			const result = parsed?.result;
+			const verdict = result?.verdict ?? parsed?.verdict;
+			const errors = result?.errors ?? parsed?.errors;
+			const riskLevel = result?.riskLevel ?? parsed?.riskLevel;
+
+			if (verdict === "PASS" || verdict === "WARN") {
+				_lastVerifyPassed = true;
+				return;
+			}
+			if (verdict === "FAIL") {
+				_lastVerifyPassed = false;
+				return;
+			}
+			// No verdict field: check errors
+			if (Array.isArray(errors) && errors.length > 0) {
+				_lastVerifyPassed = false;
+				return;
+			}
+			if (riskLevel === "high") {
+				_lastVerifyPassed = false;
+				return;
+			}
+			// Structured envelope but no clear verdict: fail-closed
+			_lastVerifyPassed = false;
+			return;
+		} catch {
+			// Not JSON: use text-based parsing
+		}
+
 		const isFail =
 			/\[FAIL\]\s+NOT\s+READY/i.test(content) ||
 			/risk\s*[:=]\s*['"]?\*{0,2}high\*{0,2}/i.test(content) ||
 			/Errors:\s*([1-9]\d*)/.test(content);
 		_lastVerifyPassed = !isFail;
 	} else {
-		// No content to parse — assume passed (backward compatibility)
-		_lastVerifyPassed = true;
+		// No content to parse — fail-closed: assume not passed
+		_lastVerifyPassed = false;
 	}
 }
 

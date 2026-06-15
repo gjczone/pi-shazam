@@ -81,8 +81,24 @@ function countSourceFilesUpTo(root: string, limit: number): number {
 function getUncommittedChangeCount(projectRoot: string): number {
 	try {
 		let output = "";
-		try { output += execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMR"], { cwd: projectRoot, encoding: "utf-8", timeout: 3000 }); } catch { /* no unstaged */ }
-		try { output += execFileSync("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMR"], { cwd: projectRoot, encoding: "utf-8", timeout: 3000 }); } catch { /* no staged */ }
+		try {
+			output += execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMR"], {
+				cwd: projectRoot,
+				encoding: "utf-8",
+				timeout: 3000,
+			});
+		} catch {
+			/* no unstaged */
+		}
+		try {
+			output += execFileSync("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMR"], {
+				cwd: projectRoot,
+				encoding: "utf-8",
+				timeout: 3000,
+			});
+		} catch {
+			/* no staged */
+		}
 		output = output.trim();
 		if (!output) return 0;
 		return new Set(output.split("\n").filter(Boolean)).size;
@@ -109,7 +125,9 @@ function buildProactiveRecommendations(projectRoot: string, graph: RepoGraph): s
 
 		// Only include recommendations that are contextually relevant
 		if (uncommitted > 0) {
-			lines.push(`- [REQUIRED] You have ${uncommitted} uncommitted change(s). Run \`shazam_verify --preCommit\` before committing.`);
+			lines.push(
+				`- [REQUIRED] You have ${uncommitted} uncommitted change(s). Run \`shazam_verify --preCommit\` before committing.`,
+			);
 		}
 
 		// Always include the most critical workflow guidance
@@ -149,11 +167,16 @@ function buildSessionBaselineSection(_projectRoot: string, graph: RepoGraph): st
 	let branch = "unknown";
 	let commit = "unknown";
 	try {
-		branch = execFileSync("git", ["branch", "--show-current"], { encoding: "utf-8", timeout: 3000 }).trim() || "unknown";
-	} catch { /* git not available or not a repo */ }
+		branch =
+			execFileSync("git", ["branch", "--show-current"], { encoding: "utf-8", timeout: 3000 }).trim() || "unknown";
+	} catch {
+		/* git not available or not a repo */
+	}
 	try {
 		commit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf-8", timeout: 3000 }).trim() || "unknown";
-	} catch { /* git not available or not a repo */ }
+	} catch {
+		/* git not available or not a repo */
+	}
 
 	try {
 		// createBaseline immediately reassigns _baseline and _previousOrphans,
@@ -223,7 +246,7 @@ export function resetOverviewShown(): void {
  * into the system prompt array. Skips full overview for continuation sessions.
  */
 export function registerBeforeStartHook(pi: ExtensionAPI): void {
-	// Reset overview flag on new session (fixes stale continuation detection)
+	// Reset overview flag and reminders on new session
 	pi.on("session_start", () => {
 		_hasShownOverview = false;
 	});

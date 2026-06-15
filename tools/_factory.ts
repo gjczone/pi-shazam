@@ -23,6 +23,26 @@ import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { truncateOutput } from "../core/output.js";
 
+// ── Envelope helper ────────────────────────────────────────────────────────
+
+/**
+ * Build a standardized JSON envelope for tool output.
+ * Used by all tools to produce consistent schema_version/command/project/status/result.
+ */
+export function buildEnvelope(name: string, project: string, status: "ok" | "error", result: unknown): string {
+	return JSON.stringify(
+		{
+			schema_version: "1.0",
+			command: name.replace("shazam_", ""),
+			project,
+			status,
+			result,
+		},
+		null,
+		2,
+	);
+}
+
 // ── Factory types ──────────────────────────────────────────────────────────
 
 export interface ToolSpec<T extends TProperties> {
@@ -91,6 +111,8 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 		async execute(_toolCallId: string, params: Record<string, unknown>): Promise<AgentToolResult> {
 			const json = (params.json as boolean) ?? false;
 			const maxTokens = params.maxTokens as number | undefined;
+			const project = process.cwd();
+			params.project = project;
 			const graph = scanProject(".");
 
 			let text: string;
@@ -98,10 +120,14 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 				text = await domainFn(graph, params);
 			} catch (err) {
 				const errMsg = err instanceof Error ? err.message : String(err);
-				return {
-					content: [{ type: "text", text: `Error: ${spec.name} failed — ${errMsg}` }],
-					isError: true,
-				};
+				if (json) {
+					text = buildEnvelope(spec.name, project, "error", { message: errMsg });
+				} else {
+					return {
+						content: [{ type: "text", text: `Error: ${spec.name} failed — ${errMsg}` }],
+						isError: true,
+					};
+				}
 			}
 
 			if (json) {
@@ -122,7 +148,7 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 				}
 			}
 
-			if (typeof maxTokens === 'number' && maxTokens > 0 && !json) {
+			if (typeof maxTokens === "number" && maxTokens > 0 && !json) {
 				text = truncateOutput(text.split("\n"), maxTokens);
 			}
 

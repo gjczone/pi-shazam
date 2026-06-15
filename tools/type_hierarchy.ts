@@ -11,6 +11,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { createTool } from "./_factory.js";
+import { buildEnvelope } from "./_factory.js";
 import { getLspManager } from "./_context.js";
 import { lspImplementation } from "./lsp_enrich.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
@@ -42,7 +43,7 @@ export function registerTypeHierarchy(pi: ExtensionAPI): void {
 				rawDir === "supertypes" || rawDir === "subtypes" ? rawDir : "both";
 			const result = await executeTypeHierarchy(graph, name, direction);
 			return json
-				? JSON.stringify({ schema_version: "1.0", command: "type_hierarchy", status: "ok", result }, null, 2)
+				? buildEnvelope("shazam_type_hierarchy", (params.project as string) ?? process.cwd(), "ok", result)
 				: formatTypeHierarchy(result, name);
 		},
 	});
@@ -110,47 +111,51 @@ export async function executeTypeHierarchy(
 					const content = readFileSync(resolve(serverInfo.workspaceRoot, symbol.file), "utf-8");
 					await client.didOpen(symbol.file, content);
 				}
-				
+
 				// Prepare typeHierarchy request
 				const uri = `file://${resolve(serverInfo.workspaceRoot, symbol.file)}`;
 				const position = { line: symbol.line - 1, character: symbol.col || 0 };
-				
+
 				// Call textDocument/prepareTypeHierarchy
-				const prepareResult = await client.request('textDocument/prepareTypeHierarchy', {
+				const prepareResult = await client.request("textDocument/prepareTypeHierarchy", {
 					textDocument: { uri },
 					position,
 				});
-				
+
 				if (prepareResult && Array.isArray(prepareResult) && prepareResult.length > 0) {
 					const item = prepareResult[0] as Record<string, unknown>;
-					
+
 					// Get supertypes if requested
 					if (direction === "both" || direction === "supertypes") {
-						const supertypes = await client.request('typeHierarchy/supertypes', { item }) as Array<Record<string, unknown>>;
+						const supertypes = (await client.request("typeHierarchy/supertypes", { item })) as Array<
+							Record<string, unknown>
+						>;
 						if (Array.isArray(supertypes)) {
 							for (const st of supertypes) {
 								result.supertypes.push({
-									name: (st.name as string) || '',
-									kind: (st.kind as string) || 'unknown',
-									file: uriToPath((st.uri as string) || '') || '',
+									name: (st.name as string) || "",
+									kind: (st.kind as string) || "unknown",
+									file: uriToPath((st.uri as string) || "") || "",
 									line: ((st.range as Record<string, unknown>)?.start as Record<string, number>)?.line + 1 || 0,
-								signature: (st.detail as string) || '',
+									signature: (st.detail as string) || "",
 								});
 							}
 						}
 					}
-					
+
 					// Get subtypes if requested
 					if (direction === "both" || direction === "subtypes") {
-						const subtypes = await client.request('typeHierarchy/subtypes', { item }) as Array<Record<string, unknown>>;
+						const subtypes = (await client.request("typeHierarchy/subtypes", { item })) as Array<
+							Record<string, unknown>
+						>;
 						if (Array.isArray(subtypes)) {
 							for (const st of subtypes) {
 								result.subtypes.push({
-									name: (st.name as string) || '',
-									kind: (st.kind as string) || 'unknown',
-									file: uriToPath((st.uri as string) || '') || '',
+									name: (st.name as string) || "",
+									kind: (st.kind as string) || "unknown",
+									file: uriToPath((st.uri as string) || "") || "",
 									line: ((st.range as Record<string, unknown>)?.start as Record<string, number>)?.line + 1 || 0,
-								signature: (st.detail as string) || '',
+									signature: (st.detail as string) || "",
 								});
 							}
 						}
@@ -165,12 +170,7 @@ export async function executeTypeHierarchy(
 			const implKinds = new Set(["interface", "type_alias"]);
 			if (implKinds.has(symbol.kind)) {
 				try {
-					const implLocs = await lspImplementation(
-						lspManager,
-						symbol.file,
-						symbol.line - 1,
-						symbol.col || 0,
-					);
+					const implLocs = await lspImplementation(lspManager, symbol.file, symbol.line - 1, symbol.col || 0);
 					if (implLocs && implLocs.length > 0) {
 						for (const loc of implLocs) {
 							const relFile = uriToPath(loc.uri);
@@ -260,7 +260,7 @@ export function formatTypeHierarchy(result: TypeHierarchyResult, name: string): 
 	// Show appropriate message based on symbol kind and hierarchy
 	const isInterfaceOrType = ["interface", "type_alias", "enum"].includes(result.symbol.kind);
 	const hasHierarchy = result.supertypes.length > 0 || result.subtypes.length > 0;
-	
+
 	if (result.symbol.kind === "unknown") {
 		lines.push(`Symbol \`${name}\` not found in the project.`, "");
 	} else if (isInterfaceOrType && !hasHierarchy) {

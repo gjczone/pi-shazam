@@ -25,21 +25,23 @@ import { markVerifyCalled, hasRecentVerify, onNewEdit, resetVerifyState } from "
 export function registerStopVerify(pi: ExtensionAPI): void {
 	// Track shazam_verify calls and clear edit history (edits are now verified)
 	pi.on("tool_result", (event) => {
-		if (event.toolName === "shazam_verify" && !event.isError) {
-			// Extract text from content blocks to parse PASS/FAIL verdict
-			const text =
-				"content" in event && Array.isArray(event.content)
-					? event.content
-							.filter((c): c is { type: "text"; text: string } => c.type === "text")
-							.map((c) => c.text)
-							.join("\n")
-					: undefined;
-			markVerifyCalled(text);
-			clearEditedFiles();
+		if (event.toolName === "shazam_verify") {
+			if (!event.isError) {
+				// Extract text from content blocks to parse PASS/FAIL verdict
+				const text =
+					"content" in event && Array.isArray(event.content)
+						? event.content
+								.filter((c): c is { type: "text"; text: string } => c.type === "text")
+								.map((c) => c.text)
+								.join("\n")
+						: undefined;
+				markVerifyCalled(text);
+				clearEditedFiles();
+			}
 		}
 	});
 
-	// Reset verify flag when new edits happen after verify
+	// Track write/edit calls
 	pi.on("tool_call", (event) => {
 		if (event.toolName === "write" || event.toolName === "edit") {
 			onNewEdit();

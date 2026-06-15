@@ -22,7 +22,11 @@ const rpc: {
 		writer: import("vscode-jsonrpc").MessageWriter,
 		logger?: import("vscode-jsonrpc").Logger,
 	) => import("vscode-jsonrpc").MessageConnection;
-	CancellationTokenSource: new () => { token: import("vscode-jsonrpc").CancellationToken; cancel(): void; dispose(): void };
+	CancellationTokenSource: new () => {
+		token: import("vscode-jsonrpc").CancellationToken;
+		cancel(): void;
+		dispose(): void;
+	};
 } = _require("vscode-jsonrpc/node");
 
 import type {
@@ -194,7 +198,7 @@ export class LspClient {
 	}
 
 	isFileOpened(filePath: string): boolean {
-		return this._openedFiles.has(path.resolve(filePath));
+		return this._openedFiles.has(this.resolveRel(filePath));
 	}
 
 	get serverCapabilities(): Record<string, unknown> {
@@ -363,7 +367,7 @@ export class LspClient {
 			return;
 		}
 
-		const resolvedPath = path.resolve(filePath);
+		const resolvedPath = this.resolveRel(filePath);
 		if (this._openedFiles.has(resolvedPath) || this._openingFiles.has(resolvedPath)) {
 			return;
 		}
@@ -382,13 +386,23 @@ export class LspClient {
 
 		try {
 			await this.connection.sendNotification("textDocument/didOpen", params);
-			this._openedFiles.add(path.resolve(filePath));
+			this._openedFiles.add(resolvedPath);
+			this._docVersions.set(uri, 1);
 		} finally {
 			this._openingFiles.delete(resolvedPath);
 		}
 	}
 
-	private _docVersion = 0;
+	private _docVersions = new Map<string, number>();
+
+	/**
+	 * Resolve a file path relative to workspaceRoot. Returns filePath
+	 * unchanged if it is already absolute.
+	 */
+	private resolveRel(filePath: string): string {
+		if (path.isAbsolute(filePath)) return filePath;
+		return path.resolve(this.workspaceRoot, filePath);
+	}
 
 	async didChange(filePath: string, text: string): Promise<void> {
 		if (!this.connection) {
@@ -406,11 +420,13 @@ export class LspClient {
 		}
 
 		const uri = pathToUri(filePath);
+		const nextVersion = (this._docVersions.get(uri) ?? 0) + 1;
+		this._docVersions.set(uri, nextVersion);
 
 		const params: DidChangeTextDocumentParams = {
 			textDocument: {
 				uri,
-				version: ++this._docVersion,
+				version: nextVersion,
 			},
 			contentChanges: [
 				{
@@ -420,6 +436,11 @@ export class LspClient {
 		};
 
 		await this.connection.sendNotification("textDocument/didChange", params);
+	}
+
+	async didClose(filePath: string): Promise<void> {
+		const uri = pathToUri(filePath);
+		this._docVersions.delete(uri);
 	}
 
 	async didSave(filePath: string): Promise<void> {
@@ -582,10 +603,7 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<SemanticTokens | null>(
-				"textDocument/semanticTokens/full",
-				params,
-			);
+			const result = await this._sendRequest<SemanticTokens | null>("textDocument/semanticTokens/full", params);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -607,10 +625,7 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<FoldingRange[] | null>(
-				"textDocument/foldingRange",
-				params,
-			);
+			const result = await this._sendRequest<FoldingRange[] | null>("textDocument/foldingRange", params);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -634,10 +649,7 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<WorkspaceEdit | null>(
-				"textDocument/rename",
-				params,
-			);
+			const result = await this._sendRequest<WorkspaceEdit | null>("textDocument/rename", params);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -696,10 +708,7 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<SignatureHelp | null>(
-				"textDocument/signatureHelp",
-				params,
-			);
+			const result = await this._sendRequest<SignatureHelp | null>("textDocument/signatureHelp", params);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -722,10 +731,7 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<Location | Location[] | null>(
-				"textDocument/implementation",
-				params,
-			);
+			const result = await this._sendRequest<Location | Location[] | null>("textDocument/implementation", params);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -747,10 +753,7 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<CodeLens[] | null>(
-				"textDocument/codeLens",
-				params,
-			);
+			const result = await this._sendRequest<CodeLens[] | null>("textDocument/codeLens", params);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -810,6 +813,18 @@ export class LspClient {
 		return this.withTimeout(promise, timeoutMs, () => cts.cancel());
 	}
 
+	/**
+	 * Cancel all in-flight LSP requests. Safe to call after close().
+	 */
+	cancelInflight(): void {
+		const err = new Error("LSP request cancelled");
+		for (const [p, reject] of this._inFlightRequests) {
+			void p.catch(() => {});
+			reject(err);
+		}
+		this._inFlightRequests.clear();
+	}
+
 	// ── Diagnostics ────────────────────────────────────────────────────────────
 
 	/**
@@ -817,7 +832,9 @@ export class LspClient {
 	 * Returns the newest notification per URI (iterates in reverse).
 	 */
 	collectDiagnostics(filePaths: string[]): PublishDiagnosticsParams[] {
-		const expectedUris = new Set(filePaths.filter((f) => this.isFileOpened(f)).map((f) => pathToUri(f)));
+		const expectedUris = new Set(
+			filePaths.filter((f) => this.isFileOpened(f)).map((f) => pathToUri(this.resolveRel(f))),
+		);
 
 		if (expectedUris.size === 0) return [];
 

@@ -15,7 +15,7 @@ import { getLspManager } from "./_context.js";
 import { ensureFileOpened } from "./lsp_enrich.js";
 import type { WorkspaceEdit, TextEdit } from "vscode-languageserver-protocol";
 import { uriToPath } from "../lsp/client.js";
-import { createTool } from "./_factory.js";
+import { createTool, buildEnvelope } from "./_factory.js";
 import { scanProject } from "../core/scanner.js";
 
 export function registerRenameSymbol(pi: ExtensionAPI): void {
@@ -36,7 +36,7 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 		}),
 		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
-			const dryRun = (params.dryRun as boolean) ?? false;
+			const dryRun = (params.dryRun as boolean) ?? true;
 			const symbolName = typeof params.symbol === "string" ? params.symbol : "";
 			const newName = typeof params.newName === "string" ? params.newName : "";
 			if (!symbolName) {
@@ -45,11 +45,29 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 			if (!newName) {
 				return { content: [{ type: "text", text: "Error: newName parameter is required" }] };
 			}
+			// Block non-dry-run: force the LLM to confirm via shazam_call_chain first
+			if (!dryRun) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: [
+								"[BLOCKED] Rename aborted — safety gate requires explicit confirmation.",
+								"",
+								`Before renaming \`${symbolName}\`, you MUST run:`,
+								`  shazam_call_chain --symbol "${symbolName}" --direction both`,
+								"",
+								"Review all callers and callees, then re-invoke shazam_rename_symbol with dryRun=false.",
+							].join("\n"),
+						},
+					],
+				};
+			}
 			// Scan project to get graph (fixes #209 — customExecute must not rely on module-level variable)
 			const graph = scanProject(".");
 			const result = await executeRenameSymbol(graph, symbolName, newName, dryRun);
 			const text = json
-				? JSON.stringify({ schema_version: "1.0", command: "rename_symbol", status: "ok", result }, null, 2)
+				? buildEnvelope("shazam_rename_symbol", process.cwd(), "ok", result)
 				: formatRenameResult(result, symbolName, newName, dryRun);
 			return { content: [{ type: "text", text }] };
 		},
@@ -356,7 +374,11 @@ async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise
 				preview: [
 					...preview,
 					{ file: filePath, line: 0, text: `Error applying edits: ${err}` },
-					{ file: "", line: 0, text: `Rolled back ${written.length} file(s) due to failure. No changes were persisted.` },
+					{
+						file: "",
+						line: 0,
+						text: `Rolled back ${written.length} file(s) due to failure. No changes were persisted.`,
+					},
 				],
 			};
 		}

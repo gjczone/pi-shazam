@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-06-15
+
+### Bug Fixes
+
+- **fix(#319): core/lsp/mcp reliability** — per-URI LSP doc version, atomic cache rename with Windows fallback, scanner edge dedup and symlink handling, MCP graceful shutdown, LSP manager restart backoff with exponential delay, YAML rootMarkers fix
+- **fix(#320): tool/hook safety** — write-tool dryRun defaults to true, audit log secret redaction with rotation, hook state race fixes (verify fail-closed, pre-edit timer cleanup, stop-verify flag), argv-based command detection for safety/issue-guard
+
+### Changed
+
+- **chore(#321): docs and schema parity** — language counts unified across README/SKILL/AGENTS (6 languages), TypeBox defaults mirror Zod, emoji removed from all source, Chinese comments translated to English, dependency versions pinned, verify→fix Next rule added
+
 ## [0.11.1] - 2026-06-15
 
 ### Bug Fixes

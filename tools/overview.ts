@@ -9,6 +9,7 @@ import type { RepoGraph, Symbol } from "../core/graph.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool } from "./_factory.js";
+import { buildEnvelope } from "./_factory.js";
 import { EXT_TO_LANG } from "../core/treesitter.js";
 import { existsSync, readFileSync } from "node:fs";
 import { execSync } from "node:child_process";
@@ -258,25 +259,19 @@ export function executeOverviewJson(graph: RepoGraph, projectRoot: string, filte
 
 	const topFiles = [...fileStats.entries()].sort((a, b) => b[1].pagerank - a[1].pagerank).slice(0, 10);
 
-	return JSON.stringify({
-		schema_version: "1.0",
-		command: "overview",
-		project: projectRoot,
-		status: "ok",
-		result: {
-			totalSymbols: graph.symbols.size,
-			totalFiles: graph.fileSymbols.size,
-			keyDependencies: filter ? undefined : buildKeyDependenciesSection(projectRoot),
-			pythonDependencies: filter ? undefined : buildPythonDepsSection(projectRoot),
-			rustDependencies: filter ? undefined : buildRustDepsSection(projectRoot),
-			goDependencies: filter ? undefined : buildGoDepsSection(projectRoot),
-			recentChanges: filter ? undefined : buildRecentChangesSection(projectRoot),
-			topFiles: topFiles.map(([file, stats]) => ({
-				file,
-				symbolCount: stats.count,
-				pagerank: Number(stats.pagerank.toFixed(4)),
-			})),
-		},
+	return buildEnvelope("shazam_overview", projectRoot, "ok", {
+		totalSymbols: graph.symbols.size,
+		totalFiles: graph.fileSymbols.size,
+		keyDependencies: filter ? undefined : buildKeyDependenciesSection(projectRoot),
+		pythonDependencies: filter ? undefined : buildPythonDepsSection(projectRoot),
+		rustDependencies: filter ? undefined : buildRustDepsSection(projectRoot),
+		goDependencies: filter ? undefined : buildGoDepsSection(projectRoot),
+		recentChanges: filter ? undefined : buildRecentChangesSection(projectRoot),
+		topFiles: topFiles.map(([file, stats]) => ({
+			file,
+			symbolCount: stats.count,
+			pagerank: Number(stats.pagerank.toFixed(4)),
+		})),
 	});
 }
 
@@ -468,7 +463,7 @@ function buildPythonDepsSection(projectRoot: string): string | null {
 			const content = readFileSync(pyprojectPath, "utf-8");
 			const depsMatch = content.match(/\[project\.dependencies\]\s*\n([\s\S]*?)(?=\n\[|\n*$)/);
 			if (depsMatch) {
-				const deps = depsMatch[1]!.split("\n").filter(l => l.trim() && !l.trim().startsWith("#"));
+				const deps = depsMatch[1]!.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#"));
 				lines.push("| Package | Version |");
 				lines.push("|---------|---------|");
 				for (const dep of deps.slice(0, 15)) {
@@ -477,7 +472,9 @@ function buildPythonDepsSection(projectRoot: string): string | null {
 				}
 				return lines.join("\n");
 			}
-		} catch { /* ignore */ }
+		} catch {
+			/* ignore */
+		}
 	}
 
 	// Fallback: requirements.txt
@@ -485,14 +482,16 @@ function buildPythonDepsSection(projectRoot: string): string | null {
 	if (existsSync(reqPath)) {
 		try {
 			const content = readFileSync(reqPath, "utf-8");
-			const deps = content.split("\n").filter(l => l.trim() && !l.startsWith("#") && !l.startsWith("-"));
+			const deps = content.split("\n").filter((l) => l.trim() && !l.startsWith("#") && !l.startsWith("-"));
 			lines.push("| Package |");
 			lines.push("|---------|");
 			for (const dep of deps.slice(0, 15)) {
 				lines.push(`| ${dep.trim()} |`);
 			}
 			return lines.join("\n");
-		} catch { /* ignore */ }
+		} catch {
+			/* ignore */
+		}
 	}
 
 	return null;
@@ -510,14 +509,16 @@ function buildRustDepsSection(projectRoot: string): string | null {
 		const content = readFileSync(cargoPath, "utf-8");
 		const depsMatch = content.match(/\[dependencies\]\s*\n([\s\S]*?)(?=\n\[|\n*$)/);
 		if (!depsMatch) return null;
-		const deps = depsMatch[1]!.split("\n").filter(l => l.trim() && !l.trim().startsWith("#"));
+		const deps = depsMatch[1]!.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#"));
 		const lines: string[] = ["### Key Dependencies", "", "| Crate | Version |", "|-------|---------|"];
 		for (const dep of deps.slice(0, 15)) {
 			const match = dep.match(/^"?([^"<>= ]+)"?\s*=\s*"?([^"]*)"?/);
 			if (match) lines.push(`| ${match[1]!.trim()} | ${match[2]?.trim() || ""} |`);
 		}
 		return lines.join("\n");
-	} catch { return null; }
+	} catch {
+		return null;
+	}
 }
 
 /**
@@ -530,14 +531,16 @@ function buildGoDepsSection(projectRoot: string): string | null {
 	if (!existsSync(goModPath)) return null;
 	try {
 		const content = readFileSync(goModPath, "utf-8");
-		const deps = content.split("\n").filter(l => l.trim().startsWith("\t") && !l.includes("go "));
+		const deps = content.split("\n").filter((l) => l.trim().startsWith("\t") && !l.includes("go "));
 		const lines: string[] = ["### Key Dependencies", "", "| Module | Version |", "|--------|---------|"];
 		for (const dep of deps.slice(0, 15)) {
 			const parts = dep.trim().split(/\s+/);
 			if (parts.length >= 2) lines.push(`| ${parts[0]} | ${parts[1]} |`);
 		}
 		return lines.join("\n");
-	} catch { return null; }
+	} catch {
+		return null;
+	}
 }
 
 // ── Recent Changes section ──────────────────────────────────────────

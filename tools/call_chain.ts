@@ -6,6 +6,7 @@ import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool } from "./_factory.js";
+import { buildEnvelope } from "./_factory.js";
 
 export function registerCallChain(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -136,12 +137,7 @@ export function executeCallChainJson(
 				: [],
 	}));
 
-	return JSON.stringify({
-		schema_version: "1.0",
-		command: "call_chain",
-		status: "ok",
-		result,
-	});
+	return buildEnvelope("shazam_call_chain", process.cwd(), "ok", result);
 }
 
 function findSymbolsByName(graph: RepoGraph, name: string): Symbol[] {

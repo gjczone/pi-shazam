@@ -29,6 +29,12 @@ let _editCounter = 0;
 const _tentativeFiles = new Map<string, Set<string>>();
 
 /**
+ * Track setTimeout handles for TTL-based eviction, keyed by toolCallId.
+ * Handles are unref()'d so they don't keep the process alive.
+ */
+const _timeoutHandles = new Map<string, ReturnType<typeof setTimeout>>();
+
+/**
  * Normalize a file path to prevent duplicate tracking of the same file
  * under different path representations (e.g. "./src/foo.ts" vs "src/foo.ts").
  */
@@ -66,6 +72,10 @@ function addEditedFile(file: string): void {
  * Clear the edited files tracker.
  */
 export function clearEditedFiles(): void {
+	for (const handle of _timeoutHandles.values()) {
+		clearTimeout(handle);
+	}
+	_timeoutHandles.clear();
 	_editedFiles.clear();
 	_editCounter = 0;
 	_tentativeFiles.clear();
@@ -130,9 +140,7 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 		// Normalize paths to avoid duplicate tracking, then drop paths that
 		// point outside the project tree (tmp, dot-dirs, node_modules, dist,
 		// json files). Tracking those would trigger spurious verify reminders.
-		const files = rawFiles
-			.map((f) => normalizeEditedPath(f, ctx.cwd))
-			.filter(isTrackableEditedPath);
+		const files = rawFiles.map((f) => normalizeEditedPath(f, ctx.cwd)).filter(isTrackableEditedPath);
 		if (files.length === 0) return;
 
 		// Track tentatively for this tool call (for removal on failure).
@@ -144,14 +152,20 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 				_tentativeFiles.get(toolId)!.add(f);
 			}
 			// Clean up orphaned entries after 5 minutes if tool_result never arrives
-			setTimeout(() => {
-				if (_tentativeFiles.has(toolId)) {
-					for (const f of _tentativeFiles.get(toolId)!) {
-						_editedFiles.delete(f);
+			const handle = setTimeout(
+				() => {
+					if (_tentativeFiles.has(toolId)) {
+						for (const f of _tentativeFiles.get(toolId)!) {
+							_editedFiles.delete(f);
+						}
+						_tentativeFiles.delete(toolId);
 					}
-					_tentativeFiles.delete(toolId);
-				}
-			}, 5 * 60 * 1000);
+					_timeoutHandles.delete(toolId);
+				},
+				5 * 60 * 1000,
+			);
+			handle.unref();
+			_timeoutHandles.set(toolId, handle);
 		}
 
 		// Track files for multi-edit detection (with eviction)
@@ -180,14 +194,20 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 
 	// On tool_result: remove tentatively tracked files if the tool call failed
 	pi.on("tool_result", (event) => {
+		const toolId = (event as unknown as Record<string, unknown>).toolCallId as string | undefined;
+
+		// Clear any TTL timeout for this tool call
+		if (toolId && _timeoutHandles.has(toolId)) {
+			clearTimeout(_timeoutHandles.get(toolId)!);
+			_timeoutHandles.delete(toolId);
+		}
+
 		if (event.toolName !== "write" && event.toolName !== "edit") return;
 		if (!event.isError) {
-			const toolId = (event as unknown as Record<string, unknown>).toolCallId as string | undefined;
 			if (toolId) _tentativeFiles.delete(toolId);
 			return;
 		}
 
-		const toolId = (event as unknown as Record<string, unknown>).toolCallId as string | undefined;
 		if (toolId && _tentativeFiles.has(toolId)) {
 			for (const f of _tentativeFiles.get(toolId)!) {
 				_editedFiles.delete(f);

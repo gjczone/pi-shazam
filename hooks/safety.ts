@@ -49,24 +49,86 @@ const MEDIUM_RISK_PATTERNS: Array<{ regex: RegExp; label: string }> = [
 /**
  * Git commit pattern for pre-commit gate.
  */
-const GIT_COMMIT_PATTERN = /git\s+commit/;
-
 /**
  * Normalize whitespace in a command string: collapse tabs and multiple spaces
  * to a single space, then trim. This prevents bypass via extra spaces or tabs.
  */
 function normalizeWhitespace(cmd: string): string {
-	return cmd.replace(/[\t\r]+/g, " ").replace(/ {2,}/g, " ").trim();
+	return cmd
+		.replace(/[\t\r]+/g, " ")
+		.replace(/ {2,}/g, " ")
+		.trim();
+}
+
+/**
+ * Tokenize a bash command string into argv, respecting quotes.
+ * Handles single quotes, double quotes, and escaped characters.
+ */
+function tokenizeCommand(cmd: string): string[] {
+	const tokens: string[] = [];
+	let i = 0;
+	while (i < cmd.length) {
+		// Skip whitespace
+		while (i < cmd.length && /\s/.test(cmd[i]!)) i++;
+		if (i >= cmd.length) break;
+
+		if (cmd[i] === "'" || cmd[i] === '"') {
+			const quote = cmd[i]!;
+			i++;
+			let token = "";
+			while (i < cmd.length && cmd[i] !== quote) {
+				if (cmd[i] === "\\" && i + 1 < cmd.length) {
+					i++;
+				}
+				token += cmd[i];
+				i++;
+			}
+			i++; // skip closing quote
+			tokens.push(token);
+		} else {
+			let token = "";
+			while (i < cmd.length && !/\s/.test(cmd[i]!)) {
+				token += cmd[i];
+				i++;
+			}
+			tokens.push(token);
+		}
+	}
+	return tokens;
 }
 
 /**
  * Check if a command matches any destructive pattern.
- * Normalizes whitespace first, then uses regex patterns for robust matching.
+ * Uses argv-based parsing for robust matching.
  * Returns the risk level and matched pattern, or null if safe.
  */
 function detectDestructiveCommand(cmd: string): { level: "HIGH" | "MEDIUM"; pattern: string } | null {
 	const normalized = normalizeWhitespace(cmd);
 	const lower = normalized.toLowerCase();
+	const argv = tokenizeCommand(cmd);
+
+	// Check via argv for more precise detection
+	const argv0 = argv[0]?.toLowerCase() ?? "";
+	const isRm = argv0 === "rm" || argv0.endsWith("/rm");
+	const isGitCommit = argv0 === "git" && argv.length >= 2 && argv[1] === "commit";
+
+	// git commit detection: check for --no-verify flag
+	if (isGitCommit) {
+		if (argv.includes("--no-verify") || argv.includes("-n")) {
+			return null; // explicitly allowed by user
+		}
+		return null; // git commit is handled by the pre-commit gate separately
+	}
+
+	// rm detection: check for recursive flag
+	if (isRm) {
+		const hasRecursive = argv.some(
+			(a) => a === "-r" || a === "-R" || a === "-rf" || a === "-Rf" || a === "--recursive",
+		);
+		if (hasRecursive) {
+			return { level: "HIGH", pattern: "rm -r" };
+		}
+	}
 
 	for (const { regex, label } of HIGH_RISK_PATTERNS) {
 		if (regex.test(lower)) {
@@ -142,12 +204,12 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 
 		// -- Check 2: Pre-commit gate --
 		// Auto-block commit when shazam_verify was not run recently.
-		// The stop-verify hook already sends LLM reminders about unverified
-		// edits, so we do not need an interactive selector here. Popups
-		// would also break non-interactive (print/RPC) modes.
-		if (GIT_COMMIT_PATTERN.test(cmd)) {
-			// Skip if --no-verify flag is present
-			if (cmd.includes("--no-verify")) {
+		// Uses argv-based detection to avoid false positives.
+		const argv = tokenizeCommand(cmd);
+		const isGitCommit = argv[0] === "git" && argv.length >= 2 && argv[1] === "commit";
+		if (isGitCommit) {
+			// Skip if --no-verify or -n flag is present
+			if (argv.includes("--no-verify") || argv.includes("-n")) {
 				return;
 			}
 

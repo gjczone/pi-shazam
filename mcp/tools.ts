@@ -18,11 +18,12 @@ import { executeVerify } from "../tools/verify.js";
 import { executeTypeHierarchy, formatTypeHierarchy } from "../tools/type_hierarchy.js";
 import { executeRenameSymbol, formatRenameResult } from "../tools/rename_symbol.js";
 import { executeSafeDelete, formatSafeDeleteResult } from "../tools/safe_delete.js";
-import { appendFileSync, mkdirSync, statSync, renameSync } from "node:fs";
+import { appendFile, mkdir, stat, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { LspManager } from "../lsp/manager.js";
 import { getToolDefinition } from "../tools/definitions.js";
+import { truncateOutput } from "../core/output.js";
 
 // ── Logging ──────────────────────────────────────────────────────
 
@@ -31,44 +32,61 @@ const LOG_DIR = join(homedir(), ".pi", "hooks", "audit");
 const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_LOG_FILES = 3;
 
+// Async mutex keyed on LOG_DIR to serialize log writes and rotations.
+let _logLock: Promise<void> = Promise.resolve();
+function withLogLock<T>(fn: () => Promise<T>): Promise<T> {
+	const prev = _logLock;
+	let release: () => void;
+	_logLock = new Promise<void>((r) => {
+		release = r;
+	});
+	return prev.then(fn).finally(() => release!());
+}
+
 /**
  * Rotate log files when the current log exceeds MAX_LOG_SIZE.
  * Keeps up to MAX_LOG_FILES archived logs (shazam-calls.log.1, .2, .3).
  */
-function rotateLog(): void {
+async function rotateLog(): Promise<void> {
 	try {
 		const logPath = join(LOG_DIR, "shazam-calls.log");
-		const stat = statSync(logPath);
-		if (stat.size > MAX_LOG_SIZE) {
+		const st = await stat(logPath);
+		if (st.size > MAX_LOG_SIZE) {
 			// Shift existing rotated files
 			for (let i = MAX_LOG_FILES - 1; i >= 1; i--) {
 				const src = join(LOG_DIR, `shazam-calls.log.${i}`);
 				const dst = join(LOG_DIR, `shazam-calls.log.${i + 1}`);
-				try { renameSync(src, dst); } catch { /* file may not exist */ }
+				try {
+					await rename(src, dst);
+				} catch {
+					/* file may not exist */
+				}
 			}
-			renameSync(logPath, join(LOG_DIR, "shazam-calls.log.1"));
+			await rename(logPath, join(LOG_DIR, "shazam-calls.log.1"));
 		}
 	} catch {
 		/* file may not exist yet */
 	}
 }
 
-function logMCP(entry: Record<string, unknown>): void {
-	try {
-		mkdirSync(LOG_DIR, { recursive: true });
-		rotateLog();
-		appendFileSync(
-			join(LOG_DIR, "shazam-calls.log"),
-			JSON.stringify({
-				ts: new Date().toISOString(),
-				source: "mcp",
-				...entry,
-			}) + "\n",
-			"utf-8",
-		);
-	} catch {
-		/* silent */
-	}
+async function logMCP(entry: Record<string, unknown>): Promise<void> {
+	await withLogLock(async () => {
+		try {
+			await mkdir(LOG_DIR, { recursive: true });
+			await rotateLog();
+			await appendFile(
+				join(LOG_DIR, "shazam-calls.log"),
+				JSON.stringify({
+					ts: new Date().toISOString(),
+					source: "mcp",
+					...entry,
+				}) + "\n",
+				"utf-8",
+			);
+		} catch {
+			/* silent */
+		}
+	});
 }
 
 type Content = { content: { type: "text"; text: string }[] };
@@ -79,10 +97,10 @@ function withLogging(
 ): (args: Record<string, unknown>) => Promise<Content> {
 	return async (args) => {
 		const t0 = Date.now();
-		logMCP({ tool, event: "start", params: JSON.stringify(args).slice(0, 200) });
+		void logMCP({ tool, event: "start", params: JSON.stringify(args).slice(0, 200) });
 		try {
 			const result = await fn(args);
-			logMCP({
+			void logMCP({
 				tool,
 				event: "end",
 				durationMs: Date.now() - t0,
@@ -91,7 +109,13 @@ function withLogging(
 			});
 			return result;
 		} catch (err) {
-			logMCP({ tool, event: "end", durationMs: Date.now() - t0, success: false, error: String(err).slice(0, 300) });
+			void logMCP({
+				tool,
+				event: "end",
+				durationMs: Date.now() - t0,
+				success: false,
+				error: String(err).slice(0, 300),
+			});
 			throw err;
 		}
 	};
@@ -99,7 +123,12 @@ function withLogging(
 
 // ── Registration ─────────────────────────────────────────────────
 
-export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, projectRoot: string, _lspManager?: LspManager): void {
+export function registerAllTools(
+	server: McpServer,
+	getGraph: () => RepoGraph,
+	projectRoot: string,
+	_lspManager?: LspManager,
+): void {
 	const overviewDef = getToolDefinition("shazam_overview")!;
 	server.registerTool(
 		"shazam_overview",
@@ -107,8 +136,9 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: overviewDef.description,
 			inputSchema: overviewDef.zodParams,
 		},
-		withLogging("shazam_overview", async ({ filter }) => {
-			const text = executeOverview(getGraph(), projectRoot, filter as string | undefined);
+		withLogging("shazam_overview", async ({ filter, maxTokens }) => {
+			let text = executeOverview(getGraph(), projectRoot, filter as string | undefined);
+			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -120,8 +150,13 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: impactDef.description,
 			inputSchema: impactDef.zodParams,
 		},
-		withLogging("shazam_impact", async ({ files, withSymbols, compact, depth }) => {
-			const text = executeImpact(getGraph(), files as string[], { withSymbols: (withSymbols as boolean) ?? false, compact: (compact as boolean) ?? false, depth: (depth as number) ?? 3 });
+		withLogging("shazam_impact", async ({ files, withSymbols, compact, depth, maxTokens }) => {
+			let text = executeImpact(getGraph(), files as string[], {
+				withSymbols: (withSymbols as boolean) ?? false,
+				compact: (compact as boolean) ?? false,
+				depth: (depth as number) ?? 3,
+			});
+			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -133,14 +168,23 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: codesearchDef.description,
 			inputSchema: codesearchDef.zodParams,
 		},
-		withLogging("shazam_codesearch", async ({ query, target, mode, topN }) => {
+		withLogging("shazam_codesearch", async ({ query, target, mode, topN, maxTokens }) => {
 			if (target === "code") {
-				const results = executeFulltextSearch(query as string, topN as number | undefined, projectRoot, mode as string | undefined);
-				return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+				const results = executeFulltextSearch(
+					query as string,
+					topN as number | undefined,
+					projectRoot,
+					mode as string | undefined,
+				);
+				let text = JSON.stringify(results, null, 2);
+				if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
+				return { content: [{ type: "text", text }] };
 			}
 			const scored = executeCodesearch(getGraph(), query as string, topN as number | undefined);
 			const results = scored.map(({ sym, score }) => ({ ...sym, score }));
-			return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+			let text = JSON.stringify(results, null, 2);
+			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
+			return { content: [{ type: "text", text }] };
 		}),
 	);
 
@@ -151,8 +195,14 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: symbolDef.description,
 			inputSchema: symbolDef.zodParams,
 		},
-		withLogging("shazam_symbol", async ({ name, mode, file }) => {
-			const text = executeSymbolWithMode(getGraph(), name as string, mode as string | undefined, file as string | undefined);
+		withLogging("shazam_symbol", async ({ name, mode, file, maxTokens }) => {
+			let text = executeSymbolWithMode(
+				getGraph(),
+				name as string,
+				mode as string | undefined,
+				file as string | undefined,
+			);
+			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -164,8 +214,9 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: fileDetailDef.description,
 			inputSchema: fileDetailDef.zodParams,
 		},
-		withLogging("shazam_file_detail", async ({ file }) => {
-			const text = executeFileDetail(getGraph(), file as string);
+		withLogging("shazam_file_detail", async ({ file, maxTokens }) => {
+			let text = executeFileDetail(getGraph(), file as string);
+			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -177,14 +228,16 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: callChainDef.description,
 			inputSchema: callChainDef.zodParams,
 		},
-		withLogging("shazam_call_chain", async ({ symbol, depth, flat, direction }) => {
+		withLogging("shazam_call_chain", async ({ symbol, depth, flat, direction, maxTokens }) => {
 			const dir = (direction as "incoming" | "outgoing" | "both") ?? "both";
 			if (flat) {
 				const refs = getFlatReferences(getGraph(), symbol as string, dir);
-				const text = formatFlatReferences(refs, symbol as string);
+				let text = formatFlatReferences(refs, symbol as string);
+				if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 				return { content: [{ type: "text", text }] };
 			}
-			const text = executeCallChain(getGraph(), symbol as string, (depth as number) ?? 2, dir);
+			let text = executeCallChain(getGraph(), symbol as string, (depth as number) ?? 2, dir);
+			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -196,9 +249,10 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: hoverDef.description,
 			inputSchema: hoverDef.zodParams,
 		},
-		withLogging("shazam_hover", async ({ name, file }) => {
+		withLogging("shazam_hover", async ({ name, file, maxTokens }) => {
 			const result = await executeHover(getGraph(), name as string, file as string | undefined);
-			const text = formatHoverResult(result, name as string);
+			let text = formatHoverResult(result, name as string);
+			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -210,16 +264,18 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: findTestsDef.description,
 			inputSchema: findTestsDef.zodParams,
 		},
-		withLogging("shazam_find_tests", async ({ sourceFile, module: mod }) => {
+		withLogging("shazam_find_tests", async ({ sourceFile, module: mod, maxTokens }) => {
 			const result = executeFindTests(getGraph(), projectRoot, {
 				sourceFile: sourceFile as string | undefined,
 				module: mod as string | undefined,
 			});
+			let text = formatFindTestsResult(result, sourceFile as string | undefined, mod as string | undefined);
+			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return {
 				content: [
 					{
 						type: "text",
-						text: formatFindTestsResult(result, sourceFile as string | undefined, mod as string | undefined),
+						text,
 					},
 				],
 			};
@@ -233,8 +289,9 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: hotspotsDef.description,
 			inputSchema: hotspotsDef.zodParams,
 		},
-		withLogging("shazam_hotspots", async ({ topN }) => {
-			const text = executeHotspots(getGraph(), topN as number | undefined);
+		withLogging("shazam_hotspots", async ({ topN, maxTokens }) => {
+			let text = executeHotspots(getGraph(), topN as number | undefined);
+			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return { content: [{ type: "text", text }] };
 		}),
 	);
@@ -246,18 +303,22 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: verifyDef.description,
 			inputSchema: verifyDef.zodParams,
 		},
-		withLogging("shazam_verify", async ({ quick, lspOnly, preCommit, delta, maxFiles, noCascade, noSecrets }) => {
-			const text = executeVerify(getGraph(), projectRoot, {
-				quick: quick as boolean,
-				lspOnly: lspOnly as boolean,
-				preCommit: preCommit as boolean,
-				delta: delta as boolean,
-				maxFiles: maxFiles as number,
-				noCascade: noCascade as boolean,
-				noSecrets: noSecrets as boolean,
-			});
-			return { content: [{ type: "text", text }] };
-		}),
+		withLogging(
+			"shazam_verify",
+			async ({ quick, lspOnly, preCommit, delta, maxFiles, noCascade, noSecrets, maxTokens }) => {
+				let text = executeVerify(getGraph(), projectRoot, {
+					quick: quick as boolean,
+					lspOnly: lspOnly as boolean,
+					preCommit: preCommit as boolean,
+					delta: delta as boolean,
+					maxFiles: maxFiles as number,
+					noCascade: noCascade as boolean,
+					noSecrets: noSecrets as boolean,
+				});
+				if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
+				return { content: [{ type: "text", text }] };
+			},
+		),
 	);
 
 	const typeHierarchyDef = getToolDefinition("shazam_type_hierarchy")!;
@@ -267,13 +328,15 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: typeHierarchyDef.description,
 			inputSchema: typeHierarchyDef.zodParams,
 		},
-		withLogging("shazam_type_hierarchy", async ({ name, direction }) => {
+		withLogging("shazam_type_hierarchy", async ({ name, direction, maxTokens }) => {
 			const result = await executeTypeHierarchy(
 				getGraph(),
 				name as string,
 				(direction as "both" | "supertypes" | "subtypes") ?? "both",
 			);
-			return { content: [{ type: "text", text: formatTypeHierarchy(result, name as string) }] };
+			let text = formatTypeHierarchy(result, name as string);
+			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
+			return { content: [{ type: "text", text }] };
 		}),
 	);
 
@@ -284,12 +347,12 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: renameSymbolDef.description,
 			inputSchema: renameSymbolDef.zodParams,
 		},
-		withLogging("shazam_rename_symbol", async ({ symbol, newName, dryRun }) => {
+		withLogging("shazam_rename_symbol", async ({ symbol, newName, dryRun, maxTokens }) => {
 			const result = await executeRenameSymbol(getGraph(), symbol as string, newName as string, dryRun as boolean);
+			let text = formatRenameResult(result, symbol as string, newName as string, dryRun as boolean);
+			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return {
-				content: [
-					{ type: "text", text: formatRenameResult(result, symbol as string, newName as string, dryRun as boolean) },
-				],
+				content: [{ type: "text", text }],
 			};
 		}),
 	);
@@ -301,9 +364,11 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: safeDeleteDef.description,
 			inputSchema: safeDeleteDef.zodParams,
 		},
-		withLogging("shazam_safe_delete", async ({ symbol, dryRun }) => {
+		withLogging("shazam_safe_delete", async ({ symbol, dryRun, maxTokens }) => {
 			const result = executeSafeDelete(getGraph(), symbol as string, dryRun as boolean);
-			return { content: [{ type: "text", text: formatSafeDeleteResult(result, symbol as string) }] };
+			let text = formatSafeDeleteResult(result, symbol as string);
+			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
+			return { content: [{ type: "text", text }] };
 		}),
 	);
 
@@ -314,8 +379,9 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			description: fixDef.description,
 			inputSchema: fixDef.zodParams,
 		},
-		withLogging("shazam_fix", async ({ dryRun, file }) => {
-			const text = executeFix(getGraph(), projectRoot, { dryRun: dryRun as boolean, file: file as string | undefined });
+		withLogging("shazam_fix", async ({ dryRun, file, maxTokens }) => {
+			let text = executeFix(getGraph(), projectRoot, { dryRun: dryRun as boolean, file: file as string | undefined });
+			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return { content: [{ type: "text", text }] };
 		}),
 	);

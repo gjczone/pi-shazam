@@ -333,15 +333,22 @@ export interface ModifiedSymbol {
 }
 
 function edgeIdentity(edge: Edge): string {
-	return `${edge.source}|${edge.target}|${edge.kind}`;
+	return `${edge.source}::${edge.target}::${edge.kind}`;
 }
 
 function edgeIdentityFromRow(row: SerializedEdge): string {
-	return `${row.source}|${row.target}|${row.kind}`;
+	return `${row.source}::${row.target}::${row.kind}`;
 }
 
 function stableKey(sym: { file: string; name: string; kind: string }): string {
 	return `${sym.file}::${sym.name}::${sym.kind}`;
+}
+
+/** Cache data loaded from disk, re-exported by core/cache.ts. */
+export interface GraphCacheData {
+	graph: RepoGraph;
+	fileMtimes: Map<string, number>;
+	timestamp: number;
 }
 
 export function compareGraphSnapshots(
@@ -458,11 +465,11 @@ export function compareGraphSnapshots(
 		modifiedSymbols,
 		callChainChanges: {
 			newCalls: edgesAdded.slice(0, 20).map((e) => {
-				const [from, to, kind] = e.split("|", 3);
+				const [from, to, kind] = e.split("::", 3);
 				return { from: from!, to: to!, kind: kind! };
 			}),
 			removedCalls: edgesRemoved.slice(0, 20).map((e) => {
-				const [from, to, kind] = e.split("|", 3);
+				const [from, to, kind] = e.split("::", 3);
 				return { from: from!, to: to!, kind: kind! };
 			}),
 		},

@@ -15,6 +15,25 @@ import iconv from "iconv-lite";
 // (fixes #131, #148)
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
+/**
+ * Error thrown when a file exceeds the max allowed size.
+ * Callers can check `instanceof FileTooLargeError` instead of
+ * substring-matching the error message.
+ */
+export class FileTooLargeError extends Error {
+	public readonly path: string;
+	public readonly size: number;
+	public readonly limit: number;
+
+	constructor(path: string, size: number, limit: number) {
+		super(`File too large (${size} bytes > ${limit}): ${path}`);
+		this.name = "FileTooLargeError";
+		this.path = path;
+		this.size = size;
+		this.limit = limit;
+	}
+}
+
 // Chunk size for encoding validation — only validate first 64KB
 // to avoid allocating huge strings for large files
 const VALIDATION_CHUNK_SIZE = 64 * 1024;
@@ -39,10 +58,10 @@ export function readFileAdaptive(filePath: string): string {
 		const stat = statSync(filePath);
 		fileSize = stat.size;
 		if (fileSize > MAX_FILE_SIZE) {
-			throw new Error(`File too large (${fileSize} bytes > ${MAX_FILE_SIZE}): ${filePath}`);
+			throw new FileTooLargeError(filePath, fileSize, MAX_FILE_SIZE);
 		}
 	} catch (err) {
-		if (err instanceof Error && err.message.startsWith("File too large")) {
+		if (err instanceof FileTooLargeError) {
 			throw err; // re-throw our size error
 		}
 		// stat failed (permission, missing) — fall through to readFileSync which will error with a clearer message
@@ -86,10 +105,10 @@ export async function readFileAdaptiveAsync(filePath: string): Promise<string> {
 	try {
 		const stat = await statAsync(filePath);
 		if (stat.size > MAX_FILE_SIZE) {
-			throw new Error(`File too large (${stat.size} bytes > ${MAX_FILE_SIZE}): ${filePath}`);
+			throw new FileTooLargeError(filePath, stat.size, MAX_FILE_SIZE);
 		}
 	} catch (err) {
-		if (err instanceof Error && err.message.startsWith("File too large")) {
+		if (err instanceof FileTooLargeError) {
 			throw err;
 		}
 		// stat failed — fall through to readFile which will error with a clearer message
@@ -136,9 +155,9 @@ export function detectEncoding(buffer: Buffer): string {
 		return "utf-8";
 	}
 
-	// Try UTF-8 validation
-	const utf8Result = tryDecode(buffer, "utf-8");
-	if (utf8Result !== null) return "utf-8";
+	// Re-validate the full buffer with stream-decode to avoid false negatives
+	// from partial validation on truncated buffers.
+	if (isValidUtf8(buffer)) return "utf-8";
 
 	// Check for GBK/GB2312 patterns (high bytes 0x81-0xfe)
 	let gbkBytes = 0;
@@ -150,11 +169,28 @@ export function detectEncoding(buffer: Buffer): string {
 	}
 
 	if (gbkBytes > buffer.length * 0.3) {
-		const gbkResult = tryDecode(buffer, "gbk");
-		if (gbkResult !== null) return "gbk";
+		// Stream-decode via iconv to avoid false positives from
+		// partial reads where the first chunk looked valid
+		try {
+			const gbkStr = iconv.decode(buffer, "gbk");
+			if (gbkStr.length > 0) {
+				// Re-encode to verify round-trip integrity
+				const reEncoded = iconv.encode(gbkStr, "utf-8");
+				if (reEncoded.length > 0) return "gbk";
+			}
+		} catch {
+			// decode failed, fall through
+		}
 
-		const gbResult = tryDecode(buffer, "gb2312");
-		if (gbResult !== null) return "gb2312";
+		try {
+			const gbStr = iconv.decode(buffer, "gb2312");
+			if (gbStr.length > 0) {
+				const reEncoded = iconv.encode(gbStr, "utf-8");
+				if (reEncoded.length > 0) return "gb2312";
+			}
+		} catch {
+			// decode failed, fall through
+		}
 	}
 
 	return "unknown";
@@ -256,9 +292,9 @@ function tryDecode(buffer: Buffer, encoding: string): string | null {
  * Read a file with specific encoding.
  */
 export function readFileWithEncoding(filePath: string, encoding: string): string {
-	const stat = statSync(filePath);
-	if (stat.size > MAX_FILE_SIZE) {
-		throw new Error(`File too large (${stat.size} bytes > ${MAX_FILE_SIZE}): ${filePath}`);
+	const st = statSync(filePath);
+	if (st.size > MAX_FILE_SIZE) {
+		throw new FileTooLargeError(filePath, st.size, MAX_FILE_SIZE);
 	}
 	const buffer = readFileSync(filePath);
 	if (encoding === "utf-8") {

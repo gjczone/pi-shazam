@@ -75,7 +75,7 @@ export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
 		commandNames: ["yaml-language-server"] as const,
 		args: ["--stdio"] as const,
 		fileSuffixes: [".yaml", ".yml"] as const,
-		rootMarkers: [".github", ".yaml", ".yml"] as const,
+		rootMarkers: [".github"] as const,
 	},
 
 	// ── JSON ──────────────────────────────────────────────────────────────────

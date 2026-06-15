@@ -10,8 +10,8 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync, renameSyn
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
-import { serializeGraphV2, deserializeGraphV2, compareGraphSnapshots } from "./graph.js";
-import type { RepoGraph, GraphDiff, Symbol, Edge, SerializedSymbol, SerializedEdge } from "./graph.js";
+import { serializeGraphV2, deserializeGraphV2 } from "./graph.js";
+import type { RepoGraph, GraphCacheData as GraphCacheDataExport } from "./graph.js";
 
 // ── Cache directory management ───────────────────────────────────────────────
 
@@ -46,61 +46,32 @@ export function getCachePaths(projectPath: string): {
 	};
 }
 
-// ── Baseline load (V1 format, for backward compatibility) ────────────────────
-
-/**
- * V1 baseline data format (kept for reading legacy baseline files).
- */
-interface BaselineData {
-	symbols: SerializedSymbol[];
-	edges: SerializedEdge[];
-	version: number;
-	timestamp: number;
-}
-
-/**
- * Load a previously saved baseline snapshot (V1 format).
- */
-export function loadBaseline(projectPath: string): BaselineData | null {
-	const { symbols } = getCachePaths(projectPath);
-	if (!existsSync(symbols)) return null;
-	try {
-		const raw = readFileSync(symbols, "utf-8");
-		const data = JSON.parse(raw);
-		if (!data || !Array.isArray(data.symbols) || !Array.isArray(data.edges)) {
-			return null;
-		}
-		return data as BaselineData;
-	} catch (err) {
-		console.warn(`[pi-shazam] loadBaseline: failed to parse baseline cache: ${err}`);
-		return null;
-	}
-}
-
-// ── Graph diff (current vs baseline) ─────────────────────────────────────────
-
-/**
- * Compute the difference between the current graph and a saved baseline.
- * Returns a structured diff with added/removed/modified symbols and edges.
- */
-export function diffBaseline(graph: RepoGraph, projectPath: string): GraphDiff | null {
-	const baseline = loadBaseline(projectPath);
-	if (!baseline) return null;
-
-	const currentSymbols: Symbol[] = [...graph.symbols.values()];
-	const currentEdges: Edge[] = [];
-	for (const [, edges] of graph.outgoing) {
-		for (const e of edges) {
-			currentEdges.push(e);
-		}
-	}
-
-	return compareGraphSnapshots(currentSymbols, currentEdges, baseline.symbols, baseline.edges);
-}
-
 // ── Persistent graph cache (V2) ──────────────────────────────────────────────
 
+/** Max age for a cached graph file before it is considered stale. */
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 1 day — prevents stale cache in active projects (fixes #100)
+
+/**
+ * Atomically rename a temp file to a target path, handling Windows EPERM/EBUSY
+ * by unlinking the target first and retrying.
+ */
+function atomicRename(tmpPath: string, targetPath: string): void {
+	try {
+		renameSync(tmpPath, targetPath);
+	} catch (err) {
+		const code = (err as NodeJS.ErrnoException).code;
+		if (code === "EPERM" || code === "EBUSY") {
+			try {
+				unlinkSync(targetPath);
+			} catch {
+				/* target may not exist */
+			}
+			renameSync(tmpPath, targetPath);
+		} else {
+			throw err;
+		}
+	}
+}
 
 /**
  * Save the full graph + file mtimes to a persistent cache file.
@@ -112,19 +83,19 @@ export function saveGraphCache(graph: RepoGraph, fileMtimes: Map<string, number>
 	const tmpPath = cachePath + ".tmp";
 	try {
 		writeFileSync(tmpPath, JSON.stringify(serialized), "utf-8");
-		renameSync(tmpPath, cachePath);
+		atomicRename(tmpPath, cachePath);
 	} catch (err) {
 		// Clean up tmp file on failure
-		try { unlinkSync(tmpPath); } catch { /* ignore cleanup error */ }
+		try {
+			unlinkSync(tmpPath);
+		} catch {
+			/* ignore cleanup error */
+		}
 		throw err;
 	}
 }
 
-export interface GraphCacheData {
-	graph: RepoGraph;
-	fileMtimes: Map<string, number>;
-	timestamp: number;
-}
+export type GraphCacheData = GraphCacheDataExport;
 
 /**
  * Load a persistent graph cache. Returns null if missing, corrupt, wrong
@@ -156,8 +127,3 @@ export function loadGraphCache(cachePath: string): GraphCacheData | null {
 		return null;
 	}
 }
-
-/**
- * Re-export serialization helpers for convenience.
- */
-export { compareGraphSnapshots };

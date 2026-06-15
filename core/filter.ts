@@ -125,7 +125,7 @@ export function isTrackableEditedPath(normalizedPath: string): boolean {
 
 	// Segment-based check: reject any path that traverses a skipped directory
 	// or a dot-directory not in SKIP_DIRS (e.g. .pi, .git, .cache)
-	const segments = normalizedPath.split("/").filter(Boolean);
+	const segments = normalizedPath.split(/[\\/]+/).filter(Boolean);
 	for (const seg of segments) {
 		if (SKIP_DIRS.has(seg)) return false;
 		if (seg.startsWith(".") && !SKIP_DIRS.has(seg)) return false;
@@ -335,11 +335,10 @@ export function findOrphans(graph: RepoGraph): {
 			if (sym.kind === "impl") continue;
 			// Skip test files
 			if (
-				sym.file.includes("tests/") ||
-				sym.file.includes(".test.") ||
-				sym.file.includes("test_") ||
-				sym.file.includes("_test.") ||
-				sym.file.includes("/test/")
+				/(^|\/)tests?(\/|$)/.test(sym.file) ||
+				/\.test\./.test(sym.file) ||
+				/(^|\/)test_/.test(sym.file) ||
+				/_test\./.test(sym.file)
 			)
 				continue;
 			// Skip registration functions called dynamically by frameworks

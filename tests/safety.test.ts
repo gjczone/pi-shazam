@@ -69,7 +69,7 @@ describe("hooks/safety pre-commit gate", () => {
 	it("should allow git commit when verify was called recently", async () => {
 		const { pi, handler } = buildFakePi();
 		registerSafetyHooks(pi);
-		markVerifyCalled();
+		markVerifyCalled("[PASS] READY");
 
 		const ctx = buildCtx();
 		const result = await handler.current!(buildBashEvent("git commit -m test"), ctx);

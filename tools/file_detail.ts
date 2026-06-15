@@ -15,6 +15,7 @@ import { getLspManager } from "./_context.js";
 import { lspDocumentSymbols, lspCodeLens } from "./lsp_enrich.js";
 import type { DocumentSymbol } from "vscode-languageserver-protocol";
 import { createTool } from "./_factory.js";
+import { buildEnvelope } from "./_factory.js";
 
 /**
  * Cache for file detail results within a session.
@@ -334,25 +335,20 @@ export function executeFileDetailJson(graph: RepoGraph, file: string): string {
 	const symIds = graph.fileSymbols.get(file) || [];
 	const symbols = symIds.map((id) => graph.symbols.get(id)).filter((s): s is NonNullable<typeof s> => s !== undefined);
 
-	return JSON.stringify({
-		schema_version: "1.0",
-		command: "file_detail",
-		status: "ok",
-		result: {
-			file,
-			symbolCount: symbols.length,
-			symbols: symbols.map((s) => ({
-				id: s.id,
-				name: s.name,
-				kind: s.kind,
-				line: s.line,
-				endLine: s.endLine,
-				visibility: s.visibility,
-				pagerank: Number(s.pagerank.toFixed(4)),
-				signature: s.signature,
-				incomingCount: (graph.incoming.get(s.id) || []).length,
-				outgoingCount: (graph.outgoing.get(s.id) || []).length,
-			})),
-		},
+	return buildEnvelope("shazam_file_detail", process.cwd(), "ok", {
+		file,
+		symbolCount: symbols.length,
+		symbols: symbols.map((s) => ({
+			id: s.id,
+			name: s.name,
+			kind: s.kind,
+			line: s.line,
+			endLine: s.endLine,
+			visibility: s.visibility,
+			pagerank: Number(s.pagerank.toFixed(4)),
+			signature: s.signature,
+			incomingCount: (graph.incoming.get(s.id) || []).length,
+			outgoingCount: (graph.outgoing.get(s.id) || []).length,
+		})),
 	});
 }

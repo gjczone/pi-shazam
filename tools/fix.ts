@@ -68,9 +68,9 @@ export function executeFix(graph: RepoGraph, projectRoot: string, options: FixOp
 		const results = runFormatters(projectRoot, formatters, options.file);
 		for (const r of results) {
 			if (r.error) {
-				lines.push(`- ❌ ${r.formatter}: ${r.error}`);
+				lines.push(`- [FAIL] ${r.formatter}: ${r.error}`);
 			} else {
-				lines.push(`- ✅ ${r.formatter}: ${r.summary}`);
+				lines.push(`- [OK] ${r.formatter}: ${r.summary}`);
 			}
 		}
 		if (results.length === 0) {
@@ -279,48 +279,51 @@ function detectFormatters(projectRoot: string): string[] {
  * Handles the case where indent_size is not set but indent_style is (fixes #153).
  */
 function parseEditorconfig(projectRoot: string): { style?: string; size?: number } | null {
-	const editorconfigPath = join(projectRoot, '.editorconfig');
+	const editorconfigPath = join(projectRoot, ".editorconfig");
 	if (!existsSync(editorconfigPath)) return null;
-	
+
 	try {
-		const content = readFileSync(editorconfigPath, 'utf-8');
-		const lines = content.split('\n');
+		const content = readFileSync(editorconfigPath, "utf-8");
+		const lines = content.split("\n");
 		let inRootSection = false;
 		let style: string | undefined;
 		let size: number | undefined;
-		
+
 		for (const line of lines) {
 			const trimmed = line.trim();
-			
+
 			// Section header
-			if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-				inRootSection = trimmed === '[*]' || trimmed === '[*.{ts,tsx,js,jsx}]';
+			if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+				inRootSection = trimmed === "[*]" || trimmed === "[*.{ts,tsx,js,jsx}]";
 				continue;
 			}
-			
+
 			if (!inRootSection) continue;
-			
+
 			// Parse key-value pairs
-			const eqIndex = trimmed.indexOf('=');
+			const eqIndex = trimmed.indexOf("=");
 			if (eqIndex === -1) continue;
-			
+
 			const key = trimmed.slice(0, eqIndex).trim().toLowerCase();
-			const val = trimmed.slice(eqIndex + 1).trim().toLowerCase();
-			
-			if (key === 'indent_style') {
+			const val = trimmed
+				.slice(eqIndex + 1)
+				.trim()
+				.toLowerCase();
+
+			if (key === "indent_style") {
 				style = val;
 			}
-			if (key === 'indent_size') {
+			if (key === "indent_size") {
 				size = parseInt(val, 10);
 			}
 		}
-		
+
 		// If indent_style is set but indent_size is not, use default (fixes #153)
 		if (style && size === undefined) {
 			// Editorconfig spec: indent_size defaults to tab_width, which defaults to 4 for spaces, 8 for tabs
-			size = style === 'tab' ? 8 : 4;
+			size = style === "tab" ? 8 : 4;
 		}
-		
+
 		return { style, size };
 	} catch {
 		return null;
@@ -332,49 +335,49 @@ function parseEditorconfig(projectRoot: string): { style?: string; size?: number
  * Returns 'tabs' if most files use tabs, 'spaces' otherwise.
  * This prevents false positives when the project consistently uses tabs (fixes #111).
  */
-function detectIndentationStyle(files: string[], projectRoot: string): 'tabs' | 'spaces' {
+function detectIndentationStyle(files: string[], projectRoot: string): "tabs" | "spaces" {
 	// First, try to read from .editorconfig (fixes #153)
 	const editorconfig = parseEditorconfig(projectRoot);
-	if (editorconfig?.style === 'tab') return 'tabs';
-	if (editorconfig?.style === 'space') return 'spaces';
-	
+	if (editorconfig?.style === "tab") return "tabs";
+	if (editorconfig?.style === "space") return "spaces";
+
 	// Fall back to file-based detection
 	let tabFiles = 0;
 	let spaceFiles = 0;
 	const sampleSize = Math.min(files.length, 20); // Sample up to 20 files
-	
+
 	for (let i = 0; i < sampleSize; i++) {
 		const fullPath = join(projectRoot, files[i]!);
 		if (!existsSync(fullPath)) continue;
-		
+
 		try {
 			const content = readFileSync(fullPath, "utf-8");
 			const lines = content.split("\n").slice(0, 50); // Check first 50 lines
-			
+
 			let tabCount = 0;
 			let spaceCount = 0;
-			
+
 			for (const line of lines) {
 				if (line.startsWith("\t")) tabCount++;
 				else if (line.startsWith("    ")) spaceCount++;
 			}
-			
+
 			if (tabCount > spaceCount) tabFiles++;
 			else if (spaceCount > tabCount) spaceFiles++;
 		} catch {
 			// Skip unreadable files
 		}
 	}
-	
-	return tabFiles > spaceFiles ? 'tabs' : 'spaces';
+
+	return tabFiles > spaceFiles ? "tabs" : "spaces";
 }
 
 /**
  * Check if prettierrc has useTabs setting.
  */
 function hasUseTabsInConfig(projectRoot: string): boolean {
-	const configFiles = ['.prettierrc', '.prettierrc.json', 'prettier.config.js', 'prettier.config.mjs'];
-	
+	const configFiles = [".prettierrc", ".prettierrc.json", "prettier.config.js", "prettier.config.mjs"];
+
 	for (const configFile of configFiles) {
 		const configPath = join(projectRoot, configFile);
 		if (existsSync(configPath)) {
@@ -388,7 +391,7 @@ function hasUseTabsInConfig(projectRoot: string): boolean {
 			}
 		}
 	}
-	
+
 	// Check package.json
 	try {
 		const pkgPath = join(projectRoot, "package.json");
@@ -399,7 +402,7 @@ function hasUseTabsInConfig(projectRoot: string): boolean {
 	} catch {
 		// Skip
 	}
-	
+
 	return false;
 }
 
@@ -408,9 +411,9 @@ function hasUseTabsInConfig(projectRoot: string): boolean {
  */
 function scanFormatIssues(projectRoot: string, files: string[], _graph: RepoGraph): FormatIssue[] {
 	const issues: FormatIssue[] = [];
-	
+
 	// Detect indentation style to avoid false positives (fixes #111)
-	const useTabs = hasUseTabsInConfig(projectRoot) || detectIndentationStyle(files, projectRoot) === 'tabs';
+	const useTabs = hasUseTabsInConfig(projectRoot) || detectIndentationStyle(files, projectRoot) === "tabs";
 
 	for (const file of files.slice(0, 100)) {
 		const fullPath = join(projectRoot, file);
@@ -551,20 +554,20 @@ function runFormatters(projectRoot: string, formatters: string[], targetFile?: s
 					});
 					break;
 				}
-					case "ruff": {
-						const args = ["ruff", "format"];
-						if (targetFile) {
-							args.push(targetFile);
-						} else {
-							args.push(".");
-						}
-						runFormatterCommand(args, projectRoot);
-						results.push({
-							formatter: "ruff",
-							summary: "Ruff format applied",
-						});
-						break;
+				case "ruff": {
+					const args = ["ruff", "format"];
+					if (targetFile) {
+						args.push(targetFile);
+					} else {
+						args.push(".");
 					}
+					runFormatterCommand(args, projectRoot);
+					results.push({
+						formatter: "ruff",
+						summary: "Ruff format applied",
+					});
+					break;
+				}
 				case "rustfmt": {
 					const args = ["cargo", "fmt"];
 					runFormatterCommand(args, projectRoot);

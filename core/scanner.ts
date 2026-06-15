@@ -7,13 +7,13 @@
  * This is the main entry point that all tools compose from.
  */
 
-import { readdirSync, statSync, existsSync } from "node:fs";
+import { readdirSync, statSync, lstatSync, existsSync } from "node:fs";
 import { join, relative, resolve, dirname } from "node:path";
 import { TreeSitterAdapter, EXT_TO_LANG } from "./treesitter.js";
 import { createRepoGraph, createEdge } from "./graph.js";
 import type { RepoGraph, Symbol, Edge } from "./graph.js";
 import { calculatePageRank } from "./pagerank.js";
-import { readFileAdaptive } from "./encoding.js";
+import { readFileAdaptive, FileTooLargeError } from "./encoding.js";
 import { getProjectCacheDir, saveGraphCache, loadGraphCache } from "./cache.js";
 import { SKIP_DIRS } from "./filter.js";
 
@@ -331,7 +331,7 @@ function parseFile(adapter: TreeSitterAdapter, root: string, relPath: string, mt
 		}
 	} catch (err) {
 		// Log parse failures to aid debugging (fixes #133)
-		if (err instanceof Error && err.message.includes("File too large")) {
+		if (err instanceof FileTooLargeError) {
 			// Expected for large files — skip silently
 			return null;
 		}
@@ -546,13 +546,18 @@ function reconstructFileCache(graph: RepoGraph, fileMtimes: Map<string, number>)
 function scanFull(root: string, files: string[], adapter: TreeSitterAdapter, logger: (msg: string) => void): RepoGraph {
 	const graph = createRepoGraph();
 	const newFileCache = new Map<string, FileCacheEntry>();
+	_scanSeenEdges = new Set<string>();
+	const skippedFiles: string[] = [];
 
 	// Phase 1: Parse all files and extract data
 	const fileMtimes = getFileMtimes(root, files);
 	for (const relPath of files) {
 		const mtime = fileMtimes.get(relPath) ?? 0;
 		const entry = parseFile(adapter, root, relPath, mtime);
-		if (!entry) continue;
+		if (!entry) {
+			skippedFiles.push(relPath);
+			continue;
+		}
 
 		newFileCache.set(relPath, entry);
 
@@ -590,6 +595,11 @@ function scanFull(root: string, files: string[], adapter: TreeSitterAdapter, log
 	cachedGraph = graph;
 	cachedProjectPath = root;
 	cachedFiles = newFileCache;
+	_scanSeenEdges = null;
+
+	if (skippedFiles.length > 0) {
+		logger(`Skipped ${skippedFiles.length} files (too large or unparseable)`);
+	}
 
 	return graph;
 }
@@ -692,6 +702,8 @@ function scanIncremental(
 	// negating the benefit of incremental scanning for large projects.
 	// oldSymIdsByFile was built above before removeFileData calls.
 
+	_scanSeenEdges = new Set<string>();
+
 	// Find files that import from changed files (dependents)
 	const dependentFiles = new Set<string>();
 	for (const relPath of changedFiles) {
@@ -709,14 +721,26 @@ function scanIncremental(
 	// Trace cross-file call edges using the snapshot (Bug #2 fix):
 	// files whose symbols had incoming edges from the changed file's old
 	// symbols need their edges rebuilt.
+	// Use nameIndex for caller lookup — more robust than graph.symbols.get()
+	// when symbols may have been removed during incremental rebuild (#319).
 	for (const [, oldIds] of oldSymIdsByFile) {
 		for (const oldId of oldIds) {
 			const incoming = oldIncomingBySymId.get(oldId);
 			if (!incoming) continue;
 			for (const edge of incoming) {
-				const callerSym = graph.symbols.get(edge.source);
-				if (callerSym) {
-					dependentFiles.add(callerSym.file);
+				// Extract caller name from edge.source ID (format: file::name::line)
+				const lastSep = edge.source.lastIndexOf("::");
+				const namePart = lastSep > -1 ? edge.source.slice(edge.source.indexOf("::") + 2, lastSep) : "";
+				if (namePart) {
+					const nameMatches = graph.nameIndex.get(namePart);
+					if (nameMatches) {
+						for (const sym of nameMatches) {
+							if (sym.id === edge.source) {
+								dependentFiles.add(sym.file);
+								break;
+							}
+						}
+					}
 				}
 			}
 		}
@@ -732,6 +756,8 @@ function scanIncremental(
 			buildEdgesForFile(graph, root, relPath, entry);
 		}
 	}
+
+	_scanSeenEdges = null;
 
 	// Recompute PageRank
 	calculatePageRank(graph);
@@ -771,8 +797,16 @@ function collectSourceFiles(root: string, maxFiles: number): string[] {
 				if (entry.name.startsWith(".")) continue;
 				walk(join(dir, entry.name));
 			} else if (entry.isSymbolicLink()) {
-				// Symlinks are silently skipped to avoid cycles and
-				// duplicate processing of linked directories.
+				// Resolve symlink to check whether it points to a directory or file.
+				try {
+					const realStat = lstatSync(join(dir, entry.name));
+					if (realStat.isDirectory()) {
+						continue; // skip directory symlinks to avoid cycles
+					}
+					// Fall through: file symlink → treat as regular file below
+				} catch {
+					continue; // broken symlink, skip
+				}
 			} else if (entry.isFile()) {
 				const ext = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();
 				if (SOURCE_EXTS.has(ext)) {
@@ -788,7 +822,17 @@ function collectSourceFiles(root: string, maxFiles: number): string[] {
 
 // ── Edge helpers ─────────────────────────────────────────────────────────────
 
+// Per-scan set of seen edge keys to prevent duplicates (#319).
+let _scanSeenEdges: Set<string> | null = null;
+
 function addEdge(graph: RepoGraph, edge: Edge): void {
+	// Deduplicate edges within a single scan using a compound key.
+	if (_scanSeenEdges) {
+		const key = `${edge.source}::${edge.target}::"${edge.kind}"`;
+		if (_scanSeenEdges.has(key)) return;
+		_scanSeenEdges.add(key);
+	}
+
 	const outgoing = graph.outgoing.get(edge.source) || [];
 	outgoing.push(edge);
 	graph.outgoing.set(edge.source, outgoing);

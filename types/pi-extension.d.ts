@@ -1,45 +1,45 @@
 /**
- * Pi Extension API 类型定义 (自包含 stub)
+ * Pi Extension API type definitions (self-contained stub)
  *
- * 从 @oh-my-pi/pi-coding-agent@15.8.0 提取的类型 stub。
- * 所有来自 @oh-my-pi/pi-* 的外部类型使用最小 stub 替代（保留方法签名但用 any 替代具体实现类型）。
- * 所有相对路径导入（../../...）的类型已内联或 stub 化。
- * ExtensionAPI 的完整方法签名保持不变。
+ * Type stubs extracted from @oh-my-pi/pi-coding-agent@15.8.0.
+ * External types from @oh-my-pi/pi-* use minimal stubs (method signatures preserved, concrete implementation types replaced with any).
+ * Types from relative-path imports (../../...) are inlined or stubbed.
+ * ExtensionAPI method signatures are preserved unchanged.
  *
- * 用法: import type { ExtensionAPI } from "./types/pi-extension"
+ * Usage: import type { ExtensionAPI } from "./types/pi-extension"
  */
 
 // ---------------------------------------------------------------------------
 // External stubs: @oh-my-pi/pi-agent-core
 // ---------------------------------------------------------------------------
 
-/** Agent 消息（user / assistant / toolResult 等角色的联合类型） */
+/** Agent message (union type of user / assistant / toolResult roles) */
 export type AgentMessage = any;
 
-/** Agent 工具执行结果 */
+/** Agent tool execution result */
 export interface AgentToolResult<TDetails = unknown> {
 	content: (TextContent | ImageContent)[];
 	details?: TDetails;
 	isError?: boolean;
 }
 
-/** Agent 工具执行过程中的增量更新回调 */
+/** Agent tool incremental update callback during execution */
 export type AgentToolUpdateCallback<TDetails = unknown> = (update: Partial<AgentToolResult<TDetails>>) => void;
 
-/** 思维等级（extended thinking 控制） */
+/** Thinking level (extended thinking control) */
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high";
 
 // ---------------------------------------------------------------------------
 // External stubs: @oh-my-pi/pi-agent-core/compaction
 // ---------------------------------------------------------------------------
 
-/** 上下文压缩结果 */
+/** Context compaction result */
 export interface CompactionResult {
 	summary: string;
 	details?: unknown;
 }
 
-/** 上下文压缩准备数据 */
+/** Context compaction preparation data */
 export interface CompactionPreparation {
 	messages: AgentMessage[];
 	[key: string]: any;
@@ -49,19 +49,19 @@ export interface CompactionPreparation {
 // External stubs: @oh-my-pi/pi-ai
 // ---------------------------------------------------------------------------
 
-/** API 类型标识符 */
+/** API type identifier */
 export type Api = string;
 
-/** Assistant 消息流事件 */
+/** Assistant message stream event */
 export type AssistantMessageEvent = any;
 
-/** Assistant 消息事件流 */
+/** Assistant message event stream */
 export type AssistantMessageEventStream = any;
 
-/** LLM 上下文对象 */
+/** LLM context object */
 export type Context = any;
 
-/** 图片内容块 */
+/** Image content block */
 export interface ImageContent {
 	type: "image";
 	source: {
@@ -1381,31 +1381,31 @@ export interface ProviderConfig {
 // ---------------------------------------------------------------------------
 
 /**
- * ExtensionAPI —— 传递给扩展工厂函数的核心接口（扁平纯对象，无嵌套属性）。
+ * ExtensionAPI — Core interface passed to extension factory functions (flat plain object, no nested properties).
  *
  * Extracted from @earendil-works/pi-coding-agent@0.78.1 runtime source (loader.js createExtensionAPI).
  * docs/INSTRUCTION.md §1 is the authoritative contract document.
  *
- * 扩展通过此接口：
- * - 订阅 Agent 生命周期事件
- * - 注册 LLM 可调用的工具
- * - 注册命令、键盘快捷键和 CLI 标志
- * - 通过 UI 原语与用户交互
+ * Extensions use this interface to:
+ * - Subscribe to Agent lifecycle events
+ * - Register LLM-callable tools
+ * - Register commands, keyboard shortcuts, and CLI flags
+ * - Interact with users through UI primitives
  */
 export interface ExtensionAPI {
-	// ⚠️ 以下属性在运行时不存在，类型定义保留仅为兼容历史代码
-	// 使用前必须加 ?. 可选链，或直接从对应包 import：
-	//   - logger → 无等效替代，用 ?. 防御
-	//   - typebox → import { Type } from "typebox"
-	//   - zod → 不使用
-	//   - pi → 不使用
-	/** @deprecated 运行时不存在，使用 ?. 防御 */
+	// NOTE: The following properties do not exist at runtime; type definitions kept only for backward compatibility.
+	// Always use ?. optional chaining before access, or import directly from the corresponding package:
+	//   - logger -> no equivalent, guard with ?.
+	//   - typebox -> import { Type } from "typebox"
+	//   - zod -> not used
+	//   - pi -> not used
+	/** @deprecated Not available at runtime, guard with ?. */
 	logger?: PiLogger;
-	/** @deprecated 运行时不存在，使用 import { Type } from "typebox" */
+	/** @deprecated Not available at runtime, use import { Type } from "typebox" */
 	typebox?: TypeBoxModule;
-	/** @deprecated 运行时不存在 */
+	/** @deprecated Not available at runtime */
 	zod?: ZodModule;
-	/** @deprecated 运行时不存在 */
+	/** @deprecated Not available at runtime */
 	pi?: PiCodingAgent;
 
 	// --- 事件订阅 ---
@@ -1462,11 +1462,11 @@ export interface ExtensionAPI {
 	on(event: "user_bash", handler: ExtensionHandler<UserBashEvent, UserBashEventResult>): void;
 	on(event: "user_python", handler: ExtensionHandler<UserPythonEvent, UserPythonEventResult>): void;
 
-	// --- 注册 ---
+	// --- Registration ---
 
-	/** 注册 LLM 可调用的工具 */
+	/** Register an LLM-callable tool */
 	registerTool<TParams extends TSchema = TSchema, TDetails = unknown>(tool: ToolDefinition<TParams, TDetails>): void;
-	/** 注册自定义命令 */
+	/** Register a custom command */
 	registerCommand(
 		name: string,
 		options: {
@@ -1475,7 +1475,7 @@ export interface ExtensionAPI {
 			handler: RegisteredCommand["handler"];
 		},
 	): void;
-	/** 注册键盘快捷键 */
+	/** Register a keyboard shortcut */
 	registerShortcut(
 		shortcut: KeyId,
 		options: {
@@ -1483,7 +1483,7 @@ export interface ExtensionAPI {
 			handler: (ctx: ExtensionContext) => Promise<void> | void;
 		},
 	): void;
-	/** 注册 CLI 标志 */
+	/** Register a CLI flag */
 	registerFlag(
 		name: string,
 		options: {
@@ -1493,28 +1493,29 @@ export interface ExtensionAPI {
 		},
 	): void;
 
-	// --- 标签与标志 ---
+	// --- Labels & Flags ---
 
-	/** 设置扩展显示标签，或设置特定条目的标签 */
+	/** Set the extension display label, or set a label for a specific entry */
 	setLabel(entryIdOrLabel: string, label?: string | undefined): void;
-	/** 获取注册的 CLI 标志值 */
+	/** Get registered CLI flag values */
 	getFlag(name: string): boolean | string | undefined;
 
-	// --- 渲染器 ---
+	// --- Renderers ---
 
-	/** 注册 CustomMessageEntry 的自定义渲染器 */
+	/** Register a custom renderer for CustomMessageEntry */
 	registerMessageRenderer<T = unknown>(customType: string, renderer: MessageRenderer<T>): void;
-	/** 注册 assistant 思考块渲染器 */
+	/** Register an assistant thinking block renderer */
 	registerAssistantThinkingRenderer(renderer: AssistantThinkingRenderer): void;
 
-	// --- 消息与会话 ---
+	// --- Messages & Sessions ---
 
 	/**
-	 * 发送自定义消息到会话。
+	 * Send a custom message to the session.
 	 *
-	 * `deliverAs: "nextTurn"` 将消息隐藏在可编辑的 pending-message UI 之外。
-	 * 如果 `triggerTurn` 也为 true 且当前 turn 仍在处理中，会话会安排一个
-	 * 内部续传来在下一个 turn 消费该消息。
+	 * `deliverAs: "nextTurn"` hides the message from the editable pending-message UI.
+	 * If `triggerTurn` is also true and the current turn is still being processed,
+	 * the session will schedule an internal continuation to consume the message
+	 * in the next turn.
 	 */
 	sendMessage<T = unknown>(
 		message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details" | "attribution">,
@@ -1523,65 +1524,65 @@ export interface ExtensionAPI {
 			deliverAs?: "steer" | "followUp" | "nextTurn";
 		},
 	): void;
-	/** 发送用户消息到 Agent，或在 deliverAs 设置时排队 */
+	/** Send a user message to the Agent, or queue when deliverAs is set */
 	sendUserMessage(
 		content: string | (TextContent | ImageContent)[],
 		options?: {
 			deliverAs?: "steer" | "followUp";
 		},
 	): void;
-	/** 追加自定义条目到会话进行状态持久化（不发送给 LLM） */
+	/** Append a custom entry to the session for state persistence (not sent to LLM) */
 	appendEntry<T = unknown>(customType: string, data?: T): void;
 
-	// --- 执行 ---
+	// --- Execution ---
 
-	/** 执行 shell 命令 */
+	/** Execute a shell command */
 	exec(command: string, args: string[], options?: ExecOptions): Promise<ExecResult>;
 
-	// --- 工具管理 ---
+	// --- Tool Management ---
 
-	/** 获取当前激活的工具名称列表 */
+	/** Get currently active tool names */
 	getActiveTools(): string[];
-	/** 获取所有已配置的工具（内置 + 扩展） */
+	/** Get all configured tools (built-in + extensions) */
 	getAllTools(): string[];
-	/** 设置激活的工具 */
+	/** Set active tools */
 	setActiveTools(toolNames: string[]): Promise<void>;
 
-	// --- 命令 ---
+	// --- Commands ---
 
-	/** 获取当前会话中可用的斜杠命令 */
+	/** Get available slash commands for the current session */
 	getCommands(): SlashCommandInfo[];
 
-	// --- 模型 ---
+	// --- Models ---
 
-	/** 设置当前模型。返回 false 表示没有可用的 API key */
+	/** Set the current model. Returns false if no API key is available */
 	setModel(model: Model): Promise<boolean>;
-	/** 获取当前思维等级 */
+	/** Get the current thinking level */
 	getThinkingLevel(): ThinkingLevel | undefined;
-	/** 设置当前会话的思维等级 */
+	/** Set the thinking level for the current session */
 	setThinkingLevel(level: ThinkingLevel): void;
 
-	// --- 会话 ---
+	// --- Session ---
 
-	/** 获取当前会话名称 */
+	/** Get the current session name */
 	getSessionName(): string | undefined;
-	/** 设置会话名称（持久化到会话文件） */
+	/** Set the session name (persisted to session file) */
 	setSessionName(name: string): Promise<void>;
 
 	// --- Provider ---
 
 	/**
-	 * 注册或覆盖模型 Provider。
+	 * Register or override a model Provider.
 	 *
-	 * 如果提供了 `models`：替换该 Provider 的所有现有模型。
-	 * 如果仅提供 `baseUrl`：覆盖现有模型的 URL。
-	 * 如果提供了 `streamSimple`：注册自定义 API 流处理器。
+	 * If `models` is provided: replaces all existing models for this Provider.
+	 * If only `baseUrl` is provided: overrides the URL of existing models.
+	 * If `streamSimple` is provided: registers a custom API stream handler.
 	 */
 	registerProvider(name: string, config: ProviderConfig): void;
 
-	// --- 事件总线 ---
+	// --- Event Bus ---
 
-	/** 扩展间通信的共享事件总线 */
+	/** Shared event bus for inter-extension communication */
 	events: EventBus;
 }
 
@@ -1589,16 +1590,16 @@ export interface ExtensionAPI {
 // Extension factory and runtime types
 // ---------------------------------------------------------------------------
 
-/** 扩展工厂函数类型（支持同步和异步初始化） */
+/** Extension factory function type (supports sync and async initialization) */
 export type ExtensionFactory = (pi: ExtensionAPI) => void | Promise<void>;
 
-/** 注册的工具 */
+/** Registered tool */
 export interface RegisteredTool<TParams extends TSchema = TSchema, TDetails = unknown> {
 	definition: ToolDefinition<TParams, TDetails>;
 	extensionPath: string;
 }
 
-/** 扩展 CLI 标志 */
+/** Extension CLI flag */
 export interface ExtensionFlag {
 	name: string;
 	description?: string;
@@ -1607,7 +1608,7 @@ export interface ExtensionFlag {
 	extensionPath: string;
 }
 
-/** 扩展快捷键 */
+/** Extension shortcut */
 export interface ExtensionShortcut {
 	shortcut: KeyId;
 	description?: string;

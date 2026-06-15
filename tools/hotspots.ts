@@ -5,6 +5,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { createTool } from "./_factory.js";
+import { buildEnvelope } from "./_factory.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { existsSync } from "node:fs";
@@ -96,20 +97,15 @@ export function executeHotspots(graph: RepoGraph, topN: number = 10): string {
 
 export function executeHotspotsJson(graph: RepoGraph, topN: number): string {
 	const hotspots = computeHotspots(graph, topN);
-	return JSON.stringify({
-		schema_version: "1.0",
-		command: "hotspots",
-		status: "ok",
-		result: {
-			hotspots: hotspots.map((h) => ({
-				file: h.file,
-				symbolCount: h.symbolCount,
-				totalPagerank: Number(h.totalPagerank.toFixed(4)),
-				incomingRefs: h.incomingRefs,
-				outgoingRefs: h.outgoingRefs,
-				hotspotScore: Number(h.hotspotScore.toFixed(2)),
-			})),
-		},
+	return buildEnvelope("shazam_hotspots", process.cwd(), "ok", {
+		hotspots: hotspots.map((h) => ({
+			file: h.file,
+			symbolCount: h.symbolCount,
+			totalPagerank: Number(h.totalPagerank.toFixed(4)),
+			incomingRefs: h.incomingRefs,
+			outgoingRefs: h.outgoingRefs,
+			hotspotScore: Number(h.hotspotScore.toFixed(2)),
+		})),
 	});
 }
 
