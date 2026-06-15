@@ -7,6 +7,7 @@
  */
 
 import { readFileSync, statSync } from "node:fs";
+import { readFile as readFileAsync, stat as statAsync } from "node:fs/promises";
 import iconv from "iconv-lite";
 
 // Tree-sitter's MAX_PARSE_SIZE — skip files larger than 2MB
@@ -56,6 +57,52 @@ export function readFileAdaptive(filePath: string): string {
 	const utf8Result = tryDecode(validationBuffer, "utf-8");
 	if (utf8Result !== null) {
 		// UTF-8 validation passed on chunk — decode full buffer
+		return buffer.length > VALIDATION_CHUNK_SIZE ? buffer.toString("utf-8") : utf8Result;
+	}
+
+	// Try GBK
+	const gbkResult = tryDecode(validationBuffer, "gbk");
+	if (gbkResult !== null) {
+		return buffer.length > VALIDATION_CHUNK_SIZE ? iconv.decode(buffer, "gbk") : gbkResult;
+	}
+
+	// Try GB2312
+	const gbResult = tryDecode(validationBuffer, "gb2312");
+	if (gbResult !== null) {
+		return buffer.length > VALIDATION_CHUNK_SIZE ? iconv.decode(buffer, "gb2312") : gbResult;
+	}
+
+	// Last resort: UTF-8 with replacement
+	return buffer.toString("utf-8");
+}
+
+/**
+ * Async variant of readFileAdaptive using fs.promises.
+ * Same encoding fallback logic (UTF-8 → GBK → GB2312) but non-blocking.
+ * Use this in async contexts (e.g., LSP enrichment) to avoid blocking the event loop.
+ */
+export async function readFileAdaptiveAsync(filePath: string): Promise<string> {
+	// Check file size before reading to prevent OOM
+	try {
+		const stat = await statAsync(filePath);
+		if (stat.size > MAX_FILE_SIZE) {
+			throw new Error(`File too large (${stat.size} bytes > ${MAX_FILE_SIZE}): ${filePath}`);
+		}
+	} catch (err) {
+		if (err instanceof Error && err.message.startsWith("File too large")) {
+			throw err;
+		}
+		// stat failed — fall through to readFile which will error with a clearer message
+	}
+	const buffer = await readFileAsync(filePath);
+
+	// For small files (<64KB), validate full buffer
+	// For larger files, validate only first chunk to reduce memory pressure
+	const validationBuffer = buffer.length > VALIDATION_CHUNK_SIZE ? buffer.subarray(0, VALIDATION_CHUNK_SIZE) : buffer;
+
+	// Try UTF-8 first
+	const utf8Result = tryDecode(validationBuffer, "utf-8");
+	if (utf8Result !== null) {
 		return buffer.length > VALIDATION_CHUNK_SIZE ? buffer.toString("utf-8") : utf8Result;
 	}
 

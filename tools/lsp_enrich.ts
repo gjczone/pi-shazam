@@ -13,8 +13,8 @@
  */
 import type { LspClient } from "../lsp/client.js";
 import { uriToPath } from "../lsp/client.js";
-import { readFileAdaptive } from "../core/encoding.js";
-import { statSync } from "node:fs";
+import { readFileAdaptiveAsync } from "../core/encoding.js";
+import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import type {
 	SymbolInformation,
@@ -30,6 +30,25 @@ import type { Command } from "vscode-languageserver-protocol";
 // ── Constants ────────────────────────────────────────────────────────────────
 
 export const DEFAULT_LSP_ENRICH_TIMEOUT_MS = 5000;
+
+// Extended timeout for the first enrichment request after didOpen.
+// Large projects may need more time for the server to index the file.
+export const FIRST_ENRICH_TIMEOUT_MS = 10000;
+
+/**
+ * Compute the effective timeout: use FIRST_ENRICH_TIMEOUT_MS for the first
+ * request after didOpen (when justOpened is true), unless the caller provided
+ * an explicit non-default timeout.
+ */
+function effectiveTimeout(
+	justOpened: boolean,
+	timeoutMs: number,
+): number {
+	if (justOpened && timeoutMs === DEFAULT_LSP_ENRICH_TIMEOUT_MS) {
+		return FIRST_ENRICH_TIMEOUT_MS;
+	}
+	return timeoutMs;
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -162,13 +181,14 @@ const _openedFileMtimes = new Map<string, number>();
 
 /**
  * Ensure a file is opened in its LSP server (best-effort, swallow errors).
- * Reads file content via fs and sends didOpen if not already opened.
+ * Reads file content via fs.promises and sends didOpen if not already opened.
  * If the file was already opened but its mtime changed, sends didChange.
+ * Returns `justOpened: true` when didOpen was called (first request needs more time).
  */
 export async function ensureFileOpened(
 	ctx: LspEnrichContext,
 	filePath: string,
-): Promise<{ client: LspClient; workspaceRoot: string } | null> {
+): Promise<{ client: LspClient; workspaceRoot: string; justOpened: boolean } | null> {
 	const info = await ctx.getServerForFile(filePath);
 	if (!info) return null;
 	if (!info.client.isRunning()) return null;
@@ -176,16 +196,19 @@ export async function ensureFileOpened(
 		const absPath = resolve(info.workspaceRoot, filePath);
 
 		if (!info.client.isFileOpened(filePath)) {
-			const content = readFileAdaptive(absPath);
+			const content = await readFileAdaptiveAsync(absPath);
 			await info.client.didOpen(filePath, content);
 			// Track the mtime after opening
-			_openedFileMtimes.set(filePath, statSync(absPath).mtimeMs);
+			const fileStat = await stat(absPath);
+			_openedFileMtimes.set(filePath, fileStat.mtimeMs);
+			return { client: info.client, workspaceRoot: info.workspaceRoot, justOpened: true };
 		} else {
 			// File already opened — check if mtime changed
-			const currentMtime = statSync(absPath).mtimeMs;
+			const fileStat = await stat(absPath);
+			const currentMtime = fileStat.mtimeMs;
 			const prevMtime = _openedFileMtimes.get(filePath);
 			if (prevMtime === undefined || currentMtime > prevMtime) {
-				const content = readFileAdaptive(absPath);
+				const content = await readFileAdaptiveAsync(absPath);
 				await info.client.didChange(filePath, content);
 				_openedFileMtimes.set(filePath, currentMtime);
 			}
@@ -193,7 +216,7 @@ export async function ensureFileOpened(
 	} catch {
 		return null;
 	}
-	return { client: info.client, workspaceRoot: info.workspaceRoot };
+	return { client: info.client, workspaceRoot: info.workspaceRoot, justOpened: false };
 }
 
 // ── workspace/symbol ─────────────────────────────────────────────────────────
@@ -280,7 +303,7 @@ export async function lspDocumentSymbols(
 	}
 	const result = await withEnrichTimeout(
 		opened.client.documentSymbols(filePath).then((r) => (r.status === "ok" ? r.data : null)),
-		timeoutMs,
+		effectiveTimeout(opened.justOpened, timeoutMs),
 	);
 	return result;
 }
@@ -318,7 +341,7 @@ export async function lspCodeActions(
 		opened.client
 			.codeAction(filePath, startLine, startChar, endLine, endChar)
 			.then((r) => (r.status === "ok" ? r.data : null)),
-		timeoutMs,
+		effectiveTimeout(opened.justOpened, timeoutMs),
 	);
 	return result;
 }
@@ -347,7 +370,7 @@ export async function lspSignatureHelp(
 		opened.client
 			.signatureHelp(filePath, line, character)
 			.then((r) => (r.status === "ok" ? r.data : null)),
-		timeoutMs,
+		effectiveTimeout(opened.justOpened, timeoutMs),
 	);
 	return result;
 }
@@ -379,7 +402,7 @@ export async function lspImplementation(
 				if (r.status !== "ok" || !r.data) return null;
 				return Array.isArray(r.data) ? r.data : [r.data];
 			}),
-		timeoutMs,
+		effectiveTimeout(opened.justOpened, timeoutMs),
 	);
 	return result;
 }
@@ -406,7 +429,7 @@ export async function lspCodeLens(
 		opened.client
 			.codeLens(filePath)
 			.then((r) => (r.status === "ok" ? r.data : null)),
-		timeoutMs,
+		effectiveTimeout(opened.justOpened, timeoutMs),
 	);
 	return result;
 }
