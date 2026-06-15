@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.7] - 2026-06-15
+
+### Bug Fixes
+
+- **fix(#297): MCP LSP not initialized** (#307)
+  - Call `setLspManager()` in MCP server entry so LSP enrichment works in MCP mode
+
+- **fix(#298): rename_symbol column off-by-one + documentChanges ignored** (#307)
+  - Fix `symbol.col - 1` producing -1 when `col=0` (LSP Position is already 0-based)
+  - Add support for `documentChanges` format in `applyWorkspaceEdit` (LSP 3.16+)
+
+- **fix(#299): type_hierarchy URI parsing broken on Windows/encoded paths** (#307)
+  - Replace `.replace('file://', '')` with `uriToPath()` for correct URI-to-path conversion
+
+- **fix(#300): verify JSON output hardcoded lspAvailable: false** (#307)
+  - Active code path already uses `executeVerifyJsonAsync` with proper LSP diagnostics
+
+- **fix(#301): LSP client lifecycle bugs** (#307)
+  - Reset `_initPromise` after completion (allow retry after failure)
+  - Clear `_openingFiles` in crash cleanup
+  - Use monotonic version counter instead of `Date.now()` for `didChange`
+  - Clean up SIGKILL fallback timer on process exit
+  - Guard `detectWorkspaceRoot` against escaping project root
+  - Close child process on initialization failure (prevent zombie processes)
+
+- **fix(#302): Core engine bugs — tree memory leak, incremental scan, OOM risks** (#307)
+  - Call `tree.delete()` to release Tree-sitter C memory after parsing
+  - Add 2MB size limit to `readFileWithEncoding` (matching `readFileAdaptive`)
+  - Validate visibility values during graph deserialization
+  - Capture stderr in preCommit type checks for better error messages
+
+- **fix(#303): Tools layer bugs — process.cwd(), formatting, schema** (#307)
+  - `impact.ts`: convert O(n) `Array.includes()` to `Set.has()` for hot loops
+  - `_factory.ts`: fix `maxTokens=0` treated as falsy (disabling truncation)
+
+- **fix(#304): Hooks regex matching too broad + shared logic duplication + state races** (#307)
+  - Add word boundaries `\b` to `SERIOUS_PATTERNS` regex
+  - Use regex `gh\s+.*issue\s+create` for gh command detection (handles flags before subcommand)
+  - Expand `rm` safety pattern to catch `rm -rf /home/` and `rm -rf ~/`
+
+- **fix(#306): P2 cleanup — missing dep, cache limits, encoding optimization** (#308)
+  - Add `tree-sitter-javascript` to package.json dependencies (was only transitive)
+  - Add 100MB size check to cache file loading (prevent OOM from corrupted cache)
+  - Add LRU eviction (max 200 entries) to `fileDetailCache`
+  - Skip GBK encoding detection when UTF-8 validation succeeds
+  - Validate `PROJECT_ROOT` argument in MCP server entry
+
+### Other
+
+- **#305**: File splitting refactor closed as "not planned" — structural preference, not a bug
+
 ## [0.10.6] - 2026-06-15
 
 ### Bug Fixes
