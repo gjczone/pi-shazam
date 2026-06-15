@@ -34,7 +34,7 @@ After installation, all 14 analysis tools register as native Pi tools alongside 
 
 ### MCP (For Non-Pi Agents Only)
 
-Use this only if you are **not** using Pi agent. The MCP interface provides the same 14 tools but without Pi-specific hooks and lifecycle integration.
+Use this only if you are **not** using Pi agent. The MCP interface provides the same 14 tools with LSP support but without Pi-specific hooks and lifecycle integration.
 
 ```json
 {

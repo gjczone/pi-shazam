@@ -120,9 +120,9 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
     ├── impact-state.ts     ← Shared impact tracking state for issue-guard + pre-edit
     ├── issue-guard.ts      ← Detect gh issue create, set pending impact flag
     └── agent-context-guard.ts ← Block agent spawn without structural context
-mcp/                        ← MCP server for non-Pi clients
-├── entry.ts                ← McpServer + StdioServerTransport init
-├── tools.ts                ← 14 MCP tool registrations wrapping core
+mcp/                        ← MCP server for non-Pi clients (with LSP support)
+├── entry.ts                ← McpServer + LspManager + StdioServerTransport init
+├── tools.ts                ← 14 MCP tool registrations wrapping core (with log rotation)
 └── README.md               ← Client setup guide (Cursor, Claude Desktop, etc.)
 ```
 
@@ -151,7 +151,7 @@ mcp/                        ← MCP server for non-Pi clients
 - **Verification**: LLM calls `shazam_verify` manually when needed (no automatic verification after edits).
 - **Tool logging**: `tool_call` + `tool_result` events → `hooks/tool-logger` → writes JSONL to `~/.pi/hooks/audit/shazam-calls.log`
 - **Agent guidance**: `before_agent_start` → `hooks/shazam-guide` → injects tool list into system prompt; `tool_result` (write/edit) → nudges `shazam_verify`; `tool_call` (grep/find) → nudges `shazam_codesearch`
-- **MCP tool calls**: MCP client → JSON-RPC over stdio → `mcp/tools.ts` → `core/` analysis → return `{ content: [...] }`
+- **MCP tool calls**: MCP client → JSON-RPC over stdio → `mcp/tools.ts` → `core/` analysis + optional LSP enrichment (LspManager initialized in `mcp/entry.ts`) → return `{ content: [...] }`
 - **LSP lifecycle**: extension load → `lsp/manager` detects project languages → spawns servers on demand → `lsp/client` handles JSON-RPC via vscode-jsonrpc over stdio → `session_shutdown` kills all
 
 ## API Surface
