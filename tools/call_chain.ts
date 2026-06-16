@@ -7,6 +7,7 @@ import type { RepoGraph, Symbol } from "../core/graph.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool } from "./_factory.js";
 import { buildEnvelope } from "./_factory.js";
+import { recordCallChain } from "../hooks/rename-state.js";
 
 export function registerCallChain(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -32,6 +33,8 @@ export function registerCallChain(pi: ExtensionAPI): void {
 			const direction = (params.direction as string) ?? "both";
 			const symbolName = typeof params.symbol === "string" ? params.symbol : "";
 			if (!symbolName) return "Error: symbol parameter is required";
+			// Mark this symbol as reviewed for the rename safety gate (issue #326)
+			recordCallChain(symbolName);
 			if (flat) {
 				const refs = getFlatReferences(graph, symbolName, direction as "incoming" | "outgoing" | "both");
 				return json ? JSON.stringify(refs, null, 2) : formatFlatReferences(refs, symbolName);
@@ -56,6 +59,9 @@ export function executeCallChain(
 	if (targets.length === 0) {
 		return `Symbol not found: ${symbolName}`;
 	}
+
+	// Mark this symbol as reviewed for the rename safety gate (issue #326)
+	recordCallChain(symbolName);
 
 	const lines: string[] = [];
 	for (const target of targets) {
@@ -115,6 +121,10 @@ export function executeCallChainJson(
 	direction: "incoming" | "outgoing" | "both" = "both",
 ): string {
 	const targets = findSymbolsByName(graph, symbolName);
+	// Mark this symbol as reviewed for the rename safety gate (issue #326)
+	if (targets.length > 0) {
+		recordCallChain(symbolName);
+	}
 	const result = targets.map((target) => ({
 		symbol: { id: target.id, name: target.name, kind: target.kind, file: target.file, line: target.line },
 		incoming:

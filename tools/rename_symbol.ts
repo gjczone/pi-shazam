@@ -17,6 +17,7 @@ import type { WorkspaceEdit, TextEdit } from "vscode-languageserver-protocol";
 import { uriToPath } from "../lsp/client.js";
 import { createTool, buildEnvelope } from "./_factory.js";
 import { scanProject } from "../core/scanner.js";
+import { hasCallChainChecked } from "../hooks/rename-state.js";
 
 export function registerRenameSymbol(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -45,23 +46,26 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 			if (!newName) {
 				return { content: [{ type: "text", text: "Error: newName parameter is required" }] };
 			}
-			// Block non-dry-run: force the LLM to confirm via shazam_call_chain first
+			// Block non-dry-run unless shazam_call_chain was run for this symbol (issue #326)
 			if (!dryRun) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: [
-								"[BLOCKED] Rename aborted — safety gate requires explicit confirmation.",
-								"",
-								`Before renaming \`${symbolName}\`, you MUST run:`,
-								`  shazam_call_chain --symbol "${symbolName}" --direction both`,
-								"",
-								"Review all callers and callees, then re-invoke shazam_rename_symbol with dryRun=false.",
-							].join("\n"),
-						},
-					],
-				};
+				if (!hasCallChainChecked(symbolName)) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: [
+									"[BLOCKED] Rename aborted — shazam_call_chain has not been run for this symbol.",
+									"",
+									`Before renaming \`${symbolName}\`, you MUST run:`,
+									`  shazam_call_chain --symbol "${symbolName}" --direction both`,
+									"",
+									"Review all callers and callees, then re-invoke shazam_rename_symbol with dryRun=false.",
+								].join("\n"),
+							},
+						],
+					};
+				}
+				// call_chain was checked — proceed with actual rename below
 			}
 			// Scan project to get graph (fixes #209 — customExecute must not rely on module-level variable)
 			const graph = scanProject(".");

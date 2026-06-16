@@ -25,6 +25,7 @@ import { registerStopVerify } from "./hooks/stop-verify.js";
 import { registerFailureRecovery } from "./hooks/failure-recovery.js";
 import { registerIssueGuard } from "./hooks/issue-guard.js";
 import { registerAgentContextGuard } from "./hooks/agent-context-guard.js";
+import { clearRenameState } from "./hooks/rename-state.js";
 
 // ── Tool registrations ────────────────────────────────────────────────────
 import { registerOverview } from "./tools/overview.js";
@@ -112,6 +113,11 @@ export default function (pi: ExtensionAPI): void {
 			const { resetLspEnrichState } = await import("./tools/lsp_enrich.js");
 			resetLspEnrichState();
 		} catch { /* best effort */ }
+	});
+
+	// Reset rename safety gate state on new session (issue #326)
+	pi.on("session_start", () => {
+		clearRenameState();
 	});
 
 	// ── Hooks ────────────────────────────────────────────────────────────────

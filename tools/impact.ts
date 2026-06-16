@@ -56,24 +56,36 @@ interface AffectedSymbol {
 	direction: "upstream" | "downstream";
 }
 
-export function executeImpact(
-	graph: RepoGraph,
-	files: string[],
-	opts: ImpactOptions = { withSymbols: false, compact: false, depth: 3 },
-): string {
+/**
+ * Result of the shared BFS traversal used by both text and JSON impact formatters.
+ * affectedFiles contains only external (non-target, non-generated) files reachable
+ * via upstream or downstream edges within the given depth limit.
+ */
+interface ImpactBfsResult {
+	affectedFiles: Set<string>;
+	affectedSymbols: AffectedSymbol[];
+}
+
+/**
+ * Perform upstream + downstream BFS traversal from the symbols in the target files.
+ * Single source of truth for impact blast-radius computation (issue #325).
+ *
+ * - Upstream: follows incoming edges (callers/importers of target symbols).
+ * - Downstream: follows outgoing edges (callees/dependencies of target symbols).
+ * - Skips non-source files (generated, config) and the target files themselves.
+ */
+function computeImpactBfs(graph: RepoGraph, files: string[], depth: number): ImpactBfsResult {
 	const affectedFiles = new Set<string>();
 	const affectedSymbols: AffectedSymbol[] = [];
-	const depth = opts.depth ?? 3;
 
 	// Collect initial symbol IDs from target files
 	const initialSymIds: string[] = [];
 	for (const file of files) {
-		affectedFiles.add(file);
 		const symIds = graph.fileSymbols.get(file) || [];
 		initialSymIds.push(...symIds);
 	}
 
-	// BFS upstream: what calls/imports symbols from this file (and transitively)?
+	// BFS upstream: what calls/imports symbols from these files (and transitively)?
 	const visitedUp = new Set<string>();
 	const queueUp: { id: string; level: number }[] = initialSymIds.map((id) => ({ id, level: 0 }));
 	for (const id of initialSymIds) visitedUp.add(id);
@@ -90,16 +102,14 @@ export function executeImpact(
 				const callerSym = graph.symbols.get(edge.source);
 				if (callerSym && !files.includes(callerSym.file) && !isNonSourceFile(callerSym.file)) {
 					affectedFiles.add(callerSym.file);
-					if (opts.withSymbols) {
-						affectedSymbols.push({ symbol: callerSym, direction: "upstream" });
-					}
+					affectedSymbols.push({ symbol: callerSym, direction: "upstream" });
 					queueUp.push({ id: edge.source, level: level + 1 });
 				}
 			}
 		}
 	}
 
-	// BFS downstream: what does this file's symbols depend on (and transitively)?
+	// BFS downstream: what do these files' symbols depend on (and transitively)?
 	const visitedDown = new Set<string>();
 	const queueDown: { id: string; level: number }[] = initialSymIds.map((id) => ({ id, level: 0 }));
 	for (const id of initialSymIds) visitedDown.add(id);
@@ -116,18 +126,27 @@ export function executeImpact(
 				const calleeSym = graph.symbols.get(edge.target);
 				if (calleeSym && !files.includes(calleeSym.file) && !isNonSourceFile(calleeSym.file)) {
 					affectedFiles.add(calleeSym.file);
-					if (opts.withSymbols) {
-						affectedSymbols.push({ symbol: calleeSym, direction: "downstream" });
-					}
+					affectedSymbols.push({ symbol: calleeSym, direction: "downstream" });
 					queueDown.push({ id: edge.target, level: level + 1 });
 				}
 			}
 		}
 	}
 
+	return { affectedFiles, affectedSymbols };
+}
+
+export function executeImpact(
+	graph: RepoGraph,
+	files: string[],
+	opts: ImpactOptions = { withSymbols: false, compact: false, depth: 3 },
+): string {
+	const depth = opts.depth ?? 3;
+	const bfs = computeImpactBfs(graph, files, depth);
+	const affectedSymbols = opts.withSymbols ? bfs.affectedSymbols : [];
+
 	if (opts.compact) {
-		return [...affectedFiles]
-			.filter((f) => !files.includes(f))
+		return [...bfs.affectedFiles]
 			.sort()
 			.join("\n");
 	}
@@ -136,7 +155,7 @@ export function executeImpact(
 	lines.push("## Impact Analysis");
 	lines.push("");
 	lines.push(`Target files: ${files.join(", ")}`);
-	lines.push(`Affected files: ${affectedFiles.size - files.length}`);
+	lines.push(`Affected files: ${bfs.affectedFiles.size}`);
 	lines.push(`Traversal depth: ${depth}`);
 	if (opts.withSymbols) {
 		lines.push(`Affected symbols: ${affectedSymbols.length}`);
@@ -144,12 +163,12 @@ export function executeImpact(
 	lines.push("");
 
 	// Risk assessment
-	const risk = assessImpactRisk(affectedFiles.size - files.length, affectedSymbols.length);
+	const risk = assessImpactRisk(bfs.affectedFiles.size, affectedSymbols.length);
 	lines.push(`### Risk Assessment`);
 	lines.push(`**${risk.level}** — ${risk.reason}`);
 	lines.push("");
 
-	if (affectedFiles.size > files.length) {
+	if (bfs.affectedFiles.size > 0) {
 		lines.push("### Affected Files & Symbols");
 		lines.push("");
 
@@ -161,8 +180,7 @@ export function executeImpact(
 			fileSymbols.set(affected.symbol.file, fileSyms);
 		}
 
-		for (const f of [...affectedFiles].sort()) {
-			if (files.includes(f)) continue;
+		for (const f of [...bfs.affectedFiles].sort()) {
 			const syms = fileSymbols.get(f) || [];
 			if (syms.length > 0) {
 				// Determine direction (use majority)
@@ -182,8 +200,8 @@ export function executeImpact(
 		}
 	}
 
-	// Identify test files in affected set
-	const testFiles = [...affectedFiles].filter(
+	// Identify test files in affected set (include target files for test detection)
+	const testFiles = [...bfs.affectedFiles, ...files].filter(
 		(f) => f.includes(".test.") || f.includes(".spec.") || f.includes("__tests__") || f.startsWith("tests/"),
 	);
 	if (testFiles.length > 0) {
@@ -245,61 +263,7 @@ function assessImpactRisk(affectedFileCount: number, affectedSymbolCount: number
 }
 
 export function executeImpactJson(graph: RepoGraph, files: string[], depth: number = 3): string {
-	const affectedFiles = new Set<string>();
-	const affectedSymbols: AffectedSymbol[] = [];
-
-	// Collect initial symbol IDs from target files
-	const initialSymIds: string[] = [];
-	for (const file of files) {
-		const symIds = graph.fileSymbols.get(file) || [];
-		initialSymIds.push(...symIds);
-	}
-
-	// BFS upstream
-	const visitedUp = new Set<string>();
-	const queueUp: { id: string; level: number }[] = initialSymIds.map((id) => ({ id, level: 0 }));
-	for (const id of initialSymIds) visitedUp.add(id);
-
-	while (queueUp.length > 0) {
-		const { id, level } = queueUp.shift()!;
-		if (level >= depth) continue;
-		const incoming = graph.incoming.get(id);
-		if (incoming) {
-			for (const edge of incoming) {
-				if (visitedUp.has(edge.source)) continue;
-				visitedUp.add(edge.source);
-				const callerSym = graph.symbols.get(edge.source);
-				if (callerSym && !files.includes(callerSym.file) && !isNonSourceFile(callerSym.file)) {
-					affectedFiles.add(callerSym.file);
-					affectedSymbols.push({ symbol: callerSym, direction: "upstream" });
-					queueUp.push({ id: edge.source, level: level + 1 });
-				}
-			}
-		}
-	}
-
-	// BFS downstream
-	const visitedDown = new Set<string>();
-	const queueDown: { id: string; level: number }[] = initialSymIds.map((id) => ({ id, level: 0 }));
-	for (const id of initialSymIds) visitedDown.add(id);
-
-	while (queueDown.length > 0) {
-		const { id, level } = queueDown.shift()!;
-		if (level >= depth) continue;
-		const outgoing = graph.outgoing.get(id);
-		if (outgoing) {
-			for (const edge of outgoing) {
-				if (visitedDown.has(edge.target)) continue;
-				visitedDown.add(edge.target);
-				const calleeSym = graph.symbols.get(edge.target);
-				if (calleeSym && !files.includes(calleeSym.file) && !isNonSourceFile(calleeSym.file)) {
-					affectedFiles.add(calleeSym.file);
-					affectedSymbols.push({ symbol: calleeSym, direction: "downstream" });
-					queueDown.push({ id: edge.target, level: level + 1 });
-				}
-			}
-		}
-	}
+	const bfs = computeImpactBfs(graph, files, depth);
 
 	// Discover tests for target files
 	const discoveredTests: string[] = [];
@@ -312,13 +276,13 @@ export function executeImpactJson(graph: RepoGraph, files: string[], depth: numb
 		}
 	}
 
-	const risk = assessImpactRisk(affectedFiles.size - files.length, affectedSymbols.length);
+	const risk = assessImpactRisk(bfs.affectedFiles.size, bfs.affectedSymbols.length);
 
 	return buildEnvelope("shazam_impact", process.cwd(), "ok", {
 		targetFiles: files,
-		affectedFileCount: affectedFiles.size - files.length,
-		affectedFiles: [...affectedFiles].filter((f) => !files.includes(f)).sort(),
-		affectedSymbols: affectedSymbols.slice(0, 50).map((a) => ({
+		affectedFileCount: bfs.affectedFiles.size,
+		affectedFiles: [...bfs.affectedFiles].sort(),
+		affectedSymbols: bfs.affectedSymbols.slice(0, 50).map((a) => ({
 			id: a.symbol.id,
 			name: a.symbol.name,
 			kind: a.symbol.kind,
