@@ -118,6 +118,8 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
     ├── tool-logger.ts      ← Log shazam calls to ~/.pi/hooks/audit/shazam-calls.log
     ├── verify-state.ts     ← Shared verify tracking state for safety + stop-verify
     ├── impact-state.ts     ← Shared impact tracking state for issue-guard + pre-edit
+    ├── rename-state.ts     ← Session-scoped state: symbols reviewed via call_chain (gates rename_symbol)
+    ├── _bash-utils.ts      ← Shared tokenizeCommand + extractCommandFromEvent (safety, issue-guard, agent-context-guard)
     ├── issue-guard.ts      ← Detect gh issue create, set pending impact flag
     └── agent-context-guard.ts ← Block agent spawn without structural context
 mcp/                        ← MCP server for non-Pi clients (with LSP support)
