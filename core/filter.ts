@@ -119,6 +119,12 @@ export function isNonSourceFile(file: string): boolean {
  * pre-edit.ts does not flag writes to /tmp/, ~/.pi/, or build outputs
  * as "unverified edits".
  */
+/**
+ * Dot-prefixed directory names that contain legitimate config files
+ * which should be trackable by the pre-edit guard.
+ */
+const DOT_PREFIX_ALLOWLIST = new Set([".github", ".husky", ".vscode", ".claude"]);
+
 export function isTrackableEditedPath(normalizedPath: string): boolean {
 	// Fast path: reject non-source files by pattern (node_modules, dist, *.json)
 	if (isNonSourceFile(normalizedPath)) return false;
@@ -128,7 +134,7 @@ export function isTrackableEditedPath(normalizedPath: string): boolean {
 	const segments = normalizedPath.split(/[\\/]+/).filter(Boolean);
 	for (const seg of segments) {
 		if (SKIP_DIRS.has(seg)) return false;
-		if (seg.startsWith(".") && !SKIP_DIRS.has(seg)) return false;
+		if (seg.startsWith(".") && !SKIP_DIRS.has(seg) && !DOT_PREFIX_ALLOWLIST.has(seg)) return false;
 	}
 
 	return true;

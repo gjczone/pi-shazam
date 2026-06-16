@@ -53,28 +53,6 @@ export function getBaseline(): SessionBaseline | null {
 }
 
 /**
- * Set the session baseline.
- */
-export function setBaseline(baseline: SessionBaseline): void {
-	_baseline = baseline;
-}
-
-/**
- * Clear the session baseline (on branch switch).
- */
-export function clearBaseline(): void {
-	_baseline = null;
-	_previousOrphans = new Map();
-}
-
-/**
- * Check if a baseline is available.
- */
-export function hasBaseline(): boolean {
-	return _baseline !== null;
-}
-
-/**
  * Create a baseline from the current graph state and LSP data.
  */
 export function createBaseline(
@@ -144,39 +122,6 @@ export function diffFromBaseline(graph: RepoGraph, lspErrors: number, lspWarning
 		removedEdges,
 		addedEdges,
 	};
-}
-
-/**
- * Format a baseline diff section for text output.
- */
-export function formatBaselineDiff(diff: BaselineDiff): string {
-	const lines: string[] = [];
-	lines.push("### Changes from Session Baseline");
-	lines.push("");
-
-	const changes: string[] = [];
-	if (diff.lspErrors !== 0) changes.push(`LSP errors: ${diff.lspErrors > 0 ? "+" : ""}${diff.lspErrors}`);
-	if (diff.lspWarnings !== 0) changes.push(`LSP warnings: ${diff.lspWarnings > 0 ? "+" : ""}${diff.lspWarnings}`);
-	if (diff.orphanSymbols !== 0) changes.push(`Orphans: ${diff.orphanSymbols > 0 ? "+" : ""}${diff.orphanSymbols}`);
-	if (diff.graphEdges !== 0) changes.push(`Graph edges: ${diff.graphEdges > 0 ? "+" : ""}${diff.graphEdges}`);
-	if (diff.symbolCount !== 0) changes.push(`Symbols: ${diff.symbolCount > 0 ? "+" : ""}${diff.symbolCount}`);
-
-	if (changes.length > 0) {
-		lines.push(changes.join(" | "));
-	} else {
-		lines.push("No significant changes from baseline.");
-	}
-
-	if (diff.newOrphans.length > 0) {
-		lines.push("");
-		lines.push("### New Orphan Symbols");
-		for (const o of diff.newOrphans) {
-			lines.push(`  - ${o.kind} \`${o.name}\` — ${o.file}:${o.line}`);
-		}
-	}
-
-	lines.push("");
-	return lines.join("\n");
 }
 
 /**

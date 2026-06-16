@@ -76,7 +76,6 @@ export function detectProjectLanguages(projectRoot: string, maxFiles: number = 2
 		// Cycle detection via realpath
 		let real: string;
 		try {
-			real = (statSync as (p: string) => { isDirectory(): boolean }).call ? dir : dir;
 			// Use resolve to normalize; rely on visited map for cycle detection
 			real = resolve(dir);
 		} catch {

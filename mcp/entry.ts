@@ -57,12 +57,12 @@ async function main(): Promise<void> {
 			/* best effort */
 		}
 	};
-	process.on("SIGTERM", () => {
-		shutdown().finally(() => process.exit(0));
-	});
-	process.on("SIGINT", () => {
-		shutdown().finally(() => process.exit(0));
-	});
+	const onSignal = async (): Promise<void> => {
+		await shutdown();
+		process.exit(0);
+	};
+	process.on("SIGTERM", onSignal);
+	process.on("SIGINT", onSignal);
 
 	// Start stdio transport
 	const transport = new StdioServerTransport();

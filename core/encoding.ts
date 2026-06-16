@@ -141,60 +141,6 @@ export async function readFileAdaptiveAsync(filePath: string): Promise<string> {
 	return buffer.toString("utf-8");
 }
 
-// ── Encoding detection ───────────────────────────────────────────────────────
-
-/**
- * Detect the most likely encoding for a buffer.
- * Returns one of: "utf-8", "gbk", "gb2312", "unknown".
- */
-export function detectEncoding(buffer: Buffer): string {
-	// Fast path: if UTF-8 is valid, skip other encoding checks
-	if (tryDecode(buffer, "utf-8") !== null) return "utf-8";
-	// UTF-8 BOM check
-	if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
-		return "utf-8";
-	}
-
-	// Re-validate the full buffer with stream-decode to avoid false negatives
-	// from partial validation on truncated buffers.
-	if (isValidUtf8(buffer)) return "utf-8";
-
-	// Check for GBK/GB2312 patterns (high bytes 0x81-0xfe)
-	let gbkBytes = 0;
-	for (let i = 0; i < buffer.length; i++) {
-		const byte = buffer[i];
-		if (byte !== undefined && byte >= 0x81 && byte <= 0xfe) {
-			gbkBytes++;
-		}
-	}
-
-	if (gbkBytes > buffer.length * 0.3) {
-		// Stream-decode via iconv to avoid false positives from
-		// partial reads where the first chunk looked valid
-		try {
-			const gbkStr = iconv.decode(buffer, "gbk");
-			if (gbkStr.length > 0) {
-				// Re-encode to verify round-trip integrity
-				const reEncoded = iconv.encode(gbkStr, "utf-8");
-				if (reEncoded.length > 0) return "gbk";
-			}
-		} catch {
-			// decode failed, fall through
-		}
-
-		try {
-			const gbStr = iconv.decode(buffer, "gb2312");
-			if (gbStr.length > 0) {
-				const reEncoded = iconv.encode(gbStr, "utf-8");
-				if (reEncoded.length > 0) return "gb2312";
-			}
-		} catch {
-			// decode failed, fall through
-		}
-	}
-
-	return "unknown";
-}
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -286,19 +232,3 @@ function tryDecode(buffer: Buffer, encoding: string): string | null {
 	}
 }
 
-// ── Convenience ──────────────────────────────────────────────────────────────
-
-/**
- * Read a file with specific encoding.
- */
-export function readFileWithEncoding(filePath: string, encoding: string): string {
-	const st = statSync(filePath);
-	if (st.size > MAX_FILE_SIZE) {
-		throw new FileTooLargeError(filePath, st.size, MAX_FILE_SIZE);
-	}
-	const buffer = readFileSync(filePath);
-	if (encoding === "utf-8") {
-		return buffer.toString("utf-8");
-	}
-	return iconv.decode(buffer, encoding);
-}

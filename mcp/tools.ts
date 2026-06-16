@@ -91,13 +91,32 @@ async function logMCP(entry: Record<string, unknown>): Promise<void> {
 
 type Content = { content: { type: "text"; text: string }[] };
 
+/** Patterns matching common secret formats for log redaction. */
+const SECRET_PATTERNS: RegExp[] = [
+	/(?:token|secret|password|key|credential|auth)\s*[:=]\s*["'\w-]{8,}/gi,
+	/(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}/g,
+	/(?:xox[abspr]-\d+-\d+-\d+-[a-f0-9]+)/gi,
+	/AKIA[0-9A-Z]{16}/g,
+	/(?:sk|rk)-[a-zA-Z0-9]{24,}/g,
+	/(?:eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,})/g,
+];
+
+/** Redact potential secrets from a string. */
+function redact(s: string): string {
+	let out = s;
+	for (const pattern of SECRET_PATTERNS) {
+		out = out.replace(pattern, "[REDACTED]");
+	}
+	return out;
+}
+
 function withLogging(
 	tool: string,
 	fn: (args: Record<string, unknown>) => Promise<Content>,
 ): (args: Record<string, unknown>) => Promise<Content> {
 	return async (args) => {
 		const t0 = Date.now();
-		void logMCP({ tool, event: "start", params: JSON.stringify(args).slice(0, 200) });
+		void logMCP({ tool, event: "start", params: redact(JSON.stringify(args).slice(0, 200)) });
 		try {
 			const result = await fn(args);
 			void logMCP({
@@ -114,7 +133,7 @@ function withLogging(
 				event: "end",
 				durationMs: Date.now() - t0,
 				success: false,
-				error: String(err).slice(0, 300),
+				error: redact(String(err).slice(0, 300)),
 			});
 			throw err;
 		}
@@ -296,6 +315,9 @@ export function registerAllTools(
 		}),
 	);
 
+	// TODO: Replace synchronous executeVerify with exported executeVerifyTextAsync/executeVerifyJsonAsync
+	// once they are exported from tools/verify.ts. The async versions support LSP enrichment
+	// which is needed for accurate MCP diagnostics. See issue #327 P2 #17.
 	const verifyDef = getToolDefinition("shazam_verify")!;
 	server.registerTool(
 		"shazam_verify",

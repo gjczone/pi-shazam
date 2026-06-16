@@ -30,22 +30,6 @@ export function getProjectCacheDir(projectPath: string): string {
 	return cacheDir;
 }
 
-/**
- * Get the standard cache file paths for a project.
- */
-export function getCachePaths(projectPath: string): {
-	symbols: string;
-	git: string;
-	lastSnapshot: string;
-} {
-	const dir = getProjectCacheDir(projectPath);
-	return {
-		symbols: join(dir, "symbols.json"),
-		git: join(dir, "git.json"),
-		lastSnapshot: join(dir, "last_snapshot.json"),
-	};
-}
-
 // ── Persistent graph cache (V2) ──────────────────────────────────────────────
 
 /** Max age for a cached graph file before it is considered stale. */

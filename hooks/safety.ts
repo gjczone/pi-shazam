@@ -11,13 +11,14 @@
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { hasRecentPassingVerify } from "./verify-state.js";
+import { tokenizeCommand, extractCommandFromEvent } from "./_bash-utils.js";
 
 /**
  * High-risk patterns that should always trigger confirmation.
  * Regex patterns catch whitespace-bypass variants (extra spaces, tabs, split flags).
  */
 const HIGH_RISK_PATTERNS: Array<{ regex: RegExp; label: string }> = [
-	{ regex: /rm\s+(-[rRfF]{2,}|-(?:r|f)\s+-(?:r|f)|--recursive)\b/, label: "rm -rf" },
+	{ regex: /rm\s+(-[rf]{2,}|-(?:r|f)\s+-(?:r|f)|--recursive)\b/, label: "rm -rf" },
 	{ regex: /dd\s+if=/, label: "dd if=" },
 	{ regex: /\bmkfs\b/, label: "mkfs" },
 	{ regex: /\bmkswap\b/, label: "mkswap" },
@@ -43,7 +44,7 @@ const MEDIUM_RISK_PATTERNS: Array<{ regex: RegExp; label: string }> = [
 	{ regex: /\blvcreate\b/, label: "lvcreate" },
 	{ regex: /iptables\s+-F\b/, label: "iptables -F" },
 	{ regex: /iptables\s+-P\b/, label: "iptables -P" },
-	{ regex: /rm\s+(-[rRfF]{2,}|-(?:r|f)\s+-(?:r|f)|--recursive|-r)\s+\//, label: "rm -r /" },
+	{ regex: /rm\s+(-[rf]{2,}|-(?:r|f)\s+-(?:r|f)|--recursive|-r)\s+\//, label: "rm -r /" },
 ];
 
 /**
@@ -58,43 +59,6 @@ function normalizeWhitespace(cmd: string): string {
 		.replace(/[\t\r]+/g, " ")
 		.replace(/ {2,}/g, " ")
 		.trim();
-}
-
-/**
- * Tokenize a bash command string into argv, respecting quotes.
- * Handles single quotes, double quotes, and escaped characters.
- */
-function tokenizeCommand(cmd: string): string[] {
-	const tokens: string[] = [];
-	let i = 0;
-	while (i < cmd.length) {
-		// Skip whitespace
-		while (i < cmd.length && /\s/.test(cmd[i]!)) i++;
-		if (i >= cmd.length) break;
-
-		if (cmd[i] === "'" || cmd[i] === '"') {
-			const quote = cmd[i]!;
-			i++;
-			let token = "";
-			while (i < cmd.length && cmd[i] !== quote) {
-				if (cmd[i] === "\\" && i + 1 < cmd.length) {
-					i++;
-				}
-				token += cmd[i];
-				i++;
-			}
-			i++; // skip closing quote
-			tokens.push(token);
-		} else {
-			let token = "";
-			while (i < cmd.length && !/\s/.test(cmd[i]!)) {
-				token += cmd[i];
-				i++;
-			}
-			tokens.push(token);
-		}
-	}
-	return tokens;
 }
 
 /**
@@ -157,10 +121,8 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 		// Only intercept bash commands
 		if (event.toolName !== "bash") return;
 
-		const input = "input" in event ? (event as unknown as Record<string, unknown>).input : {};
-		const cmd = (input as Record<string, unknown>).command as string;
-
-		if (!cmd || typeof cmd !== "string") return;
+		const cmd = extractCommandFromEvent(event);
+		if (!cmd) return;
 
 		// -- Check 1: Destructive command detection --
 		const destructive = detectDestructiveCommand(cmd);

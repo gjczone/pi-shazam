@@ -358,13 +358,15 @@ async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise
 			written.push(filePath);
 		} catch (err) {
 			// Rollback all already-written files to their backups
+			const rollbackFailures: string[] = [];
 			for (const writtenPath of written) {
 				const backup = backups.find((b) => b.filePath === writtenPath);
 				if (backup) {
 					try {
 						writeFileSync(backup.filePath, backup.content, "utf-8");
-					} catch {
-						// Best-effort rollback — log but don't mask the original error
+					} catch (rollbackErr) {
+						console.error(`[pi-shazam] Rollback failed for ${backup.filePath}:`, rollbackErr);
+						rollbackFailures.push(backup.filePath);
 					}
 				}
 			}
@@ -377,7 +379,7 @@ async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise
 					{
 						file: "",
 						line: 0,
-						text: `Rolled back ${written.length} file(s) due to failure. No changes were persisted.`,
+						text: `Rolled back ${written.length} file(s) due to failure. No changes were persisted.${rollbackFailures.length > 0 ? ` Rollback also failed for: ${rollbackFailures.join(", ")}` : ""}`,
 					},
 				],
 			};

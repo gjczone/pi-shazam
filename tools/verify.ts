@@ -18,10 +18,10 @@ import type { RepoGraph } from "../core/graph.js";
 import { getGraphEdgeCount } from "../core/graph.js";
 import { diffFromBaseline } from "../core/baseline.js";
 import { isNonSourceFile, findOrphans } from "../core/filter.js";
-import { execSync, exec } from "node:child_process";
+import { execSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 import { existsSync } from "node:fs";
 import { readFileAdaptive } from "../core/encoding.js";
 import { resolve } from "node:path";
@@ -481,37 +481,49 @@ async function runSubprocessDiagnostics(projectRoot: string): Promise<LspDiagRes
 	const projectType = detectProjectType(projectRoot);
 	if (!projectType) return { diagnostics, available: false };
 
-	let command: string;
+	let program: string;
+	let args: string[];
 	switch (projectType) {
 		case "typescript":
-			command = "npx tsc --noEmit 2>&1 || true";
+			program = "npx";
+			args = ["tsc", "--noEmit"];
 			break;
 		case "rust":
-			command = "cargo check 2>&1 || true";
+			program = "cargo";
+			args = ["check"];
 			break;
 		case "go":
-			command = "go vet ./... 2>&1 || true";
+			program = "go";
+			args = ["vet", "./..."];
 			break;
 		case "python":
-			command = "pyright . 2>&1 || true";
+			program = "pyright";
+			args = ["."];
 			break;
 		case "node":
-			command = existsSync(resolve(projectRoot, "biome.json"))
-				? "npx biome check . 2>&1 || true"
-				: "npx eslint . 2>&1 || true";
+			if (existsSync(resolve(projectRoot, "biome.json"))) {
+				program = "npx";
+				args = ["biome", "check", "."];
+			} else {
+				program = "npx";
+				args = ["eslint", "."];
+			}
 			break;
 		default:
 			return { diagnostics, available: false };
 	}
 
 	try {
-		const { stdout } = await execAsync(command, {
+		const { stdout, stderr } = await execFileAsync(program, args, {
 			cwd: projectRoot,
 			encoding: "utf-8",
 			timeout: 15000,
 			maxBuffer: 1024 * 1024,
+		}).catch((err: { stdout?: string; stderr?: string }) => {
+			// execFile rejects on non-zero exit code, but the output is still valid
+			return { stdout: err.stdout ?? "", stderr: err.stderr ?? "" };
 		});
-		const output = stdout.trim();
+		const output = ((stdout ?? "") + (stderr ?? "")).trim();
 		if (output) {
 			for (const line of output.split("\n").slice(0, 100)) {
 				if (line.trim()) {
@@ -752,181 +764,3 @@ export function executeVerifyJson(graph: RepoGraph, projectRoot: string, options
 	});
 }
 
-// ── Parse-mode diagnostic (absorbed from check.ts, test-compatible) ────────
-
-/**
- * Synchronous tree-sitter parse diagnostics (from check.ts).
- */
-export function executeCheck(graph: RepoGraph, _projectRoot: string, file?: string): string {
-	const lines: string[] = [];
-	lines.push("## Parse & Symbol Diagnostics");
-	lines.push("");
-
-	const targetFiles = file ? [file] : [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
-
-	if (targetFiles.length === 0) {
-		lines.push("No files to check.");
-		return lines.join("\n");
-	}
-
-	lines.push("### Tree-sitter Parse Status");
-	lines.push("");
-
-	const failedFiles: string[] = [];
-	const successfulFiles: string[] = [];
-	for (const filePath of targetFiles) {
-		const symIds = graph.fileSymbols.get(filePath);
-		if (!symIds || symIds.length === 0) failedFiles.push(filePath);
-		else successfulFiles.push(filePath);
-	}
-
-	lines.push(`[PASS] ${successfulFiles.length} files parsed successfully`);
-	if (failedFiles.length > 0) {
-		lines.push(`[WARN] ${failedFiles.length} files have no symbols (possible parse failure)`);
-		for (const f of failedFiles.slice(0, 10)) lines.push(`  - ${f}`);
-	}
-	lines.push("");
-
-	lines.push("### Symbol Summary");
-	lines.push("");
-	let totalSymbols = 0;
-	let totalEdges = 0;
-	for (const filePath of targetFiles) {
-		const symIds = graph.fileSymbols.get(filePath);
-		if (symIds) {
-			totalSymbols += symIds.length;
-			for (const id of symIds) {
-				const out = graph.outgoing.get(id);
-				if (out) totalEdges += out.length;
-			}
-		}
-	}
-	lines.push(`Files: ${successfulFiles.length}`);
-	lines.push(`Symbols: ${totalSymbols}`);
-	lines.push(`Edges: ${totalEdges}`);
-	lines.push("");
-	lines.push(`For LSP diagnostics, use \`shazam_verify\` (default mode includes LSP).`);
-
-	return lines.join("\n");
-}
-
-export function executeCheckJson(graph: RepoGraph, _projectRoot: string, file?: string): string {
-	const targetFiles = file ? [file] : [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
-	const successfulFiles: string[] = [];
-	const failedFiles: string[] = [];
-	for (const filePath of targetFiles) {
-		const symIds = graph.fileSymbols.get(filePath);
-		if (!symIds || symIds.length === 0) failedFiles.push(filePath);
-		else successfulFiles.push(filePath);
-	}
-
-	return JSON.stringify({
-		schema_version: "1.0",
-		command: "check",
-		project: _projectRoot,
-		status: "ok",
-		mode: "parse",
-		result: {
-			totalFiles: targetFiles.length,
-			parsedFiles: successfulFiles.length,
-			failedFiles: failedFiles.length,
-			failedFileList: failedFiles.slice(0, 20),
-			symbolCount: graph.symbols.size,
-		},
-	});
-}
-
-// ── Pre-commit readiness (absorbed from ready.ts, test-compatible) ─────────
-
-export function executeReady(graph: RepoGraph, projectRoot: string): string {
-	const verifyJsonRaw = executeVerifyJson(graph, projectRoot);
-	const checkJsonRaw = executeCheckJson(graph, projectRoot);
-
-	// Own JSON.stringify output — parse failure is impossible, no try/catch needed
-	const verifyData = JSON.parse(verifyJsonRaw) as {
-		result?: { riskLevel?: string; orphanCount?: number; symbolCount?: number; fileCount?: number };
-	};
-	const checkData = JSON.parse(checkJsonRaw) as {
-		result?: { parsedFiles?: number; failedFiles?: number; symbolCount?: number };
-	};
-
-	const riskLevel = verifyData.result?.riskLevel ?? "unknown";
-	const orphanCount = verifyData.result?.orphanCount ?? 0;
-	const internalOrphanCount = ((verifyData.result as Record<string, unknown>)?.internalOrphanCount as number) ?? 0;
-	const failedFiles = checkData.result?.failedFiles ?? 0;
-	const parsedFiles = checkData.result?.parsedFiles ?? 0;
-	const isReady = riskLevel === "low" && internalOrphanCount === 0 && failedFiles === 0;
-
-	const lines: string[] = [];
-	lines.push("## Pre-Commit Readiness");
-	lines.push("");
-	lines.push(`**Status:** ${isReady ? "[PASS] READY" : "[FAIL] NOT READY"}`);
-	lines.push("");
-	lines.push("### Verify");
-	lines.push(`Risk level: **${riskLevel}**`);
-	lines.push(`Orphan symbols: ${orphanCount} (internal: ${internalOrphanCount})`);
-	lines.push(`Total symbols: ${verifyData.result?.symbolCount ?? "?"}`);
-	lines.push(`Total files: ${verifyData.result?.fileCount ?? "?"}`);
-	lines.push("");
-	lines.push("### Check");
-	lines.push(`Files parsed: ${parsedFiles}`);
-	lines.push(`Files failed: ${failedFiles}`);
-	lines.push("");
-
-	if (!isReady) {
-		lines.push("### Issues to Fix Before Commit");
-		lines.push("");
-		if (riskLevel !== "low") lines.push(`- Risk level is **${riskLevel}** — run \`shazam_verify\` for details`);
-		if (internalOrphanCount > 0)
-			lines.push(`- ${internalOrphanCount} internal orphan symbol(s) — run \`shazam_verify\` for detailed review`);
-		if (failedFiles > 0) lines.push(`- ${failedFiles} file(s) failed parse — run \`shazam_verify\` for details`);
-		lines.push("");
-	} else {
-		lines.push("All checks pass. Ready to commit.");
-	}
-
-	return lines.join("\n");
-}
-
-export function executeReadyJson(graph: RepoGraph, projectRoot: string): string {
-	const verifyJsonRaw = executeVerifyJson(graph, projectRoot);
-	const checkJsonRaw = executeCheckJson(graph, projectRoot);
-
-	// Own JSON.stringify output — parse failure is impossible, no try/catch needed
-	const verifyData = JSON.parse(verifyJsonRaw) as {
-		result?: { riskLevel?: string; orphanCount?: number; symbolCount?: number; fileCount?: number };
-	};
-	const checkData = JSON.parse(checkJsonRaw) as {
-		result?: { parsedFiles?: number; failedFiles?: number; symbolCount?: number };
-	};
-
-	const riskLevel = verifyData.result?.riskLevel ?? "unknown";
-	const orphanCount = verifyData.result?.orphanCount ?? 0;
-	const internalOrphanCount = ((verifyData.result as Record<string, unknown>)?.internalOrphanCount as number) ?? 0;
-	const failedFiles = checkData.result?.failedFiles ?? 0;
-	// Consistent with executeReady: use internalOrphanCount (internal orphans only)
-	// orphanCount includes exported orphans, which would incorrectly mark NOT READY
-	const isReady = riskLevel === "low" && internalOrphanCount === 0 && failedFiles === 0;
-
-	return JSON.stringify({
-		schema_version: "1.0",
-		command: "ready",
-		project: projectRoot,
-		status: "ok",
-		result: {
-			ready: isReady,
-			verify: {
-				riskLevel,
-				orphanCount,
-				internalOrphanCount,
-				symbolCount: verifyData.result?.symbolCount ?? 0,
-				fileCount: verifyData.result?.fileCount ?? 0,
-			},
-			check: {
-				parsedFiles: checkData.result?.parsedFiles ?? 0,
-				failedFiles,
-				symbolCount: checkData.result?.symbolCount ?? 0,
-			},
-		},
-	});
-}

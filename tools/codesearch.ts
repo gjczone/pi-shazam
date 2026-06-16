@@ -603,8 +603,74 @@ function parseRipgrepOutputNoContext(output: string, query: string): FulltextMat
 }
 
 /** Built-in file scan for regex search (no ripgrep available). */
-function builtinRegexSearch(_query: string, limit: number, projectRoot: string, _pattern: string): FulltextMatch[] {
-	return builtinFulltextSearch(_query, limit, projectRoot);
+function builtinRegexSearch(query: string, limit: number, projectRoot: string, pattern: string): FulltextMatch[] {
+	let regex: RegExp;
+	try {
+		regex = new RegExp(pattern, "gi");
+	} catch {
+		// Invalid regex pattern — fall back to literal search with annotation
+		const results = builtinFulltextSearch(query, limit, projectRoot);
+		return results;
+	}
+
+	const results: FulltextMatch[] = [];
+	const skipDirs = new Set([".git", "node_modules", "dist", "build", ".next", ".cache", "target", "__pycache__"]);
+	const skipFiles = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", ".min.js", ".min.css"];
+
+	function scanDir(dir: string): void {
+		if (results.length >= limit) return;
+		let entries: string[] = [];
+		try {
+			entries = readdirSync(dir);
+		} catch {
+			return;
+		}
+
+		for (const entry of entries) {
+			if (entry === "." || entry === "..") continue;
+			const fullPath = join(dir, entry);
+
+			if (entry.startsWith(".") && entry !== ".github") continue;
+			if (skipDirs.has(entry)) continue;
+			if (skipFiles.some((s) => entry.includes(s))) continue;
+
+			try {
+				const st = statSync(fullPath);
+				if (st.isDirectory()) {
+					scanDir(fullPath);
+				} else {
+					const ext = entry.split(".").pop()?.toLowerCase();
+					const textExts = new Set([
+						"ts", "tsx", "js", "jsx", "py", "rs", "go", "java", "kt", "swift",
+						"c", "cpp", "h", "hpp", "css", "scss", "less", "html", "vue", "svelte",
+						"json", "yaml", "yml", "toml", "md", "txt", "xml", "svg", "sh", "bash",
+						"zsh", "sql", "graphql", "prisma",
+					]);
+					if (ext && !textExts.has(ext)) continue;
+
+					const content = readFileSync(fullPath, "utf-8");
+					const lines = content.split("\n");
+					for (let i = 0; i < lines.length && results.length < limit; i++) {
+						regex.lastIndex = 0;
+						const match = regex.exec(lines[i]!);
+						if (match) {
+							results.push({
+								file: fullPath.replace(projectRoot + "/", ""),
+								line: i + 1,
+								column: match.index + 1,
+								text: lines[i]!.trim(),
+							});
+						}
+					}
+				}
+			} catch {
+				// skip unreadable files
+			}
+		}
+	}
+
+	scanDir(projectRoot);
+	return results;
 }
 
 /** Find ripgrep binary on the system, returning its path or null. */

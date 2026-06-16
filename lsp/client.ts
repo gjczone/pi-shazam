@@ -172,8 +172,7 @@ export class LspClient {
 	private _log: (msg: string) => void;
 
 	// Store notifications (e.g., diagnostics) received outside request-response.
-	// Capped at MAX_NOTIFICATIONS_PER_URI per URI to prevent unbounded growth.
-	private static readonly MAX_NOTIFICATIONS_PER_URI = 5;
+	// Deduplicated per URI: only the latest notification per URI is kept.
 	private _notifications: PublishDiagnosticsParams[] = [];
 
 	// Track in-flight LSP requests with their reject callbacks so close()
@@ -248,13 +247,6 @@ export class LspClient {
 				this._notifications.splice(idx, 1);
 			}
 			this._notifications.push(params);
-			// Cap per URI: remove oldest if too many entries
-			const count = this._notifications.filter((n) => n.uri === params.uri).length;
-			if (count > LspClient.MAX_NOTIFICATIONS_PER_URI) {
-				// Remove the oldest entry for this URI
-				const oldestIdx = this._notifications.findIndex((n) => n.uri === params.uri);
-				if (oldestIdx !== -1) this._notifications.splice(oldestIdx, 1);
-			}
 		});
 
 		this.connection.listen();
@@ -441,6 +433,7 @@ export class LspClient {
 	async didClose(filePath: string): Promise<void> {
 		const uri = pathToUri(filePath);
 		this._docVersions.delete(uri);
+		this._openedFiles.delete(this.resolveRel(filePath));
 	}
 
 	async didSave(filePath: string): Promise<void> {
@@ -808,9 +801,12 @@ export class LspClient {
 	 * and cancels it if the timeout fires — so the server can stop work.
 	 */
 	private _sendRequest<R>(method: string, params: unknown, timeoutMs?: number): Promise<R> {
+		if (!this.connection) {
+			return Promise.reject(new Error("LSP connection not available"));
+		}
 		const cts = new rpc.CancellationTokenSource();
-		const promise = this.connection!.sendRequest<R>(method, params, cts.token);
-		return this.withTimeout(promise, timeoutMs, () => cts.cancel());
+		const promise = this.connection.sendRequest<R>(method, params, cts.token);
+		return this.withTimeout(promise, timeoutMs, () => cts.cancel()).finally(() => cts.dispose());
 	}
 
 	/**

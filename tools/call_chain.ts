@@ -28,7 +28,7 @@ export function registerCallChain(pi: ExtensionAPI): void {
 		execute(graph, params) {
 			const json = params.json ?? false;
 			const flat = (params.flat as boolean) ?? false;
-			const depth = (params.depth as number) ?? 2;
+			const depth = Math.min(Math.max((params.depth as number) ?? 2, 1), 10);
 			const direction = (params.direction as string) ?? "both";
 			const symbolName = typeof params.symbol === "string" ? params.symbol : "";
 			if (!symbolName) return "Error: symbol parameter is required";

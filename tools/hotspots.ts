@@ -24,7 +24,7 @@ export function registerHotspots(pi: ExtensionAPI): void {
 		params: Type.Object({ topN: Type.Optional(Type.Number()) }),
 		execute(graph, params) {
 			const json = params.json ?? false;
-			const topN = (params.topN as number) ?? 10;
+			const topN = Math.min(Math.max((params.topN as number) ?? 10, 1), 50);
 			return json ? executeHotspotsJson(graph, topN) : executeHotspots(graph, topN);
 		},
 	});

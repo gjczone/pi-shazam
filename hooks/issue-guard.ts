@@ -10,6 +10,7 @@
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { setPendingImpact, clearPendingImpact } from "./impact-state.js";
+import { tokenizeCommand, extractCommandFromEvent } from "./_bash-utils.js";
 
 /**
  * Patterns that indicate a serious issue requiring impact analysis.
@@ -26,39 +27,6 @@ let _lastErrorFlagTime = 0;
 const ERROR_COOLDOWN_MS = 30_000;
 
 /**
- * Tokenize a bash command string into argv, respecting quotes.
- */
-function tokenizeCommand(cmd: string): string[] {
-	const tokens: string[] = [];
-	let i = 0;
-	while (i < cmd.length) {
-		while (i < cmd.length && /\s/.test(cmd[i]!)) i++;
-		if (i >= cmd.length) break;
-
-		if (cmd[i] === "'" || cmd[i] === '"') {
-			const quote = cmd[i]!;
-			i++;
-			let token = "";
-			while (i < cmd.length && cmd[i] !== quote) {
-				if (cmd[i] === "\\" && i + 1 < cmd.length) i++;
-				token += cmd[i];
-				i++;
-			}
-			i++;
-			tokens.push(token);
-		} else {
-			let token = "";
-			while (i < cmd.length && !/\s/.test(cmd[i]!)) {
-				token += cmd[i];
-				i++;
-			}
-			tokens.push(token);
-		}
-	}
-	return tokens;
-}
-
-/**
  * Register the issue guard hook.
  *
  * On bash tool_call: detects `gh issue create` via argv-based parsing.
@@ -70,8 +38,7 @@ export function registerIssueGuard(pi: ExtensionAPI): void {
 	pi.on("tool_call", (event) => {
 		if (event.toolName !== "bash") return;
 
-		const input = "input" in event ? (event as unknown as Record<string, unknown>).input : {};
-		const command = ((input as Record<string, unknown>).command as string) || "";
+		const command = extractCommandFromEvent(event);
 
 		// argv-based gh issue create detection
 		const argv = tokenizeCommand(command);
@@ -93,12 +60,16 @@ export function registerIssueGuard(pi: ExtensionAPI): void {
 			clearPendingImpact();
 		}
 
-		// On isError: set pending impact with 30s cooldown
-		if (event.isError && event.toolName !== "shazam_impact") {
-			const now = Date.now();
-			if (now - _lastErrorFlagTime > ERROR_COOLDOWN_MS) {
-				_lastErrorFlagTime = now;
-				setPendingImpact();
+		// On isError from bash: set pending impact with 30s cooldown,
+		// scoped to gh/npm-test commands that indicate workflow failures
+		if (event.isError && event.toolName === "bash") {
+			const cmd = extractCommandFromEvent(event);
+			if (/\b(gh|npm\s+(test|run\s+test))\b/.test(cmd)) {
+				const now = Date.now();
+				if (now - _lastErrorFlagTime > ERROR_COOLDOWN_MS) {
+					_lastErrorFlagTime = now;
+					setPendingImpact();
+				}
 			}
 		}
 	});

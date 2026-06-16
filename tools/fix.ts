@@ -11,7 +11,7 @@ import type { RepoGraph } from "../core/graph.js";
 import { createTool } from "./_factory.js";
 import { readFileAdaptive } from "../core/encoding.js";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve as pathResolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { isNonSourceFile } from "../core/filter.js";
@@ -92,6 +92,15 @@ export function executeFix(graph: RepoGraph, projectRoot: string, options: FixOp
 	}
 	lines.push("");
 
+	// Validate file path does not escape project root
+	if (options.file) {
+		const resolved = pathResolve(projectRoot, options.file);
+		const rootResolved = pathResolve(projectRoot);
+		if (!resolved.startsWith(rootResolved + "/") && resolved !== rootResolved) {
+			return "Error: file path escapes project root";
+		}
+	}
+
 	// ── Scan files for common issues ─────────────────────────────────────
 	const rawFiles = options.file ? [options.file] : [...graph.fileSymbols.keys()];
 	const targetFiles = rawFiles.filter((f) => !isNonSourceFile(f));
@@ -164,6 +173,16 @@ export function executeFix(graph: RepoGraph, projectRoot: string, options: FixOp
 export function executeFixJson(graph: RepoGraph, projectRoot: string, options: FixOptions = {}): string {
 	const dryRun = options.dryRun ?? true;
 	const formatters = detectFormatters(projectRoot);
+
+	// Validate file path does not escape project root
+	if (options.file) {
+		const resolved = pathResolve(projectRoot, options.file);
+		const rootResolved = pathResolve(projectRoot);
+		if (!resolved.startsWith(rootResolved + "/") && resolved !== rootResolved) {
+			return JSON.stringify({ schema_version: "1.0", command: "fix", project: projectRoot, status: "error", result: { error: "file path escapes project root" } });
+		}
+	}
+
 	const rawFiles = options.file ? [options.file] : [...graph.fileSymbols.keys()];
 	const targetFiles = rawFiles.filter((f) => !isNonSourceFile(f));
 

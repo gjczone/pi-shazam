@@ -70,7 +70,8 @@ export function registerOverview(pi: ExtensionAPI): void {
 		execute(graph, params) {
 			const filter = (params.filter as string) ?? "";
 			const json = params.json ?? false;
-			return json ? executeOverviewJson(graph, ".", filter) : executeOverview(graph, ".", filter);
+			const projectRoot = (params.project as string) || ".";
+			return json ? executeOverviewJson(graph, projectRoot, filter) : executeOverview(graph, projectRoot, filter);
 		},
 	});
 }

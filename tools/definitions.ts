@@ -42,7 +42,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			files: Type.Array(Type.String()),
 			withSymbols: Type.Optional(Type.Boolean()),
 			compact: Type.Optional(Type.Boolean()),
-			depth: Type.Optional(Type.Number()),
+			depth: Type.Optional(Type.Number({ minimum: 1, maximum: 10 })),
 		}),
 		zodParams: z.object({
 			files: z.array(z.string()).describe("List of file paths to analyze"),
@@ -65,7 +65,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 					default: "literal",
 				}),
 			),
-			topN: Type.Optional(Type.Number()),
+			topN: Type.Optional(Type.Number({ minimum: 1, maximum: 50 })),
 			maxTokens: Type.Optional(Type.Number()),
 		}),
 		zodParams: z.object({
@@ -122,7 +122,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			"Without this, you ship bugs. Traces ALL upstream callers, downstream callees, and references for any symbol. Pass --depth to control traversal depth (default 2). Pass --flat for a simple flat list of all references. Pass --direction to filter by incoming/outgoing/both (default both).",
 		typeboxParams: Type.Object({
 			symbol: Type.String(),
-			depth: Type.Optional(Type.Number()),
+			depth: Type.Optional(Type.Number({ minimum: 1, maximum: 10 })),
 			flat: Type.Optional(Type.Boolean()),
 			direction: Type.Optional(
 				Type.Union([Type.Literal("incoming"), Type.Literal("outgoing"), Type.Literal("both")], {
@@ -178,7 +178,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		description:
 			"Without this, you optimize the wrong files. Returns files ranked by (symbol density x PageRank) — these are the files where bugs have the highest blast radius. Use to prioritize code review, decide where to write tests first, and understand which files form the project's core.",
 		typeboxParams: Type.Object({
-			topN: Type.Optional(Type.Number()),
+			topN: Type.Optional(Type.Number({ minimum: 1, maximum: 50 })),
 		}),
 		zodParams: z.object({ topN: z.number().optional().describe("Max results to return") }),
 	},

@@ -7,7 +7,7 @@
  * This is the main entry point that all tools compose from.
  */
 
-import { readdirSync, statSync, lstatSync, existsSync } from "node:fs";
+import { readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, resolve, dirname } from "node:path";
 import { TreeSitterAdapter, EXT_TO_LANG } from "./treesitter.js";
 import { createRepoGraph, createEdge } from "./graph.js";
@@ -769,6 +769,7 @@ function scanIncremental(
 
 function collectSourceFiles(root: string, maxFiles: number): string[] {
 	const files: string[] = [];
+	const visitedSymlinks = new Set<string>();
 
 	function walk(dir: string) {
 		if (files.length >= maxFiles) return;
@@ -798,12 +799,21 @@ function collectSourceFiles(root: string, maxFiles: number): string[] {
 				walk(join(dir, entry.name));
 			} else if (entry.isSymbolicLink()) {
 				// Resolve symlink to check whether it points to a directory or file.
+				// Use statSync (not lstatSync) to follow the symlink and get the
+				// target's actual type (isDirectory reflects the target, not the link).
 				try {
-					const realStat = lstatSync(join(dir, entry.name));
+					const realStat = statSync(join(dir, entry.name));
 					if (realStat.isDirectory()) {
+						// Symlink cycle detection: skip if we already visited this realpath
+						const realPath = realStat.isDirectory() ? join(dir, entry.name) : "";
+						if (realPath && visitedSymlinks.has(realPath)) {
+							console.warn(`[pi-shazam] collectSourceFiles: skipping symlink cycle: ${relPath}`);
+							continue;
+						}
+						if (realPath) visitedSymlinks.add(realPath);
 						continue; // skip directory symlinks to avoid cycles
 					}
-					// Fall through: file symlink → treat as regular file below
+					// Fall through: file symlink -> treat as regular file below
 				} catch {
 					continue; // broken symlink, skip
 				}

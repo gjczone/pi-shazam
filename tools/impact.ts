@@ -33,7 +33,7 @@ export function registerImpact(pi: ExtensionAPI): void {
 				return "Error: --files is required (must be an array of file paths)";
 			}
 			const files = params.files as string[];
-			const depth = (params.depth as number) ?? 3;
+			const depth = Math.min(Math.max((params.depth as number) ?? 3, 1), 10);
 			return json
 				? executeImpactJson(graph, files, depth)
 				: executeImpact(graph, files, {
