@@ -18,19 +18,18 @@ import { executeVerify } from "../tools/verify.js";
 import { executeTypeHierarchy, formatTypeHierarchy } from "../tools/type_hierarchy.js";
 import { executeRenameSymbol, formatRenameResult } from "../tools/rename_symbol.js";
 import { executeSafeDelete, formatSafeDeleteResult } from "../tools/safe_delete.js";
-import { appendFile, mkdir, stat, rename } from "node:fs/promises";
+import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import type { LspManager } from "../lsp/manager.js";
 import { getToolDefinition } from "../tools/definitions.js";
 import { truncateOutput } from "../core/output.js";
+import { redact } from "../core/redact.js";
+import { AUDIT_LOG_DIR, rotateAuditLog } from "../core/audit-log.js";
 
 // ── Logging ──────────────────────────────────────────────────────
 
 // Use pi-shazam-specific audit directory (was .kimi-code/audit for Kimi Code compatibility)
-const LOG_DIR = join(homedir(), ".pi", "hooks", "audit");
-const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10MB
-const MAX_LOG_FILES = 3;
+const LOG_DIR = AUDIT_LOG_DIR;
 
 // Async mutex keyed on LOG_DIR to serialize log writes and rotations.
 let _logLock: Promise<void> = Promise.resolve();
@@ -43,37 +42,11 @@ function withLogLock<T>(fn: () => Promise<T>): Promise<T> {
 	return prev.then(fn).finally(() => release!());
 }
 
-/**
- * Rotate log files when the current log exceeds MAX_LOG_SIZE.
- * Keeps up to MAX_LOG_FILES archived logs (shazam-calls.log.1, .2, .3).
- */
-async function rotateLog(): Promise<void> {
-	try {
-		const logPath = join(LOG_DIR, "shazam-calls.log");
-		const st = await stat(logPath);
-		if (st.size > MAX_LOG_SIZE) {
-			// Shift existing rotated files
-			for (let i = MAX_LOG_FILES - 1; i >= 1; i--) {
-				const src = join(LOG_DIR, `shazam-calls.log.${i}`);
-				const dst = join(LOG_DIR, `shazam-calls.log.${i + 1}`);
-				try {
-					await rename(src, dst);
-				} catch {
-					/* file may not exist */
-				}
-			}
-			await rename(logPath, join(LOG_DIR, "shazam-calls.log.1"));
-		}
-	} catch {
-		/* file may not exist yet */
-	}
-}
-
 async function logMCP(entry: Record<string, unknown>): Promise<void> {
 	await withLogLock(async () => {
 		try {
 			await mkdir(LOG_DIR, { recursive: true });
-			await rotateLog();
+			await rotateAuditLog(join(LOG_DIR, "shazam-calls.log"));
 			await appendFile(
 				join(LOG_DIR, "shazam-calls.log"),
 				JSON.stringify({
@@ -90,25 +63,6 @@ async function logMCP(entry: Record<string, unknown>): Promise<void> {
 }
 
 type Content = { content: { type: "text"; text: string }[] };
-
-/** Patterns matching common secret formats for log redaction. */
-const SECRET_PATTERNS: RegExp[] = [
-	/(?:token|secret|password|key|credential|auth)\s*[:=]\s*["'\w-]{8,}/gi,
-	/(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}/g,
-	/(?:xox[abspr]-\d+-\d+-\d+-[a-f0-9]+)/gi,
-	/AKIA[0-9A-Z]{16}/g,
-	/(?:sk|rk)-[a-zA-Z0-9]{24,}/g,
-	/(?:eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,})/g,
-];
-
-/** Redact potential secrets from a string. */
-function redact(s: string): string {
-	let out = s;
-	for (const pattern of SECRET_PATTERNS) {
-		out = out.replace(pattern, "[REDACTED]");
-	}
-	return out;
-}
 
 function withLogging(
 	tool: string,

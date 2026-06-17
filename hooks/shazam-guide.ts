@@ -17,6 +17,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync, readFileSync } from "node:fs";
 import { join, extname } from "node:path";
+import { detectFormatters } from "../core/formatters.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -134,12 +135,8 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 				".svelte",
 			].includes(ext)
 		) {
-			const hasPrettier =
-				existsSync(join(projectRoot, ".prettierrc")) ||
-				existsSync(join(projectRoot, ".prettierrc.json")) ||
-				existsSync(join(projectRoot, ".prettierrc.js")) ||
-				existsSync(join(projectRoot, "prettier.config.js")) ||
-				existsSync(join(projectRoot, "prettier.config.mjs"));
+			const formatters = detectFormatters(projectRoot);
+		const hasPrettier = formatters.includes("prettier");
 			if (hasPrettier) {
 				await execFileAsync("npx", ["prettier", "--write", absPath], { cwd: projectRoot, timeout: 15000 });
 				ctx.ui.notify(`[auto-format] Formatted ${filePath} with prettier`, "info");

@@ -14,7 +14,7 @@ import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
-import { isNonSourceFile } from "../core/filter.js";
+import { isNonSourceFile, SKIP_DIRS } from "../core/filter.js";
 import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 import { getLspManager } from "./_context.js";
 import { lspWorkspaceSearch, type EnrichedSymbolHit } from "./lsp_enrich.js";
@@ -614,7 +614,6 @@ function builtinRegexSearch(query: string, limit: number, projectRoot: string, p
 	}
 
 	const results: FulltextMatch[] = [];
-	const skipDirs = new Set([".git", "node_modules", "dist", "build", ".next", ".cache", "target", "__pycache__"]);
 	const skipFiles = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", ".min.js", ".min.css"];
 
 	function scanDir(dir: string): void {
@@ -631,7 +630,7 @@ function builtinRegexSearch(query: string, limit: number, projectRoot: string, p
 			const fullPath = join(dir, entry);
 
 			if (entry.startsWith(".") && entry !== ".github") continue;
-			if (skipDirs.has(entry)) continue;
+			if (SKIP_DIRS.has(entry)) continue;
 			if (skipFiles.some((s) => entry.includes(s))) continue;
 
 			try {
@@ -723,8 +722,6 @@ function builtinFulltextSearch(query: string, limit: number, projectRoot: string
 	const results: FulltextMatch[] = [];
 	const lower = query.toLowerCase();
 
-	// Directories to skip
-	const skipDirs = new Set([".git", "node_modules", "dist", "build", ".next", ".cache", "target", "__pycache__"]);
 	const skipFiles = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", ".min.js", ".min.css"];
 
 	function scanDir(dir: string): void {
@@ -742,7 +739,7 @@ function builtinFulltextSearch(query: string, limit: number, projectRoot: string
 
 			// Skip hidden files/dirs (except .github)
 			if (entry.startsWith(".") && entry !== ".github") continue;
-			if (skipDirs.has(entry)) continue;
+			if (SKIP_DIRS.has(entry)) continue;
 			if (skipFiles.some((s) => entry.includes(s))) continue;
 
 			try {
