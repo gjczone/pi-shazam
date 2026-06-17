@@ -14,7 +14,7 @@ import { executeHover, formatHoverResult } from "../tools/hover.js";
 import { executeFindTests, formatFindTestsResult } from "../tools/find_tests.js";
 import { executeHotspots } from "../tools/hotspots.js";
 import { executeFix } from "../tools/fix.js";
-import { executeVerify } from "../tools/verify.js";
+import { executeVerifyTextAsync, executeVerifyJsonAsync } from "../tools/verify.js";
 import { executeTypeHierarchy, formatTypeHierarchy } from "../tools/type_hierarchy.js";
 import { executeRenameSymbol, formatRenameResult } from "../tools/rename_symbol.js";
 import { executeSafeDelete, formatSafeDeleteResult } from "../tools/safe_delete.js";
@@ -315,9 +315,7 @@ export function registerAllTools(
 		}),
 	);
 
-	// TODO: Replace synchronous executeVerify with exported executeVerifyTextAsync/executeVerifyJsonAsync
-	// once they are exported from tools/verify.ts. The async versions support LSP enrichment
-	// which is needed for accurate MCP diagnostics. See issue #327 P2 #17.
+	// shazam_verify — async path with LSP diagnostics
 	const verifyDef = getToolDefinition("shazam_verify")!;
 	server.registerTool(
 		"shazam_verify",
@@ -327,8 +325,8 @@ export function registerAllTools(
 		},
 		withLogging(
 			"shazam_verify",
-			async ({ quick, lspOnly, preCommit, delta, maxFiles, noCascade, noSecrets, maxTokens }) => {
-				let text = executeVerify(getGraph(), projectRoot, {
+			async ({ quick, lspOnly, preCommit, delta, maxFiles, noCascade, noSecrets, maxTokens, json }) => {
+				const opts = {
 					quick: quick as boolean,
 					lspOnly: lspOnly as boolean,
 					preCommit: preCommit as boolean,
@@ -336,7 +334,21 @@ export function registerAllTools(
 					maxFiles: maxFiles as number,
 					noCascade: noCascade as boolean,
 					noSecrets: noSecrets as boolean,
-				});
+				};
+				if (json) {
+					const result = await executeVerifyJsonAsync(projectRoot, opts);
+					const envelope = JSON.stringify(
+						{ schema_version: "1.0", command: "verify", project: projectRoot, status: "ok", result },
+						null,
+						2,
+					);
+					let text = envelope;
+					if (typeof maxTokens === "number" && maxTokens > 0) {
+						text = truncateOutput(envelope.split("\n"), maxTokens);
+					}
+					return { content: [{ type: "text", text }] };
+				}
+				let text = await executeVerifyTextAsync(projectRoot, opts);
 				if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 				return { content: [{ type: "text", text }] };
 			},

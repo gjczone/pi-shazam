@@ -96,7 +96,7 @@ export interface VerifyOptions {
 
 // ── Async verify (LSP + graph, used by the tool) ────────────────────────────
 
-async function executeVerifyJsonAsync(projectRoot: string, options: VerifyOptions) {
+export async function executeVerifyJsonAsync(projectRoot: string, options: VerifyOptions) {
 	const { scanProject } = await import("../core/scanner.js");
 	const graph = scanProject(projectRoot);
 	const quick = options.quick ?? false;
@@ -176,7 +176,7 @@ async function executeVerifyJsonAsync(projectRoot: string, options: VerifyOption
 	};
 }
 
-async function executeVerifyTextAsync(projectRoot: string, options: VerifyOptions): Promise<string> {
+export async function executeVerifyTextAsync(projectRoot: string, options: VerifyOptions): Promise<string> {
 	const { scanProject } = await import("../core/scanner.js");
 	const graph = scanProject(projectRoot);
 	const quick = options.quick ?? false;

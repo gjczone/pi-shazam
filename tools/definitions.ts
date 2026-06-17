@@ -30,6 +30,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		}),
 		zodParams: z.object({
 			filter: z.string().optional().describe("Optional keyword to filter files"),
+			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
 		}),
 	},
 
@@ -49,6 +51,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			withSymbols: z.boolean().optional().describe("Show per-symbol risk breakdown"),
 			compact: z.boolean().optional().describe("Concise output (file names only)"),
 			depth: z.number().int().min(1).max(10).optional().default(3).describe("BFS traversal depth (default 3)"),
+			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
 		}),
 	},
 
@@ -76,8 +80,9 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 				.optional()
 				.default("literal")
 				.describe("Search mode for target=code: literal (exact), regex (tokenized), smart (auto-detect NL)"),
-			topN: z.number().optional().describe("Max results to return"),
+			topN: z.number().int().min(1).max(50).optional().describe("Max results to return"),
 			maxTokens: z.number().optional().describe("Max tokens in output"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
 		}),
 	},
 
@@ -112,6 +117,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		}),
 		zodParams: z.object({
 			file: z.string().describe("Path to the file to analyze"),
+			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
 		}),
 	},
 
@@ -139,6 +146,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 				.optional()
 				.default("both")
 				.describe("Filter by direction: incoming callers, outgoing callees, or both (default)"),
+			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
 		}),
 	},
 
@@ -154,6 +163,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		zodParams: z.object({
 			name: z.string().describe("Symbol name"),
 			file: z.string().optional().describe("Optional file path to scope lookup"),
+			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
 		}),
 	},
 
@@ -169,6 +180,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		zodParams: z.object({
 			sourceFile: z.string().optional().describe("Path to source file to find tests for"),
 			module: z.string().optional().describe("Module name to scope search"),
+			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
 		}),
 	},
 
@@ -180,7 +193,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		typeboxParams: Type.Object({
 			topN: Type.Optional(Type.Number({ minimum: 1, maximum: 50 })),
 		}),
-		zodParams: z.object({ topN: z.number().optional().describe("Max results to return") }),
+		zodParams: z.object({ topN: z.number().int().min(1).max(50).optional().describe("Max results to return"), maxTokens: z.number().int().positive().optional().describe("Max tokens in output"), json: z.boolean().optional().describe("Return structured JSON output") }),
 	},
 
 	shazam_verify: {
@@ -196,6 +209,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			maxFiles: Type.Optional(Type.Number()),
 			noCascade: Type.Optional(Type.Boolean()),
 			noSecrets: Type.Optional(Type.Boolean()),
+			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
 		}),
 		zodParams: z.object({
 			quick: z.boolean().optional().default(false).describe("Fast git-change-only check (~2s)"),
@@ -205,6 +220,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			maxFiles: z.number().optional().describe("Max files to check"),
 			noCascade: z.boolean().optional().default(false).describe("Skip cascade analysis"),
 			noSecrets: z.boolean().optional().default(false).describe("Skip secrets detection"),
+			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
 		}),
 	},
 
@@ -222,6 +239,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		zodParams: z.object({
 			name: z.string().describe("Symbol name"),
 			direction: z.enum(["both", "supertypes", "subtypes"]).optional().default("both").describe("Traversal direction"),
+			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
 		}),
 	},
 
@@ -239,6 +258,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			symbol: z.string().describe("Current symbol name to rename"),
 			newName: z.string().describe("New symbol name"),
 			dryRun: z.boolean().optional().default(true).describe("Preview only, do not modify files"),
+			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
 		}),
 	},
 
@@ -254,6 +275,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		zodParams: z.object({
 			symbol: z.string().describe("Symbol name to delete"),
 			dryRun: z.boolean().optional().default(true).describe("Preview only, do not modify files"),
+			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
 		}),
 	},
 
@@ -269,6 +292,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		zodParams: z.object({
 			dryRun: z.boolean().optional().default(true).describe("Preview changes without applying"),
 			file: z.string().optional().describe("Scope to a single file"),
+			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
 		}),
 	},
 };
