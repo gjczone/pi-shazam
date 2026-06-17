@@ -396,87 +396,89 @@ export class LspManager {
 		const existingInit = this._initPromises.get(language);
 		if (existingInit) return existingInit;
 
-		const initPromise = (async (): Promise<LspServerInfo | null> => {
+		const initPromise = this._initServerForLanguage(language, filePath, signal);
+		this._initPromises.set(language, initPromise);
+		return initPromise;
+	}
+
+	private async _initServerForLanguage(language: string, filePath?: string, signal?: AbortSignal): Promise<LspServerInfo | null> {
+		try {
+			// Return existing server if already initialized
+			const existing = this.servers.get(language);
+			if (existing && existing.client.isInitialized()) return existing;
+			// Remove dead client so re-detection can happen
+			if (existing) {
+				this.servers.delete(language);
+			}
+
+			// Detect and spawn
+			const detection = detectLspServer(this.projectRoot, language, filePath ?? null);
+
+			if (detection.status !== "available" || detection.command.length === 0) {
+				this.log(`LSP server not available for ${language}: ${detection.reason ?? "not found"}`);
+				return null;
+			}
+
+			// Check abort signal before expensive init
+			if (signal?.aborted) return null;
+
+			const timeout = lspTimeoutFor(language);
+			const client = new LspClient(detection.command, detection.workspaceRoot, timeout, this.log);
+
 			try {
-				// Return existing server if already initialized
-				const existing = this.servers.get(language);
-				if (existing && existing.client.isInitialized()) return existing;
-				// Remove dead client so re-detection can happen
-				if (existing) {
-					this.servers.delete(language);
-				}
-
-				// Detect and spawn
-				const detection = detectLspServer(this.projectRoot, language, filePath ?? null);
-
-				if (detection.status !== "available" || detection.command.length === 0) {
-					this.log(`LSP server not available for ${language}: ${detection.reason ?? "not found"}`);
-					return null;
-				}
-
-				// Check abort signal before expensive init
-				if (signal?.aborted) return null;
-
-				const timeout = lspTimeoutFor(language);
-				const client = new LspClient(detection.command, detection.workspaceRoot, timeout, this.log);
-
-				try {
-					client.start();
-					// Initialize immediately so tools get a ready client
-					await client.initialize(signal);
-					// Check if cancelled during init
-					if (signal?.aborted) {
-						await client.close().catch(() => {});
-						return null;
-					}
-					// Successful init — reset restart budget
-					this._restartBudget.delete(language);
-				} catch (err) {
-					this.log(`Failed to start/initialize LSP for ${language}: ${err}`);
-					// Track failures and set backoff
-					const cur = this._restartBudget.get(language) ?? { failures: 0, nextRetryAt: 0 };
-					cur.failures++;
-					cur.nextRetryAt = Date.now() + Math.min(2 ** cur.failures * 1000, 60_000);
-					this._restartBudget.set(language, cur);
+				client.start();
+				// Initialize immediately so tools get a ready client
+				await client.initialize(signal);
+				// Check if cancelled during init
+				if (signal?.aborted) {
 					await client.close().catch(() => {});
 					return null;
 				}
+				// Successful init — reset restart budget
+				this._restartBudget.delete(language);
+			} catch (err) {
+				this.log(`Failed to start/initialize LSP for ${language}: ${err}`);
+				// Track failures and set backoff
+				const cur = this._restartBudget.get(language) ?? { failures: 0, nextRetryAt: 0 };
+				cur.failures++;
+				cur.nextRetryAt = Date.now() + Math.min(2 ** cur.failures * 1000, 60_000);
+				this._restartBudget.set(language, cur);
+				await client.close().catch(() => {});
+				return null;
+			}
 
-				const info: LspServerInfo = {
-					language,
-					serverName: detection.serverName,
-					client,
-					command: detection.command,
-					workspaceRoot: detection.workspaceRoot,
-					source: detection.source as LspServerInfo["source"],
-				};
+			const info: LspServerInfo = {
+				language,
+				serverName: detection.serverName,
+				client,
+				command: detection.command,
+				workspaceRoot: detection.workspaceRoot,
+				source: detection.source as LspServerInfo["source"],
+			};
 
-				this.servers.set(language, info);
+			this.servers.set(language, info);
 
-				// Re-open previously opened files after server crash/reconnection
-				const prevOpened = this._openedFilePaths.get(language);
-				if (prevOpened && prevOpened.size > 0) {
-					const { readFileSync } = await import("node:fs");
-					const { resolve } = await import("node:path");
-					for (const filePath of prevOpened) {
-						try {
-							const absPath = resolve(detection.workspaceRoot, filePath);
-							const content = readFileSync(absPath, "utf-8");
-							await client.didOpen(filePath, content);
-						} catch {
-							// File may have been deleted; remove from tracking
-							prevOpened.delete(filePath);
-						}
+			// Re-open previously opened files after server crash/reconnection
+			const prevOpened = this._openedFilePaths.get(language);
+			if (prevOpened && prevOpened.size > 0) {
+				const { readFileSync } = await import("node:fs");
+				const { resolve } = await import("node:path");
+				for (const filePath of prevOpened) {
+					try {
+						const absPath = resolve(detection.workspaceRoot, filePath);
+						const content = readFileSync(absPath, "utf-8");
+						await client.didOpen(filePath, content);
+					} catch {
+						// File may have been deleted; remove from tracking
+						prevOpened.delete(filePath);
 					}
 				}
-
-				return info;
-			} finally {
-				this._initPromises.delete(language);
 			}
-		})();
-		this._initPromises.set(language, initPromise);
-		return initPromise;
+
+			return info;
+		} finally {
+			this._initPromises.delete(language);
+		}
 	}
 
 	/**

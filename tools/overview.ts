@@ -76,7 +76,11 @@ export function registerOverview(pi: ExtensionAPI): void {
 	});
 }
 
-export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?: string): string {
+export function executeOverview(graph: RepoGraph, projectRoot: string, filter?: string): string {
+	return _buildOverviewText(graph, projectRoot, filter);
+}
+
+function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: string): string {
 	const lines: string[] = [];
 
 	// ── Apply file filtering ───────────────────────────────────────
@@ -116,27 +120,27 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 
 	// Key Dependencies and Recent Changes (only in full overview, not filter mode)
 	if (!filter) {
-		const depsSection = buildKeyDependenciesSection(_projectRoot);
+		const depsSection = buildKeyDependenciesSection(projectRoot);
 		if (depsSection) {
 			lines.push("");
 			lines.push(depsSection);
 		}
-		const pythonDeps = buildPythonDepsSection(_projectRoot);
+		const pythonDeps = buildPythonDepsSection(projectRoot);
 		if (pythonDeps) {
 			lines.push("");
 			lines.push(pythonDeps);
 		}
-		const rustDeps = buildRustDepsSection(_projectRoot);
+		const rustDeps = buildRustDepsSection(projectRoot);
 		if (rustDeps) {
 			lines.push("");
 			lines.push(rustDeps);
 		}
-		const goDeps = buildGoDepsSection(_projectRoot);
+		const goDeps = buildGoDepsSection(projectRoot);
 		if (goDeps) {
 			lines.push("");
 			lines.push(goDeps);
 		}
-		const changesSection = buildRecentChangesSection(_projectRoot);
+		const changesSection = buildRecentChangesSection(projectRoot);
 		if (changesSection) {
 			lines.push("");
 			lines.push(changesSection);

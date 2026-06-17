@@ -768,66 +768,74 @@ function scanIncremental(
 // ── File collection ──────────────────────────────────────────────────────────
 
 function collectSourceFiles(root: string, maxFiles: number): string[] {
-	const files: string[] = [];
-	const visitedSymlinks = new Set<string>();
+	const options = {
+		root,
+		maxFiles,
+		files: [] as string[],
+		visitedSymlinks: new Set<string>(),
+	};
+	_walkDirectory(root, 0, options);
+	return options.files;
+}
 
-	function walk(dir: string) {
+function _walkDirectory(
+	dir: string,
+	_depth: number,
+	options: { root: string; maxFiles: number; files: string[]; visitedSymlinks: Set<string> },
+): void {
+	const { root, maxFiles, files, visitedSymlinks } = options;
+	if (files.length >= maxFiles) return;
+
+	let entries;
+	try {
+		entries = readdirSync(dir, { withFileTypes: true });
+	} catch (err) {
+		// Log directory read failures (fixes #133, #160)
+		if (err instanceof Error && (err.message.includes("EACCES") || err.message.includes("EPERM"))) {
+			console.warn(`[pi-shazam] _walkDirectory: permission denied: ${dir}`);
+		} else {
+			const code = (err as NodeJS.ErrnoException)?.code ?? String(err);
+			console.warn(`[pi-shazam] _walkDirectory: unexpected error reading ${dir}: ${code}`);
+		}
+		return;
+	}
+
+	for (const entry of entries) {
 		if (files.length >= maxFiles) return;
 
-		let entries;
-		try {
-			entries = readdirSync(dir, { withFileTypes: true });
-		} catch (err) {
-			// Log directory read failures (fixes #133, #160)
-			if (err instanceof Error && (err.message.includes("EACCES") || err.message.includes("EPERM"))) {
-				console.warn(`[pi-shazam] collectSourceFiles: permission denied: ${dir}`);
-			} else {
-				const code = (err as NodeJS.ErrnoException)?.code ?? String(err);
-				console.warn(`[pi-shazam] collectSourceFiles: unexpected error reading ${dir}: ${code}`);
-			}
-			return;
-		}
+		const relPath = relative(root, join(dir, entry.name));
 
-		for (const entry of entries) {
-			if (files.length >= maxFiles) return;
-
-			const relPath = relative(root, join(dir, entry.name));
-
-			if (entry.isDirectory()) {
-				if (SKIP_DIRS.has(entry.name)) continue;
-				if (entry.name.startsWith(".")) continue;
-				walk(join(dir, entry.name));
-			} else if (entry.isSymbolicLink()) {
-				// Resolve symlink to check whether it points to a directory or file.
-				// Use statSync (not lstatSync) to follow the symlink and get the
-				// target's actual type (isDirectory reflects the target, not the link).
-				try {
-					const realStat = statSync(join(dir, entry.name));
-					if (realStat.isDirectory()) {
-						// Symlink cycle detection: skip if we already visited this realpath
-						const realPath = realStat.isDirectory() ? join(dir, entry.name) : "";
-						if (realPath && visitedSymlinks.has(realPath)) {
-							console.warn(`[pi-shazam] collectSourceFiles: skipping symlink cycle: ${relPath}`);
-							continue;
-						}
-						if (realPath) visitedSymlinks.add(realPath);
-						continue; // skip directory symlinks to avoid cycles
+		if (entry.isDirectory()) {
+			if (SKIP_DIRS.has(entry.name)) continue;
+			if (entry.name.startsWith(".")) continue;
+			_walkDirectory(join(dir, entry.name), _depth + 1, options);
+		} else if (entry.isSymbolicLink()) {
+			// Resolve symlink to check whether it points to a directory or file.
+			// Use statSync (not lstatSync) to follow the symlink and get the
+			// target's actual type (isDirectory reflects the target, not the link).
+			try {
+				const realStat = statSync(join(dir, entry.name));
+				if (realStat.isDirectory()) {
+					// Symlink cycle detection: skip if we already visited this realpath
+					const realPath = realStat.isDirectory() ? join(dir, entry.name) : "";
+					if (realPath && visitedSymlinks.has(realPath)) {
+						console.warn(`[pi-shazam] _walkDirectory: skipping symlink cycle: ${relPath}`);
+						continue;
 					}
-					// Fall through: file symlink -> treat as regular file below
-				} catch {
-					continue; // broken symlink, skip
+					if (realPath) visitedSymlinks.add(realPath);
+					continue; // skip directory symlinks to avoid cycles
 				}
-			} else if (entry.isFile()) {
-				const ext = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();
-				if (SOURCE_EXTS.has(ext)) {
-					files.push(relPath);
-				}
+				// Fall through: file symlink -> treat as regular file below
+			} catch {
+				continue; // broken symlink, skip
+			}
+		} else if (entry.isFile()) {
+			const ext = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();
+			if (SOURCE_EXTS.has(ext)) {
+				files.push(relPath);
 			}
 		}
 	}
-
-	walk(root);
-	return files;
 }
 
 // ── Edge helpers ─────────────────────────────────────────────────────────────
