@@ -253,7 +253,7 @@ export class LspClient {
 		this._running = true;
 	}
 
-	async initialize(): Promise<void> {
+	async initialize(signal?: AbortSignal): Promise<void> {
 		if (!this.connection) {
 			throw new Error("LSP client not started");
 		}
@@ -263,7 +263,7 @@ export class LspClient {
 		if (this._initialized) return;
 		if (this._initPromise) return this._initPromise;
 
-		this._initPromise = this._doInitialize();
+		this._initPromise = this._doInitialize(signal);
 		try {
 			await this._initPromise;
 		} finally {
@@ -271,7 +271,10 @@ export class LspClient {
 		}
 	}
 
-	private async _doInitialize(): Promise<void> {
+	private async _doInitialize(signal?: AbortSignal): Promise<void> {
+		// Check for cancellation before the expensive JSON-RPC round-trip
+		if (signal?.aborted) throw new Error("LSP initialization cancelled");
+
 		const initParams: InitializeParams = {
 			processId: process.pid,
 			rootUri: pathToUri(this.workspaceRoot),

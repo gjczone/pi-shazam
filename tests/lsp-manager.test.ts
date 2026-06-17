@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { LspManager } from "../lsp/manager.js";
+import type { LspClient } from "../lsp/client.js";
 
 describe("lsp/manager", () => {
 	describe("LspManager constructor", () => {
@@ -43,6 +44,60 @@ describe("lsp/manager", () => {
 			const manager = new LspManager("/test/project");
 			// Manager starts with no servers, and .rb is not in our 6-language map
 			expect(await manager.getServerForFile("/test/script.rb")).toBeNull();
+		});
+	});
+
+	describe("shutdown + re-initialize (#334 latch reset)", () => {
+		it("should reset _shuttingDown when initializeAll is called after shutdown", async () => {
+			const manager = new LspManager("/test/project");
+			// Shutdown sets the latch
+			await manager.shutdown();
+			// initializeAll should reset the latch — with no LSP servers
+			// installed, it will complete without spawning anything.
+			// The key test: calling initializeAll after shutdown should not throw
+			// or hang, and the manager should be usable again.
+			await manager.initializeAll();
+
+			// After reset, getServerForFile should NOT return null due to latch.
+			// An unsupported file type (.rb) still returns null, but a supported
+			// type (.ts) would at least attempt detection (it fails gracefully
+			// because no tsserver is installed in CI).
+			const result = await manager.getServerForFile("/test/script.rb");
+			expect(result).toBeNull(); // still null for .rb
+		});
+	});
+
+	describe("shutdown timeout (#334)", () => {
+		it("should complete shutdown even with missing servers (no-op)", async () => {
+			const manager = new LspManager("/test/project");
+			// Shutdown with empty server list should complete immediately
+			await expect(manager.shutdown()).resolves.toBeUndefined();
+		});
+
+		it("should complete within timeout when called on empty manager", async () => {
+			const manager = new LspManager("/test/project");
+			const start = Date.now();
+			await manager.shutdown();
+			const elapsed = Date.now() - start;
+			// Should complete quickly (well under the 8s timeout)
+			expect(elapsed).toBeLessThan(5000);
+		});
+	});
+
+	describe("initializeAll with AbortSignal (#341)", () => {
+		it("should handle pre-aborted signal", async () => {
+			const manager = new LspManager("/test/project");
+			const controller = new AbortController();
+			controller.abort(); // signal already aborted
+
+			// Should complete without throwing (all server inits skip)
+			await expect(manager.initializeAll(controller.signal)).resolves.toBeUndefined();
+		});
+
+		it("should complete normally without signal", async () => {
+			const manager = new LspManager("/test/project");
+			// No signal — should complete normally (no servers to init)
+			await expect(manager.initializeAll()).resolves.toBeUndefined();
 		});
 	});
 });

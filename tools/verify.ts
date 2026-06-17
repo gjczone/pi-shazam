@@ -29,6 +29,7 @@ import { getNextForTool, formatNextSection, truncateOutput } from "../core/outpu
 import { getLspManager } from "./_context.js";
 import { lspCodeActions } from "./lsp_enrich.js";
 import { createTool } from "./_factory.js";
+import { uriToPath } from "../lsp/client.js";
 
 /** Time in ms to wait for LSP servers to publish diagnostics after didOpen. */
 const LSP_DIAGNOSTIC_SETTLE_MS = 500;
@@ -378,19 +379,39 @@ async function runLspDiagnostics(
 	const serversUsed = new Set<string>();
 	const failedOpens: string[] = [];
 
-	// Open files first (batch all didOpen calls)
-	for (const filePath of targetFiles) {
-		const serverInfo = await lspManager.getServerForFile(filePath);
-		if (!serverInfo) continue;
-		try {
-			const content = readFileAdaptive(resolve(projectRoot, filePath));
-			await serverInfo.client.didOpen(filePath, content);
-			serversUsed.add(serverInfo.serverName);
-			// Track for crash recovery
-			lspManager.trackOpenedFile(serverInfo.language, filePath);
-		} catch (e) {
-			failedOpens.push(filePath);
-			console.warn(`[pi-shazam] LSP didOpen failed for ${filePath}: ${e instanceof Error ? e.message : String(e)}`);
+	// Open files in parallel (each getServerForFile internally deduplicates
+	// concurrent inits for the same language via _initPromises).
+	const openResults = await Promise.allSettled(
+		targetFiles.map(async (filePath) => {
+			const serverInfo = await lspManager.getServerForFile(filePath);
+			if (!serverInfo) return { filePath, opened: false, serverName: "" };
+			try {
+				const content = readFileAdaptive(resolve(projectRoot, filePath));
+				await serverInfo.client.didOpen(filePath, content);
+				// Track for crash recovery
+				lspManager.trackOpenedFile(serverInfo.language, filePath);
+				return { filePath, opened: true, serverName: serverInfo.serverName };
+			} catch (e) {
+				return { filePath, opened: false, serverName: serverInfo.serverName, error: e };
+			}
+		}),
+	);
+
+	for (const result of openResults) {
+		if (result.status === "fulfilled") {
+			const { filePath, opened, serverName, error } = result.value;
+			if (opened) {
+				serversUsed.add(serverName);
+			} else if (error) {
+				failedOpens.push(filePath);
+				console.warn(
+					`[pi-shazam] LSP didOpen failed for ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
+		} else {
+			// Promise rejected — this shouldn't happen with internal error handling,
+			// but log it for observability
+			console.warn(`[pi-shazam] LSP didOpen unexpected rejection: ${result.reason}`);
 		}
 	}
 
@@ -401,15 +422,18 @@ async function runLspDiagnostics(
 		await new Promise((r) => setTimeout(r, LSP_DIAGNOSTIC_SETTLE_MS));
 	}
 
-	for (const filePath of targetFiles) {
-		const serverInfo = await lspManager.getServerForFile(filePath);
-		if (!serverInfo) continue;
-		const notifications = serverInfo.client.collectDiagnostics([filePath]);
+	// Collect diagnostics from all active LSP servers. Each server's
+	// collectDiagnostics filters to only its opened files, so we can safely
+	// pass all target files to every server.
+	const activeServers = lspManager.getActiveServers();
+	for (const serverInfo of activeServers) {
+		const notifications = serverInfo.client.collectDiagnostics(targetFiles);
 		for (const notif of notifications) {
+			const relPath = uriToPath(notif.uri);
 			for (const diag of notif.diagnostics) {
 				const sev = diag.severity ?? 0;
 				diagnostics.push({
-					file: filePath,
+					file: relPath,
 					line: diag.range.start.line + 1,
 					col: diag.range.start.character + 1,
 					endLine: diag.range.end.line + 1,
