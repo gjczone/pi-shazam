@@ -176,8 +176,12 @@ function isValidUtf8(buffer: Buffer): boolean {
 			return false;
 		}
 
-		// Ensure we have enough bytes remaining
-		if (i + seqLen > buffer.length) return false;
+		// Ensure we have enough bytes remaining.
+		// If the sequence extends past the buffer end, it may be boundary
+		// truncation (the full file has the continuation bytes). Break
+		// instead of returning false so the caller can retry with a
+		// larger chunk or validate the full buffer (fixes #335).
+		if (i + seqLen > buffer.length) break;
 
 		// All continuation bytes must match 10xxxxxx
 		for (let j = 1; j < seqLen; j++) {
