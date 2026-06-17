@@ -385,7 +385,7 @@ export class LspManager {
 	/**
 	 * Get or create an LSP client for a language.
 	 */
-	async getServerForLanguage(language: string, filePath?: string): Promise<LspServerInfo | null> {
+	async getServerForLanguage(language: string, filePath?: string, signal?: AbortSignal): Promise<LspServerInfo | null> {
 		if (this._shuttingDown) return null;
 
 		// Honor restart budget: if server previously failed, wait for backoff
@@ -414,13 +414,21 @@ export class LspManager {
 					return null;
 				}
 
+				// Check abort signal before expensive init
+				if (signal?.aborted) return null;
+
 				const timeout = lspTimeoutFor(language);
 				const client = new LspClient(detection.command, detection.workspaceRoot, timeout, this.log);
 
 				try {
 					client.start();
 					// Initialize immediately so tools get a ready client
-					await client.initialize();
+					await client.initialize(signal);
+					// Check if cancelled during init
+					if (signal?.aborted) {
+						await client.close().catch(() => {});
+						return null;
+					}
 					// Successful init — reset restart budget
 					this._restartBudget.delete(language);
 				} catch (err) {
@@ -475,11 +483,17 @@ export class LspManager {
 	 * Initialize all detected LSP servers.
 	 */
 	async initializeAll(signal?: AbortSignal): Promise<void> {
+		// Reset the shutdown latch so LSP recovers after a prior shutdown()
+		// (_shuttingDown is a one-way latch set by shutdown() — without this
+		// reset, getServerForLanguage returns null forever).
+		this._shuttingDown = false;
+
 		const languages = this.detectLanguages();
 
 		const promises = languages.map(async (language) => {
 			if (signal?.aborted) return;
-			const info = await this.getServerForLanguage(language);
+			const info = await this.getServerForLanguage(language, undefined, signal);
+			if (signal?.aborted) return;
 			if (info) {
 				this.log(`LSP initialized: ${language} (${info.serverName})`);
 			}
@@ -518,9 +532,19 @@ export class LspManager {
 		this._openedFilePaths.clear();
 		this._initPromises.clear();
 
+		const SHUTDOWN_TIMEOUT_MS = 8000;
+
 		const closePromises = snapshot.map(async ([language, info]) => {
 			try {
-				await info.client.close();
+				// Race client.close() against a timeout to prevent hung processes
+				// from leaking. client.close() has its own internal timeouts, but
+				// a stuck process can still cause indefinite hangs.
+				await Promise.race([
+					info.client.close(),
+					new Promise<void>((_, reject) =>
+						setTimeout(() => reject(new Error("close timed out")), SHUTDOWN_TIMEOUT_MS),
+					),
+				]);
 				this.log(`LSP shutdown: ${language}`);
 			} catch (err) {
 				this.log(`LSP shutdown error for ${language}: ${err}`);
