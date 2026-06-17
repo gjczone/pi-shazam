@@ -37,7 +37,7 @@ export function registerFindTests(pi: ExtensionAPI): void {
 			const json = params.json ?? false;
 			const sourceFile = params.sourceFile as string | undefined;
 			const module = params.module as string | undefined;
-			const result = executeFindTests(graph, ".", { sourceFile, module });
+			const result = executeFindTests(graph, (params.project as string) || ".", { sourceFile, module });
 			return json
 				? buildEnvelope("shazam_find_tests", (params.project as string) ?? process.cwd(), "ok", result)
 				: formatFindTestsResult(result, sourceFile, module);

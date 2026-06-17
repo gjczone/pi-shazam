@@ -246,7 +246,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_safe_delete",
 		label: "Safe Delete",
 		description:
-			"Required safety gate before removing any symbol. Automatically verifies zero incoming references before providing deletion instructions. This is a WRITE operation. Safety workflow: checks incoming references (must be 0), reports outgoing references, provides deletion guidance. Do not delete based on intuition — a symbol that looks unused may be called dynamically.",
+			"Required safety gate before removing any symbol. Automatically verifies zero incoming references before providing deletion instructions. READ-ONLY safety check; returns deletion guidance, does not delete Safety workflow: checks incoming references (must be 0), reports outgoing references, provides deletion guidance. Do not delete based on intuition — a symbol that looks unused may be called dynamically.",
 		typeboxParams: Type.Object({
 			symbol: Type.String(),
 			dryRun: Type.Optional(Type.Boolean({ default: true })),
@@ -261,7 +261,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_fix",
 		label: "Auto-Fix",
 		description:
-			"When shazam_verify reports format or lint errors, use this to auto-fix them. Runs nearest-wins formatters (prettier, biome, eslint --fix, ruff, cargo fmt, gofmt). Format only — never touches logic. Always run with --dry-run first to preview changes before applying.",
+			"When shazam_verify reports format or lint errors, use this to auto-fix them. Runs nearest-wins formatters (prettier, biome, eslint --fix, ruff, cargo fmt, gofmt). Format only — never touches logic. Use --dry-run to preview when unsure.",
 		typeboxParams: Type.Object({
 			dryRun: Type.Optional(Type.Boolean({ default: true })),
 			file: Type.Optional(Type.String()),

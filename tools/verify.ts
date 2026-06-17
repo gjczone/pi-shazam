@@ -56,6 +56,7 @@ export function registerVerify(pi: ExtensionAPI): void {
 		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
 			const maxTokens = params.maxTokens;
+			const projectRoot = (params.project as string) || process.cwd();
 			const options: VerifyOptions = {
 				quick: (params.quick as boolean) ?? false,
 				lspOnly: (params.lspOnly as boolean) ?? false,
@@ -68,10 +69,10 @@ export function registerVerify(pi: ExtensionAPI): void {
 
 			let text: string;
 			if (json) {
-				const result = await executeVerifyJsonAsync(".", options);
-				text = JSON.stringify({ schema_version: "1.0", command: "verify", project: ".", status: "ok", result });
+				const result = await executeVerifyJsonAsync(projectRoot, options);
+				text = JSON.stringify({ schema_version: "1.0", command: "verify", project: projectRoot, status: "ok", result });
 			} else {
-				text = await executeVerifyTextAsync(".", options);
+				text = await executeVerifyTextAsync(projectRoot, options);
 			}
 
 			if (maxTokens && !json) {
@@ -445,7 +446,7 @@ async function runLspDiagnostics(
 						.filter(Boolean) as string[];
 				}
 			} catch {
-				// codeAction fetch failed — silent fallback
+				console.warn(`[pi-shazam] codeAction fetch failed for ${diag.file}:${diag.line}:${diag.col}`);
 			}
 		}
 	}

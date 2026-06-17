@@ -184,7 +184,7 @@ export async function executeTypeHierarchy(
 						}
 					}
 				} catch {
-					// implementation lookup failed — silent fallback
+					console.warn(`[pi-shazam] implementation lookup failed for ${symbol.name} at ${symbol.file}:${symbol.line}`);
 				}
 			}
 		}

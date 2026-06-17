@@ -169,8 +169,10 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 		}
 
 		// Track files for multi-edit detection (with eviction)
-		for (const f of files) {
-			addEditedFile(f);
+		if (toolId) {
+			for (const f of files) {
+				addEditedFile(f);
+			}
 		}
 
 		// Combine current files with previously edited files

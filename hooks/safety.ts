@@ -18,7 +18,7 @@ import { tokenizeCommand, extractCommandFromEvent } from "./_bash-utils.js";
  * Regex patterns catch whitespace-bypass variants (extra spaces, tabs, split flags).
  */
 const HIGH_RISK_PATTERNS: Array<{ regex: RegExp; label: string }> = [
-	{ regex: /rm\s+(-[rf]{2,}|-(?:r|f)\s+-(?:r|f)|--recursive)\b/, label: "rm -rf" },
+	{ regex: /rm\s+(-[a-z]*[rf][a-z]*[rf][a-z]*|-[a-z]*[rf][a-z]*\s+-[a-z]*[rf][a-z]*|--recursive)\b/, label: "rm -rf" },
 	{ regex: /dd\s+if=/, label: "dd if=" },
 	{ regex: /\bmkfs\b/, label: "mkfs" },
 	{ regex: /\bmkswap\b/, label: "mkswap" },
@@ -44,7 +44,7 @@ const MEDIUM_RISK_PATTERNS: Array<{ regex: RegExp; label: string }> = [
 	{ regex: /\blvcreate\b/, label: "lvcreate" },
 	{ regex: /iptables\s+-F\b/, label: "iptables -F" },
 	{ regex: /iptables\s+-P\b/, label: "iptables -P" },
-	{ regex: /rm\s+(-[rf]{2,}|-(?:r|f)\s+-(?:r|f)|--recursive|-r)\s+\//, label: "rm -r /" },
+	{ regex: /rm\s+(-[a-z]*[rf][a-z]*[rf][a-z]*|-[a-z]*[rf][a-z]*\s+-[a-z]*[rf][a-z]*|--recursive|-r[a-z]*)\s+\//, label: "rm -r /" },
 ];
 
 /**
@@ -86,9 +86,15 @@ function detectDestructiveCommand(cmd: string): { level: "HIGH" | "MEDIUM"; patt
 
 	// rm detection: check for recursive flag
 	if (isRm) {
-		const hasRecursive = argv.some(
-			(a) => a === "-r" || a === "-R" || a === "-rf" || a === "-Rf" || a === "--recursive",
-		);
+		const hasRecursive = argv.some((a) => {
+			if (a === "--recursive") return true;
+			if (a === "-r" || a === "-R") return true;
+			// Split combined short flags like -rfv, -Rf to check for individual r/R
+			if (a.startsWith("-") && !a.startsWith("--") && a.length > 2) {
+				return [...a.slice(1)].some((ch) => ch === "r" || ch === "R");
+			}
+			return false;
+		});
 		if (hasRecursive) {
 			return { level: "HIGH", pattern: "rm -r" };
 		}

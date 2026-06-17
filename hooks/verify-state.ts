@@ -34,7 +34,7 @@ export function markVerifyCalled(content?: string): void {
 			const errors = result?.errors ?? parsed?.errors;
 			const riskLevel = result?.riskLevel ?? parsed?.riskLevel;
 
-			if (verdict === "PASS" || verdict === "WARN") {
+			if (verdict === "PASS") {
 				_lastVerifyPassed = true;
 				return;
 			}
@@ -60,7 +60,7 @@ export function markVerifyCalled(content?: string): void {
 
 		const isFail =
 			/\[FAIL\]\s+NOT\s+READY/i.test(content) ||
-			/risk\s*[:=]\s*['"]?\*{0,2}high\*{0,2}/i.test(content) ||
+			/risk\s*[:=]\s*['"]?\*\*high\*\*/i.test(content) ||
 			/Errors:\s*([1-9]\d*)/.test(content);
 		_lastVerifyPassed = !isFail;
 	} else {

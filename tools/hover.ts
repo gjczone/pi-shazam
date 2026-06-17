@@ -82,9 +82,13 @@ function extractDocstring(filePath: string, symbolLine: number, _kind?: string):
 			if (tsAdapter.hasLanguage(lang)) {
 				const tree = tsAdapter.parse(content, lang);
 				if (tree) {
-					const rootNode = tree.rootNode as unknown as AstNode;
-					const docComment = extractDocstringFromAst(rootNode, symbolLine);
-					if (docComment) return docComment;
+					try {
+						const rootNode = tree.rootNode as unknown as AstNode;
+						const docComment = extractDocstringFromAst(rootNode, symbolLine);
+						if (docComment) return docComment;
+					} finally {
+						(tree as any).delete?.();
+					}
 				}
 			}
 		}

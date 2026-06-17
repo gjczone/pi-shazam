@@ -111,7 +111,7 @@ export function executeOverview(graph: RepoGraph, _projectRoot: string, filter?:
 		lines.push("");
 		lines.push("Supported: " + [...langCounts.entries()].map(([l, c]) => `${l} (${c} files)`).join(", "));
 		lines.push("");
-		lines.push("Note: Only Python, TypeScript, Go, Rust, and JSON are analyzed. Other file types are skipped.");
+		lines.push("Note: Only Python, TypeScript, JavaScript, Go, Rust, and JSON are analyzed. Other file types are skipped.");
 	}
 
 	// Key Dependencies and Recent Changes (only in full overview, not filter mode)
