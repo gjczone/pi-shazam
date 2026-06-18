@@ -1,23 +1,138 @@
+## User System Rules
+
+# Rules
+
+## 1) Prohibitions
+
+- No silent assumptions at critical semantic points.
+- No fabricated tool outputs, test results, logs, or external confirmations.
+- No hardcoding where constants, enums, or shared definitions are appropriate.
+- No blind copy-paste of generated code. Review all generated code, especially queries, auth, file handling, and user input.
+- No skipping verification for features, bugfixes, or behavior changes.
+- No ignoring security on auth, permissions, secrets, file access, execution, or user input paths.
+
+## 2) Basic Norms
+
+- Address the user as `老板`.
+- Default to Simplified Chinese. Use English only for code, commands, technical terms, commit types, and tool names.
+- Treat the user as non-technical unless they clearly ask for engineering detail. Explain in business terms first.
+- Do not dump code unless the user asks for code.
+- Verify important claims with tools. Do not ignore type errors, build errors, failing tests, or command failures.
+- Comments added to code must explain: business purpose, implementation logic, and edge cases; use Chinese and avoid jargon.
+
+## 3) Behavioral Guidelines
+
+### 3.1 Before Acting
+
+- State assumptions explicitly when meaning is unclear.
+- Propose a simpler path when the requested approach is heavier than necessary.
+- When business logic or domain rules are unclear, ask once rather than guess. A wrong assumption costs more than a clarifying question.
+
+### 3.2 Change Discipline
+
+- Do only what the user asked. Prefer the smallest change that solves the request.
+- Fix broken things on sight — build errors, missing dependencies, type errors, broken commands — regardless of whether the current task introduced it. Do not touch anything that is a matter of style or opinion (naming, formatting, architecture preference) unless the task explicitly requires it. Report fixes in the completion report.
+- Match the local style of the touched area.
+- Keep shared business rules, cache keys, and classification logic in one source of truth. When adding state, cache, schema, or persisted fields, update the full lifecycle.
+
+
+### 3.3 Verifiable Execution
+
+- Verify beyond the happy path: boundary cases, repeated runs, and nearby old entry points.
+- Execute autonomously. Do not stop and ask for confirmation between steps — keep going until the task is complete or you hit a blocker.
+- Stop and ask only when: (a) verification fails and you cannot fix it, (b) business meaning or domain rules are unclear, (c) a destructive action has no safety net, or (d) the user explicitly asked to be consulted.
+- Verification failure: stop immediately, report what failed and why, do not self-patch tests or silently work around the failure.
+- If the request is naturally multi-step, list the plan first, then execute all steps autonomously:
+
+```text
+1. [Step] -> verify: [check]
+2. [Step] -> verify: [check]
+```
+
+## 4) Completion Report
+
+Trigger only when the task or milestone is fully completed:
+
+```markdown
+老板您好，已完成 [一句话总结]。
+
+**做了什么**
+- [业务层面]: [通俗说明变更内容和原因]
+
+**结果**
+- [什么变了]: [用户视角描述变更效果]
+- [影响范围]: [受影响的页面/功能/模块]
+
+**已确认**
+- [验证项 1]: [验证方式和结果]
+- [验证项 2]: [验证方式和结果]
+
+**需要你决策**
+- [需人工判断的事项]: [为什么需要你决定]
+
+**待跟进**
+- #N: [简述] → 已建 issue，后续处理
+```
+
+## 5) Tool Invocation — Aggressive & Automatic
+
+Skills and MCP tools provide domain-specific knowledge and workflows. When a relevant skill or MCP tool exists for the task at hand, invoke it without asking — do not default to raw shell commands when a better alternative is available.
+
+## 6) Coding Structure Rules
+
+### 6.1 Function Scope
+
+- A function does ONE thing. If its name needs "and" to describe its purpose, split it.
+- If a function exceeds 80 lines, extract helper functions (`_build_*`, `_compute_*`, `_classify_*`).
+
+### 6.2 File Boundaries
+
+- One file = one business concept. A file named `utils.py` or `helpers.ts` over 200 lines is no longer utilities — split it by domain.
+- When a single file contains 2+ unrelated domains, extract each into its own file under a shared directory.
+- When migrating: grep all callers first, update them, then delete the old file. Do not create pass-through compatibility layers.
+
+### 6.3 Deletion Discipline
+
+- When a component, function, or module is replaced, delete the old one in the same change. No compatibility wrappers.
+- Before deleting, grep for all references. If any remain, update them in the same change.
+- A file that only re-exports another module's symbols is dead weight — inline the imports at call sites and remove the file.
+
+### 6.4 API Calls
+
+- Before writing any `fetch()`, `axios.`, `curl`, or API client code, read `./api.d.ts` if it exists. The endpoint path, HTTP method, request shape, and response shape must match `api.d.ts` exactly.
+- When implementing a new API call, cross-check: does the backend endpoint exist in `api.d.ts`? Does the frontend request shape match the backend's expected input?
+- External library APIs → query `context7` MCP. Your project's own API → read `./api.d.ts`. Know which is which — do not guess either.
+- If the needed endpoint is not in `api.d.ts`, update `api.d.ts` FIRST, then implement both backend and frontend. Never write client code against an undocumented endpoint.
+
+### 6.5 Logging
+
+- Every `except` / `catch` / `match Err` branch must either handle the error (with a log) or propagate it. Empty catch blocks are forbidden.
+- When handling an error, log: what operation failed, the input context, and the original error message.
+
+## 7) Reasoning
+
+Reasoning effort is set to xhigh. Please think carefully through the task, validate key assumptions, consider plausible alternatives, and prioritize correctness, consistency, and clarity in the final answer.
+
+## 8) Toolchain Rules
+
+- Python: ALL operations MUST go through `uv` — installing, running, syncing, building. NEVER invoke `python`, `pip`, `venv`, or `virtualenv` directly. If a command needs Python, wrap it with `uv run`. If dependencies need installing, use `uv sync`. If a virtual environment is needed, `uv` manages it automatically.
+
+<general-project-rules>
+
 # pi-shazam
-
-> **IMPORTANT: LANGUAGE RULE**
->
-> **All source code, code comments, JSDoc, commit messages, PR titles/descriptions,
-> GitHub Issue content, and GitHub Release notes MUST be written in English.**
->
-> No Chinese or any other non-English language in any artifact that goes into the repository.
-> This is a hard requirement for this project.
-
-> **DEVELOPMENT RULE: All development and maintenance of this project MUST follow
-> the conventions, workflows, and contracts defined in [INSTRUCTION.md](./docs/INSTRUCTION.md).
-> This includes Pi extension API contracts, architecture layer boundaries, tool
-> registration patterns, content format contracts, release process, and verification
-> gates. INSTRUCTION.md is the single source of truth for how to build and maintain
-> pi-shazam. Read it before making any change.**
 
 Pi coding agent native codebase awareness extension. "Shazam" — like the superhero whose power comes from multiple deities, pi-shazam unifies the strength of multiple analysis engines (repomap/aider, pi-lens, serena MCP, tree-sitter, LSP) into one coherent interface for the agent.
 
 Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as a native Pi extension in TypeScript. All analysis capabilities register as first-class Pi tools — LLM sees them alongside `read`/`write`/`bash` with no distinction.
+
+## When to Read Companion Files
+
+| File | Directive | Trigger |
+|------|-----------|---------|
+| `docs/INSTRUCTION.md` | You MUST read this file BEFORE making any change. It is the single source of truth for Pi extension API contracts, architecture layer boundaries, tool registration patterns, content format contracts, release process, and verification gates. Do not guess any contract. | Any code change, tool/hook creation, or release |
+| `SKILL.md` | You MUST read this file BEFORE using any `shazam_*` tool. It documents every tool's parameters, behavior, return format, and usage patterns with concrete examples. Do not guess parameter names or output shapes. | Before calling a shazam tool for the first time, or when uncertain about parameters |
+| `README.md` | Reference for user-facing setup, install, and feature descriptions. Do not duplicate its content in AGENTS.md. | User onboarding, release announcements |
+| `CHANGELOG.md` | Reference for release history and version tracking. Update when releasing a new version. | Before creating a release, before investigating regression |
 
 ## Project Snapshot
 
@@ -27,6 +142,7 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 - **Architecture**: 4 layers — `core/` (parsing, graph, ranking), `lsp/` (language server management), `tools/` (Pi tool wrappers), `hooks/` (automatic verification)
 - **External dependency**: Language servers (pyright, tsserver, rust-analyzer, gopls) are user-installed; pi-shazam manages process lifecycle
 - **Release artifact**: npm package with `dist/` compiled output
+- **Risk areas**: LSP process lifecycle edge cases, tree-sitter grammar binary compatibility across platforms, encoding fallback for non-UTF-8 source files
 
 ## Commands
 
@@ -36,6 +152,7 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 | `npm run build`                  | Compile TS → `dist/`                                                                             |
 | `npm run typecheck`              | `tsc --noEmit` — type validation without emit                                                    |
 | `npm run dev`                    | `tsc --watch` — incremental compilation                                                          |
+| `npm test`                       | Run all tests via vitest                                                                         |
 | `npm publish`                    | **DO NOT use directly** — Publishing is done via GitHub Actions (see Release & Publish workflow) |
 
 ## Development Environment
@@ -83,9 +200,9 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 │   ├── baseline.ts         ← In-memory session baseline for diff-aware verify
 │   ├── filter.ts           ← Shared file filtering (source vs config/generated)
 │   ├── output.ts           ← Standardized tool output formatting + Next rules
-│   ├── redact.ts            ← Shared secret redaction for audit logs
-│   ├── formatters.ts        ← Shared formatter/linter detection
-│   ├── audit-log.ts         ← Unified audit log rotation policy
+│   ├── redact.ts           ← Shared secret redaction for audit logs
+│   ├── formatters.ts       ← Shared formatter/linter detection
+│   ├── audit-log.ts        ← Unified audit log rotation policy
 │   └── git-hooks.ts        ← Git pre-commit hook install/remove/verify
 ├── lsp/                    ← Language server process management
 │   ├── manager.ts          ← Server lifecycle (spawn, stdio, health, shutdown)
@@ -271,12 +388,14 @@ Optional detailed body explaining the fix.
 The CI workflow runs on both `push` to `main` and `pull_request` to `main`.
 Do NOT merge until all jobs pass:
 
-| Job         | What It Checks                               |
-| ----------- | -------------------------------------------- |
-| `typecheck` | `npx tsc --noEmit` — zero type errors        |
-| `test`      | `npm test` — all tests pass (ubuntu + macos) |
-| `build`     | `npm run build` — `dist/` output exists      |
-| `security`  | `npm audit --omit=dev` — informational       |
+| Job           | What It Checks                               |
+| ------------- | -------------------------------------------- |
+| `typecheck`   | `npx tsc --noEmit` — zero type errors        |
+| `test`        | `npm test` — all tests pass (ubuntu + macos) |
+| `build`       | `npm run build` — `dist/` output exists      |
+| `integration` | MCP integration smoke test                   |
+| `benchmark`   | Performance benchmark tests                  |
+| `security`    | `npm audit --omit=dev` — informational       |
 
 ### Anti-Patterns
 
@@ -512,8 +631,6 @@ when working on that topic, read the corresponding guide first.
 
 > See [INSTRUCTION.md](./docs/INSTRUCTION.md) sections 1.3 and 3.9 for hook API conventions.
 
-<general-project-rules>
-
 # General Project Rules
 
 ## Coding Rules
@@ -524,7 +641,7 @@ when working on that topic, read the corresponding guide first.
 - LSP degradation: When LSP server is unavailable, fall back to tree-sitter only. Annotate output with "(tree-sitter only, LSP unavailable)". Never throw on missing LSP.
 - Encoding: Always use `core/encoding.ts` adaptive reader (UTF-8 → GBK → GB2312). Never assume UTF-8 for source files.
 - Tool descriptions: Write clear, specific `description` strings for every registered tool — these are what the LLM reads to decide when to call.
-- CI: Invoke `github-workflow` skill before the first code commit. CI must exist on day 1.
+- CI: GitHub Actions runs on push/PR to main. Check CI status before merging. Never skip CI.
 - PRs: One vertical slice per PR — build a complete module (core + tool + typecheck), then merge. No big-bang PRs.
 - TDD: Write the test first for every slice. Watch it fail, implement, verify, commit.
 - AGENTS.md: Update this file whenever a new module, tool, command, or data flow is created.
@@ -550,6 +667,8 @@ when working on that topic, read the corresponding guide first.
 
 ## Project-Specific Rules
 
+- **LANGUAGE RULE**: All source code, code comments, JSDoc, commit messages, PR titles/descriptions, GitHub Issue content, and GitHub Release notes MUST be written in English. No Chinese or any other non-English language in any artifact that goes into the repository. This is a hard requirement for this project.
+- **DEVELOPMENT RULE**: All development and maintenance of this project MUST follow the conventions, workflows, and contracts defined in `docs/INSTRUCTION.md`. This includes Pi extension API contracts, architecture layer boundaries, tool registration patterns, content format contracts, release process, and verification gates. `INSTRUCTION.md` is the single source of truth — read it before making any change.
 - **No emoji or decorative symbols.** Emoji (✅❌🔴🟡🟢🆕⚠️💡 etc.), Unicode decorative characters, and ASCII art are forbidden in all source files, tool output, code comments, and commit messages. The only allowed symbols are standard ASCII punctuation and Markdown formatting characters. This rule applies to all repository artifacts except `AGENTS.md` itself (this file) and `SKILL.md`.
 - **Tool output must be clean.** Tool output text returned to the LLM must be minimal, structured, and free of noise. Specifically:
   - No emoji, no decorative Unicode, no ANSI escape codes
@@ -562,9 +681,7 @@ when working on that topic, read the corresponding guide first.
 - Tool naming: Prefix all tools with `shazam_` to avoid conflicts with other Pi extensions.
 - Symbol IDs: Format as `{file}::{name}::{line}` to match the repomap convention. Keep this stable — other tools depend on it.
 
-</general-project-rules>
-
-## Pre-Commit Checklist
+## Agent Checklist
 
 Before committing or creating a PR, verify ALL of the following:
 
@@ -572,11 +689,11 @@ Before committing or creating a PR, verify ALL of the following:
 - [ ] `npm test` passes — 0 failures, 0 errors, 0 skipped
 - [ ] `npm run build` succeeds with `dist/index.js` and `dist/index.d.ts` present
 - [ ] `shazam_verify` called after all code changes (PASS/WARN verdict, no FAIL)
-- [ ] AGENTS.md updated if new module/tool/command/hook was added
+- [ ] Read `docs/INSTRUCTION.md` if any contract, layer, or convention was changed
+- [ ] AGENTS.md updated if new module/tool/command/hook/data flow was added
 - [ ] MCP tools synced in `mcp/tools.ts` if Pi tools were changed
 - [ ] README.md updated if user-facing features or tool list changed
 - [ ] CHANGELOG.md updated if this is a release commit
-- [ ] `tree-sitter-javascript` grammar loaded if `.js`/`.jsx`/`.mjs`/`.cjs` extensions added to `EXT_TO_LANG`
 - [ ] All code comments, JSDoc, commit messages in English (no Chinese)
-- [ ] `docs/kimi-code-hooks.md` updated if kimi-code shell hooks need to reflect pi-shazam changes
-- [ ] Kimi-code hooks (`~/.A1/ai/.kimi-code/hooks/`) reviewed for stale tool names, missing tools, or broken detection logic after pi-shazam upgrades
+
+</general-project-rules>
