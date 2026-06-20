@@ -133,7 +133,8 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 | `SKILL.md` | You MUST read this file BEFORE using any `shazam_*` tool. It documents every tool's parameters, behavior, return format, and usage patterns with concrete examples. Do not guess parameter names or output shapes. | Before calling a shazam tool for the first time, or when uncertain about parameters |
 | `README.md` | Reference for user-facing setup, install, and feature descriptions. Do not duplicate its content in AGENTS.md. | User onboarding, release announcements |
 | `CHANGELOG.md` | Reference for release history and version tracking. Update when releasing a new version. | Before creating a release, before investigating regression |
-| `LOCAL_CI.md` | You MUST read this file and run EVERY check BEFORE committing code or reporting task completion. A commit that fails any check is a broken commit. | Before every commit, before reporting task completion |
+| `LOCAL_CI.md` | You MUST read this file and run EVERY check BEFORE committing code or reporting task completion. A commit that fails any check is a broken commit. 13 steps: deps, types, format, tests, build, dist, hooks, MCP integration, benchmarks, security, contracts, MCP smoke, Pi smoke. | Before every commit, before reporting task completion |
+| `OPS.md` | Release operations checklist — documentation sync (CHANGELOG, README, AGENTS, SKILL, MCP README), version bump, local CI, GitHub Release, npm/MCP/Pi verification, branch cleanup, git clean state. Run through ALL 17 checklist items when publishing. | Before every release |
 
 ## Project Snapshot
 

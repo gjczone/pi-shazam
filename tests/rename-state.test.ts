@@ -8,11 +8,7 @@
  * - state resets on clearRenameState (session boundary)
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import {
-	recordCallChain,
-	hasCallChainChecked,
-	clearRenameState,
-} from "../hooks/rename-state.js";
+import { recordCallChain, hasCallChainChecked, clearRenameState } from "../hooks/rename-state.js";
 import { scanProject } from "../core/scanner.js";
 import { executeCallChain } from "../tools/call_chain.js";
 import type { RepoGraph } from "../core/graph.js";

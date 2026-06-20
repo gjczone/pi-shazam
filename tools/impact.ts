@@ -146,9 +146,7 @@ export function executeImpact(
 	const affectedSymbols = opts.withSymbols ? bfs.affectedSymbols : [];
 
 	if (opts.compact) {
-		return [...bfs.affectedFiles]
-			.sort()
-			.join("\n");
+		return [...bfs.affectedFiles].sort().join("\n");
 	}
 
 	const lines: string[] = [];

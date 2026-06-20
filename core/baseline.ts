@@ -138,5 +138,3 @@ export function formatBaselineSummary(baseline: SessionBaseline): string {
 	lines.push("");
 	return lines.join("\n");
 }
-
-

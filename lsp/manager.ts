@@ -401,7 +401,11 @@ export class LspManager {
 		return initPromise;
 	}
 
-	private async _initServerForLanguage(language: string, filePath?: string, signal?: AbortSignal): Promise<LspServerInfo | null> {
+	private async _initServerForLanguage(
+		language: string,
+		filePath?: string,
+		signal?: AbortSignal,
+	): Promise<LspServerInfo | null> {
 		try {
 			// Return existing server if already initialized
 			const existing = this.servers.get(language);
@@ -543,9 +547,7 @@ export class LspManager {
 				// a stuck process can still cause indefinite hangs.
 				await Promise.race([
 					info.client.close(),
-					new Promise<void>((_, reject) =>
-						setTimeout(() => reject(new Error("close timed out")), SHUTDOWN_TIMEOUT_MS),
-					),
+					new Promise<void>((_, reject) => setTimeout(() => reject(new Error("close timed out")), SHUTDOWN_TIMEOUT_MS)),
 				]);
 				this.log(`LSP shutdown: ${language}`);
 			} catch (err) {

@@ -141,7 +141,6 @@ export async function readFileAdaptiveAsync(filePath: string): Promise<string> {
 	return buffer.toString("utf-8");
 }
 
-
 // ── Internal helpers ─────────────────────────────────────────────────────────
 
 /**
@@ -235,4 +234,3 @@ function tryDecode(buffer: Buffer, encoding: string): string | null {
 		return null;
 	}
 }
-

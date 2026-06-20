@@ -197,18 +197,18 @@ export function installPreCommitHook(projectRoot: string): string {
 	if (existsSync(join(projectRoot, ".husky"))) {
 		throw new Error(
 			"Husky detected (.husky/ directory). To add shazam as a pre-commit hook with husky:\n" +
-			"  1. Run: npx husky add .husky/pre-commit 'npx shazam-pre-commit-verify'\n" +
-			"  2. Or add 'npx shazam-pre-commit-verify' to your .husky/pre-commit file."
+				"  1. Run: npx husky add .husky/pre-commit 'npx shazam-pre-commit-verify'\n" +
+				"  2. Or add 'npx shazam-pre-commit-verify' to your .husky/pre-commit file.",
 		);
 	}
 	if (existsSync(join(projectRoot, "lefthook.yml")) || existsSync(join(projectRoot, "lefthook.yaml"))) {
 		throw new Error(
 			"Lefthook detected. To add shazam as a pre-commit hook with lefthook:\n" +
-			"  1. Add to your lefthook.yml:\n" +
-			"     pre-commit:\n" +
-			"       commands:\n" +
-			"         shazam-verify:\n" +
-			"           run: npx shazam-pre-commit-verify"
+				"  1. Add to your lefthook.yml:\n" +
+				"     pre-commit:\n" +
+				"       commands:\n" +
+				"         shazam-verify:\n" +
+				"           run: npx shazam-pre-commit-verify",
 		);
 	}
 

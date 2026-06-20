@@ -315,7 +315,11 @@ describe("LspClient initialize()", () => {
 	it("should await in-flight initialize on concurrent calls", async () => {
 		const conn = createMockConnection();
 		let resolveInit: (v: unknown) => void = () => {};
-		conn.sendRequest.mockReturnValue(new Promise((resolve) => { resolveInit = resolve; }));
+		conn.sendRequest.mockReturnValue(
+			new Promise((resolve) => {
+				resolveInit = resolve;
+			}),
+		);
 		const { client } = createStartedClient(conn);
 
 		// Start concurrent initializations

@@ -179,7 +179,13 @@ export function executeFixJson(graph: RepoGraph, projectRoot: string, options: F
 		const resolved = pathResolve(projectRoot, options.file);
 		const rootResolved = pathResolve(projectRoot);
 		if (!resolved.startsWith(rootResolved + "/") && resolved !== rootResolved) {
-			return JSON.stringify({ schema_version: "1.0", command: "fix", project: projectRoot, status: "error", result: { error: "file path escapes project root" } });
+			return JSON.stringify({
+				schema_version: "1.0",
+				command: "fix",
+				project: projectRoot,
+				status: "error",
+				result: { error: "file path escapes project root" },
+			});
 		}
 	}
 

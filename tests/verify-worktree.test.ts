@@ -78,7 +78,9 @@ describe("getGitChangedFiles — worktree awareness (issue #226)", () => {
 				cwd: mainRepo,
 				encoding: "utf-8",
 			});
-		} catch { /* ignore */ }
+		} catch {
+			/* ignore */
+		}
 		rmSync(mainRepo, { recursive: true, force: true });
 		// Also clean up the worktree base directory
 		if (worktreeDir) {

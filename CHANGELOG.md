@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.2] - 2026-06-21
+
+### Other
+
+- **chore(#348): Bump actions/checkout from 6.0.3 to 7.0.0** — Dependabot CI workflow dependency update.
+- **chore: Apply Prettier formatting** — Consistent code style across 22 source files.
+- **docs: Enhance LOCAL_CI.md** — Add format check, hook verification, contract check, MCP smoke test, and Pi integration smoke test steps (13 total).
+- **docs: Add OPS.md** — Release operations checklist with 17 items covering documentation sync, version bump, CI, GitHub Release, post-release verification, and cleanup.
+- **docs: Update AGENTS.md** — Add OPS.md reference and expand LOCAL_CI.md description with step summary.
+
+## [0.13.1] - 2026-06-17
+
+### Bug Fixes
+
+- **fix(#334): LspManager._shuttingDown is a one-way latch** — Reset _shuttingDown in initializeAll() so LSP recovers after shutdown. Add 8s timeout to per-server close() in shutdown() to prevent hung-process leak.
+- **fix(#335): UTF-8 boundary corruption in encoding.ts** — isValidUtf8 now treats truncated multi-byte sequences at 64KB chunk boundary as inconclusive instead of false, preventing misclassification as GBK/GB2312.
+- **fix(#330): MCP shazam_verify runs sync path** — Switch to async verify (executeVerifyTextAsync/executeVerifyJsonAsync), enabling LSP diagnostics for MCP clients.
+- **fix(#331): MCP silently ignores {json:true}** — Add maxTokens and json to all 14 Zod schemas; add topN bounds (min 1, max 50) to codesearch/hotspots.
+- **fix(#336): codesearch hardcodes divergent skipDirs** — Replace local skipDirs sets with canonical SKIP_DIRS from core/filter.ts.
+
+### Refactoring
+
+- **refactor(#337): Extract core/redact.ts** — Shared SECRET_PATTERNS + redact() from mcp/tools.ts and hooks/tool-logger.ts.
+- **refactor(#339): Extract core/formatters.ts** — Shared detectFormatters() from tools/fix.ts and hooks/shazam-guide.ts.
+- **refactor(#340): Extract core/audit-log.ts** — Unified audit-log rotation (10MB size, 5 archived copies, 30-day age).
+- **refactor(#338): Split oversized functions** — Extract helpers in tools/overview.ts (_buildOverviewText), core/scanner.ts (_walkDirectory), lsp/manager.ts (_initServerForLanguage).
+
+### Other
+
+- **fix(#333): Batch cleanup** — Project root fixes, safety regex for combined flags, verify-state WARN handling, tree-sitter memory leak, logging improvements, documentation updates.
+- **fix(#332): Definitions parity test** — Add definitions-parity.test.ts verifying TypeBox↔Zod field parity across all 14 tools.
+- **fix(#341): AbortSignal not wired through** — Thread AbortSignal through initializeAll → getServerForLanguage → client.initialize. Parallelize runLspDiagnostics with Promise.allSettled.
+
 ## [0.13.0] - 2026-06-17
 
 ### Features & Enhancements
@@ -704,26 +737,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Graph-based dependency analysis
 - PageRank-based file importance scoring
 - Incremental scanning with persistent caching
-
-## [0.13.1] - 2026-06-17
-
-### Bug Fixes
-
-- **fix(#334): LspManager._shuttingDown is a one-way latch** — Reset _shuttingDown in initializeAll() so LSP recovers after shutdown. Add 8s timeout to per-server close() in shutdown() to prevent hung-process leak.
-- **fix(#335): UTF-8 boundary corruption in encoding.ts** — isValidUtf8 now treats truncated multi-byte sequences at 64KB chunk boundary as inconclusive instead of false, preventing misclassification as GBK/GB2312.
-- **fix(#330): MCP shazam_verify runs sync path** — Switch to async verify (executeVerifyTextAsync/executeVerifyJsonAsync), enabling LSP diagnostics for MCP clients.
-- **fix(#331): MCP silently ignores {json:true}** — Add maxTokens and json to all 14 Zod schemas; add topN bounds (min 1, max 50) to codesearch/hotspots.
-- **fix(#336): codesearch hardcodes divergent skipDirs** — Replace local skipDirs sets with canonical SKIP_DIRS from core/filter.ts.
-
-### Refactoring
-
-- **refactor(#337): Extract core/redact.ts** — Shared SECRET_PATTERNS + redact() from mcp/tools.ts and hooks/tool-logger.ts.
-- **refactor(#339): Extract core/formatters.ts** — Shared detectFormatters() from tools/fix.ts and hooks/shazam-guide.ts.
-- **refactor(#340): Extract core/audit-log.ts** — Unified audit-log rotation (10MB size, 5 archived copies, 30-day age).
-- **refactor(#338): Split oversized functions** — Extract helpers in tools/overview.ts (_buildOverviewText), core/scanner.ts (_walkDirectory), lsp/manager.ts (_initServerForLanguage).
-
-### Other
-
-- **fix(#333): Batch cleanup** — Project root fixes, safety regex for combined flags, verify-state WARN handling, tree-sitter memory leak, logging improvements, documentation updates.
-- **fix(#332): Definitions parity test** — Add definitions-parity.test.ts verifying TypeBox↔Zod field parity across all 14 tools.
-- **fix(#341): AbortSignal not wired through** — Thread AbortSignal through initializeAll → getServerForLanguage → client.initialize. Parallelize runLspDiagnostics with Promise.allSettled.

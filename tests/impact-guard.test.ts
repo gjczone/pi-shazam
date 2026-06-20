@@ -3,12 +3,7 @@
  * and the pre-edit impact blocking integration.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import {
-	setPendingImpact,
-	clearPendingImpact,
-	hasPendingImpact,
-	resetImpactState,
-} from "../hooks/impact-state.js";
+import { setPendingImpact, clearPendingImpact, hasPendingImpact, resetImpactState } from "../hooks/impact-state.js";
 import { registerIssueGuard } from "../hooks/issue-guard.js";
 import { registerAgentContextGuard } from "../hooks/agent-context-guard.js";
 import type { ExtensionAPI, ToolCallEvent, ToolResultEvent } from "../types/pi-extension.js";
@@ -275,10 +270,7 @@ describe("hooks/agent-context-guard", () => {
 		expect(blockResult).toBeUndefined();
 
 		// Should have sent a warning notification
-		expect(mockCtx.ui.notify).toHaveBeenCalledWith(
-			expect.stringContaining("lacks structural context"),
-			"warning",
-		);
+		expect(mockCtx.ui.notify).toHaveBeenCalledWith(expect.stringContaining("lacks structural context"), "warning");
 	});
 
 	it("should skip short prompts (< 30 words)", () => {

@@ -117,9 +117,7 @@ describe("core/filter findOrphans", () => {
 	});
 
 	it("should still report orphans in files that are NOT imported by anyone (issue #243)", () => {
-		const graph = buildGraph([
-			sym("src/stray.ts::unused::1", "src/stray.ts", "unused", "function", "internal"),
-		]);
+		const graph = buildGraph([sym("src/stray.ts::unused::1", "src/stray.ts", "unused", "function", "internal")]);
 		const result = findOrphans(graph);
 		expect(result.internal).toHaveLength(1);
 		expect(result.internal[0].name).toBe("unused");

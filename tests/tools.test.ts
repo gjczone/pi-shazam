@@ -294,8 +294,6 @@ describe("Tool: verify", () => {
 		const result = executeVerify(getGraph(), ".");
 		expect(result).not.toMatch(/LSP diagnostics.*pyright.*tsc.*rust-analyzer.*gopls/);
 	});
-
-
 });
 
 describe("Tool: fix", () => {

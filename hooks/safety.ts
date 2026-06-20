@@ -44,7 +44,10 @@ const MEDIUM_RISK_PATTERNS: Array<{ regex: RegExp; label: string }> = [
 	{ regex: /\blvcreate\b/, label: "lvcreate" },
 	{ regex: /iptables\s+-F\b/, label: "iptables -F" },
 	{ regex: /iptables\s+-P\b/, label: "iptables -P" },
-	{ regex: /rm\s+(-[a-z]*[rf][a-z]*[rf][a-z]*|-[a-z]*[rf][a-z]*\s+-[a-z]*[rf][a-z]*|--recursive|-r[a-z]*)\s+\//, label: "rm -r /" },
+	{
+		regex: /rm\s+(-[a-z]*[rf][a-z]*[rf][a-z]*|-[a-z]*[rf][a-z]*\s+-[a-z]*[rf][a-z]*|--recursive|-r[a-z]*)\s+\//,
+		label: "rm -r /",
+	},
 ];
 
 /**

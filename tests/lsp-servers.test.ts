@@ -97,7 +97,7 @@ describe("lsp/servers", () => {
 			expect(languageForSuffix(".tsx")).toBe("typescript");
 			expect(languageForSuffix(".go")).toBe("go");
 			expect(languageForSuffix(".rs")).toBe("rust");
-			
+
 			expect(languageForSuffix(".yaml")).toBe("yaml");
 			expect(languageForSuffix(".yml")).toBe("yaml");
 		});

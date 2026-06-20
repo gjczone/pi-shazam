@@ -57,9 +57,7 @@ function generateSyntheticProject(fileCount: number): string {
 		for (let f = 0; f < 3; f++) {
 			const funcName = `func_${i}_${f}`;
 			const callTarget = `func_${(i + f + 1) % fileCount}_0`;
-			exports.push(
-				`export function ${funcName}(x: number): number {\n  return x + ${i + f};\n}`,
-			);
+			exports.push(`export function ${funcName}(x: number): number {\n  return x + ${i + f};\n}`);
 			// Add a class for variety
 			if (f === 0) {
 				exports.push(

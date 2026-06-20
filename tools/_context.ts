@@ -18,7 +18,9 @@ export function setLspManager(mgr: LspManager): void {
 	const prev = _manager;
 	if (prev) {
 		_shutdownPromise = prev.shutdown().catch((err) => {
-			console.warn(`[pi-shazam] Previous LspManager shutdown failed: ${err instanceof Error ? err.message : String(err)}`);
+			console.warn(
+				`[pi-shazam] Previous LspManager shutdown failed: ${err instanceof Error ? err.message : String(err)}`,
+			);
 		});
 	}
 	_manager = mgr;

@@ -193,7 +193,11 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		typeboxParams: Type.Object({
 			topN: Type.Optional(Type.Number({ minimum: 1, maximum: 50 })),
 		}),
-		zodParams: z.object({ topN: z.number().int().min(1).max(50).optional().describe("Max results to return"), maxTokens: z.number().int().positive().optional().describe("Max tokens in output"), json: z.boolean().optional().describe("Return structured JSON output") }),
+		zodParams: z.object({
+			topN: z.number().int().min(1).max(50).optional().describe("Max results to return"),
+			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
+			json: z.boolean().optional().describe("Return structured JSON output"),
+		}),
 	},
 
 	shazam_verify: {

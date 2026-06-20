@@ -136,7 +136,7 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 			].includes(ext)
 		) {
 			const formatters = detectFormatters(projectRoot);
-		const hasPrettier = formatters.includes("prettier");
+			const hasPrettier = formatters.includes("prettier");
 			if (hasPrettier) {
 				await execFileAsync("npx", ["prettier", "--write", absPath], { cwd: projectRoot, timeout: 15000 });
 				ctx.ui.notify(`[auto-format] Formatted ${filePath} with prettier`, "info");

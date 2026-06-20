@@ -89,7 +89,9 @@ export default function (pi: ExtensionAPI): void {
 				// to prevent orphaned processes until session_shutdown (fixes #312).
 				try {
 					await lspManager.shutdown();
-				} catch { /* best effort cleanup */ }
+				} catch {
+					/* best effort cleanup */
+				}
 			}
 			log(`LSP init error: ${err}`);
 		}
@@ -108,11 +110,15 @@ export default function (pi: ExtensionAPI): void {
 		try {
 			const { resetCache } = await import("./core/scanner.js");
 			resetCache();
-		} catch { /* best effort */ }
+		} catch {
+			/* best effort */
+		}
 		try {
 			const { resetLspEnrichState } = await import("./tools/lsp_enrich.js");
 			resetLspEnrichState();
-		} catch { /* best effort */ }
+		} catch {
+			/* best effort */
+		}
 	});
 
 	// Reset rename safety gate state on new session (issue #326)
@@ -223,12 +229,7 @@ export default function (pi: ExtensionAPI): void {
 		description: "Run pre-commit verification (used by git hook)",
 		async handler(_args: string, ctx: ExtensionCommandContext) {
 			const result = runPreCommitVerify(projectRoot);
-			const msg = [
-				"## Pre-Commit Verification",
-				"",
-				`Verdict: ${result.verdict}`,
-				`${result.message}`,
-			].join("\n");
+			const msg = ["## Pre-Commit Verification", "", `Verdict: ${result.verdict}`, `${result.message}`].join("\n");
 			ctx.ui?.setStatus?.("shazam-pre-commit-verify", `Pre-commit verify: ${result.verdict}`);
 			pi.sendMessage({ customType: "shazam-pre-commit-verify", content: msg, display: true });
 		},

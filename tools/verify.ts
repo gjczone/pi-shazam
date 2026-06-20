@@ -788,4 +788,3 @@ export function executeVerifyJson(graph: RepoGraph, projectRoot: string, options
 		},
 	});
 }
-
