@@ -116,7 +116,7 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 		lines.push("Supported: " + [...langCounts.entries()].map(([l, c]) => `${l} (${c} files)`).join(", "));
 		lines.push("");
 		lines.push(
-			"Note: Only Python, TypeScript, JavaScript, Go, Rust, and JSON are analyzed. Other file types are skipped.",
+			"Note: Only Python, TypeScript, JavaScript, Go, Rust, Dart, and JSON are analyzed. Other file types are skipped.",
 		);
 	}
 

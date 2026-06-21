@@ -76,7 +76,9 @@ This script handles:
 - `npm run build` + `npm test`
 - Git commit + annotated tag `vX.Y.Z`
 - Push to `origin main --tags`
-- `gh release create vX.Y.Z` (triggers npm publish via GitHub Actions)
+- Auto-extract current version section from `CHANGELOG.md` for detailed GitHub Release notes
+- `gh release create vX.Y.Z` with CHANGELOG-derived notes (triggers npm publish via GitHub Actions)
+- Auto-delete merged remote temporary branches (cleanup after PR merge)
 - Wait for npm publish
 - Update local Pi extension + global npm install
 
@@ -108,11 +110,19 @@ Plus the manual steps (3, 7, 11, 12, 13) not covered by `npm run ci`.
 
 Every step must pass before proceeding.
 
-## Phase 4: GitHub Release
+## Phase 4: Verify GitHub Release
 
-### 4.1 Update Release Notes
+### 4.1 Verify Release Notes Content
 
-After `gh release create` creates the release, edit it with detailed notes:
+`release.sh` auto-extracts the current version section from `CHANGELOG.md` and uses it as GitHub Release notes (including upgrade instructions and full changelog diff link). Verify the generated notes are complete:
+
+```bash
+gh release view vX.Y.Z
+```
+
+**Pass**: Release notes contain "What's Changed", upgrade instructions, and full changelog link. NOT just "See CHANGELOG for details."
+
+If the notes are incomplete or malformed, fix with:
 
 ```bash
 gh release edit vX.Y.Z --notes "$(cat <<'EOF'
@@ -120,21 +130,13 @@ gh release edit vX.Y.Z --notes "$(cat <<'EOF'
 
 ## What's Changed
 
-### Features & Enhancements
-- ...
-
-### Bug Fixes
-- ...
-
-### Refactoring
-- ...
+<content from CHANGELOG.md>
 
 ## Upgrade
 
-```bash
-npm install -g pi-shazam@latest --legacy-peer-deps
+\`\`\`bash
 pi install npm:pi-shazam@latest
-```
+\`\`\`
 
 **Full Changelog**: https://github.com/gjczone/pi-shazam/compare/vX.Y.Z-1...vX.Y.Z
 EOF
@@ -187,17 +189,19 @@ printf '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion
 
 ## Phase 6: Cleanup
 
-### 6.1 Delete Temporary Branches
+### 6.1 Verify Temporary Branch Cleanup
+
+`release.sh` auto-deletes merged remote branches (Step 8.5). Verify:
 
 ```bash
-# List all merged remote branches (excluding main)
-git branch -r --merged origin/main | grep -v "origin/main\|origin/HEAD"
-
-# Delete each merged branch
-# git push origin --delete <branch-name>
+git branch -r | grep -v "origin/main\|origin/HEAD"
 ```
 
-**Pass**: no temporary branches remaining.
+**Pass**: no temporary branches remaining. If any remain, delete manually:
+
+```bash
+git push origin --delete <branch-name>
+```
 
 ### 6.2 Git Clean State
 
@@ -220,12 +224,12 @@ git branch
 [ ] 7.  release.sh executed successfully
 [ ] 8.  Version consistent across 4 surfaces
 [ ] 9.  Local CI (all 13 steps) passed
-[ ] 10. GitHub Release notes updated with detailed changelog
+[ ] 10. GitHub Release notes verified (auto-generated from CHANGELOG)
 [ ] 11. CHANGELOG.md committed and pushed
 [ ] 12. npm registry shows correct version
 [ ] 13. Global npm install verified
 [ ] 14. Pi extension updated and smoke-tested
 [ ] 15. MCP server smoke-tested
-[ ] 16. Temporary branches deleted
+[ ] 16. Temporary branches cleaned up (auto-deleted by release.sh, verified)
 [ ] 17. Git clean state confirmed
 ```

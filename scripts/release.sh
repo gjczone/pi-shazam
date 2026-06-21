@@ -95,16 +95,61 @@ git tag -a "v$NEW_VERSION" -m "Version $NEW_VERSION"
 log "Step 7: Pushing to GitHub..."
 git push origin main --tags
 
-# Step 8: Create GitHub Release (triggers npm publish)
+# Step 8: Create GitHub Release with detailed notes from CHANGELOG
 log "Step 8: Creating GitHub Release..."
+
+# Extract current version section from CHANGELOG.md for release notes
+CHANGELOG_SECTION=$(awk -v ver="$NEW_VERSION" '
+  /^## \[/ { if (found) exit; if ($0 ~ ver) { found=1; next } }
+  found { print }
+' CHANGELOG.md 2>/dev/null)
+
+# Get previous version for diff link
+PREV_VERSION=$(grep -oP '\[\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | sed -n '2p')
+DIFF_LINK=""
+if [[ -n "$PREV_VERSION" ]]; then
+    DIFF_LINK="**Full Changelog**: https://github.com/gjczone/pi-shazam/compare/v${PREV_VERSION}...v${NEW_VERSION}"
+fi
+
+# Build release notes
+RELEASE_NOTES="# v$NEW_VERSION
+
+## What's Changed
+
+${CHANGELOG_SECTION}
+
+## Upgrade
+
+\`\`\`bash
+pi install npm:pi-shazam@latest
+\`\`\`
+
+Or for MCP clients:
+\`\`\`json
+{ \"mcpServers\": { \"pi-shazam\": { \"command\": \"npx\", \"args\": [\"-y\", \"-p\", \"pi-shazam@${NEW_VERSION}\", \"pi-shazam-mcp\"] } } }
+\`\`\`
+
+${DIFF_LINK}"
+
 gh release create "v$NEW_VERSION" \
     --title "v$NEW_VERSION" \
-    --notes "Release v$NEW_VERSION
-
-See CHANGELOG for details." \
+    --notes "$RELEASE_NOTES" \
     --verify-tag
 
-log "GitHub Release created. npm publish will be triggered automatically."
+log "GitHub Release created with CHANGELOG content. npm publish will be triggered automatically."
+
+# Step 8.5: Clean up merged remote branches
+log "Step 8.5: Cleaning up merged remote branches..."
+MERGED_BRANCHES=$(git branch -r --merged origin/main | grep -v "origin/main\|origin/HEAD" | sed 's/  origin\///')
+if [[ -n "$MERGED_BRANCHES" ]]; then
+    for BRANCH in $MERGED_BRANCHES; do
+        log "  Deleting merged remote branch: $BRANCH"
+        git push origin --delete "$BRANCH" 2>/dev/null || warn "Failed to delete $BRANCH"
+    done
+    log "  Remote branches cleaned up."
+else
+    log "  No merged remote branches to clean up."
+fi
 
 # Step 9: Wait for npm publish
 log "Step 9: Waiting for npm publish (watching GitHub Actions)..."
