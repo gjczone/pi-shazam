@@ -26,6 +26,7 @@ import { executeOverview } from "../tools/overview.js";
 import { hasTestFiles, hasHierarchyKinds } from "../core/output.js";
 import { createBaseline, getBaseline, formatBaselineSummary } from "../core/baseline.js";
 import { safeGitExec, isProjectDir } from "../core/git-utils.js";
+import { getParserStatus } from "../core/treesitter.js";
 import { readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { SKIP_DIRS } from "../core/filter.js";
@@ -163,6 +164,26 @@ function buildSessionBaselineSection(_projectRoot: string, graph: RepoGraph): st
 }
 
 /**
+ * 构建 parser 可用性警告段落，注入 system prompt。
+ * 当某些语言的 tree-sitter parser 加载失败时，向 LLM 明确报告，
+ * 避免"静默失败"——工具返回空结果但 LLM 不知道原因。
+ */
+function buildParserWarningSection(): string {
+	const status = getParserStatus();
+	const unavailable = [...status.entries()].filter(([, v]) => v.status === "unavailable");
+	if (unavailable.length === 0) return "";
+
+	const lines: string[] = [];
+	lines.push("[pi-shazam] Language Parser Status:");
+	for (const [lang, info] of unavailable) {
+		const suggestion = info.suggestion ? ` ${info.suggestion}` : "";
+		lines.push(`- ${lang}: tree-sitter parser unavailable.${suggestion}`);
+	}
+	lines.push("For these languages, use `shazam_hover` and `shazam_verify` (LSP-based tools) instead of graph-based tools (call_chain, impact, hotspots).");
+	return lines.join("\n");
+}
+
+/**
  * Track whether we've already shown the overview in this session.
  * For continuation sessions, we skip the full overview to save tokens.
  */
@@ -209,7 +230,13 @@ export function generateOverviewForPrompt(projectRoot: string, isContinuation = 
 	const overview = executeOverview(graph, projectRoot);
 	const recommendations = buildProactiveRecommendations(projectRoot, graph);
 	const baselineSection = buildSessionBaselineSection(projectRoot, graph);
-	const parts = [`[pi-shazam] Project Overview:\n${overview}`, recommendations, baselineSection].filter(Boolean);
+	const parserWarning = buildParserWarningSection();
+	const parts = [
+		`[pi-shazam] Project Overview:\n${overview}`,
+		recommendations,
+		baselineSection,
+		parserWarning,
+	].filter(Boolean);
 
 	_hasShownOverview = true;
 	return parts.join("\n\n");

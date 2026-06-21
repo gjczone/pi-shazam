@@ -78,7 +78,32 @@ export const EXT_TO_LANG: Record<string, string> = {
 	".json": "json",
 };
 
-// ── Main adapter class ───────────────────────────────────────────────────────
+// ── Parser availability tracking ────────────────────────────────────────────
+// 模块级状态记录，追踪每个语言的 parser 加载结果。
+// 让 overview 和 before-start hook 能向 LLM 报告哪些语言不可用，
+// 避免"静默失败"——工具返回空结果但 LLM 不知道原因。
+
+export interface ParserStatusInfo {
+	status: "loaded" | "unavailable";
+	reason?: string;
+	suggestion?: string;
+}
+
+const _parserStatus = new Map<string, ParserStatusInfo>();
+
+/**
+ * 获取所有注册语言的 parser 加载状态。
+ * overview 和 before-start hook 用此函数向 LLM 报告语言可用性。
+ */
+export function getParserStatus(): Map<string, ParserStatusInfo> {
+	// 确保所有 EXT_TO_LANG 语言都有记录（即使 adapter 未构造）
+	for (const lang of Object.values(EXT_TO_LANG)) {
+		if (!_parserStatus.has(lang)) {
+			_parserStatus.set(lang, { status: "unavailable", reason: "Parser not yet initialized" });
+		}
+	}
+	return new Map(_parserStatus);
+}
 
 export class TreeSitterAdapter {
 	private parsers = new Map<string, ParserInstance>();
@@ -119,8 +144,15 @@ export class TreeSitterAdapter {
 			const parser = new Parser();
 			parser.setLanguage(grammar);
 			this.parsers.set(lang, parser);
+			_parserStatus.set(lang, { status: "loaded" });
 			this.log(`Parser loaded: ${lang}`);
 		} catch (e) {
+			const reason = e instanceof Error ? e.message : String(e);
+			_parserStatus.set(lang, {
+				status: "unavailable",
+				reason,
+				suggestion: `LSP support still works (hover, verify, fix). Tree-sitter parsing unavailable — upgrade tree-sitter to enable.`,
+			});
 			this.log(`Parser unavailable [${lang}]: ${e}`);
 		}
 	}
@@ -133,6 +165,7 @@ export class TreeSitterAdapter {
 			const tsParser = new Parser();
 			tsParser.setLanguage(tsGrammar);
 			this.parsers.set("typescript", tsParser);
+			_parserStatus.set("typescript", { status: "loaded" });
 			this.log("Parser loaded: typescript (dedicated)");
 
 			try {
@@ -140,8 +173,10 @@ export class TreeSitterAdapter {
 				const tsxParser = new Parser();
 				tsxParser.setLanguage(tsxGrammar);
 				this.parsers.set("tsx", tsxParser);
+				_parserStatus.set("tsx", { status: "loaded" });
 				this.log("Parser loaded: tsx (dedicated)");
 			} catch {
+				_parserStatus.set("tsx", { status: "unavailable", reason: "TSX grammar load failed", suggestion: "Falls back to TypeScript parser." });
 				this.log("TSX parser unavailable");
 			}
 		} catch {
@@ -149,7 +184,12 @@ export class TreeSitterAdapter {
 			const jsParser = this.parsers.get("javascript");
 			if (jsParser) {
 				this.parsers.set("typescript", jsParser);
+				_parserStatus.set("typescript", { status: "loaded", reason: "Fell back to JavaScript parser" });
+				_parserStatus.set("tsx", { status: "loaded", reason: "Fell back to JavaScript parser" });
 				this.log("TypeScript parser unavailable, falling back to JavaScript parser");
+			} else {
+				_parserStatus.set("typescript", { status: "unavailable", reason: "TypeScript and JavaScript parsers both failed" });
+				_parserStatus.set("tsx", { status: "unavailable", reason: "TypeScript and JavaScript parsers both failed" });
 			}
 		}
 	}

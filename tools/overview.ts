@@ -10,7 +10,7 @@ import { isNonSourceFile } from "../core/filter.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool } from "./_factory.js";
 import { buildEnvelope } from "./_factory.js";
-import { EXT_TO_LANG } from "../core/treesitter.js";
+import { EXT_TO_LANG, getParserStatus } from "../core/treesitter.js";
 import { existsSync, readFileSync } from "node:fs";
 import { safeGitExec } from "../core/git-utils.js";
 import { join } from "node:path";
@@ -118,6 +118,24 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 		lines.push(
 			"Note: Only Python, TypeScript, JavaScript, Go, Rust, Dart, and JSON are analyzed. Other file types are skipped.",
 		);
+
+		// Parser 可用性警告（follow-up to #349）：
+		// 当某些语言的 tree-sitter parser 加载失败时，向 LLM 明确报告，
+		// 避免工具返回空结果时 LLM 不知道原因。
+		const parserStatus = getParserStatus();
+		const unavailable = [...parserStatus.entries()].filter(([, v]) => v.status === "unavailable");
+		if (unavailable.length > 0) {
+			lines.push("");
+			lines.push("### Parser Availability Warning");
+			lines.push("");
+			for (const [lang, info] of unavailable) {
+				const reason = info.reason ? ` (${info.reason})` : "";
+				const suggestion = info.suggestion ? ` Suggestion: ${info.suggestion}` : "";
+				lines.push(`- **${lang}**: tree-sitter parser unavailable${reason}.${suggestion}`);
+			}
+			lines.push("");
+			lines.push("Files in these languages will have 0 symbols in the graph. Use `shazam_hover` and `shazam_verify` (LSP-based) for these files instead.");
+		}
 	}
 
 	// Key Dependencies and Recent Changes (only in full overview, not filter mode)
