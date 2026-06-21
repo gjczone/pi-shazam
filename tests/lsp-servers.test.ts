@@ -3,11 +3,11 @@ import { LSP_SERVER_SPECS, suffixToLanguage, languageForSuffix } from "../lsp/se
 
 describe("lsp/servers", () => {
 	describe("LSP_SERVER_SPECS", () => {
-		it("should contain exactly 6 language entries", () => {
+		it("should contain exactly 7 language entries", () => {
 			const languages = new Set(LSP_SERVER_SPECS.map((s) => s.language));
-			// 6 languages: python, typescript, go, yaml, json, rust
-			// python has 2 specs (pyright + pylsp), so specs count >= 7
-			expect(languages.size).toBe(6);
+			// 7 languages: python, typescript, go, yaml, json, rust, dart
+			// python has 2 specs (pyright + pylsp), so specs count >= 8
+			expect(languages.size).toBe(7);
 		});
 
 		it("should have python specs (pyright + pylsp)", () => {
@@ -57,6 +57,16 @@ describe("lsp/servers", () => {
 			expect(yaml).toBeDefined();
 			expect(yaml!.fileSuffixes).toContain(".yaml");
 			expect(yaml!.fileSuffixes).toContain(".yml");
+		});
+
+		it("should have dart spec", () => {
+			const dart = LSP_SERVER_SPECS.find((s) => s.language === "dart");
+			expect(dart).toBeDefined();
+			expect(dart!.serverName).toBe("dart-language-server");
+			expect(dart!.commandNames).toContain("dart");
+			expect(dart!.args).toContain("language-server");
+			expect(dart!.fileSuffixes).toContain(".dart");
+			expect(dart!.rootMarkers).toContain("pubspec.yaml");
 		});
 
 		it("should NOT have specs for removed languages", () => {

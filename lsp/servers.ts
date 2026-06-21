@@ -97,6 +97,16 @@ export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
 		fileSuffixes: [".rs"] as const,
 		rootMarkers: ["Cargo.toml"] as const,
 	},
+
+	// ── Dart (Flutter) ──────────────────────────────────────────────────────────────
+	{
+		language: "dart",
+		serverName: "dart-language-server",
+		commandNames: ["dart"] as const,
+		args: ["language-server"] as const,
+		fileSuffixes: [".dart"] as const,
+		rootMarkers: ["pubspec.yaml", "analysis_options.yaml"] as const,
+	},
 ];
 
 // ── Suffix → language mapping ────────────────────────────────────────────────
@@ -149,6 +159,7 @@ const LSP_TIMEOUT_BY_LANGUAGE: Record<string, number> = {
 	go: 8_000,
 	yaml: 8_000,
 	json: 8_000,
+	dart: 12_000,
 };
 
 export const DEFAULT_LSP_TIMEOUT_MS = 8_000;

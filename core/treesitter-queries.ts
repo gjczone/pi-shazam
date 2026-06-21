@@ -211,6 +211,32 @@ export const QUERIES: QueryDict = {
 	html: {},
 	css: {},
 	json: {},
+	// Dart queries — based on tree-sitter-dart grammar node types.
+	// NOTE: tree-sitter-dart grammar currently requires tree-sitter >=0.24.
+	// With tree-sitter 0.22.4, parser loading fails gracefully (try-catch in
+	// _loadGrammar). These queries become active when tree-sitter is upgraded.
+	dart: {
+		function: `\
+(function_signature name: (identifier) @name) @definition.function
+(method_signature name: (identifier) @name) @definition.method
+(getter_signature name: (identifier) @name) @definition.method
+(setter_signature name: (identifier) @name) @definition.method
+(constructor_signature name: (identifier) @name) @definition.method
+`,
+		class: `\
+(class_definition name: (identifier) @name) @definition.class
+(mixin_declaration name: (identifier) @name) @definition.class
+(enum_declaration name: (identifier) @name) @definition.class
+(extension_declaration name: (identifier) @name) @definition.class
+`,
+		import: `\
+(import_specification (uri) @source)
+`,
+		call: `\
+(method_invocation name: (identifier) @name) @reference.call
+(method_invocation name: (unconditional_assignable_selector (identifier) @name)) @reference.call
+`,
+	},
 };
 
 // TSX uses the same queries as typescript

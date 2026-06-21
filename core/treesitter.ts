@@ -74,6 +74,7 @@ export const EXT_TO_LANG: Record<string, string> = {
 	".cjs": "javascript",
 	".go": "go",
 	".rs": "rust",
+	".dart": "dart",
 	".json": "json",
 };
 
@@ -97,6 +98,7 @@ export class TreeSitterAdapter {
 			["javascript", "tree-sitter-javascript"],
 			["go", "tree-sitter-go", "go"],
 			["rust", "tree-sitter-rust", "rust"],
+			["dart", "@sengac/tree-sitter-dart"],
 			["json", "tree-sitter-json", "json"],
 		];
 
