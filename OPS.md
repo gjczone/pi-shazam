@@ -212,6 +212,37 @@ git branch
 
 **Pass**: on `main` branch, working directory clean, only `main` local branch.
 
+## Phase 7: Self-Improvement Retrospective
+
+After every release, review the OPS process itself and ALL companion .md files for staleness. OPS.md is a living document — if you had to do something not documented here, add it.
+
+### 7.1 Companion File Audit
+
+Review EVERY companion .md file. For each one, ask: "Did this release change anything that this file documents?"
+
+| File | Check |
+|------|-------|
+| `CHANGELOG.md` | New version section exists and is complete |
+| `README.md` | Tool tables, language count, install commands, feature descriptions match current code |
+| `AGENTS.md` | Architecture tree, tool/hook/command tables, language count, version number |
+| `SKILL.md` | Tool docs, parameter descriptions, usage examples |
+| `mcp/README.md` | MCP tool table, client setup examples |
+| `docs/INSTRUCTION.md` | API contracts, version number, architecture boundaries |
+| `LOCAL_CI.md` | All CI steps still valid (new test files? new checks needed?) |
+| `OPS.md` | This file — were any steps missing, wrong order, or need new Pass criteria? |
+| `DESIGN.md` | (if exists) Design tokens, component styles |
+| `api.d.ts` | (if exists) All API endpoints match current implementation |
+
+### 7.2 Process Retrospective
+
+- [ ] Were there any manual steps during this release NOT documented in OPS.md? → **Add them now.**
+- [ ] Did any companion file go stale and only get caught late? → **Add a check to Phase 1.0.**
+- [ ] Did any Pass criteria fail to catch a real problem? → **Strengthen the criteria.**
+- [ ] Did any automation (release.sh, CI) miss something? → **Fix the automation.**
+- [ ] Were there any "I forgot to do X" moments? → **Add a checklist item.**
+
+**Rule**: If you fixed something during this release that OPS.md didn't cover, commit the OPS.md update in the same release. Do not defer — the next person will make the same mistake.
+
 ## Release Checklist (Summary)
 
 ```
@@ -232,4 +263,6 @@ git branch
 [ ] 15. MCP server smoke-tested
 [ ] 16. Temporary branches cleaned up (auto-deleted by release.sh, verified)
 [ ] 17. Git clean state confirmed
+[ ] 18. Self-improvement retrospective completed (Phase 7)
+[ ] 19. All companion .md files audited for staleness
 ```
