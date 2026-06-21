@@ -25,7 +25,7 @@ import { scanProject } from "../core/scanner.js";
 import { executeOverview } from "../tools/overview.js";
 import { hasTestFiles, hasHierarchyKinds } from "../core/output.js";
 import { createBaseline, getBaseline, formatBaselineSummary } from "../core/baseline.js";
-import { execFileSync } from "node:child_process";
+import { safeGitExec, isProjectDir } from "../core/git-utils.js";
 import { readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { SKIP_DIRS } from "../core/filter.js";
@@ -76,35 +76,14 @@ function countSourceFilesUpTo(root: string, limit: number): number {
 }
 
 /**
- * Get the number of uncommitted changes in the working tree.
+ * 统计未提交的变更文件数（issue #350：使用 safeGitExec 抑制 stderr）。
  */
 function getUncommittedChangeCount(projectRoot: string): number {
-	try {
-		let output = "";
-		try {
-			output += execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMR"], {
-				cwd: projectRoot,
-				encoding: "utf-8",
-				timeout: 3000,
-			});
-		} catch {
-			/* no unstaged */
-		}
-		try {
-			output += execFileSync("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMR"], {
-				cwd: projectRoot,
-				encoding: "utf-8",
-				timeout: 3000,
-			});
-		} catch {
-			/* no staged */
-		}
-		output = output.trim();
-		if (!output) return 0;
-		return new Set(output.split("\n").filter(Boolean)).size;
-	} catch {
-		return 0;
-	}
+	const unstaged = safeGitExec(["diff", "--name-only", "--diff-filter=ACMR"], projectRoot, 3000);
+	const staged = safeGitExec(["diff", "--cached", "--name-only", "--diff-filter=ACMR"], projectRoot, 3000);
+	const combined = [unstaged, staged].filter(Boolean).join("\n").trim();
+	if (!combined) return 0;
+	return new Set(combined.split("\n").filter(Boolean)).size;
 }
 
 /**
@@ -166,17 +145,10 @@ function buildProactiveRecommendations(projectRoot: string, graph: RepoGraph): s
 function buildSessionBaselineSection(_projectRoot: string, graph: RepoGraph): string {
 	let branch = "unknown";
 	let commit = "unknown";
-	try {
-		branch =
-			execFileSync("git", ["branch", "--show-current"], { encoding: "utf-8", timeout: 3000 }).trim() || "unknown";
-	} catch {
-		/* git not available or not a repo */
-	}
-	try {
-		commit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf-8", timeout: 3000 }).trim() || "unknown";
-	} catch {
-		/* git not available or not a repo */
-	}
+	const branchOutput = safeGitExec(["branch", "--show-current"], _projectRoot, 3000);
+	if (branchOutput) branch = branchOutput;
+	const commitOutput = safeGitExec(["rev-parse", "HEAD"], _projectRoot, 3000);
+	if (commitOutput) commit = commitOutput;
 
 	try {
 		// createBaseline immediately reassigns _baseline and _previousOrphans,
@@ -207,6 +179,17 @@ export function generateOverviewForPrompt(projectRoot: string, isContinuation = 
 	// For continuation sessions, skip the full overview (fixes #117, #118)
 	if (isContinuation && _hasShownOverview) {
 		return "[pi-shazam] Session continuation — use shazam_overview for project structure.";
+	}
+
+	// 非项目目录快速短路（issue #350）：
+	// 若目录既不是 git 仓库，也没有任何项目标记文件（package.json 等），
+	// 跳过 scanProject，避免在 /tmp 等大型临时目录下同步阻塞。
+	if (!isProjectDir(projectRoot)) {
+		_hasShownOverview = true;
+		return [
+			"[pi-shazam] This directory does not appear to be a project (no git repo, no project files).",
+			"Run `shazam_overview` manually if you want to scan it.",
+		].join("\n");
 	}
 
 	// Pre-check: skip synchronous scanProject on very large projects to

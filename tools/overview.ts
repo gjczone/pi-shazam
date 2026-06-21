@@ -12,7 +12,7 @@ import { createTool } from "./_factory.js";
 import { buildEnvelope } from "./_factory.js";
 import { EXT_TO_LANG } from "../core/treesitter.js";
 import { existsSync, readFileSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { safeGitExec } from "../core/git-utils.js";
 import { join } from "node:path";
 
 // ── Route detection (absorbed from tools/routes.ts) ──────────────────────
@@ -558,25 +558,16 @@ function buildGoDepsSection(projectRoot: string): string | null {
  * Returns null when git is not available or the command fails.
  */
 export function buildRecentChangesSection(projectRoot: string): string | null {
-	try {
-		const stdout = execSync("git log --oneline -10", {
-			cwd: projectRoot,
-			timeout: 5000,
-			encoding: "utf-8",
-		}).trim();
+	const stdout = safeGitExec(["log", "--oneline", "-10"], projectRoot, 5000);
+	if (!stdout) return null;
 
-		if (!stdout) return null;
-
-		const commits = stdout.split("\n").filter(Boolean);
-		const lines: string[] = [];
-		lines.push("### Recent Changes");
-		lines.push("");
-		for (const c of commits) {
-			lines.push(`- ${c}`);
-		}
-
-		return lines.join("\n");
-	} catch {
-		return null;
+	const commits = stdout.split("\n").filter(Boolean);
+	const lines: string[] = [];
+	lines.push("### Recent Changes");
+	lines.push("");
+	for (const c of commits) {
+		lines.push(`- ${c}`);
 	}
+
+	return lines.join("\n");
 }

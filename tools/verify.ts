@@ -18,7 +18,8 @@ import type { RepoGraph } from "../core/graph.js";
 import { getGraphEdgeCount } from "../core/graph.js";
 import { diffFromBaseline } from "../core/baseline.js";
 import { isNonSourceFile, findOrphans } from "../core/filter.js";
-import { execSync, execFile } from "node:child_process";
+import { execFile } from "node:child_process";
+import { safeGitExec } from "../core/git-utils.js";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -597,29 +598,17 @@ interface RiskResult {
  * Falls back to `cwd` when the path is not inside a git repository.
  */
 export function resolveGitWorkdir(cwd: string): string {
-	try {
-		return execSync("git rev-parse --show-toplevel", {
-			cwd,
-			encoding: "utf-8",
-			timeout: 5000,
-		}).trim();
-	} catch {
-		return cwd;
-	}
+	const result = safeGitExec(["rev-parse", "--show-toplevel"], cwd, 5000);
+	return result || cwd;
 }
 
 function getGitChangedFiles(projectRoot: string): string[] {
-	try {
-		const gitDir = resolveGitWorkdir(projectRoot);
-		const output = execSync(
-			"git diff --name-only --diff-filter=ACMR 2>/dev/null; git diff --cached --name-only --diff-filter=ACMR 2>/dev/null",
-			{ cwd: gitDir, encoding: "utf-8", timeout: 5000 },
-		).trim();
-		if (!output) return [];
-		return [...new Set(output.split("\n").filter(Boolean))];
-	} catch {
-		return [];
-	}
+	const gitDir = resolveGitWorkdir(projectRoot);
+	const unstaged = safeGitExec(["diff", "--name-only", "--diff-filter=ACMR"], gitDir, 5000);
+	const staged = safeGitExec(["diff", "--cached", "--name-only", "--diff-filter=ACMR"], gitDir, 5000);
+	const combined = [unstaged, staged].filter(Boolean).join("\n").trim();
+	if (!combined) return [];
+	return [...new Set(combined.split("\n").filter(Boolean))];
 }
 
 function assessRisk(
