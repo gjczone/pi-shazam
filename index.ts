@@ -41,7 +41,7 @@ import { registerSafeDelete } from "./tools/safe_delete.js";
 export default function (pi: ExtensionAPI): void {
 	let projectRoot = process.cwd();
 	const log = (msg: string) => {
-		if (pi.logger?.info) pi.logger.info(`[pi-shazam] ${msg}`);
+		pi.logger?.info?.(`[pi-shazam] ${msg}`);
 	};
 
 	// ── LSP manager ─────────────────────────────────────────────────────────

@@ -48,6 +48,7 @@ interface FileCacheEntry {
 	symbols: Symbol[];
 	imports: [string, number][];
 	calls: [string, number, string][];
+	refs: [string, number][];
 	jsImportBindings: import("./graph.js").JSImportBinding[];
 }
 
@@ -323,9 +324,10 @@ function parseFile(adapter: TreeSitterAdapter, root: string, relPath: string, mt
 			}
 			const imports = adapter.extractImports(tree, lang);
 			const calls = adapter.extractCalls(tree, lang);
+			const refs = adapter.extractRefs(tree, lang);
 			const jsImportBindings = adapter.extractJsTsImportBindings(tree, lang);
 
-			return { mtime, symbols, imports, calls, jsImportBindings };
+			return { mtime, symbols, imports, calls, refs, jsImportBindings };
 		} finally {
 			(tree as unknown as { delete?: () => void }).delete?.();
 		}
@@ -375,6 +377,21 @@ function buildEdgesForFile(graph: RepoGraph, root: string, relPath: string, entr
 				for (const callee of calleeSyms) {
 					if (caller.id !== callee.id) {
 						addEdge(graph, createEdge(caller.id, callee.id, 1.0, "call", 0.9));
+					}
+				}
+			}
+		}
+	}
+
+	// Ref edges — 同一文件内的标识符引用（回调/事件处理器等）
+	if (entry.refs.length > 0) {
+		for (const [refName, refLine] of entry.refs) {
+			const callerSyms = findCallerSymbols(thisFileSymIds, graph.symbols, refLine);
+			const calleeSym = findSymbolByNameInFile(refName, relPath, graph);
+			if (calleeSym) {
+				for (const caller of callerSyms) {
+					if (caller.id !== calleeSym.id) {
+						addEdge(graph, createEdge(caller.id, calleeSym.id, 0.5, "ref", 0.9));
 					}
 				}
 			}
@@ -532,9 +549,10 @@ function reconstructFileCache(graph: RepoGraph, fileMtimes: Map<string, number>)
 		const imports: [string, number][] = importModules.map((m) => [m, 0]);
 
 		const calls = graph.fileCalls.get(relPath) || [];
+		const refs: [string, number][] = [];
 		const jsImportBindings = graph.fileImportBindings.get(relPath) || [];
 
-		entries.set(relPath, { mtime, symbols, imports, calls, jsImportBindings });
+		entries.set(relPath, { mtime, symbols, imports, calls, refs, jsImportBindings });
 	}
 
 	return entries;
