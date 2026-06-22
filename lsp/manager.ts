@@ -214,6 +214,8 @@ const SAFE_PATH_DIRS = new Set([
 	"/usr/local/sbin",
 	"/usr/sbin",
 	"/sbin",
+	"/opt/homebrew/bin",
+	"/snap/bin",
 ]);
 
 function findInPath(command: string): string | null {

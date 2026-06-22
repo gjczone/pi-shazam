@@ -822,9 +822,10 @@ export class LspClient {
 		const cts = new rpc.CancellationTokenSource();
 		try {
 			const promise = this.connection.sendRequest<R>(method, params, cts.token);
-			return this.withTimeout(promise, timeoutMs, () => cts.cancel());
-		} finally {
+			return this.withTimeout(promise, timeoutMs, () => cts.cancel()).finally(() => cts.dispose());
+		} catch (e) {
 			cts.dispose();
+			throw e;
 		}
 	}
 
