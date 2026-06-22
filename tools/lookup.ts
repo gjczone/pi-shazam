@@ -397,7 +397,7 @@ function _extractDocstring(filePath: string, symbolLine: number): string | undef
 						const docComment = _extractDocstringFromAst(rootNode, symbolLine);
 						if (docComment) return docComment;
 					} finally {
-						(tree as any).delete?.();
+						tree.delete?.();
 					}
 				}
 			}

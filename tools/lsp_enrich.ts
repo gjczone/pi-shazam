@@ -16,6 +16,7 @@ import { uriToPath } from "../lsp/client.js";
 import { readFileAdaptiveAsync } from "../core/encoding.js";
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
+import { createRequire } from "node:module";
 import type {
 	SymbolInformation,
 	WorkspaceSymbol,
@@ -27,6 +28,18 @@ import type {
 	CodeLens,
 } from "vscode-languageserver-protocol";
 import type { Command } from "vscode-languageserver-protocol";
+
+const _require = createRequire(import.meta.url);
+const _ctsCtor = (
+	_require("vscode-jsonrpc/node") as {
+		CancellationTokenSource: new () => {
+			token: import("vscode-jsonrpc").CancellationToken;
+			cancel(): void;
+			dispose(): void;
+		};
+	}
+).CancellationTokenSource;
+type CtsInstance = InstanceType<typeof _ctsCtor>;
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -65,6 +78,7 @@ export interface LspEnrichContext {
 		client: LspClient;
 		workspaceRoot: string;
 	}[];
+	trackOpenedFile(language: string, filePath: string): void;
 }
 
 export interface EnrichedSymbolHit {
@@ -89,9 +103,12 @@ export interface EnrichedSymbolHit {
 function withEnrichTimeout<T>(
 	promise: Promise<T | null | undefined>,
 	ms: number = DEFAULT_LSP_ENRICH_TIMEOUT_MS,
+	cts?: CtsInstance | undefined,
 ): Promise<T | null> {
 	return new Promise<T | null>((resolve) => {
 		const timer = setTimeout(() => {
+			// Cancel the underlying LSP request to free server resources
+			cts?.cancel();
 			// Silence the original promise to prevent unhandled rejections
 			// if it resolves/rejects after timeout.
 			void promise.catch(() => {});
@@ -210,6 +227,8 @@ export async function ensureFileOpened(
 		if (!info.client.isFileOpened(filePath)) {
 			const content = await readFileAdaptiveAsync(absPath);
 			await info.client.didOpen(filePath, content);
+			// Track for crash recovery so the file can be re-opened after server restart
+			ctx.trackOpenedFile(info.language, filePath);
 			// Track the mtime after opening
 			const fileStat = await stat(absPath);
 			_openedFileMtimes.set(filePath, fileStat.mtimeMs);
@@ -255,10 +274,12 @@ export async function lspWorkspaceSearch(
 			return [];
 		}
 		try {
+			const cts = new _ctsCtor();
 			const raw = await withEnrichTimeout(
 				srv.client.workspaceSymbol(query).then((r) => (r.status === "ok" ? r.data : null)),
 				timeoutMs,
-			);
+				cts,
+			).finally(() => cts.dispose());
 			if (!raw) return [];
 			return raw.map((s) => toEnrichedHit(s)).filter(Boolean) as EnrichedSymbolHit[];
 		} catch {
@@ -315,10 +336,12 @@ export async function lspDocumentSymbols(
 	if (!cap || !(cap as Record<string, unknown>).documentSymbolProvider) {
 		return null;
 	}
+	const cts = new _ctsCtor();
 	const result = await withEnrichTimeout(
 		opened.client.documentSymbols(filePath).then((r) => (r.status === "ok" ? r.data : null)),
 		effectiveTimeout(opened.justOpened, timeoutMs),
-	);
+		cts,
+	).finally(() => cts.dispose());
 	return result;
 }
 
@@ -351,12 +374,14 @@ export async function lspCodeActions(
 	if (!cap || !(cap as Record<string, unknown>).codeActionProvider) {
 		return null;
 	}
+	const cts = new _ctsCtor();
 	const result = await withEnrichTimeout(
 		opened.client
 			.codeAction(filePath, startLine, startChar, endLine, endChar)
 			.then((r) => (r.status === "ok" ? r.data : null)),
 		effectiveTimeout(opened.justOpened, timeoutMs),
-	);
+		cts,
+	).finally(() => cts.dispose());
 	return result;
 }
 
@@ -380,10 +405,12 @@ export async function lspSignatureHelp(
 	if (!cap || !(cap as Record<string, unknown>).signatureHelpProvider) {
 		return null;
 	}
+	const cts = new _ctsCtor();
 	const result = await withEnrichTimeout(
 		opened.client.signatureHelp(filePath, line, character).then((r) => (r.status === "ok" ? r.data : null)),
 		effectiveTimeout(opened.justOpened, timeoutMs),
-	);
+		cts,
+	).finally(() => cts.dispose());
 	return result;
 }
 
@@ -408,6 +435,7 @@ export async function lspImplementation(
 	if (!cap || !(cap as Record<string, unknown>).implementationProvider) {
 		return null;
 	}
+	const cts = new _ctsCtor();
 	const result = await withEnrichTimeout(
 		opened.client.implementation(filePath, line, character).then((r) => {
 			if (r.status !== "ok" || !r.data) return null;
@@ -425,7 +453,8 @@ export async function lspImplementation(
 			return arr as Location[];
 		}),
 		effectiveTimeout(opened.justOpened, timeoutMs),
-	);
+		cts,
+	).finally(() => cts.dispose());
 	return result;
 }
 
@@ -448,6 +477,7 @@ export async function lspReferences(
 	if (!cap || !(cap as Record<string, unknown>).referencesProvider) {
 		return null;
 	}
+	const cts = new _ctsCtor();
 	const result = await withEnrichTimeout(
 		opened.client.references(filePath, line, character).then((r) => {
 			if (r.status !== "ok" || !r.data) return null;
@@ -465,7 +495,8 @@ export async function lspReferences(
 			return arr as Location[];
 		}),
 		effectiveTimeout(opened.justOpened, timeoutMs),
-	);
+		cts,
+	).finally(() => cts.dispose());
 	return result;
 }
 
@@ -487,9 +518,11 @@ export async function lspCodeLens(
 	if (!cap || !(cap as Record<string, unknown>).codeLensProvider) {
 		return null;
 	}
+	const cts = new _ctsCtor();
 	const result = await withEnrichTimeout(
 		opened.client.codeLens(filePath).then((r) => (r.status === "ok" ? r.data : null)),
 		effectiveTimeout(opened.justOpened, timeoutMs),
-	);
+		cts,
+	).finally(() => cts.dispose());
 	return result;
 }

@@ -329,7 +329,7 @@ function parseFile(adapter: TreeSitterAdapter, root: string, relPath: string, mt
 
 			return { mtime, symbols, imports, calls, refs, jsImportBindings };
 		} finally {
-			(tree as unknown as { delete?: () => void }).delete?.();
+			tree.delete?.();
 		}
 	} catch (err) {
 		// Log parse failures to aid debugging (fixes #133)

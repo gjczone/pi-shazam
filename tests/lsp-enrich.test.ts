@@ -68,6 +68,7 @@ describe("lsp_enrich helpers", () => {
 			const ctx: LspEnrichContext = {
 				getServerForFile: () => null,
 				getActiveServers: () => [],
+				trackOpenedFile: () => {},
 			};
 			const results = await lspWorkspaceSearch(ctx, "foo", 1000);
 			expect(results).toEqual([]);

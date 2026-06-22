@@ -43,6 +43,8 @@ interface ParserInstance {
 
 interface Tree {
 	rootNode: SyntaxNode;
+	/** Release native memory; tree is unusable after calling. */
+	delete?(): void;
 }
 
 interface SyntaxNode {

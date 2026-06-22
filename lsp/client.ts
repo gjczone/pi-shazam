@@ -175,7 +175,7 @@ export class LspClient {
 	// Deduplicated per URI: only the latest notification per URI is kept.
 	// Capped to prevent unbounded growth in long-running sessions.
 	private static readonly MAX_NOTIFICATIONS = 2000;
-	private _notifications: PublishDiagnosticsParams[] = [];
+	private _notifications = new Map<string, PublishDiagnosticsParams>();
 
 	// Track in-flight LSP requests with their reject callbacks so close()
 	// can cancel all pending requests.
@@ -243,15 +243,18 @@ export class LspClient {
 
 		// Listen for notifications (diagnostics etc.)
 		this.connection.onNotification("textDocument/publishDiagnostics", (params: PublishDiagnosticsParams) => {
-			// Replace previous notification for same URI (keep only latest)
-			const idx = this._notifications.findIndex((n) => n.uri === params.uri);
-			if (idx !== -1) {
-				this._notifications.splice(idx, 1);
-			}
-			this._notifications.push(params);
+			// Upsert by URI — O(1) via Map (was O(N) findIndex + splice)
+			this._notifications.set(params.uri, params);
 			// Cap to prevent unbounded growth in long-running sessions
-			if (this._notifications.length > LspClient.MAX_NOTIFICATIONS) {
-				this._notifications.splice(0, this._notifications.length - LspClient.MAX_NOTIFICATIONS);
+			if (this._notifications.size > LspClient.MAX_NOTIFICATIONS) {
+				// Evict oldest entries (Map iteration order = insertion order)
+				const excess = this._notifications.size - LspClient.MAX_NOTIFICATIONS;
+				let count = 0;
+				for (const key of this._notifications.keys()) {
+					if (count >= excess) break;
+					this._notifications.delete(key);
+					count++;
+				}
 			}
 		});
 
@@ -347,11 +350,14 @@ export class LspClient {
 			workspaceFolders: null,
 		};
 
+		const conn = this.connection;
+		if (!conn) throw new Error("LSP client not started");
+
 		const result = await this._sendRequest<InitializeResult>("initialize", initParams, 10000);
 
 		this._serverCapabilities = ((result as InitializeResult).capabilities as Record<string, unknown>) ?? {};
 
-		await this.connection!.sendNotification("initialized", {});
+		await conn.sendNotification("initialized", {});
 		this._initialized = true;
 		this._log(`LSP initialized: ${this.command[0]}`);
 	}
@@ -860,20 +866,14 @@ export class LspClient {
 		if (expectedUris.size === 0) return [];
 
 		const results: PublishDiagnosticsParams[] = [];
-		const remaining: PublishDiagnosticsParams[] = [];
-
-		// Iterate in reverse to return the newest notification per URI first
-		for (let i = this._notifications.length - 1; i >= 0; i--) {
-			const notif = this._notifications[i]!;
-			if (expectedUris.has(notif.uri)) {
+		for (const [uri, notif] of this._notifications) {
+			if (expectedUris.has(uri)) {
 				results.push(notif);
-				expectedUris.delete(notif.uri);
-			} else {
-				remaining.unshift(notif);
+				expectedUris.delete(uri);
 			}
 		}
 		if (consume) {
-			this._notifications = remaining;
+			for (const r of results) this._notifications.delete(r.uri);
 		}
 
 		return results;
@@ -913,7 +913,7 @@ export class LspClient {
 		this.connection = null;
 		this.process = null;
 		this._openedFiles.clear();
-		this._notifications = [];
+		this._notifications.clear();
 		this._docVersions.clear();
 		this._serverCapabilities = {};
 		this._initialized = false;
@@ -1016,7 +1016,7 @@ export class LspClient {
 			this.connection = null;
 			this.process = null;
 			this._openedFiles.clear();
-			this._notifications = [];
+			this._notifications.clear();
 			this._docVersions.clear();
 			this._serverCapabilities = {};
 			this._initialized = false;

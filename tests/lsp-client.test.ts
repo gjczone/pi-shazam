@@ -507,14 +507,14 @@ describe("LspClient edge cases", () => {
 		conn.sendRequest.mockResolvedValue(null);
 
 		// Pre-populate state
-		(client as any)._notifications = [{ uri: "file:///test.ts", diagnostics: [] }];
+		(client as any)._notifications = new Map([["file:///test.ts", { uri: "file:///test.ts", diagnostics: [] }]]);
 		(client as any)._serverCapabilities = { hoverProvider: true };
 
 		const closeResult = client.close();
 		expect(closeResult).toBeInstanceOf(Promise);
 		await closeResult;
 
-		expect((client as any)._notifications).toEqual([]);
+		expect((client as any)._notifications.size).toBe(0);
 		expect((client as any)._serverCapabilities).toEqual({});
 	});
 
@@ -656,16 +656,20 @@ describe("LspClient didClose and collectDiagnostics", () => {
 		const notifA = { uri: "file:///test/fileA.ts", diagnostics: [] };
 		const notifB = { uri: "file:///test/fileB.ts", diagnostics: [] };
 		const notifC = { uri: "file:///test/fileC.ts", diagnostics: [] };
-		(client as any)._notifications = [notifA, notifB, notifC];
+		(client as any)._notifications = new Map([
+			["file:///test/fileA.ts", notifA],
+			["file:///test/fileB.ts", notifB],
+			["file:///test/fileC.ts", notifC],
+		]);
 
 		// Consume fileA — remaining should be [B, C] in original order
 		client.collectDiagnostics(["/test/fileA.ts"]);
 
-		const remaining = (client as any)._notifications as (typeof notifA)[];
-		// Bug: remaining.push() in reverse iteration reverses the order,
-		// so remaining would be [C, B] instead of [B, C].
-		expect(remaining).toHaveLength(2);
-		expect(remaining[0]).toBe(notifB);
-		expect(remaining[1]).toBe(notifC);
+		const remaining = (client as any)._notifications as Map<string, (typeof notifA)>;
+		// Map preserves insertion order; after consuming A, B and C remain
+		expect(remaining.size).toBe(2);
+		const remainingEntries = [...remaining.values()];
+		expect(remainingEntries[0]).toBe(notifB);
+		expect(remainingEntries[1]).toBe(notifC);
 	});
 });
