@@ -104,8 +104,8 @@ function getSuggestion(toolName: string, failCount: number, errorMessage: string
 				"[shazam] File not found error repeated 3x.",
 				"",
 				"Try:",
-				"- Run `shazam_file_detail --file <path>` to check if the file exists",
-				"- Use `shazam_codesearch --query <filename>` to locate the file",
+				"- Run `shazam_lookup --file <path>` to check if the file exists",
+				"- Use `shazam_lookup --file <filename>` to locate the file",
 				"- Check if the file was renamed, moved, or deleted",
 			].join("\n");
 		}
@@ -155,8 +155,8 @@ function getSuggestion(toolName: string, failCount: number, errorMessage: string
 					"[shazam] Bash command failed 3x consecutively.",
 					"",
 					"Try a different approach:",
-					"- Use `shazam_codesearch` instead of grep/find",
-					"- Use `shazam_file_detail` to understand file structure first",
+					"- Use `shazam_lookup` instead of grep/find",
+					"- Use `shazam_lookup` to understand file structure first",
 					"- Break the command into smaller steps",
 				].join("\n");
 
@@ -165,8 +165,8 @@ function getSuggestion(toolName: string, failCount: number, errorMessage: string
 					"[shazam] Edit failed 3x consecutively.",
 					"",
 					"Try:",
-					"- Use `shazam_file_detail` to see the current file structure",
-					"- Use `shazam_symbol` to understand the symbol you're editing",
+					"- Use `shazam_lookup` to see the current file structure",
+					"- Use `shazam_lookup` to understand the symbol you're editing",
 					"- Read the file first with `read` to see current content",
 				].join("\n");
 

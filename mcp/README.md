@@ -67,26 +67,21 @@ Or directly edit `kimi_mcp.json`:
 
 Defaults to the current working directory.
 
-## Available Tools (14)
+## Available Tools (9)
 
 All tools use the `shazam_` prefix for consistency with the Pi extension.
 
-| Tool                    | Description                                                            |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `shazam_overview`       | Project structure, top files, dependencies, recent git changes, routes |
-| `shazam_impact`         | Blast radius analysis before multi-file edits                          |
-| `shazam_codesearch`     | BM25 symbol search (use instead of grep)                               |
-| `shazam_symbol`         | Symbol lookup with definition, callers, callees, state map             |
-| `shazam_file_detail`    | File structural analysis (symbols, PageRank, hierarchy, codeLens refs) |
-| `shazam_call_chain`     | Upstream callers and downstream callees                                |
-| `shazam_hover`          | Type signatures, documentation, signatureHelp via LSP                  |
-| `shazam_find_tests`     | Discover test files for a module                                       |
-| `shazam_hotspots`       | Complexity hotspots ranked by blast radius                             |
-| `shazam_verify`         | Post-edit verification (LSP diagnostics + codeAction fixes + graph)    |
-| `shazam_fix`            | Auto-fix format/lint errors (prettier, eslint, biome)                  |
-| `shazam_type_hierarchy` | Class/interface inheritance chain + implementation locations           |
-| `shazam_rename_symbol`  | Safe symbol rename with reference verification                         |
-| `shazam_safe_delete`    | Safe symbol deletion with reference check                              |
+| Tool                   | Description                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------ |
+| `shazam_overview`      | Project structure, top files (hotspots), dependencies, recent git changes, routes    |
+| `shazam_lookup`        | Unified symbol/file lookup: definition, type signature, docs, hierarchy, file detail |
+| `shazam_impact`        | File impact analysis + call chain tracing (--symbol param)                           |
+| `shazam_verify`        | Post-edit verification (LSP diagnostics + codeAction fixes + graph)                  |
+| `shazam_changes`       | Git change summary with risk level                                                   |
+| `shazam_format`        | Auto-fix format/lint errors (prettier, eslint, biome, ruff, cargo fmt, gofmt)        |
+| `shazam_find_tests`    | Discover test files for a module                                                     |
+| `shazam_rename_symbol` | Safe project-wide symbol rename with reference verification                          |
+| `shazam_safe_delete`   | Safe symbol deletion with reference check                                            |
 
 ## Architecture
 

@@ -25,7 +25,7 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 		label: "Rename Symbol",
 		description: `\
 		Required safety gate before renaming any symbol. Step 1: call
-		shazam_call_chain to review all references. Step 2: use this to
+		shazam_impact --symbol to review all references. Step 2: use this to
 		perform the project-wide rename via LSP textDocument/rename. Step 3:
 		call shazam_verify to confirm no broken references. This is a WRITE
 		operation — do not manually find-and-replace; missed references
@@ -46,7 +46,7 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 			if (!newName) {
 				return { content: [{ type: "text", text: "Error: newName parameter is required" }] };
 			}
-			// Block non-dry-run unless shazam_call_chain was run for this symbol (issue #326)
+			// Block non-dry-run unless shazam_impact --symbol was run for this symbol (issue #326)
 			if (!dryRun) {
 				if (!hasCallChainChecked(symbolName)) {
 					return {
@@ -54,10 +54,10 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 							{
 								type: "text",
 								text: [
-									"[BLOCKED] Rename aborted — shazam_call_chain has not been run for this symbol.",
+									"[BLOCKED] Rename aborted — shazam_impact --symbol has not been run for this symbol.",
 									"",
 									`Before renaming \`${symbolName}\`, you MUST run:`,
-									`  shazam_call_chain --symbol "${symbolName}" --direction both`,
+									`  shazam_impact --symbol "${symbolName}" --direction both`,
 									"",
 									"Review all callers and callees, then re-invoke shazam_rename_symbol with dryRun=false.",
 								].join("\n"),
@@ -197,7 +197,7 @@ export async function executeRenameSymbol(
 		if (symbolMatchesMsg) {
 			msg += `\n\n${symbolMatchesMsg}`;
 		}
-		msg += `\n\n**Recommendation:** Run \`shazam_call_chain --symbol "${symbolName}"\` to manually verify ALL references before attempting rename.`;
+		msg += `\n\n**Recommendation:** Run \`shazam_impact --symbol "${symbolName}"\` to manually verify ALL references before attempting rename.`;
 		return {
 			status: "lsp_unavailable",
 			symbol: symbolName,
@@ -221,7 +221,7 @@ export async function executeRenameSymbol(
 		if (symbolMatchesMsg) {
 			msg += `\n\n${symbolMatchesMsg}`;
 		}
-		msg += `\n\n**Recommendation:** Run \`shazam_call_chain --symbol "${symbolName}"\` to manually verify ALL references before attempting rename.`;
+		msg += `\n\n**Recommendation:** Run \`shazam_impact --symbol "${symbolName}"\` to manually verify ALL references before attempting rename.`;
 		return {
 			status: "lsp_unavailable",
 			symbol: symbolName,
@@ -245,7 +245,7 @@ export async function executeRenameSymbol(
 		if (symbolMatchesMsg) {
 			msg += `\n\n${symbolMatchesMsg}`;
 		}
-		msg += `\n\n**Recommendation:** Run \`shazam_call_chain --symbol "${symbolName}"\` to manually verify ALL references before attempting rename.`;
+		msg += `\n\n**Recommendation:** Run \`shazam_impact --symbol "${symbolName}"\` to manually verify ALL references before attempting rename.`;
 		return {
 			status: "lsp_unavailable",
 			symbol: symbolName,

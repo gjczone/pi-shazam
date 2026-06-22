@@ -82,7 +82,8 @@ describe("Tool: impact", () => {
 	});
 });
 
-describe("Tool: codesearch", () => {
+// codesearch removed in #362
+describe.skip("Tool: codesearch", () => {
 	it("should search symbols by keyword", async () => {
 		const { executeCodesearch } = await import("../tools/codesearch.js");
 		const result = executeCodesearch(getGraph(), "scan");
@@ -119,7 +120,7 @@ describe("Tool: codesearch", () => {
 
 describe("Tool: symbol", () => {
 	it("should return symbol details", async () => {
-		const { executeSymbol } = await import("../tools/symbol.js");
+		const { executeSymbol } = await import("../tools/lookup.js");
 		const result = executeSymbol(getGraph(), "scanProject");
 		expect(result).toBeDefined();
 		expect(typeof result).toBe("string");
@@ -129,7 +130,7 @@ describe("Tool: symbol", () => {
 
 describe("Tool: call_chain", () => {
 	it("should trace call chain for a symbol", async () => {
-		const { executeCallChain } = await import("../tools/call_chain.js");
+		const { executeCallChain } = await import("../tools/impact.js");
 		const graph = getGraph();
 		const syms = [...graph.symbols.values()];
 		const symWithEdges = syms.find((s) => {
@@ -145,7 +146,7 @@ describe("Tool: call_chain", () => {
 	});
 
 	it("should support --flat mode (replaces refs)", async () => {
-		const mod = await import("../tools/call_chain.js");
+		const mod = await import("../tools/impact.js");
 		const graph = getGraph();
 		const refs = mod.getFlatReferences(graph, "scanProject");
 		expect(refs).toBeDefined();
@@ -158,7 +159,8 @@ describe("Tool: call_chain", () => {
 	});
 });
 
-describe("Tool: hover", () => {
+// hover merged into lookup (async LSP, not exported synchronously)
+describe.skip("Tool: hover", () => {
 	it("should return hover info for a symbol", async () => {
 		const { executeHover } = await import("../tools/hover.js");
 		const graph = getGraph();
@@ -174,7 +176,7 @@ describe("Tool: hover", () => {
 
 describe("Tool: file_detail", () => {
 	it("should analyze a file in detail", async () => {
-		const { executeFileDetail } = await import("../tools/file_detail.js");
+		const { executeFileDetail } = await import("../tools/lookup.js");
 		const result = executeFileDetail(getGraph(), "core/graph.ts");
 		expect(result).toBeDefined();
 		expect(typeof result).toBe("string");
@@ -185,7 +187,7 @@ describe("Tool: file_detail", () => {
 
 describe("Tool: hotspots", () => {
 	it("should rank files by complexity", async () => {
-		const { executeHotspots } = await import("../tools/hotspots.js");
+		const { executeHotspots } = await import("../tools/overview.js");
 		const result = executeHotspots(getGraph(), 5);
 		expect(result).toBeDefined();
 		expect(typeof result).toBe("string");
@@ -193,7 +195,7 @@ describe("Tool: hotspots", () => {
 	});
 
 	it("should NOT rank config/generated files like package-lock.json in top results", async () => {
-		const { executeHotspots } = await import("../tools/hotspots.js");
+		const { executeHotspots } = await import("../tools/overview.js");
 		const result = executeHotspots(getGraph(), 20);
 		// package-lock.json and other config files should not appear in hotspots
 		// Check that no ranked line (starting with a number) contains config files
@@ -228,7 +230,7 @@ describe("Tool: overview — routes section", () => {
 
 describe("Tool: symbol — state mode", () => {
 	it("should explore enum/state symbols via state mode", async () => {
-		const { executeStateMap } = await import("../tools/symbol.js");
+		const { executeStateMap } = await import("../tools/lookup.js");
 		const graph = getGraph();
 		const enumSym = [...graph.symbols.values()].find((s) => s.kind === "class" || s.kind === "enum");
 		if (enumSym) {
@@ -239,7 +241,7 @@ describe("Tool: symbol — state mode", () => {
 	});
 
 	it("should reject non-enum/non-const symbols with a clear message", async () => {
-		const { executeStateMap } = await import("../tools/symbol.js");
+		const { executeStateMap } = await import("../tools/lookup.js");
 		const graph = getGraph();
 		// Find a function symbol (not enum/const/state-machine)
 		const funcSym = [...graph.symbols.values()].find((s) => s.kind === "function");
@@ -251,7 +253,7 @@ describe("Tool: symbol — state mode", () => {
 	});
 
 	it("should return state map output when mode=state via executeSymbol", async () => {
-		const { executeSymbolWithMode } = await import("../tools/symbol.js");
+		const { executeSymbolWithMode } = await import("../tools/lookup.js");
 		const graph = getGraph();
 		const enumSym = [...graph.symbols.values()].find((s) => s.kind === "class" || s.kind === "enum");
 		if (enumSym) {
@@ -298,7 +300,7 @@ describe("Tool: verify", () => {
 
 describe("Tool: fix", () => {
 	it("should return fix results in dry-run mode", async () => {
-		const { executeFix } = await import("../tools/fix.js");
+		const { executeFix } = await import("../tools/format.js");
 		const result = executeFix(getGraph(), ".", { dryRun: true });
 		expect(result).toBeDefined();
 		expect(typeof result).toBe("string");
@@ -306,7 +308,7 @@ describe("Tool: fix", () => {
 	});
 
 	it("should support json output with dryRun", async () => {
-		const { executeFixJson } = await import("../tools/fix.js");
+		const { executeFixJson } = await import("../tools/format.js");
 		const result = executeFixJson(getGraph(), ".", { dryRun: true });
 		expect(result).toBeDefined();
 		const parsed = JSON.parse(result);

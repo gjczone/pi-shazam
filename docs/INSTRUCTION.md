@@ -268,18 +268,12 @@ index.ts                    <- Pi extension entry, default export(pi: ExtensionA
   │   ├── _context.ts       <- Tool-level shared LspManager holder
   │   ├── _factory.ts       <- createTool() registration factory
   │   ├── lsp_enrich.ts     <- Tool-layer LSP enrichment wrappers
-  │   ├── overview.ts       <- Project structure summary
-  │   ├── impact.ts         <- File-level change impact
-  │   ├── codesearch.ts     <- BM25 symbol search + LSP enrichment
-  │   ├── file_detail.ts    <- Single file deep analysis
-  │   ├── call_chain.ts     <- Call graph traversal
-  │   ├── symbol.ts         <- Symbol lookup
+  │   ├── overview.ts       <- Project structure summary + hotspot ranking
+  │   ├── impact.ts         <- File-level change impact + call chain analysis
+  │   ├── lookup.ts         <- Symbol/hover/file-detail/type-hierarchy lookup
   │   ├── verify.ts         <- Post-edit diagnostics gate
-  │   ├── fix.ts            <- Auto-fix lint/format
-  │   ├── hotspots.ts       <- Complexity hotspot ranking
-  │   ├── hover.ts          <- Symbol type/documentation hover
+  │   ├── format.ts         <- Auto-fix lint/format
   │   ├── find_tests.ts     <- Test file discovery
-  │   ├── type_hierarchy.ts <- LSP type hierarchy + implementations
   │   ├── rename_symbol.ts  <- Symbol rename
   │   └── safe_delete.ts    <- Safe symbol deletion
   ├── hooks/                <- Automatic (not LLM-visible)
@@ -294,7 +288,7 @@ index.ts                    <- Pi extension entry, default export(pi: ExtensionA
   │   └── agent-context-guard.ts <- Block agent spawn without structural context
   └── mcp/                  <- MCP server for non-Pi clients
       ├── entry.ts          <- McpServer + StdioServerTransport init
-      └── tools.ts          <- 14 MCP tool registrations wrapping core
+      └── tools.ts          <- 9 MCP tool registrations wrapping core
 ```
 
 ### 2.2 Dependency Direction
@@ -487,7 +481,7 @@ pi.on("before_agent_start", (_event, _ctx) => {
 	// _event.systemPrompt is always string[] (input)
 	// Returned systemPrompt must be string (output)
 	const existing = _event.systemPrompt ?? [];
-	if (existing.some(s => s.includes("my-guide"))) return; // avoid double injection
+	if (existing.some((s) => s.includes("my-guide"))) return; // avoid double injection
 
 	return {
 		systemPrompt: [...existing, "my guidance text here"].filter(Boolean).join("\n\n"),
@@ -812,7 +806,7 @@ it("overview schema should accept optional filter", () => {
 pi install npm:pi-shazam@latest
 pi -p "call shazam_overview briefly"
 pi -p "call shazam_verify"
-pi -p "call shazam_hotspots"
+pi -p "call shazam_lookup"
 # Check: no "Extension error" in output, tools return meaningful results.
 
 # MCP smoke test

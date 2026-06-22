@@ -111,8 +111,8 @@ function buildProactiveRecommendations(projectRoot: string, graph: RepoGraph): s
 		}
 
 		// Always include the most critical workflow guidance
-		lines.push("- Before editing a file for the first time: \`shazam_file_detail --file <path>\`");
-		lines.push("- Before changing a shared/exported symbol: \`shazam_call_chain --symbol <name>\`");
+		lines.push("- Before editing a file for the first time: \`shazam_lookup --file <path>\`");
+		lines.push("- Before changing a shared/exported symbol: \`shazam_impact --symbol <name>\`");
 
 		// Conditional: only mention if project has tests
 		if (hasTests) {
@@ -121,18 +121,17 @@ function buildProactiveRecommendations(projectRoot: string, graph: RepoGraph): s
 
 		// Conditional: only mention if project has OOP types
 		if (hasHierarchy) {
-			lines.push("- For OOP type hierarchies: \`shazam_type_hierarchy --name <class>\`");
+			lines.push("- For OOP type hierarchies: \`shazam_lookup --name <class>\`");
 		}
 
 		// Core workflow tools
 		lines.push("- After every edit: \`shazam_verify\` to check for errors");
-		lines.push("- Instead of grep: \`shazam_codesearch --query <keyword>\`");
 	} catch {
 		// If scan fails, provide minimal recommendations
 		lines.push("### Recommendations");
 		lines.push("");
 		lines.push("- \`shazam_overview\` to understand project structure");
-		lines.push("- \`shazam_file_detail --file <path>\` before editing any file");
+		lines.push("- \`shazam_lookup --file <path>\` before editing any file");
 		lines.push("- \`shazam_verify\` after every edit");
 	}
 
@@ -179,7 +178,7 @@ function buildParserWarningSection(graph: RepoGraph): string {
 		lines.push(`- ${lang}: tree-sitter parser unavailable.${suggestion}`);
 	}
 	lines.push(
-		"For these languages, use `shazam_hover` and `shazam_verify` (LSP-based tools) instead of graph-based tools (call_chain, impact, hotspots).",
+		"For these languages, use `shazam_lookup` and `shazam_verify` (LSP-based tools) instead of graph-based tools (impact).",
 	);
 	return lines.join("\n");
 }

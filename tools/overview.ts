@@ -58,10 +58,11 @@ export function registerOverview(pi: ExtensionAPI): void {
 		description: `\
 		When you first enter a project or return after changes — use this to
 		understand the codebase before reading a single file. Returns: module
-		dependency map, top-10 highest-PageRank files (the "spine"), entry
-		points, suggested reading order, and HTTP route inventory for web
-		projects. Supports --filter to locate files by keyword.
-		
+		dependency map, top-10 highest-PageRank files (the "spine"), key
+		dependencies, recent git changes, entry points, reading order, HTTP
+		route inventory, and complexity hotspots ranked by blast radius.
+		Supports --filter to locate files by keyword.
+
 		Output: plain text summary by default. Pass { json: true } for
 		structured output with file lists and PageRank scores.`,
 		params: Type.Object({
@@ -133,7 +134,9 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 				lines.push(`- **${lang}**: tree-sitter parser unavailable${reason}.${suggestion}`);
 			}
 			lines.push("");
-			lines.push("Files in these languages will have 0 symbols in the graph. Use `shazam_hover` and `shazam_verify` (LSP-based) for these files instead.");
+			lines.push(
+				"Files in these languages will have 0 symbols in the graph. Use `shazam_lookup` and `shazam_verify` (LSP-based) for these files instead.",
+			);
 		}
 	}
 
@@ -243,6 +246,25 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 		if (routesSection) {
 			lines.push("");
 			lines.push(routesSection);
+		}
+	}
+
+	// Hotspots section (absorbed from tools/hotspots.ts)
+	if (!filter) {
+		const hotspots = _computeHotspots(graph, 10);
+		if (hotspots.length > 0) {
+			lines.push("");
+			lines.push("### Complexity Hotspots (Top 10)");
+			lines.push("");
+			lines.push("Ranked by symbol density x PageRank score.");
+			lines.push("");
+			for (let i = 0; i < hotspots.length; i++) {
+				const h = hotspots[i]!;
+				lines.push(`${i + 1}. \`${h.file}\` — score: ${h.hotspotScore.toFixed(2)}`);
+				lines.push(
+					`   ${h.symbolCount} symbols | PageRank: ${h.totalPagerank.toFixed(2)} | in:${h.incomingRefs} out:${h.outgoingRefs}`,
+				);
+			}
 		}
 	}
 
@@ -587,4 +609,81 @@ export function buildRecentChangesSection(projectRoot: string): string | null {
 	}
 
 	return lines.join("\n");
+}
+
+// ── Hotspots (absorbed from tools/hotspots.ts) ─────────────────────────
+
+interface FileHotspot {
+	file: string;
+	symbolCount: number;
+	totalPagerank: number;
+	incomingRefs: number;
+	outgoingRefs: number;
+	hotspotScore: number;
+}
+
+function _computeHotspots(graph: RepoGraph, topN: number): FileHotspot[] {
+	const fileStats = new Map<string, FileHotspot>();
+
+	for (const [file, symIds] of graph.fileSymbols) {
+		if (isNonSourceFile(file)) continue;
+
+		let totalPR = 0;
+		let incoming = 0;
+		let outgoing = 0;
+
+		for (const id of symIds) {
+			const sym = graph.symbols.get(id);
+			if (sym) totalPR += sym.pagerank;
+			const inc = graph.incoming.get(id);
+			if (inc) incoming += inc.length;
+			const out = graph.outgoing.get(id);
+			if (out) outgoing += out.length;
+		}
+
+		fileStats.set(file, {
+			file,
+			symbolCount: symIds.length,
+			totalPagerank: totalPR,
+			incomingRefs: incoming,
+			outgoingRefs: outgoing,
+			hotspotScore: symIds.length * totalPR,
+		});
+	}
+
+	return [...fileStats.values()].sort((a, b) => b.hotspotScore - a.hotspotScore).slice(0, topN);
+}
+
+// ── Backward-compatible exports (for hotspots tests) ───────────────────
+
+export function executeHotspots(graph: RepoGraph, topN: number = 10): string {
+	const hotspots = _computeHotspots(graph, topN);
+	const lines: string[] = [];
+	lines.push(`## Complexity Hotspots (Top ${topN})`);
+	lines.push("");
+	lines.push("Ranked by symbol density x PageRank score.");
+	lines.push("");
+	for (let i = 0; i < hotspots.length; i++) {
+		const h = hotspots[i]!;
+		lines.push(`${i + 1}. \`${h.file}\` — score: ${h.hotspotScore.toFixed(2)}`);
+		lines.push(
+			`   ${h.symbolCount} symbols | PageRank: ${h.totalPagerank.toFixed(2)} | in:${h.incomingRefs} out:${h.outgoingRefs}`,
+		);
+		lines.push("");
+	}
+	return lines.join("\n");
+}
+
+export function executeHotspotsJson(graph: RepoGraph, topN: number): string {
+	const hotspots = _computeHotspots(graph, topN);
+	return buildEnvelope("shazam_hotspots", process.cwd(), "ok", {
+		hotspots: hotspots.map((h) => ({
+			file: h.file,
+			symbolCount: h.symbolCount,
+			totalPagerank: Number(h.totalPagerank.toFixed(4)),
+			incomingRefs: h.incomingRefs,
+			outgoingRefs: h.outgoingRefs,
+			hotspotScore: Number(h.hotspotScore.toFixed(2)),
+		})),
+	});
 }

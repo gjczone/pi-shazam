@@ -1,7 +1,7 @@
 /**
  * pi-shazam hooks/rename-state -- Shared rename safety gate state.
  *
- * Tracks which symbols have been reviewed via shazam_call_chain.
+ * Tracks which symbols have been reviewed via shazam_impact --symbol.
  * shazam_rename_symbol checks this state before allowing a non-dry-run rename.
  *
  * State machine:
@@ -15,15 +15,15 @@
 const _reviewedSymbols = new Set<string>();
 
 /**
- * Record that shazam_call_chain completed for the given symbol name.
- * Called from tools/call_chain.ts after successful execution.
+ * Record that shazam_impact --symbol completed for the given symbol name.
+ * Called from tools/impact.ts after successful execution.
  */
 export function recordCallChain(symbolName: string): void {
 	_reviewedSymbols.add(symbolName);
 }
 
 /**
- * Check whether shazam_call_chain has been run for the given symbol name
+ * Check whether shazam_impact --symbol has been run for the given symbol name
  * in the current session. Used by tools/rename_symbol.ts to gate non-dry-run renames.
  */
 export function hasCallChainChecked(symbolName: string): boolean {

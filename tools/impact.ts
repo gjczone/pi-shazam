@@ -1,5 +1,8 @@
 /**
- * pi-shazam tools/impact — Change blast radius analysis.
+ * pi-shazam tools/impact — Change blast radius analysis + call chain.
+ *
+ * Merged with call_chain (issue #362): now supports --symbol for per-symbol
+ * caller/callee tracing in addition to file-level impact analysis.
  */
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
@@ -9,6 +12,7 @@ import { createTool } from "./_factory.js";
 import { buildEnvelope } from "./_factory.js";
 import { executeFindTests } from "./find_tests.js";
 import { isNonSourceFile } from "../core/filter.js";
+import { recordCallChain } from "../hooks/rename-state.js";
 
 export function registerImpact(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -20,20 +24,43 @@ export function registerImpact(pi: ExtensionAPI): void {
 		Without this, you are guessing which tests to run and which callers to
 		update. Pass --with-symbols for per-symbol risk breakdown. Pass
 		--compact for concise output (file names only). Pass --depth to
-		control BFS traversal depth (default 3). Supports multiple --files.`,
+		control BFS traversal depth (default 3). Supports multiple --files.
+		Pass --symbol for per-symbol caller/callee tracing (replaces
+		shazam_call_chain). Pass --flat for a flat list of references.
+		Pass --direction to filter by incoming/outgoing/both.`,
 		params: Type.Object({
-			files: Type.Array(Type.String()),
+			files: Type.Optional(Type.Array(Type.String())),
+			symbol: Type.Optional(Type.String()),
 			withSymbols: Type.Optional(Type.Boolean()),
 			compact: Type.Optional(Type.Boolean()),
 			depth: Type.Optional(Type.Number()),
+			flat: Type.Optional(Type.Boolean()),
+			direction: Type.Optional(Type.Union([Type.Literal("incoming"), Type.Literal("outgoing"), Type.Literal("both")])),
 		}),
 		execute(graph, params) {
 			const json = params.json ?? false;
+			const depth = Math.min(Math.max((params.depth as number) ?? 3, 1), 10);
+			const symbolName = params.symbol as string | undefined;
+
+			// Symbol mode: call chain analysis (replaces shazam_call_chain)
+			if (symbolName) {
+				recordCallChain(symbolName);
+				const flat = (params.flat as boolean) ?? false;
+				const direction = (params.direction as "incoming" | "outgoing" | "both") ?? "both";
+				if (flat) {
+					const refs = _getFlatReferences(graph, symbolName, direction);
+					return json ? JSON.stringify(refs, null, 2) : _formatFlatReferences(refs, symbolName);
+				}
+				return json
+					? _executeCallChainJson(graph, symbolName, depth, direction)
+					: _executeCallChain(graph, symbolName, depth, direction);
+			}
+
+			// File mode: impact analysis
 			if (!params.files || !Array.isArray(params.files)) {
-				return "Error: --files is required (must be an array of file paths)";
+				return "Error: either --files (array of file paths) or --symbol (symbol name) is required";
 			}
 			const files = params.files as string[];
-			const depth = Math.min(Math.max((params.depth as number) ?? 3, 1), 10);
 			return json
 				? executeImpactJson(graph, files, depth)
 				: executeImpact(graph, files, {
@@ -291,4 +318,248 @@ export function executeImpactJson(graph: RepoGraph, files: string[], depth: numb
 		risk: risk,
 		discoveredTests: discoveredTests,
 	});
+}
+
+// ── Call chain (absorbed from tools/call_chain.ts) ──────────────────────
+
+const MAX_DISPLAY_REFS = 50;
+
+function _executeCallChain(
+	graph: RepoGraph,
+	symbolName: string,
+	depth: number = 2,
+	direction: "incoming" | "outgoing" | "both" = "both",
+): string {
+	const targets = graph.nameIndex.get(symbolName) ?? [];
+	if (targets.length === 0) return `Symbol not found: ${symbolName}`;
+
+	const lines: string[] = [];
+	for (const target of targets) {
+		lines.push(`## Call Chain for ${target.kind} \`${target.name}\` (${target.file}:${target.line})`);
+		lines.push("");
+
+		if (direction !== "outgoing") {
+			const chain = _traceIncoming(graph, target.id, depth);
+			if (chain.length > 0) {
+				const shown = chain.slice(0, MAX_DISPLAY_REFS);
+				lines.push(`### Incoming Calls (${chain.length} callers in ${depth} levels)`);
+				for (const [level, sym, edge] of shown) {
+					const indent = "  ".repeat(level);
+					lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (${edge.kind})`);
+				}
+				if (chain.length > MAX_DISPLAY_REFS) lines.push(`  ... and ${chain.length - MAX_DISPLAY_REFS} more`);
+			}
+		}
+
+		if (direction !== "incoming") {
+			const chain = _traceOutgoing(graph, target.id, depth);
+			if (chain.length > 0) {
+				const shown = chain.slice(0, MAX_DISPLAY_REFS);
+				lines.push("");
+				lines.push(`### Outgoing Calls (${chain.length} callees in ${depth} levels)`);
+				for (const [level, sym, edge] of shown) {
+					const indent = "  ".repeat(level);
+					lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (${edge.kind})`);
+				}
+				if (chain.length > MAX_DISPLAY_REFS) lines.push(`  ... and ${chain.length - MAX_DISPLAY_REFS} more`);
+			}
+		}
+
+		lines.push("");
+	}
+
+	const nextItems = getNextForTool("impact", { topSymbol: targets[0]?.name });
+	if (nextItems.length > 0) {
+		lines.push(formatNextSection(nextItems));
+	}
+
+	return lines.join("\n").trim();
+}
+
+function _executeCallChainJson(
+	graph: RepoGraph,
+	symbolName: string,
+	depth: number,
+	direction: "incoming" | "outgoing" | "both" = "both",
+): string {
+	const targets = graph.nameIndex.get(symbolName) ?? [];
+	const result = targets.map((target) => ({
+		symbol: { id: target.id, name: target.name, kind: target.kind, file: target.file, line: target.line },
+		incoming:
+			direction !== "outgoing"
+				? _traceIncoming(graph, target.id, depth).map(([level, sym, edge]) => ({
+						level,
+						symbol: sym.name,
+						file: sym.file,
+						kind: edge.kind,
+					}))
+				: [],
+		outgoing:
+			direction !== "incoming"
+				? _traceOutgoing(graph, target.id, depth).map(([level, sym, edge]) => ({
+						level,
+						symbol: sym.name,
+						file: sym.file,
+						kind: edge.kind,
+					}))
+				: [],
+	}));
+
+	return buildEnvelope("shazam_call_chain", process.cwd(), "ok", result);
+}
+
+function _traceIncoming(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, { kind: string }][] {
+	const visited = new Set<string>();
+	const result: [number, Symbol, { kind: string }][] = [];
+	const queue: { id: string; depth: number }[] = [{ id: startId, depth: 0 }];
+	visited.add(startId);
+
+	while (queue.length > 0) {
+		const { id, depth } = queue.shift()!;
+		if (depth >= maxDepth) continue;
+		const incoming = graph.incoming.get(id);
+		if (!incoming) continue;
+		for (const edge of incoming) {
+			const srcSym = graph.symbols.get(edge.source);
+			if (!srcSym || visited.has(edge.source)) continue;
+			visited.add(edge.source);
+			result.push([depth + 1, srcSym, edge]);
+			queue.push({ id: edge.source, depth: depth + 1 });
+		}
+	}
+
+	return result;
+}
+
+function _traceOutgoing(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, { kind: string }][] {
+	const visited = new Set<string>();
+	const result: [number, Symbol, { kind: string }][] = [];
+	const queue: { id: string; depth: number }[] = [{ id: startId, depth: 0 }];
+	visited.add(startId);
+
+	while (queue.length > 0) {
+		const { id, depth } = queue.shift()!;
+		if (depth >= maxDepth) continue;
+		const outgoing = graph.outgoing.get(id);
+		if (!outgoing) continue;
+		for (const edge of outgoing) {
+			const tgtSym = graph.symbols.get(edge.target);
+			if (!tgtSym || visited.has(edge.target)) continue;
+			visited.add(edge.target);
+			result.push([depth + 1, tgtSym, edge]);
+			queue.push({ id: edge.target, depth: depth + 1 });
+		}
+	}
+
+	return result;
+}
+
+interface FlatReference {
+	symbol: string;
+	file: string;
+	line: number;
+	kind: string;
+	direction: string;
+}
+
+function _getFlatReferences(
+	graph: RepoGraph,
+	symbolName: string,
+	direction: "incoming" | "outgoing" | "both" = "both",
+): FlatReference[] {
+	const targets = graph.nameIndex.get(symbolName) ?? [];
+	if (targets.length === 0) return [];
+
+	const refs: FlatReference[] = [];
+	const seen = new Set<string>();
+
+	for (const target of targets) {
+		if (direction !== "outgoing") {
+			const incoming = graph.incoming.get(target.id);
+			if (incoming) {
+				for (const edge of incoming) {
+					const src = graph.symbols.get(edge.source);
+					if (!src) continue;
+					const key = `${src.name}:${src.file}:${src.line}`;
+					if (seen.has(key)) continue;
+					seen.add(key);
+					refs.push({ symbol: src.name, file: src.file, line: src.line, kind: src.kind, direction: "incoming" });
+				}
+			}
+		}
+		if (direction !== "incoming") {
+			const outgoing = graph.outgoing.get(target.id);
+			if (outgoing) {
+				for (const edge of outgoing) {
+					const tgt = graph.symbols.get(edge.target);
+					if (!tgt) continue;
+					const key = `${tgt.name}:${tgt.file}:${tgt.line}`;
+					if (seen.has(key)) continue;
+					seen.add(key);
+					refs.push({ symbol: tgt.name, file: tgt.file, line: tgt.line, kind: tgt.kind, direction: "outgoing" });
+				}
+			}
+		}
+	}
+
+	return refs;
+}
+
+function _formatFlatReferences(refs: FlatReference[], symbolName: string): string {
+	if (refs.length === 0) return `No references found for "${symbolName}".`;
+
+	const lines: string[] = [`## Flat References for \`${symbolName}\` (${refs.length} total)`, ""];
+	const incoming = refs.filter((r) => r.direction === "incoming");
+	const outgoing = refs.filter((r) => r.direction === "outgoing");
+
+	if (incoming.length > 0) {
+		lines.push(`### Incoming (${incoming.length})`);
+		for (const r of incoming.slice(0, MAX_DISPLAY_REFS))
+			lines.push(`- ${r.kind} \`${r.symbol}\` — ${r.file}:${r.line}`);
+		if (incoming.length > MAX_DISPLAY_REFS) lines.push(`  ... and ${incoming.length - MAX_DISPLAY_REFS} more`);
+		lines.push("");
+	}
+
+	if (outgoing.length > 0) {
+		lines.push(`### Outgoing (${outgoing.length})`);
+		for (const r of outgoing.slice(0, MAX_DISPLAY_REFS))
+			lines.push(`- ${r.kind} \`${r.symbol}\` — ${r.file}:${r.line}`);
+		if (outgoing.length > MAX_DISPLAY_REFS) lines.push(`  ... and ${outgoing.length - MAX_DISPLAY_REFS} more`);
+		lines.push("");
+	}
+
+	return lines.join("\n");
+}
+
+// ── Backward-compatible exports (for call_chain tests) ─────────────────
+
+export function executeCallChain(
+	graph: RepoGraph,
+	symbolName: string,
+	depth: number = 2,
+	direction: "incoming" | "outgoing" | "both" = "both",
+): string {
+	recordCallChain(symbolName);
+	return _executeCallChain(graph, symbolName, depth, direction);
+}
+
+export function executeCallChainJson(
+	graph: RepoGraph,
+	symbolName: string,
+	depth: number,
+	direction: "incoming" | "outgoing" | "both" = "both",
+): string {
+	return _executeCallChainJson(graph, symbolName, depth, direction);
+}
+
+export function getFlatReferences(
+	graph: RepoGraph,
+	symbolName: string,
+	direction: "incoming" | "outgoing" | "both" = "both",
+): FlatReference[] {
+	return _getFlatReferences(graph, symbolName, direction);
+}
+
+export function formatFlatReferences(refs: FlatReference[], symbolName: string): string {
+	return _formatFlatReferences(refs, symbolName);
 }

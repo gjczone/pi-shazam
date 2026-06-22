@@ -35,7 +35,6 @@
 - Match the local style of the touched area.
 - Keep shared business rules, cache keys, and classification logic in one source of truth. When adding state, cache, schema, or persisted fields, update the full lifecycle.
 
-
 ### 3.3 Verifiable Execution
 
 - Verify beyond the happy path: boundary cases, repeated runs, and nearby old entry points.
@@ -57,20 +56,25 @@ Trigger only when the task or milestone is fully completed:
 老板您好，已完成 [一句话总结]。
 
 **做了什么**
+
 - [业务层面]: [通俗说明变更内容和原因]
 
 **结果**
+
 - [什么变了]: [用户视角描述变更效果]
 - [影响范围]: [受影响的页面/功能/模块]
 
 **已确认**
+
 - [验证项 1]: [验证方式和结果]
 - [验证项 2]: [验证方式和结果]
 
 **需要你决策**
+
 - [需人工判断的事项]: [为什么需要你决定]
 
 **待跟进**
+
 - #N: [简述] → 已建 issue，后续处理
 ```
 
@@ -128,6 +132,7 @@ pi-shazam is an open-source project. When replying to issues filed by external (
 - **For feature requests**: Thank them for the idea, explain whether/how it will be implemented, mention any known limitations (e.g., dependency constraints).
 - **Never**: Be dismissive, blame the user, leave an issue unacknowledged for more than 48 hours, or close without explanation.
 - **Template for bug fix**:
+
   ```
   Hi @{user}, thank you for reporting this!
 
@@ -138,7 +143,9 @@ pi-shazam is an open-source project. When replying to issues filed by external (
 
   Feel free to reopen if you still see the issue after updating.
   ```
+
 - **Template for feature request**:
+
   ```
   Hi @{user}, great suggestion!
 
@@ -160,20 +167,20 @@ Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as
 
 ## When to Read Companion Files
 
-| File | Directive | Trigger |
-|------|-----------|---------|
-| `docs/INSTRUCTION.md` | You MUST read this file BEFORE making any change. It is the single source of truth for Pi extension API contracts, architecture layer boundaries, tool registration patterns, content format contracts, release process, and verification gates. Do not guess any contract. | Any code change, tool/hook creation, or release |
-| `SKILL.md` | You MUST read this file BEFORE using any `shazam_*` tool. It documents every tool's parameters, behavior, return format, and usage patterns with concrete examples. Do not guess parameter names or output shapes. | Before calling a shazam tool for the first time, or when uncertain about parameters |
-| `README.md` | Reference for user-facing setup, install, and feature descriptions. Do not duplicate its content in AGENTS.md. | User onboarding, release announcements |
-| `CHANGELOG.md` | Reference for release history and version tracking. Update when releasing a new version. | Before creating a release, before investigating regression |
-| `LOCAL_CI.md` | You MUST read this file and run EVERY check BEFORE committing code or reporting task completion. A commit that fails any check is a broken commit. 13 steps: deps, types, format, tests, build, dist, hooks, MCP integration, benchmarks, security, contracts, MCP smoke, Pi smoke. | Before every commit, before reporting task completion |
-| `OPS.md` | Release operations checklist — documentation sync (CHANGELOG, README, AGENTS, SKILL, MCP README), version bump, local CI, GitHub Release, npm/MCP/Pi verification, branch cleanup, git clean state. Run through ALL 17 checklist items when publishing. | Before every release |
+| File                  | Directive                                                                                                                                                                                                                                                                           | Trigger                                                                             |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `docs/INSTRUCTION.md` | You MUST read this file BEFORE making any change. It is the single source of truth for Pi extension API contracts, architecture layer boundaries, tool registration patterns, content format contracts, release process, and verification gates. Do not guess any contract.         | Any code change, tool/hook creation, or release                                     |
+| `SKILL.md`            | You MUST read this file BEFORE using any `shazam_*` tool. It documents every tool's parameters, behavior, return format, and usage patterns with concrete examples. Do not guess parameter names or output shapes.                                                                  | Before calling a shazam tool for the first time, or when uncertain about parameters |
+| `README.md`           | Reference for user-facing setup, install, and feature descriptions. Do not duplicate its content in AGENTS.md.                                                                                                                                                                      | User onboarding, release announcements                                              |
+| `CHANGELOG.md`        | Reference for release history and version tracking. Update when releasing a new version.                                                                                                                                                                                            | Before creating a release, before investigating regression                          |
+| `LOCAL_CI.md`         | You MUST read this file and run EVERY check BEFORE committing code or reporting task completion. A commit that fails any check is a broken commit. 13 steps: deps, types, format, tests, build, dist, hooks, MCP integration, benchmarks, security, contracts, MCP smoke, Pi smoke. | Before every commit, before reporting task completion                               |
+| `OPS.md`              | Release operations checklist — documentation sync (CHANGELOG, README, AGENTS, SKILL, MCP README), version bump, local CI, GitHub Release, npm/MCP/Pi verification, branch cleanup, git clean state. Run through ALL 17 checklist items when publishing.                             | Before every release                                                                |
 
 ## Project Snapshot
 
 - **Runtime**: TypeScript on Node.js ≥18, ES2022 target, NodeNext module resolution, ESM (`"type": "module"`)
-- **Package**: npm `pi-shazam` (v0.13.1), entry `dist/index.js` (default export function receiving `ExtensionAPI`)
-- **Primary user flow**: LLM calls analysis tools (`overview`, `impact`, `codesearch`, etc.) to understand code structure, change impact, and call chains before making edits
+- **Package**: npm `pi-shazam` (v0.14.2), entry `dist/index.js` (default export function receiving `ExtensionAPI`)
+- **Primary user flow**: LLM calls analysis tools (`overview`, `lookup`, `impact`, etc.) to understand code structure, change impact, and call chains before making edits
 - **Architecture**: 4 layers — `core/` (parsing, graph, ranking), `lsp/` (language server management), `tools/` (Pi tool wrappers), `hooks/` (automatic verification)
 - **External dependency**: Language servers (pyright, tsserver, rust-analyzer, gopls) are user-installed; pi-shazam manages process lifecycle
 - **Release artifact**: npm package with `dist/` compiled output
@@ -250,18 +257,13 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
 │   ├── _factory.ts         ← createTool() registration factory (json/maxTokens, scanProject, envelope, truncation)
 │   ├── definitions.ts      ← Shared tool definitions (names, descriptions, param schemas)
 │   ├── lsp_enrich.ts       ← Tool-layer LSP enrichment wrappers (workspace/symbol, documentSymbol, semanticTokens, foldingRange) with 5s timeout + null fallback
-│   ├── overview.ts         ← Scenario trigger: use first in unfamiliar projects (module map, deps, git history, routes)
-│   ├── impact.ts           ← Prerequisite: required before editing 2+ files or shared modules
-│   ├── codesearch.ts       ← Anti-pattern: use this instead of grep (BM25 ranking + LSP enrichment)
-│   ├── file_detail.ts      ← Scenario trigger: shows structure not syntax before first edit
-│   ├── call_chain.ts       ← Consequence hint: without this you ship bugs from missed callers
-│   ├── symbol.ts           ← Scenario trigger: look up symbol before importing/calling (mode=state)
+│   ├── overview.ts         ← Project overview + complexity hotspots (absorbed hotspots.ts)
+│   ├── lookup.ts           ← Unified symbol/file lookup (absorbed symbol, file_detail, hover, type_hierarchy)
+│   ├── impact.ts           ← Change impact + call chain analysis (absorbed call_chain.ts)
 │   ├── verify.ts           ← Action binding: run after every write/edit with LSP codeAction fixes (PASS/WARN/FAIL)
-│   ├── fix.ts              ← Action binding: auto-fix format/lint when verify reports errors
-│   ├── hotspots.ts         ← Consequence hint: without this you optimize the wrong files
-│   ├── hover.ts            ← Action binding: get type signatures + docs after finding a symbol
+│   ├── changes.ts          ← Git change summary with symbol-level detail
+│   ├── format.ts           ← Auto-format code (renamed from fix.ts)
 │   ├── find_tests.ts       ← Scenario trigger: discover test files before adding/modifying tests
-│   ├── type_hierarchy.ts   ← Scenario trigger: see inheritance chain for OOP/interface types
 │   ├── rename_symbol.ts    ← Prerequisite: safety gate before renaming (verify references first)
 │   └── safe_delete.ts      ← Prerequisite: safety gate before removing (verify zero refs first)
 └── hooks/                  ← Automatic (not LLM-visible)
@@ -274,13 +276,13 @@ index.ts                    ← Pi extension entry, default export(pi: Extension
     ├── tool-logger.ts      ← Log shazam calls to ~/.pi/hooks/audit/shazam-calls.log
     ├── verify-state.ts     ← Shared verify tracking state for safety + stop-verify
     ├── impact-state.ts     ← Shared impact tracking state for issue-guard + pre-edit
-    ├── rename-state.ts     ← Session-scoped state: symbols reviewed via call_chain (gates rename_symbol)
+    ├── rename-state.ts     ← Session-scoped state: symbols reviewed via impact (gates rename_symbol)
     ├── _bash-utils.ts      ← Shared tokenizeCommand + extractCommandFromEvent (safety, issue-guard, agent-context-guard)
     ├── issue-guard.ts      ← Detect gh issue create, set pending impact flag
     └── agent-context-guard.ts ← Block agent spawn without structural context
 mcp/                        ← MCP server for non-Pi clients (with LSP support)
 ├── entry.ts                ← McpServer + LspManager + StdioServerTransport init
-├── tools.ts                ← 14 MCP tool registrations wrapping core (with log rotation)
+├── tools.ts                ← 9 MCP tool registrations wrapping core (with log rotation)
 └── README.md               ← Client setup guide (Cursor, Claude Desktop, etc.)
 ```
 
@@ -308,7 +310,7 @@ mcp/                        ← MCP server for non-Pi clients (with LSP support)
 - **Tool call**: LLM calls tool → `tools/*.execute()` → `core/scanner` (disk cache → in-memory cache → incremental/full scan) → `core/` analysis → optional LSP enrichment via `tools/lsp_enrich.ts` (5s timeout, tree-sitter fallback) → return `AgentToolResult`
 - **Verification**: LLM calls `shazam_verify` manually when needed (no automatic verification after edits).
 - **Tool logging**: `tool_call` + `tool_result` events → `hooks/tool-logger` → writes JSONL to `~/.pi/hooks/audit/shazam-calls.log`
-- **Agent guidance**: `before_agent_start` → `hooks/shazam-guide` → injects tool list into system prompt; `tool_result` (write/edit) → nudges `shazam_verify`; `tool_call` (grep/find) → nudges `shazam_codesearch`
+- **Agent guidance**: `before_agent_start` → `hooks/shazam-guide` → injects tool list into system prompt; `tool_result` (write/edit) → nudges `shazam_verify`; `tool_call` (grep/find) → nudges `shazam_lookup`
 - **MCP tool calls**: MCP client → JSON-RPC over stdio → `mcp/tools.ts` → `core/` analysis + optional LSP enrichment (LspManager initialized in `mcp/entry.ts`) → return `{ content: [...] }`
 - **LSP lifecycle**: extension load → `lsp/manager` detects project languages → spawns servers on demand → `lsp/client` handles JSON-RPC via vscode-jsonrpc over stdio → `session_shutdown` kills all
 
@@ -318,36 +320,31 @@ mcp/                        ← MCP server for non-Pi clients (with LSP support)
 
 `lsp/client.ts` exposes the following LSP protocol methods. Each returns `null` when the server is unavailable, the file is not opened, the server capability is missing, or the call times out (5s). Tools compose these via `tools/lsp_enrich.ts`.
 
-| Method            | LSP request                        | Consumer                                                         |
-| ----------------- | ---------------------------------- | ---------------------------------------------------------------- |
-| `definition`      | `textDocument/definition`          | tools/symbol.ts (future), tools/type_hierarchy.ts                |
-| `references`      | `textDocument/references`          | tools/call_chain.ts, tools/verify.ts                             |
-| `hover`           | `textDocument/hover`               | tools/hover.ts                                                   |
-| `documentSymbols` | `textDocument/documentSymbol`      | tools/symbol.ts, tools/file_detail.ts (via `lspDocumentSymbols`) |
-| `workspaceSymbol` | `workspace/symbol`                 | tools/codesearch.ts (via `lspWorkspaceSearch`)                   |
-| `semanticTokens`  | `textDocument/semanticTokens/full` | (wired via `lspSemanticTokens`, not yet consumed by tools)       |
-| `foldingRange`    | `textDocument/foldingRange`        | (wired via `lspFoldingRanges`, not yet consumed by tools)        |
+| Method            | LSP request                        | Consumer                                                   |
+| ----------------- | ---------------------------------- | ---------------------------------------------------------- |
+| `definition`      | `textDocument/definition`          | tools/lookup.ts                                            |
+| `references`      | `textDocument/references`          | tools/impact.ts, tools/verify.ts                           |
+| `hover`           | `textDocument/hover`               | tools/lookup.ts                                            |
+| `documentSymbols` | `textDocument/documentSymbol`      | tools/lookup.ts (via `lspDocumentSymbols`)                 |
+| `workspaceSymbol` | `workspace/symbol`                 | tools/lookup.ts (via `lspWorkspaceSearch`)                 |
+| `semanticTokens`  | `textDocument/semanticTokens/full` | (wired via `lspSemanticTokens`, not yet consumed by tools) |
+| `foldingRange`    | `textDocument/foldingRange`        | (wired via `lspFoldingRanges`, not yet consumed by tools)  |
 
 > Contract documentation: `docs/INSTRUCTION.md` §1 is the authoritative source for Pi ExtensionAPI real contract, extracted from `pi-coding-agent@0.78.1` runtime source.
 
 ### Registered Tools (LLM-visible)
 
-| Tool                    | Value  | Style            | Description                                                                                                        |
-| ----------------------- | ------ | ---------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `shazam_overview`       | HIGH   | Scenario trigger | When you first enter a project — see structure, deps, git history before reading a single file                     |
-| `shazam_impact`         | HIGH   | Prerequisite     | Required before editing 2+ files or any shared/exported module                                                     |
-| `shazam_codesearch`     | HIGH   | Anti-pattern     | Don't reach for grep — this ranks results by relevance with BM25                                                   |
-| `shazam_call_chain`     | HIGH   | Consequence hint | Without this you ship bugs — traces ALL upstream callers and downstream callees                                    |
-| `shazam_verify`         | HIGH   | Action binding   | After every write or edit — confirm no errors (PASS/WARN/FAIL)                                                     |
-| `shazam_hover`          | HIGH   | Action binding   | After finding a symbol, get its full type signature, documentation, and signatureHelp for function call context    |
-| `shazam_symbol`         | MEDIUM | Scenario trigger | When you need to look up a symbol before importing or calling it                                                   |
-| `shazam_file_detail`    | MEDIUM | Scenario trigger | When about to edit an unfamiliar file — shows structure, not just syntax; also shows reference counts via codeLens |
-| `shazam_find_tests`     | MEDIUM | Scenario trigger | When adding tests — discover test files and coverage for a module                                                  |
-| `shazam_hotspots`       | MEDIUM | Consequence hint | Without this you optimize the wrong files — ranked by blast radius                                                 |
-| `shazam_fix`            | MEDIUM | Action binding   | When verify reports format/lint errors — auto-fix with nearest-wins formatters                                     |
-| `shazam_type_hierarchy` | MEDIUM | Scenario trigger | When working with OOP types — see the full inheritance chain                                                       |
-| `shazam_rename_symbol`  | LOW    | Prerequisite     | Safety gate before renaming — verify references first, then rename                                                 |
-| `shazam_safe_delete`    | LOW    | Prerequisite     | Safety gate before removal — verify zero incoming references first                                                 |
+| Tool                   | Value  | Style            | Description                                                                                                |
+| ---------------------- | ------ | ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| `shazam_overview`      | HIGH   | Scenario trigger | Project structure, deps, git history, hotspots — use first in unfamiliar projects                          |
+| `shazam_lookup`        | HIGH   | Scenario trigger | Unified symbol/file lookup with type hierarchy, hover, file detail — auto-detects file path vs symbol name |
+| `shazam_impact`        | HIGH   | Prerequisite     | Impact analysis + call chain tracing — required before editing 2+ files or shared modules                  |
+| `shazam_verify`        | HIGH   | Action binding   | Post-edit verification gate (LSP diagnostics + graph analysis). PASS/WARN/FAIL                             |
+| `shazam_changes`       | MEDIUM | Action binding   | Git change summary — changed files, affected symbols, risk level                                           |
+| `shazam_format`        | MEDIUM | Action binding   | Auto-format code with nearest-wins formatters (prettier, biome, eslint, ruff, cargo fmt, gofmt)            |
+| `shazam_find_tests`    | MEDIUM | Scenario trigger | Discover test files covering a module                                                                      |
+| `shazam_rename_symbol` | LOW    | Prerequisite     | Safety gate before renaming — verify references first, then rename                                         |
+| `shazam_safe_delete`   | LOW    | Prerequisite     | Safety gate before removal — verify zero incoming references first                                         |
 
 All tools follow the same pattern:
 
@@ -602,7 +599,7 @@ cp dist/**/*.js ~/.pi/agent/npm/node_modules/pi-shazam/dist/ -r
 # Smoke test all tools
 pi -p "call shazam_overview briefly"
 pi -p "call shazam_verify"
-pi -p "call shazam_hotspots"
+pi -p "call shazam_lookup"
 
 # Check: no "Extension error" in output, tools return meaningful results.
 ```
@@ -610,7 +607,7 @@ pi -p "call shazam_hotspots"
 ### MCP Testing
 
 ```bash
-printf '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}\n{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shazam_hotspots","arguments":{}}}\n' | timeout 15 node dist/mcp/entry.js . 2>/dev/null | tail -1
+printf '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}\n{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shazam_overview","arguments":{}}}\n' | timeout 15 node dist/mcp/entry.js . 2>/dev/null | tail -1
 ```
 
 ### Hook Verification

@@ -1,16 +1,16 @@
 # pi-shazam
 
-> **Pi coding agent native codebase awareness toolkit** — 14 structural analysis tools built natively for Pi agent. MCP support available for non-Pi agents (Cursor, Claude Code, Qoder, Trae, Codebuddy, etc.)
+> **Pi coding agent native codebase awareness toolkit** — 9 structural analysis tools built natively for Pi agent. MCP support available for non-Pi agents (Cursor, Claude Code, Qoder, Trae, Codebuddy, etc.)
 
 [![npm version](https://img.shields.io/npm/v/pi-shazam)](https://www.npmjs.com/package/pi-shazam)
 [![CI](https://github.com/gjczone/pi-shazam/actions/workflows/ci.yml/badge.svg)](https://github.com/gjczone/pi-shazam/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **100% Vibe Coding** — This entire project (core analysis engine, 14 tools, hooks, LSP integration, MCP server, CI/CD, documentation) was built using [Pi coding agent](https://pi.dev) powered primarily by **DeepSeek-V4-Pro**, **MiMo-V2.5-Pro**, and **Qwen3.7-Max**. Zero hand-written code. Every line, every test, every architecture decision — generated and refined by AI, verified by automated CI.
+> **100% Vibe Coding** — This entire project (core analysis engine, 9 tools, hooks, LSP integration, MCP server, CI/CD, documentation) was built using [Pi coding agent](https://pi.dev) powered primarily by **DeepSeek-V4-Pro**, **MiMo-V2.5-Pro**, and **Qwen3.7-Max**. Zero hand-written code. Every line, every test, every architecture decision — generated and refined by AI, verified by automated CI.
 
 ## What It Does
 
-**pi-shazam** is a native codebase analysis toolkit built for the **Pi coding agent**. It provides 14 structural analysis tools that help AI agents understand project architecture before reading code.
+**pi-shazam** is a native codebase analysis toolkit built for the **Pi coding agent**. It provides 9 structural analysis tools that help AI agents understand project architecture before reading code.
 
 For non-Pi agents, pi-shazam also exposes the same tools via **MCP (Model Context Protocol)**. Supported MCP clients include Cursor, Claude Code, Qoder, Trae, Codebuddy, Kimi Code, and more. **Note: the MCP interface is a compatibility layer — the primary and recommended deployment model is as a native Pi extension.**
 
@@ -32,11 +32,11 @@ For non-Pi agents, pi-shazam also exposes the same tools via **MCP (Model Contex
 pi install npm:pi-shazam
 ```
 
-After installation, all 14 analysis tools register as native Pi tools alongside `read`, `write`, and `bash`. Automatic hooks inject project structure into system prompts, verify code after edits, and log tool usage. **Full hook lifecycle (before_agent_start, session_start, session_shutdown, tool_call, tool_result) available only in Pi mode.**
+After installation, all 9 analysis tools register as native Pi tools alongside `read`, `write`, and `bash`. Automatic hooks inject project structure into system prompts, verify code after edits, and log tool usage. **Full hook lifecycle (before_agent_start, session_start, session_shutdown, tool_call, tool_result) available only in Pi mode.**
 
 ### MCP (For Non-Pi Agents Only)
 
-Use this only if you are **not** using Pi agent. The MCP interface provides the same 14 tools with LSP support but without Pi-specific hooks and lifecycle integration.
+Use this only if you are **not** using Pi agent. The MCP interface provides the same 9 tools with LSP support but without Pi-specific hooks and lifecycle integration.
 
 ```json
 {
@@ -55,25 +55,20 @@ Compatible with any MCP-capable client. Same analysis engine, JSON-based tool in
 
 ### Query (Read-Only)
 
-| Tool                    | What It Does                                                                       |
-| ----------------------- | ---------------------------------------------------------------------------------- |
-| `shazam_overview`       | Project structure, top-10 core files by PageRank, key dependencies, recent commits |
-| `shazam_impact`         | Change impact analysis (BFS depth tracking, default 3): affected files, symbols, tests |
-| `shazam_codesearch`     | BM25 symbol search + ripgrep full-text search (target=symbol/code) — ranked alternative to grep                                    |
-| `shazam_symbol`         | Symbol definition, signature, callers, callees                                     |
-| `shazam_hover`          | Type signatures, JSDoc, signatureHelp for function call context                    |
-| `shazam_file_detail`    | File structure: symbols, PageRank, call counts, LSP hierarchy, codeLens refs       |
-| `shazam_call_chain`     | Full upstream/downstream call graph                                                |
-| `shazam_find_tests`     | Find test files covering a module                                                  |
-| `shazam_hotspots`       | Files ranked by complexity — where bugs hurt most                                  |
-| `shazam_type_hierarchy` | Class/interface inheritance chain + implementation locations                       |
+| Tool                | What It Does                                                             |
+| ------------------- | ------------------------------------------------------------------------ |
+| `shazam_overview`   | Project structure + hotspots + deps + routes                             |
+| `shazam_lookup`     | Symbol/file lookup with type hierarchy, hover, LSP enrichment            |
+| `shazam_impact`     | File impact + symbol call chain analysis (BFS depth tracking, default 3) |
+| `shazam_changes`    | Git change summary with risk level                                       |
+| `shazam_find_tests` | Find test files covering a module                                        |
 
 ### Write & Verify
 
 | Tool                   | What It Does                                                                |
 | ---------------------- | --------------------------------------------------------------------------- |
 | `shazam_verify`        | Post-edit verification: LSP diagnostics + codeAction fixes + risk + orphans |
-| `shazam_fix`           | Auto-fix format issues (prettier, biome, eslint, ruff, gofmt)               |
+| `shazam_format`        | Auto-format code (prettier, biome, eslint, ruff, gofmt)                     |
 | `shazam_rename_symbol` | Safe project-wide rename — verify references first                          |
 | `shazam_safe_delete`   | Delete with zero-reference confirmation                                     |
 
@@ -81,17 +76,17 @@ Compatible with any MCP-capable client. Same analysis engine, JSON-based tool in
 
 ### Pi Agent Hooks
 
-| Hook               | Event                       | What It Does                                                                                 |
-| ------------------ | --------------------------- | -------------------------------------------------------------------------------------------- |
-| `before-start`     | `before_agent_start`        | Inject project structure overview + proactive recommendations into system prompt             |
-| `safety`           | `tool_call` (bash)          | Destructive command confirmation dialog + Pre-commit gate (blocks git commit without verify) |
-| `shazam-guide`     | `tool_result`               | Auto-format files after write/edit + contextual tool suggestions                             |
-| `stop-verify`      | `turn_end`                  | Remind to run `shazam_verify` before ending turn                                             |
-| `failure-recovery` | `tool_result`               | Detect consecutive failures (3x/5x) and suggest alternatives                                 |
-| `pre-edit`         | `tool_call`                 | Detect multi-file edits, warn about blast radius                                             |
-| `tool-logger`      | `tool_call` + `tool_result` | Log all shazam tool calls to `~/.pi/hooks/audit/shazam-calls.log`                            |
-| `issue-guard`      | `tool_call` (bash) + `tool_result` | Detects `gh issue create`, blocks edits until `shazam_impact` runs                   |
-| `agent-context-guard` | `tool_call` (agent)       | Blocks agent spawn without structural context for review tasks                              |
+| Hook                  | Event                              | What It Does                                                                                 |
+| --------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------- |
+| `before-start`        | `before_agent_start`               | Inject project structure overview + proactive recommendations into system prompt             |
+| `safety`              | `tool_call` (bash)                 | Destructive command confirmation dialog + Pre-commit gate (blocks git commit without verify) |
+| `shazam-guide`        | `tool_result`                      | Auto-format files after write/edit + contextual tool suggestions                             |
+| `stop-verify`         | `turn_end`                         | Remind to run `shazam_verify` before ending turn                                             |
+| `failure-recovery`    | `tool_result`                      | Detect consecutive failures (3x/5x) and suggest alternatives                                 |
+| `pre-edit`            | `tool_call`                        | Detect multi-file edits, warn about blast radius                                             |
+| `tool-logger`         | `tool_call` + `tool_result`        | Log all shazam tool calls to `~/.pi/hooks/audit/shazam-calls.log`                            |
+| `issue-guard`         | `tool_call` (bash) + `tool_result` | Detects `gh issue create`, blocks edits until `shazam_impact` runs                           |
+| `agent-context-guard` | `tool_call` (agent)                | Blocks agent spawn without structural context for review tasks                               |
 
 **Auto-format support**: ruff (Python), prettier (JS/TS/JSON/MD), eslint (JS/TS), gofmt (Go), rustfmt (Rust), biome (JS/TS)
 
@@ -161,11 +156,9 @@ pi-shazam (npm package)
 │   ├── _factory.ts                     Tool registration factory
 │   ├── _context.ts                     Shared LSP manager holder
 │   ├── lsp_enrich.ts                   LSP enrichment wrappers
-│   ├── overview.ts ─── impact.ts ─── codesearch.ts
-│   ├── symbol.ts ─── hover.ts ─── file_detail.ts
-│   ├── call_chain.ts ─── verify.ts ─── fix.ts
-│   ├── hotspots.ts ─── find_tests.ts ─── type_hierarchy.ts
-│   ├── rename_symbol.ts ─── safe_delete.ts
+│   ├── overview.ts ─── lookup.ts ─── impact.ts
+│   ├── verify.ts ─── changes.ts ─── format.ts
+│   ├── find_tests.ts ─── rename_symbol.ts ─── safe_delete.ts
 │   │
 │   └── Pi Extension (index.ts)         MCP Server (mcp/entry.ts ── mcp/tools.ts)
 │           │                                   │

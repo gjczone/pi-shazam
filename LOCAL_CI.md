@@ -119,10 +119,10 @@ echo "=== Done ==="
 ### 12. MCP Smoke Test
 
 ```bash
-printf '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}\n{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shazam_hotspots","arguments":{}}}\n' | timeout 15 node dist/mcp/entry.js . 2>/dev/null | tail -1
+printf '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}\n{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shazam_overview","arguments":{}}}\n' | timeout 15 node dist/mcp/entry.js . 2>/dev/null | tail -1
 ```
 
-**Pass**: JSON response with `shazam_hotspots` results (non-empty text content).
+**Pass**: JSON response with `shazam_overview` results (non-empty text content).
 **Common fix**: check MCP server init in `mcp/entry.ts`, ensure `dist/` is built.
 
 ### 13. Pi Integration Smoke Test

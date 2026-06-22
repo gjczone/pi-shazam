@@ -9,8 +9,8 @@ import { TOOL_DEFINITIONS, getToolDefinition } from "../tools/definitions.js";
 describe("definitions parity (#332)", () => {
 	const tools = Object.keys(TOOL_DEFINITIONS);
 
-	it("should have definitions for all 14 tools", () => {
-		expect(tools.length).toBe(14);
+	it("should have definitions for all 9 tools", () => {
+		expect(tools.length).toBe(9);
 	});
 
 	for (const toolName of tools) {
@@ -34,14 +34,6 @@ describe("definitions parity (#332)", () => {
 	it("shazam_impact: depth should have bounds in both schemas", () => {
 		const def = getToolDefinition("shazam_impact")!;
 		expect(def.zodParams.shape).toHaveProperty("depth");
-	});
-
-	it("shazam_codesearch/shazam_hotspots: topN should exist in Zod", () => {
-		for (const name of ["shazam_codesearch", "shazam_hotspots"]) {
-			const def = getToolDefinition(name)!;
-			const topN = def.zodParams.shape.topN;
-			expect(topN).toBeDefined();
-		}
 	});
 
 	it("shazam_safe_delete: dryRun should exist in both schemas", () => {

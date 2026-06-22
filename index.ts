@@ -29,17 +29,12 @@ import { clearRenameState } from "./hooks/rename-state.js";
 
 // ── Tool registrations ────────────────────────────────────────────────────
 import { registerOverview } from "./tools/overview.js";
+import { registerLookup } from "./tools/lookup.js";
 import { registerImpact } from "./tools/impact.js";
-import { registerCallChain } from "./tools/call_chain.js";
 import { registerVerify } from "./tools/verify.js";
-import { registerFix } from "./tools/fix.js";
-import { registerHotspots } from "./tools/hotspots.js";
-import { registerCodesearch } from "./tools/codesearch.js";
-import { registerFileDetail } from "./tools/file_detail.js";
-import { registerSymbol } from "./tools/symbol.js";
-import { registerHover } from "./tools/hover.js";
+import { registerChanges } from "./tools/changes.js";
+import { registerFormat } from "./tools/format.js";
 import { registerFindTests } from "./tools/find_tests.js";
-import { registerTypeHierarchy } from "./tools/type_hierarchy.js";
 import { registerRenameSymbol } from "./tools/rename_symbol.js";
 import { registerSafeDelete } from "./tools/safe_delete.js";
 
@@ -237,17 +232,12 @@ export default function (pi: ExtensionAPI): void {
 
 	// ── Tools (LLM-visible) ────────────────────────────────────────────────
 	registerOverview(pi);
+	registerLookup(pi);
 	registerImpact(pi);
-	registerCallChain(pi);
 	registerVerify(pi);
-	registerFix(pi);
-	registerHotspots(pi);
-	registerCodesearch(pi);
-	registerFileDetail(pi);
-	registerSymbol(pi);
-	registerHover(pi);
+	registerChanges(pi);
+	registerFormat(pi);
 	registerFindTests(pi);
-	registerTypeHierarchy(pi);
 	registerRenameSymbol(pi);
 	registerSafeDelete(pi);
 

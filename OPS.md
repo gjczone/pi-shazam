@@ -71,6 +71,7 @@ Before bumping the version, ensure ALL documentation is up to date with the chan
 ```
 
 This script handles:
+
 - `npm version` bump in `package.json`
 - Version sync to `mcp/entry.ts`, `AGENTS.md`, `docs/INSTRUCTION.md`
 - `npm run build` + `npm test`
@@ -93,6 +94,7 @@ grep '0\.[0-9]*\.[0-9]*' AGENTS.md | head -3
 ```
 
 All four surfaces should show the same version:
+
 - `package.json`
 - `mcp/entry.ts`
 - `AGENTS.md`
@@ -218,20 +220,20 @@ After every pi-shazam release, check if Kimi Code hooks need to be updated. Kimi
 
 ### 7.1 When to Sync
 
-| pi-shazam Change | Kimi Code Hook to Check |
-|-----------------|------------------------|
-| New/renamed/deleted tool | `mcp-reference.sh`, `shazam-guide.sh` |
-| Tool description changed | `mcp-reference.sh`, `radar-session.sh` |
-| `tools/fix.ts` formatter changed | `auto-fix.sh` |
-| Verification flow changed | `pre-commit-shazam.sh`, `stop-verify.sh` |
-| Hook behavior changed | Corresponding `.sh` script |
-| New danger pattern added | `check-destructive.sh` |
+| pi-shazam Change                    | Kimi Code Hook to Check                  |
+| ----------------------------------- | ---------------------------------------- |
+| New/renamed/deleted tool            | `mcp-reference.sh`, `shazam-guide.sh`    |
+| Tool description changed            | `mcp-reference.sh`, `radar-session.sh`   |
+| `tools/format.ts` formatter changed | `auto-fix.sh`                            |
+| Verification flow changed           | `pre-commit-shazam.sh`, `stop-verify.sh` |
+| Hook behavior changed               | Corresponding `.sh` script               |
+| New danger pattern added            | `check-destructive.sh`                   |
 
 ### 7.2 Sync Checklist
 
 - [ ] `mcp-reference.sh` — tool list complete, tool names correct (`mcp__pi-shazam__shazam_*`)
 - [ ] `shazam-guide.sh` — covers all tools with trigger patterns
-- [ ] `auto-fix.sh` — formatter commands match `tools/fix.ts`
+- [ ] `auto-fix.sh` — formatter commands match `tools/format.ts`
 - [ ] `pre-commit-shazam.sh` — verify logic matches `hooks/safety.ts`
 - [ ] `stop-verify.sh` — edit detection correct
 - [ ] `watchdog.sh` — audit log format matches `hooks/tool-logger.ts`
@@ -241,13 +243,13 @@ After every pi-shazam release, check if Kimi Code hooks need to be updated. Kimi
 
 ### 7.3 Key Differences (Pi vs Kimi Code)
 
-| Aspect | Pi (TypeScript) | Kimi Code (Shell) |
-|--------|-----------------|-------------------|
-| Interactive confirm | `ctx.ui.confirm()` | ❌ exit 2 only |
-| State persistence | In-memory Map | Disk files (`~/.kimi-code/watchdog/`) |
-| Tool call format | `shazam_*` | `mcp__pi-shazam__shazam_*` |
-| Formatter execution | `execSync()` | Shell script |
-| Verify detection | `verify-state.ts` memory | `verified_<session>` marker file |
+| Aspect              | Pi (TypeScript)          | Kimi Code (Shell)                     |
+| ------------------- | ------------------------ | ------------------------------------- |
+| Interactive confirm | `ctx.ui.confirm()`       | ❌ exit 2 only                        |
+| State persistence   | In-memory Map            | Disk files (`~/.kimi-code/watchdog/`) |
+| Tool call format    | `shazam_*`               | `mcp__pi-shazam__shazam_*`            |
+| Formatter execution | `execSync()`             | Shell script                          |
+| Verify detection    | `verify-state.ts` memory | `verified_<session>` marker file      |
 
 ## Phase 8: Self-Improvement Retrospective
 
@@ -257,18 +259,18 @@ After every release, review the OPS process itself and ALL companion .md files f
 
 Review EVERY companion .md file. For each one, ask: "Did this release change anything that this file documents?"
 
-| File | Check |
-|------|-------|
-| `CHANGELOG.md` | New version section exists and is complete |
-| `README.md` | Tool tables, language count, install commands, feature descriptions match current code |
-| `AGENTS.md` | Architecture tree, tool/hook/command tables, language count, version number |
-| `SKILL.md` | Tool docs, parameter descriptions, usage examples |
-| `mcp/README.md` | MCP tool table, client setup examples |
-| `docs/INSTRUCTION.md` | API contracts, version number, architecture boundaries |
-| `LOCAL_CI.md` | All CI steps still valid (new test files? new checks needed?) |
-| `OPS.md` | This file — were any steps missing, wrong order, or need new Pass criteria? |
-| `DESIGN.md` | (if exists) Design tokens, component styles |
-| `api.d.ts` | (if exists) All API endpoints match current implementation |
+| File                  | Check                                                                                  |
+| --------------------- | -------------------------------------------------------------------------------------- |
+| `CHANGELOG.md`        | New version section exists and is complete                                             |
+| `README.md`           | Tool tables, language count, install commands, feature descriptions match current code |
+| `AGENTS.md`           | Architecture tree, tool/hook/command tables, language count, version number            |
+| `SKILL.md`            | Tool docs, parameter descriptions, usage examples                                      |
+| `mcp/README.md`       | MCP tool table, client setup examples                                                  |
+| `docs/INSTRUCTION.md` | API contracts, version number, architecture boundaries                                 |
+| `LOCAL_CI.md`         | All CI steps still valid (new test files? new checks needed?)                          |
+| `OPS.md`              | This file — were any steps missing, wrong order, or need new Pass criteria?            |
+| `DESIGN.md`           | (if exists) Design tokens, component styles                                            |
+| `api.d.ts`            | (if exists) All API endpoints match current implementation                             |
 
 ### 8.2 Process Retrospective
 

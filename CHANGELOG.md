@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-06-22
+
+### Refactoring
+
+- **refactor(#362): Tool consolidation 14->9 -- unified lookup, impact+call_chain, overview+hotspots**
+  - Merged `shazam_symbol`, `shazam_file_detail`, `shazam_hover`, `shazam_type_hierarchy` into `shazam_lookup` (auto-detects file path vs symbol name)
+  - Merged `shazam_call_chain` into `shazam_impact` (new `--symbol` parameter for per-symbol tracing)
+  - Merged `shazam_hotspots` into `shazam_overview` (hotspots section shown at end of overview)
+  - Renamed `shazam_fix` to `shazam_format` (precise naming, avoids LLM confusion)
+  - Added `shazam_changes` -- lightweight git change summary with risk level
+  - Deleted `shazam_codesearch` (overlaps with ffgrep)
+  - Updated all hooks, MCP tools, NEXT_RULES, and definitions to match new tool names
+
+### Breaking Changes
+
+- Tool count reduced from 14 to 9. LLM agents using old tool names (`shazam_symbol`, `shazam_file_detail`, `shazam_hover`, `shazam_type_hierarchy`, `shazam_call_chain`, `shazam_hotspots`, `shazam_codesearch`, `shazam_fix`) must update to new names.
+- `shazam_impact --files` parameter is now optional when using `--symbol` mode.
+
 ## [0.14.2] - 2026-06-22
 
 ### Bug Fixes

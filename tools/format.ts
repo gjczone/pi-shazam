@@ -1,5 +1,5 @@
 /**
- * pi-shazam tools/fix — Auto-fix lint/format.
+ * pi-shazam tools/format — Auto-format code.
  *
  * Scans source files for common format issues and offers fixes.
  * In dry-run mode, previews what would change without modifying files.
@@ -16,10 +16,10 @@ import { execFileSync } from "node:child_process";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { isNonSourceFile } from "../core/filter.js";
 
-export function registerFix(pi: ExtensionAPI): void {
+export function registerFormat(pi: ExtensionAPI): void {
 	createTool(pi, {
-		name: "shazam_fix",
-		label: "Auto-Fix Format & Lint",
+		name: "shazam_format",
+		label: "Auto-Format Code",
 		description: `\
 		When shazam_verify reports format or lint errors, use this to
 		auto-fix them. Runs nearest-wins formatters (prettier, biome, eslint
@@ -33,14 +33,14 @@ export function registerFix(pi: ExtensionAPI): void {
 			const json = params.json ?? false;
 			const dryRun = (params.dryRun as boolean) ?? true;
 			const file = params.file as string | undefined;
-			return json ? executeFixJson(graph, ".", { dryRun, file }) : executeFix(graph, ".", { dryRun, file });
+			return json ? executeFormatJson(graph, ".", { dryRun, file }) : executeFormat(graph, ".", { dryRun, file });
 		},
 	});
 }
 
-// ── Fix options ────────────────────────────────────────────────────────────
+// ── Format options ────────────────────────────────────────────────────────
 
-export interface FixOptions {
+export interface FormatOptions {
 	/** Dry-run mode: preview changes without applying */
 	dryRun?: boolean;
 	/** Target specific file (omit for all files) */
@@ -50,14 +50,14 @@ export interface FixOptions {
 // ── Execute functions (testable without Pi) ────────────────────────────────
 
 /**
- * Run format fix analysis. In dry-run mode (default), only reports issues.
+ * Run format analysis. In dry-run mode (default), only reports issues.
  * In apply mode, runs detected formatters with auto-fix flags.
  */
-export function executeFix(graph: RepoGraph, projectRoot: string, options: FixOptions = {}): string {
+export function executeFormat(graph: RepoGraph, projectRoot: string, options: FormatOptions = {}): string {
 	const dryRun = options.dryRun ?? true;
 	const lines: string[] = [];
 
-	lines.push("## Fix Results");
+	lines.push("## Format Results");
 	lines.push("");
 	lines.push(
 		dryRun ? "**Mode: DRY RUN** (preview only, no changes applied)" : "**Mode: APPLY** (changes will be written)",
@@ -158,7 +158,7 @@ export function executeFix(graph: RepoGraph, projectRoot: string, options: FixOp
 	}
 
 	// Add Next recommendations
-	const nextItems = getNextForTool("fix");
+	const nextItems = getNextForTool("format");
 	if (nextItems.length > 0) {
 		lines.push("");
 		lines.push(formatNextSection(nextItems));
@@ -168,9 +168,9 @@ export function executeFix(graph: RepoGraph, projectRoot: string, options: FixOp
 }
 
 /**
- * Run fix analysis and return structured JSON.
+ * Run format analysis and return structured JSON.
  */
-export function executeFixJson(graph: RepoGraph, projectRoot: string, options: FixOptions = {}): string {
+export function executeFormatJson(graph: RepoGraph, projectRoot: string, options: FormatOptions = {}): string {
 	const dryRun = options.dryRun ?? true;
 	const formatters = detectFormatters(projectRoot);
 
@@ -181,7 +181,7 @@ export function executeFixJson(graph: RepoGraph, projectRoot: string, options: F
 		if (!resolved.startsWith(rootResolved + "/") && resolved !== rootResolved) {
 			return JSON.stringify({
 				schema_version: "1.0",
-				command: "fix",
+				command: "format",
 				project: projectRoot,
 				status: "error",
 				result: { error: "file path escapes project root" },
@@ -196,7 +196,7 @@ export function executeFixJson(graph: RepoGraph, projectRoot: string, options: F
 
 	return JSON.stringify({
 		schema_version: "1.0",
-		command: "fix",
+		command: "format",
 		project: projectRoot,
 		status: "ok",
 		result: {
@@ -565,3 +565,7 @@ function runFormatterCommand(args: string[], cwd: string): void {
 		// Formatter may fail on individual files — non-fatal
 	}
 }
+
+// ── Backward-compatible exports (for tests) ────────────────────────────────
+export { executeFormat as executeFix, executeFormatJson as executeFixJson };
+export type { FormatOptions as FixOptions };

@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { recordCallChain, hasCallChainChecked, clearRenameState } from "../hooks/rename-state.js";
 import { scanProject } from "../core/scanner.js";
-import { executeCallChain } from "../tools/call_chain.js";
+import { executeCallChain } from "../tools/impact.js";
 import type { RepoGraph } from "../core/graph.js";
 
 let _graph: RepoGraph | null = null;

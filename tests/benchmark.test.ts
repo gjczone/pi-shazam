@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { scanProject } from "../core/scanner.js";
 import { createRepoGraph, createSymbol, createEdge } from "../core/graph.js";
 import { calculatePageRank } from "../core/pagerank.js";
-import { executeCodesearch } from "../tools/codesearch.js";
+// codesearch removed in #362
 import type { RepoGraph } from "../core/graph.js";
 
 // Track temp dirs for cleanup
@@ -230,7 +230,10 @@ describe("Benchmark: PageRank computation", () => {
 });
 
 // ── Benchmark: codesearch on large index ─────────────────────────────────
+// codesearch removed in #362 — benchmarks below depended on executeCodesearch
+// which no longer exists. Kept as a comment for reference.
 
+/*
 describe("Benchmark: codesearch", () => {
 	it("should search 1000 symbols within 5s", () => {
 		const graph = buildSyntheticGraph(1000, 2);
@@ -275,3 +278,4 @@ describe("Benchmark: codesearch", () => {
 		expect(results.length).toBeLessThanOrEqual(5);
 	});
 });
+*/

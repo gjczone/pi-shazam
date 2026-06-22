@@ -85,7 +85,7 @@ describe("MCP integration: overview pipeline", () => {
 
 describe("MCP integration: hotspots pipeline", () => {
 	it("should produce valid MCP content from hotspots", async () => {
-		const { executeHotspots } = await import("../tools/hotspots.js");
+		const { executeHotspots } = await import("../tools/overview.js");
 		const text = executeHotspots(graph);
 		const envelope = wrapMcp(text);
 		assertMcpEnvelope(envelope);
@@ -93,7 +93,7 @@ describe("MCP integration: hotspots pipeline", () => {
 	});
 
 	it("should produce valid JSON envelope from hotspots", async () => {
-		const { executeHotspotsJson } = await import("../tools/hotspots.js");
+		const { executeHotspotsJson } = await import("../tools/overview.js");
 		const jsonText = executeHotspotsJson(graph, 5);
 		const parsed = JSON.parse(jsonText);
 		expect(parsed.schema_version).toBe("1.0");
@@ -112,13 +112,13 @@ describe("MCP integration: hotspots pipeline", () => {
 	});
 
 	it("should respect topN parameter", async () => {
-		const { executeHotspots } = await import("../tools/hotspots.js");
+		const { executeHotspots } = await import("../tools/overview.js");
 		const text = executeHotspots(graph, 3);
 		expect(text).toMatch(/Top 3/);
 	});
 
 	it("should exclude config/generated files from results", async () => {
-		const { executeHotspots } = await import("../tools/hotspots.js");
+		const { executeHotspots } = await import("../tools/overview.js");
 		const text = executeHotspots(graph, 20);
 		const rankedLines = text.split("\n").filter((l: string) => /^\d+\./.test(l));
 		expect(rankedLines).not.toContainEqual(expect.stringMatching(/package-lock\.json/));
@@ -128,7 +128,8 @@ describe("MCP integration: hotspots pipeline", () => {
 
 // ── Integration: codesearch → MCP envelope ───────────────────────────────
 
-describe("MCP integration: codesearch pipeline", () => {
+// codesearch removed in #362
+describe.skip("MCP integration: codesearch pipeline", () => {
 	it("should produce valid results from BM25 symbol search", async () => {
 		const { executeCodesearch } = await import("../tools/codesearch.js");
 		const results = executeCodesearch(graph, "scanProject");
@@ -198,7 +199,7 @@ describe("MCP integration: impact pipeline", () => {
 
 describe("MCP integration: symbol pipeline", () => {
 	it("should produce valid text from symbol lookup", async () => {
-		const { executeSymbol } = await import("../tools/symbol.js");
+		const { executeSymbol } = await import("../tools/lookup.js");
 		const text = executeSymbol(graph, "scanProject");
 		expect(typeof text).toBe("string");
 		expect(text).toContain("scanProject");
@@ -231,7 +232,7 @@ describe("MCP integration: verify pipeline", () => {
 
 describe("MCP integration: file_detail pipeline", () => {
 	it("should produce valid text from file_detail", async () => {
-		const { executeFileDetail } = await import("../tools/file_detail.js");
+		const { executeFileDetail } = await import("../tools/lookup.js");
 		const text = executeFileDetail(graph, "core/graph.ts");
 		expect(typeof text).toBe("string");
 		expect(text.length).toBeGreaterThan(0);
@@ -245,7 +246,7 @@ describe("MCP integration: file_detail pipeline", () => {
 
 describe("MCP integration: call_chain pipeline", () => {
 	it("should produce valid text from call_chain", async () => {
-		const { executeCallChain } = await import("../tools/call_chain.js");
+		const { executeCallChain } = await import("../tools/impact.js");
 		const text = executeCallChain(graph, "scanProject", 1);
 		expect(typeof text).toBe("string");
 		const envelope = wrapMcp(text);
@@ -269,7 +270,7 @@ describe("MCP integration: find_tests pipeline", () => {
 
 describe("MCP integration: fix pipeline", () => {
 	it("should produce valid text from fix in dry-run mode", async () => {
-		const { executeFix } = await import("../tools/fix.js");
+		const { executeFix } = await import("../tools/format.js");
 		const text = executeFix(graph, ".", { dryRun: true });
 		expect(typeof text).toBe("string");
 		expect(text.length).toBeGreaterThan(0);
@@ -297,7 +298,7 @@ describe("MCP integration: end-to-end handler simulation", () => {
 	});
 
 	it("should simulate the MCP hotspots handler pattern", async () => {
-		const { executeHotspots } = await import("../tools/hotspots.js");
+		const { executeHotspots } = await import("../tools/overview.js");
 
 		const text = executeHotspots(graph);
 		const mcpResult = { content: [{ type: "text" as const, text }] };
@@ -308,7 +309,8 @@ describe("MCP integration: end-to-end handler simulation", () => {
 		assertMcpEnvelope(deserialized);
 	});
 
-	it("should simulate the MCP codesearch handler pattern", async () => {
+	// codesearch removed in #362
+	it.skip("should simulate the MCP codesearch handler pattern", async () => {
 		const { executeCodesearch } = await import("../tools/codesearch.js");
 
 		// MCP codesearch serializes results as JSON

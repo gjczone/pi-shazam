@@ -111,119 +111,12 @@ export const NEXT_RULES: NextRule[] = [
 		forTools: ["overview"],
 		condition: (ctx) => Boolean(ctx.topFile),
 		recommendation: (ctx) => ({
-			tool: "file_detail",
-			params: { file: ctx.topFile! },
+			tool: "lookup",
+			params: { name: ctx.topFile! },
 			label: "Inspect top file",
 			level: "recommended",
 		}),
 	},
-	{
-		forTools: ["overview"],
-		condition: () => true,
-		recommendation: () => ({
-			tool: "codesearch",
-			params: { query: "<keyword>" },
-			label: "Search for related symbols",
-			level: "also",
-		}),
-	},
-
-	// hotspots
-	{
-		forTools: ["hotspots"],
-		condition: (ctx) => Boolean(ctx.topFile),
-		recommendation: (ctx) => ({
-			tool: "file_detail",
-			params: { file: ctx.topFile! },
-			label: "Inspect top hotspot",
-			level: "recommended",
-		}),
-	},
-	{
-		forTools: ["hotspots"],
-		condition: () => true,
-		recommendation: () => ({
-			tool: "overview",
-			label: "Review project overview",
-			level: "also",
-		}),
-	},
-
-	// symbol
-	{
-		forTools: ["symbol"],
-		condition: (ctx) => Boolean(ctx.topSymbol),
-		recommendation: (ctx) => ({
-			tool: "call_chain",
-			params: { symbol: ctx.topSymbol! },
-			label: "Trace call chain",
-			level: "recommended",
-		}),
-	},
-	{
-		forTools: ["symbol"],
-		condition: (ctx) => Boolean(ctx.topSymbol),
-		recommendation: (ctx) => ({
-			tool: "hover",
-			params: { name: ctx.topSymbol! },
-			label: "Get type info",
-			level: "also",
-		}),
-	},
-
-	// codesearch (find_tests suppressed when graph has no tests)
-	{
-		forTools: ["codesearch"],
-		condition: (ctx) => Boolean(ctx.topSymbol),
-		recommendation: (ctx) => ({
-			tool: "symbol",
-			params: { name: ctx.topSymbol! },
-			label: "View top result details",
-			level: "recommended",
-		}),
-	},
-	{
-		forTools: ["codesearch"],
-		condition: (_ctx, graph) => graph === undefined || hasTestFiles(graph),
-		recommendation: () => ({
-			tool: "find_tests",
-			label: "Find related tests",
-			level: "also",
-		}),
-	},
-
-	// call_chain
-	{
-		forTools: ["call_chain"],
-		condition: () => true,
-		recommendation: () => ({
-			tool: "impact",
-			params: { files: "<caller-file>" },
-			label: "Assess blast radius",
-			level: "recommended",
-		}),
-	},
-	{
-		forTools: ["call_chain"],
-		condition: (ctx) => Boolean(ctx.topSymbol),
-		recommendation: (ctx) => ({
-			tool: "hover",
-			params: { name: ctx.topSymbol! },
-			label: "Inspect symbol type",
-			level: "also",
-		}),
-	},
-	{
-		forTools: ["call_chain"],
-		condition: (_ctx, graph) => graph === undefined || hasTestFiles(graph),
-		recommendation: () => ({
-			tool: "find_tests",
-			label: "Find tests for affected modules",
-			level: "also",
-		}),
-	},
-
-	// overview (enhanced)
 	{
 		forTools: ["overview"],
 		condition: (_ctx, graph) => graph === undefined || hasTestFiles(graph),
@@ -237,89 +130,35 @@ export const NEXT_RULES: NextRule[] = [
 		forTools: ["overview"],
 		condition: (_ctx, graph) => graph === undefined || hasHierarchyKinds(graph),
 		recommendation: () => ({
-			tool: "type_hierarchy",
+			tool: "lookup",
+			params: { name: "<type-name>" },
 			label: "Explore type hierarchy",
 			level: "also",
 		}),
 	},
 
-	// hover (type_hierarchy suppressed when graph has no class/interface)
+	// lookup (replaces symbol, file_detail, hover, type_hierarchy)
 	{
-		forTools: ["hover"],
+		forTools: ["lookup"],
 		condition: (ctx) => Boolean(ctx.topSymbol),
 		recommendation: (ctx) => ({
-			tool: "symbol",
-			params: { name: ctx.topSymbol! },
-			label: "View symbol graph info",
+			tool: "impact",
+			params: { symbol: ctx.topSymbol! },
+			label: "Trace call chain",
 			level: "recommended",
 		}),
 	},
 	{
-		forTools: ["hover"],
-		condition: (ctx, graph) => Boolean(ctx.topSymbol) && (graph === undefined || hasHierarchyKinds(graph)),
-		recommendation: (ctx) => ({
-			tool: "type_hierarchy",
-			params: { name: ctx.topSymbol! },
-			label: "Explore type hierarchy",
-			level: "also",
-		}),
-	},
-
-	// file_detail (find_tests suppressed when graph has no tests)
-	{
-		forTools: ["file_detail"],
-		condition: (ctx) => Boolean(ctx.topSymbol),
-		recommendation: (ctx) => ({
-			tool: "symbol",
-			params: { name: ctx.topSymbol! },
-			label: "Inspect top symbol",
-			level: "recommended",
-		}),
-	},
-	{
-		forTools: ["file_detail"],
-		condition: (ctx, graph) => Boolean(ctx.topFile) && (graph === undefined || hasTestFiles(graph)),
-		recommendation: (ctx) => ({
-			tool: "find_tests",
-			params: { sourceFile: ctx.topFile! },
-			label: "Find tests for this file",
-			level: "also",
-		}),
-	},
-
-	// find_tests
-	{
-		forTools: ["find_tests"],
-		condition: (ctx) => Boolean(ctx.testFunc),
-		recommendation: (ctx) => ({
-			tool: "call_chain",
-			params: { symbol: ctx.testFunc! },
-			label: "Trace test function",
-			level: "recommended",
-		}),
-	},
-
-	// type_hierarchy
-	{
-		forTools: ["type_hierarchy"],
-		condition: () => true,
+		forTools: ["lookup"],
+		condition: (_ctx, graph) => graph === undefined || hasTestFiles(graph),
 		recommendation: () => ({
 			tool: "find_tests",
-			label: "Find tests for related types",
-			level: "recommended",
-		}),
-	},
-	{
-		forTools: ["type_hierarchy"],
-		condition: () => true,
-		recommendation: () => ({
-			tool: "hover",
-			label: "Get hover info",
+			label: "Find related tests",
 			level: "also",
 		}),
 	},
 
-	// impact
+	// impact (replaces call_chain)
 	{
 		forTools: ["impact"],
 		condition: () => true,
@@ -333,9 +172,9 @@ export const NEXT_RULES: NextRule[] = [
 		forTools: ["impact"],
 		condition: (ctx) => Boolean(ctx.topSymbol),
 		recommendation: (ctx) => ({
-			tool: "call_chain",
-			params: { symbol: ctx.topSymbol! },
-			label: "Trace top impacted symbol",
+			tool: "lookup",
+			params: { name: ctx.topSymbol! },
+			label: "Inspect impacted symbol",
 			level: "recommended",
 		}),
 	},
@@ -345,7 +184,7 @@ export const NEXT_RULES: NextRule[] = [
 		forTools: ["verify"],
 		condition: (ctx) => Boolean(ctx.orphanCount && ctx.orphanCount > 0),
 		recommendation: () => ({
-			tool: "call_chain",
+			tool: "impact",
 			params: { symbol: "<orphan>" },
 			label: "Trace orphan symbols",
 			level: "recommended",
@@ -355,20 +194,43 @@ export const NEXT_RULES: NextRule[] = [
 		forTools: ["verify"],
 		condition: (ctx) => Boolean(ctx.hasErrors || ctx.hasFixes),
 		recommendation: () => ({
-			tool: "fix",
+			tool: "format",
 			label: "Auto-fix format errors",
 			level: "recommended",
 		}),
 	},
 
-	// fix
+	// changes
 	{
-		forTools: ["fix"],
+		forTools: ["changes"],
 		condition: () => true,
 		recommendation: () => ({
 			tool: "verify",
-			label: "Verify after fixing",
+			label: "Run full verification",
 			level: "required",
+		}),
+	},
+
+	// format (replaces fix)
+	{
+		forTools: ["format"],
+		condition: () => true,
+		recommendation: () => ({
+			tool: "verify",
+			label: "Verify after formatting",
+			level: "required",
+		}),
+	},
+
+	// find_tests
+	{
+		forTools: ["find_tests"],
+		condition: (ctx) => Boolean(ctx.testFunc),
+		recommendation: (ctx) => ({
+			tool: "impact",
+			params: { symbol: ctx.testFunc! },
+			label: "Trace test function",
+			level: "recommended",
 		}),
 	},
 
@@ -377,19 +239,10 @@ export const NEXT_RULES: NextRule[] = [
 		forTools: ["rename_symbol"],
 		condition: (ctx) => Boolean(ctx.topSymbol),
 		recommendation: (ctx) => ({
-			tool: "call_chain",
+			tool: "impact",
 			params: { symbol: ctx.topSymbol! },
 			label: "Verify blast radius before rename",
 			level: "required",
-		}),
-	},
-	{
-		forTools: ["rename_symbol"],
-		condition: () => true,
-		recommendation: () => ({
-			tool: "hover",
-			label: "Inspect symbol type",
-			level: "also",
 		}),
 	},
 
@@ -398,7 +251,7 @@ export const NEXT_RULES: NextRule[] = [
 		forTools: ["safe_delete"],
 		condition: (ctx) => Boolean(ctx.topSymbol),
 		recommendation: (ctx) => ({
-			tool: "call_chain",
+			tool: "impact",
 			params: { symbol: ctx.topSymbol! },
 			label: "Verify zero references before delete",
 			level: "required",

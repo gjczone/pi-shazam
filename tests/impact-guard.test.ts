@@ -228,7 +228,7 @@ describe("hooks/agent-context-guard", () => {
 
 		// Review prompt with explicit file paths and shazam references (score >= 2)
 		const prompt =
-			"Please review the security of src/auth/login.ts and src/db/queries.ts modules carefully. Run shazam_file_detail to check the structure and shazam_codesearch to find potential vulnerabilities in the authentication flow and database patterns";
+			"Please review the security of src/auth/login.ts and src/db/queries.ts modules carefully. Run shazam_lookup to check the structure and shazam_impact to find potential vulnerabilities in the authentication flow and database patterns";
 
 		const results = emit("tool_call", {
 			type: "tool_call",

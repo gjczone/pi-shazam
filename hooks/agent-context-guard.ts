@@ -97,14 +97,14 @@ export function registerAgentContextGuard(pi: ExtensionAPI): void {
 			return {
 				block: true,
 				reason:
-					"Review task lacks structural context. Provide file paths and symbols from shazam_file_detail or shazam_codesearch first.",
+					"Review task lacks structural context. Provide file paths and symbols from shazam_lookup or shazam_impact first.",
 			};
 		}
 
 		// Warn coding tasks without context (non-blocking)
 		if (isCoding && contextScore < CODING_CONTEXT_THRESHOLD) {
 			ctx.ui?.notify?.(
-				"[shazam] Coding task lacks structural context. Consider running shazam_overview or shazam_codesearch first for better results.",
+				"[shazam] Coding task lacks structural context. Consider running shazam_overview or shazam_lookup first for better results.",
 				"warning",
 			);
 		}

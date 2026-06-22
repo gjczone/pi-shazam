@@ -3,14 +3,14 @@
  *
  * Injects context reminders at key lifecycle points:
  * - tool_result (write/edit): auto-format + suggest running shazam_verify
- * - tool_result (shazam_symbol): suggest call_chain when symbol has many callers
+ * - tool_result (shazam_lookup): suggest impact when symbol has many callers
  * - tool_call (shazam_impact): suggest running shazam_verify first
- * - tool_call (shazam_rename_symbol): suggest running shazam_call_chain first
+ * - tool_call (shazam_rename_symbol): suggest running shazam_impact --symbol first
  *
  * Auto-format feature (v0.6.4):
  * - After write/edit, detect file type and run native formatter
  * - Supported: ruff (Python), prettier (JS/TS/JSON/MD), gofmt (Go), rustfmt (Rust)
- * - Falls back to shazam_fix suggestion if no native formatter found
+ * - Falls back to shazam_format suggestion if no native formatter found
  */
 import type { ExtensionAPI, ExtensionContext } from "../types/pi-extension.js";
 import { execFile } from "node:child_process";
@@ -22,7 +22,7 @@ import { detectFormatters } from "../core/formatters.js";
 const execFileAsync = promisify(execFile);
 
 /**
- * Check if a tool result contains caller count (>= 2, not >= 1) and suggest call_chain.
+ * Check if a tool result contains caller count (>= 2, not >= 1) and suggest impact.
  * Parses result.details JSON first, then falls back to text-based detection.
  */
 function hasManyCallers(content: unknown[] | undefined): string | null {
@@ -202,9 +202,9 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 			const filePath = extractFilePath(input);
 			const formatted = filePath ? await autoFormatFile(filePath, ctx) : false;
 
-			// If no native formatter found, suggest shazam_fix
+			// If no native formatter found, suggest shazam_format
 			if (!formatted) {
-				ctx.ui.notify("run shazam_fix to auto-format (prettier/ruff/gofmt/rustfmt)", "info");
+				ctx.ui.notify("run shazam_format to auto-format (prettier/ruff/gofmt/rustfmt)", "info");
 			}
 
 			// Check if multi-file edit was done — suggest impact analysis
@@ -217,12 +217,12 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 			return;
 		}
 
-		// After shazam_symbol: suggest call_chain for symbols with many callers
-		if (event.toolName === "shazam_symbol") {
+		// After shazam_lookup: suggest impact for symbols with many callers
+		if (event.toolName === "shazam_lookup") {
 			const symbolName = hasManyCallers(event.content);
 			if (symbolName && !event.isError) {
 				ctx.ui.notify(
-					`recommended: shazam_call_chain --symbol ${symbolName} traces all callers before changing this symbol`,
+					`recommended: shazam_impact --symbol ${symbolName} traces all callers before changing this symbol`,
 					"info",
 				);
 			}
@@ -241,7 +241,7 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 			if (combined.includes("[FAIL]")) {
 				ctx.ui.notify("shazam_verify reported FAIL — fix errors before proceeding", "warning");
 			} else if (combined.includes("[WARN]")) {
-				ctx.ui.notify("shazam_verify reported WARN — review warnings, then run shazam_fix if needed", "info");
+				ctx.ui.notify("shazam_verify reported WARN — review warnings, then run shazam_format if needed", "info");
 			}
 			return;
 		}
@@ -256,9 +256,9 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 			return;
 		}
 
-		// Before rename_symbol: suggest call_chain first
+		// Before rename_symbol: suggest impact first
 		if (name === "shazam_rename_symbol") {
-			ctx.ui.notify("tip: run shazam_call_chain first to verify all references before renaming", "info");
+			ctx.ui.notify("tip: run shazam_impact --symbol first to verify all references before renaming", "info");
 			return;
 		}
 	});

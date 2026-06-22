@@ -87,7 +87,7 @@ export function executeSafeDelete(graph: RepoGraph, symbolName: string, dryRun: 
 			line: symbol.line,
 			kind: symbol.kind,
 			dryRun,
-			message: `Symbol "${symbolName}" still has ${incoming.length} incoming reference(s). Cannot safely delete. Use shazam_call_chain --symbol ${symbolName} to review.`,
+			message: `Symbol "${symbolName}" still has ${incoming.length} incoming reference(s). Cannot safely delete. Use shazam_impact --symbol ${symbolName} to review.`,
 		};
 	}
 

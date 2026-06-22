@@ -120,14 +120,14 @@ describe("MCP: tool output format", () => {
 	});
 
 	it("hotspots returns text content", async () => {
-		const { executeHotspots } = await import("../tools/hotspots.js");
+		const { executeHotspots } = await import("../tools/overview.js");
 		const result = executeHotspots(getGraph());
 		expect(typeof result).toBe("string");
 		expect(result.length).toBeGreaterThan(0);
 	});
 
 	it("call_chain returns text content for valid symbol", async () => {
-		const { executeCallChain } = await import("../tools/call_chain.js");
+		const { executeCallChain } = await import("../tools/impact.js");
 		const result = executeCallChain(getGraph(), "index.ts", 1);
 		expect(typeof result).toBe("string");
 	});
