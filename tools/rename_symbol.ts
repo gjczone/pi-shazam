@@ -15,7 +15,7 @@ import { getLspManager } from "./_context.js";
 import { ensureFileOpened } from "./lsp_enrich.js";
 import type { WorkspaceEdit, TextEdit } from "vscode-languageserver-protocol";
 import { uriToPath } from "../lsp/client.js";
-import { createTool, buildEnvelope } from "./_factory.js";
+import { createTool, buildEnvelope, validatePathInProject } from "./_factory.js";
 import { scanProject } from "../core/scanner.js";
 import { hasCallChainChecked } from "../hooks/rename-state.js";
 
@@ -323,6 +323,16 @@ async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise
 
 	for (const { uri, edits: textEdits } of textDocEdits) {
 		const filePath = uriToPath(uri);
+
+		// 路径穿越校验：确保 LSP 返回的文件路径在项目根目录内
+		if (!validatePathInProject(filePath)) {
+			preview.push({
+				file: filePath,
+				line: 0,
+				text: `Skipped: file path escapes project root`,
+			});
+			continue;
+		}
 		fileCount++;
 		totalChanges += textEdits.length;
 
@@ -354,6 +364,7 @@ async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise
 				const startChar = te.range.start.character;
 				const endLine = te.range.end.line;
 				const endChar = te.range.end.character;
+				const safeEndLine = Math.min(endLine, lines.length - 1);
 
 				if (startLine === endLine) {
 					// Single line edit
@@ -362,9 +373,9 @@ async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise
 				} else {
 					// Multi-line edit
 					const startLineText = lines[startLine] || "";
-					const endLineText = lines[endLine] || "";
+					const endLineText = lines[safeEndLine] || "";
 					const newLine = startLineText.slice(0, startChar) + te.newText + endLineText.slice(endChar);
-					lines.splice(startLine, endLine - startLine + 1, newLine);
+					lines.splice(startLine, safeEndLine - startLine + 1, newLine);
 				}
 			}
 

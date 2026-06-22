@@ -32,6 +32,56 @@ describe("tokenizeCommand", () => {
 	it("handles single-quoted strings with spaces", () => {
 		expect(tokenizeCommand("echo 'hello   world'")).toEqual(["echo", "hello   world"]);
 	});
+
+	it("splits on pipe separator", () => {
+		expect(tokenizeCommand("echo foo | grep bar")).toEqual(["echo", "foo", "grep", "bar"]);
+	});
+
+	it("splits on semicolon separator", () => {
+		expect(tokenizeCommand("echo foo; ls -la")).toEqual(["echo", "foo", "ls", "-la"]);
+	});
+
+	it("splits on && separator", () => {
+		expect(tokenizeCommand("make && make install")).toEqual(["make", "make", "install"]);
+	});
+
+	it("splits on || separator", () => {
+		expect(tokenizeCommand("cmd1 || cmd2")).toEqual(["cmd1", "cmd2"]);
+	});
+
+	it("splits mixed separators", () => {
+		expect(tokenizeCommand("echo foo | grep bar && echo done; ls")).toEqual([
+			"echo",
+			"foo",
+			"grep",
+			"bar",
+			"echo",
+			"done",
+			"ls",
+		]);
+	});
+
+	it("treats $() as single token", () => {
+		expect(tokenizeCommand("echo $(ls -la)")).toEqual(["echo", "$(ls -la)"]);
+	});
+
+	it("handles nested $()", () => {
+		expect(tokenizeCommand("echo $(echo $(pwd))")).toEqual(["echo", "$(echo $(pwd))"]);
+	});
+
+	it("does not split on | inside quotes", () => {
+		expect(tokenizeCommand("echo 'hello | world'")).toEqual(["echo", "hello | world"]);
+	});
+
+	it("does not split on | inside $()", () => {
+		expect(tokenizeCommand("echo $(echo hello | world)")).toEqual(["echo", "$(echo hello | world)"]);
+	});
+
+	it("handles pipe with git commit (safety gate scenario)", () => {
+		// git commit detection uses argv[0]; this test ensures the safety loop
+		// sees "git" in the flat token list even when it's the second command
+		expect(tokenizeCommand("echo done && git commit -m 'msg'")).toEqual(["echo", "done", "git", "commit", "-m", "msg"]);
+	});
 });
 
 describe("extractCommandFromEvent", () => {

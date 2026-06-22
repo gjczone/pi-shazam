@@ -19,11 +19,11 @@ const CACHE_ROOT = join(homedir(), ".cache", "repomap");
 
 /**
  * Get the cache directory for a specific project.
- * Uses MD5 hash of canonical path for isolation.
+ * Uses SHA-256 hash of canonical path for isolation.
  */
 export function getProjectCacheDir(projectPath: string): string {
 	const canonical = projectPath.replace(/\/$/, "");
-	const hash = createHash("md5").update(canonical).digest("hex").slice(0, 8);
+	const hash = createHash("sha256").update(canonical).digest("hex").slice(0, 8);
 	const projectName = canonical.split("/").pop() || "unknown";
 	const cacheDir = join(CACHE_ROOT, `${projectName}_${hash}`);
 	mkdirSync(cacheDir, { recursive: true });
@@ -88,7 +88,7 @@ export type GraphCacheData = GraphCacheDataExport;
 export function loadGraphCache(cachePath: string): GraphCacheData | null {
 	if (!existsSync(cachePath)) return null;
 	try {
-		const MAX_CACHE_SIZE = 100 * 1024 * 1024; // 100MB
+		const MAX_CACHE_SIZE = 20 * 1024 * 1024; // 20MB
 		const cacheStat = statSync(cachePath);
 		if (cacheStat.size > MAX_CACHE_SIZE) {
 			console.warn(`[pi-shazam] Cache file too large (${cacheStat.size} bytes), skipping`);

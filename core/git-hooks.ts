@@ -52,7 +52,7 @@ if [ -f "tsconfig.json" ] || [ -f "package.json" ]; then
   if command -v npx &>/dev/null; then
     if [ -f "tsconfig.json" ]; then
       echo "[shazam] Running TypeScript typecheck..."
-      if ! npx tsc --noEmit 2>&1; then
+      if ! npx --no-install tsc --noEmit 2>&1; then
         echo "[shazam] FAIL: TypeScript typecheck found errors."
         ERRORS=$((ERRORS + 1))
       fi
@@ -61,13 +61,13 @@ if [ -f "tsconfig.json" ] || [ -f "package.json" ]; then
     # Lint (eslint or biome)
     if [ -f "eslint.config.js" ] || [ -f "eslint.config.mjs" ] || [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ]; then
       echo "[shazam] Running eslint..."
-      if ! npx eslint . --max-warnings=0 2>&1; then
+      if ! npx --no-install eslint . --max-warnings=0 2>&1; then
         echo "[shazam] FAIL: eslint found issues."
         ERRORS=$((ERRORS + 1))
       fi
     elif [ -f "biome.json" ] || [ -f "biome.jsonc" ]; then
       echo "[shazam] Running biome check..."
-      if ! npx biome check . 2>&1; then
+      if ! npx --no-install biome check . 2>&1; then
         echo "[shazam] FAIL: biome found issues."
         ERRORS=$((ERRORS + 1))
       fi
@@ -306,7 +306,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 		// ── TypeScript/JavaScript ──────────────────────────────────────────
 		if (existsSync(join(projectRoot, "tsconfig.json"))) {
 			try {
-				execSync("npx tsc --noEmit", {
+				execSync("npx --no-install tsc --noEmit", {
 					cwd: projectRoot,
 					encoding: "utf-8",
 					timeout: 60000,

@@ -7,6 +7,7 @@
  * Ported from repomap/src/lsp.py (detect_lsp_servers and CLI output formatting).
  */
 
+import { homedir } from "node:os";
 import { detectLspServer, detectProjectLanguages } from "./manager.js";
 import type { LspServerDetection } from "./manager.js";
 
@@ -100,7 +101,7 @@ export function generateSetupReport(projectRoot: string, languages?: string[]): 
 
 	lines.push("## Shazam LSP Setup");
 	lines.push("");
-	lines.push(`Project: ${projectRoot}`);
+	lines.push(`Project: ${projectRoot.startsWith(homedir()) ? "~" + projectRoot.slice(homedir().length) : projectRoot}`);
 	lines.push(`Detected languages: ${detections.map((d) => d.language).join(", ") || "none"}`);
 	lines.push("");
 

@@ -25,7 +25,7 @@ const HIGH_RISK_PATTERNS: Array<{ regex: RegExp; label: string }> = [
 	{ regex: /\bfdisk\b/, label: "fdisk" },
 	{ regex: /\bparted\b/, label: "parted" },
 	{ regex: /\bsfdisk\b/, label: "sfdisk" },
-	{ regex: /:\(\)\s*\{\s*:\|:&\s*\};:/, label: ":(){ :|:& };:" }, // fork bomb
+	{ regex: /:\(\)\s*\{.*:\s*\|\s*:.*&\s*\}.*;/, label: ":(){ :|:& };:" }, // fork bomb (flexible — catches spacing / padding variants)
 ];
 
 /**

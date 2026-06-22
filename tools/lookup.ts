@@ -27,6 +27,17 @@ import { resolve } from "node:path";
 import { TreeSitterAdapter } from "../core/treesitter.js";
 import { uriToPath } from "../lsp/client.js";
 
+// ── Markdown sanitization ────────────────────────────────────────────────
+
+/**
+ * Escape backticks in user-controlled content to prevent markdown injection.
+ * Symbol names and docstrings may contain backtick characters that would
+ * break markdown formatting when interpolated into tool output.
+ */
+function _sanitizeMarkdown(s: string): string {
+	return s.replace(/`/g, "\\`");
+}
+
 // ── State map kinds (from symbol.ts) ─────────────────────────────────────
 
 const STATE_MAP_KINDS = new Set(["enum", "class", "interface", "type_alias", "const"]);
@@ -36,6 +47,16 @@ const STATE_MAP_KINDS = new Set(["enum", "class", "interface", "type_alias", "co
 const MAX_DETAIL_CACHE_SIZE = 200;
 const fileDetailCache = new Map<string, { text: string; timestamp: number; mtimeMs: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000;
+
+// LRU 访问顺序追踪（issue #368）：数组头部 = 最近访问，尾部 = 最久未访问。
+const _detailAccessOrder: string[] = [];
+
+/** 从缓存和访问顺序中同时移除一个 key。 */
+function _removeFromDetailCache(key: string): void {
+	fileDetailCache.delete(key);
+	const idx = _detailAccessOrder.indexOf(key);
+	if (idx >= 0) _detailAccessOrder.splice(idx, 1);
+}
 
 // ── LSP SymbolKind constants ─────────────────────────────────────────────
 
@@ -110,7 +131,9 @@ function _isFilePath(name: string): boolean {
 	return (
 		name.includes("/") ||
 		name.includes("\\") ||
-		/\.(ts|tsx|js|jsx|py|go|rs|dart|json|yaml|yml|mjs|cjs|rb|java|cs|c|cpp|h|hpp|css|scss|less|sh|bash|toml|html|htm|md)$/.test(name)
+		/\.(ts|tsx|js|jsx|py|go|rs|dart|json|yaml|yml|mjs|cjs|rb|java|cs|c|cpp|h|hpp|css|scss|less|sh|bash|toml|html|htm|md)$/.test(
+			name,
+		)
 	);
 }
 
@@ -160,7 +183,7 @@ async function _executeLookupAsync(
 ): Promise<string> {
 	const matches = _findSymbols(graph, name, file);
 	if (matches.length === 0) {
-		return `Symbol not found: \`${name}\`.\n\nCheck spelling, or use \`shazam_overview\` to browse the project structure.`;
+		return `Symbol not found: \`${_sanitizeMarkdown(name)}\`.\n\nCheck spelling, or use \`shazam_overview\` to browse the project structure.`;
 	}
 
 	const uniqueFiles = [...new Set(matches.map((m) => m.file))];
@@ -196,27 +219,27 @@ async function _executeLookupAsync(
 	const hasLsp = enriched.some((m) => m.source === "lsp");
 	const sourceLabel = hasLsp ? " (LSP enriched)" : " (tree-sitter only)";
 	lines.push(
-		`## Lookup: \`${name}\` (${namedMatches.length} matches${collapsedCount > 0 ? `, ${collapsedCount} anonymous collapsed` : ""})${sourceLabel}`,
+		`## Lookup: \`${_sanitizeMarkdown(name)}\` (${namedMatches.length} matches${collapsedCount > 0 ? `, ${collapsedCount} anonymous collapsed` : ""})${sourceLabel}`,
 	);
 	lines.push("");
 
 	// Hover info — fetch in parallel for all matches
-		const hoverResults = await Promise.all(namedMatches.map((e) => _getHoverInfo(e.sym)));
+	const hoverResults = await Promise.all(namedMatches.map((e) => _getHoverInfo(e.sym)));
 
-		for (let i = 0; i < namedMatches.length; i++) {
-			const e = namedMatches[i]!;
-			const s = e.sym;
-		lines.push(`${s.kind} \`${s.name}\` — ${s.file}:${s.line}-${e.endLine} [${s.visibility}]`);
+	for (let i = 0; i < namedMatches.length; i++) {
+		const e = namedMatches[i]!;
+		const s = e.sym;
+		lines.push(`${s.kind} \`${_sanitizeMarkdown(s.name)}\` — ${s.file}:${s.line}-${e.endLine} [${s.visibility}]`);
 		if (e.container) lines.push(`  container: ${e.container}`);
 		lines.push(`  PageRank: ${s.pagerank.toFixed(4)}`);
 		lines.push(`  signature: ${s.signature}`);
 
 		// Hover info (inline, from hover.ts)
-			const hoverInfo = hoverResults[i]!;
+		const hoverInfo = hoverResults[i]!;
 		if (hoverInfo.lspHover) {
-			lines.push(`  hover: ${hoverInfo.lspHover.split("\n")[0]!.slice(0, 120)}`);
+			lines.push(`  hover: ${_sanitizeMarkdown(hoverInfo.lspHover.split("\n")[0]!.slice(0, 120))}`);
 		} else if (hoverInfo.docstring) {
-			lines.push(`  docs: ${hoverInfo.docstring.split("\n")[0]!.slice(0, 120)}`);
+			lines.push(`  docs: ${_sanitizeMarkdown(hoverInfo.docstring.split("\n")[0]!.slice(0, 120))}`);
 		}
 
 		// Incoming/outgoing counts
@@ -237,11 +260,13 @@ async function _executeLookupAsync(
 			lines.push("");
 			if (hierarchy.supertypes.length > 0) {
 				lines.push(`Supertypes (${hierarchy.supertypes.length}):`);
-				for (const st of hierarchy.supertypes) lines.push(`  - ${st.kind} \`${st.name}\` — ${st.file}:${st.line}`);
+				for (const st of hierarchy.supertypes)
+					lines.push(`  - ${st.kind} \`${_sanitizeMarkdown(st.name)}\` — ${st.file}:${st.line}`);
 			}
 			if (hierarchy.subtypes.length > 0) {
 				lines.push(`Subtypes (${hierarchy.subtypes.length}):`);
-				for (const st of hierarchy.subtypes) lines.push(`  - ${st.kind} \`${st.name}\` — ${st.file}:${st.line}`);
+				for (const st of hierarchy.subtypes)
+					lines.push(`  - ${st.kind} \`${_sanitizeMarkdown(st.name)}\` — ${st.file}:${st.line}`);
 			}
 			if (hierarchy.implementations.length > 0) {
 				lines.push(`Implementations (${hierarchy.implementations.length}):`);
@@ -573,7 +598,7 @@ async function _getTypeHierarchy(
 		}
 	}
 
-// Graph-based hierarchy fallback
+	// Graph-based hierarchy fallback
 	const inheritanceKinds = new Set(["class", "interface", "type_alias"]);
 
 	if (direction === "both" || direction === "supertypes") {
@@ -641,8 +666,16 @@ async function _executeFileDetailAsync(
 	if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
 		try {
 			const st = statSync(file);
-			if (st.mtimeMs === cached.mtimeMs) return cached.text;
-			fileDetailCache.delete(cacheKey);
+			if (st.mtimeMs === cached.mtimeMs) {
+				// LRU: 将当前 key 移到访问顺序头部
+				const idx = _detailAccessOrder.indexOf(cacheKey);
+				if (idx >= 0) {
+					_detailAccessOrder.splice(idx, 1);
+					_detailAccessOrder.unshift(cacheKey);
+				}
+				return cached.text;
+			}
+			_removeFromDetailCache(cacheKey);
 		} catch {
 			return cached.text;
 		}
@@ -693,10 +726,13 @@ async function _executeFileDetailAsync(
 		// File may not exist
 	}
 	if (fileDetailCache.size >= MAX_DETAIL_CACHE_SIZE) {
-		const firstKey = fileDetailCache.keys().next().value;
-		if (firstKey !== undefined) fileDetailCache.delete(firstKey);
+		// LRU: 驱逐访问顺序最尾部的 key（最久未访问，而非最早插入）
+		const lruKey = _detailAccessOrder.pop();
+		if (lruKey !== undefined) fileDetailCache.delete(lruKey);
 	}
 	fileDetailCache.set(cacheKey, { text, timestamp: Date.now(), mtimeMs });
+	// LRU: 将新 key 插入访问顺序头部
+	_detailAccessOrder.unshift(cacheKey);
 
 	return text;
 }
@@ -714,7 +750,7 @@ function _formatHierarchy(syms: DocumentSymbol[], depth: number): string[] {
 		if (depth > 0 && LOCAL_KINDS.has(s.kind)) continue;
 		const startLine = s.range.start.line + 1;
 		const endLine = s.range.end.line + 1;
-		out.push(`${indent}- \`${s.name}\` L${startLine}-${endLine}`);
+		out.push(`${indent}- \`${_sanitizeMarkdown(s.name)}\` L${startLine}-${endLine}`);
 		if (s.children && s.children.length > 0) {
 			out.push(..._formatHierarchy(s.children, depth + 1));
 		}
@@ -786,13 +822,13 @@ function _executeFileDetail(graph: RepoGraph, file: string): string {
 			const inc = graph.incoming.get(sym.id);
 			const out = graph.outgoing.get(sym.id);
 			lines.push(
-				`- container ${sym.kind} \`${sym.name}\` L${sym.line}-${sym.endLine} | in:${inc ? inc.length : 0} out:${out ? out.length : 0}`,
+				`- container ${sym.kind} \`${_sanitizeMarkdown(sym.name)}\` L${sym.line}-${sym.endLine} | in:${inc ? inc.length : 0} out:${out ? out.length : 0}`,
 			);
 			for (const member of members) {
 				const mInc = graph.incoming.get(member.id);
 				const mOut = graph.outgoing.get(member.id);
 				lines.push(
-					`  └ ${member.kind} \`${member.name}\` L${member.line}-${member.endLine} [${member.visibility}] PR ${member.pagerank.toFixed(4)} | in:${mInc ? mInc.length : 0} out:${mOut ? mOut.length : 0}`,
+					`  └ ${member.kind} \`${_sanitizeMarkdown(member.name)}\` L${member.line}-${member.endLine} [${member.visibility}] PR ${member.pagerank.toFixed(4)} | in:${mInc ? mInc.length : 0} out:${mOut ? mOut.length : 0}`,
 				);
 			}
 		}
@@ -805,7 +841,7 @@ function _executeFileDetail(graph: RepoGraph, file: string): string {
 				const inc = graph.incoming.get(sym.id);
 				const out = graph.outgoing.get(sym.id);
 				lines.push(
-					`  - ${sym.kind} \`${sym.name}\` L${sym.line}-${sym.endLine} [${sym.visibility}] PR ${sym.pagerank.toFixed(4)} | in:${inc ? inc.length : 0} out:${out ? out.length : 0}`,
+					`  - ${sym.kind} \`${_sanitizeMarkdown(sym.name)}\` L${sym.line}-${sym.endLine} [${sym.visibility}] PR ${sym.pagerank.toFixed(4)} | in:${inc ? inc.length : 0} out:${out ? out.length : 0}`,
 				);
 			}
 		}
@@ -814,7 +850,7 @@ function _executeFileDetail(graph: RepoGraph, file: string): string {
 			const inc = graph.incoming.get(sym.id);
 			const out = graph.outgoing.get(sym.id);
 			lines.push(
-				`- ${sym.kind} \`${sym.name}\` L${sym.line}-${sym.endLine} [${sym.visibility}] PR ${sym.pagerank.toFixed(4)} | in:${inc ? inc.length : 0} out:${out ? out.length : 0}`,
+				`- ${sym.kind} \`${_sanitizeMarkdown(sym.name)}\` L${sym.line}-${sym.endLine} [${sym.visibility}] PR ${sym.pagerank.toFixed(4)} | in:${inc ? inc.length : 0} out:${out ? out.length : 0}`,
 			);
 			if (sym.signature) lines.push(`  ${sym.signature.slice(0, 100)}`);
 		}
@@ -866,21 +902,23 @@ function _executeStateMap(graph: RepoGraph, symbolName: string): string {
 		if (sym.name === symbolName) targets.push(sym);
 	}
 
-	if (targets.length === 0) return `Symbol not found: ${symbolName}`;
+	if (targets.length === 0) return `Symbol not found: ${_sanitizeMarkdown(symbolName)}`;
 
 	const lines: string[] = [];
 	for (const target of targets) {
 		if (!STATE_MAP_KINDS.has(target.kind)) {
-			lines.push(`## ${target.kind} \`${target.name}\` — cannot generate state map`);
+			lines.push(`## ${target.kind} \`${_sanitizeMarkdown(target.name)}\` — cannot generate state map`);
 			lines.push("");
-			lines.push(`Symbol \`${target.name}\` is a ${target.kind}, not an enum, const group, or state machine.`);
+			lines.push(
+				`Symbol \`${_sanitizeMarkdown(target.name)}\` is a ${target.kind}, not an enum, const group, or state machine.`,
+			);
 			lines.push("State map analysis requires: enum, class, interface, type_alias, or const.");
 			lines.push("");
-			lines.push(`Use \`shazam_lookup --name ${target.name}\` instead.`);
+			lines.push(`Use \`shazam_lookup --name ${_sanitizeMarkdown(target.name)}\` instead.`);
 			continue;
 		}
 
-		lines.push(`## State Map: ${target.kind} \`${target.name}\` (${target.file}:${target.line})`);
+		lines.push(`## State Map: ${target.kind} \`${_sanitizeMarkdown(target.name)}\` (${target.file}:${target.line})`);
 		lines.push("");
 
 		const incoming = graph.incoming.get(target.id) || [];
@@ -898,7 +936,7 @@ function _executeStateMap(graph: RepoGraph, symbolName: string): string {
 				}
 			}
 			for (const [file, syms] of [...byFile.entries()].sort()) {
-				lines.push(`  **${file}**: ${syms.map((s) => s.name).join(", ")}`);
+				lines.push(`  **${file}**: ${syms.map((s) => _sanitizeMarkdown(s.name)).join(", ")}`);
 			}
 		}
 
@@ -907,7 +945,7 @@ function _executeStateMap(graph: RepoGraph, symbolName: string): string {
 			lines.push(`### Dependencies (${outgoing.length} symbols this depends on)`);
 			for (const edge of outgoing) {
 				const sym = graph.symbols.get(edge.target);
-				if (sym) lines.push(`- ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line}`);
+				if (sym) lines.push(`- ${sym.kind} \`${_sanitizeMarkdown(sym.name)}\` — ${sym.file}:${sym.line}`);
 			}
 		}
 
@@ -930,9 +968,12 @@ function _executeStateMap(graph: RepoGraph, symbolName: string): string {
 
 export function executeSymbol(graph: RepoGraph, name: string, file?: string): string {
 	const matches = _findSymbols(graph, name, file);
-	const lines: string[] = [`## Symbol: \`${name}\` (${matches.length} matches) (tree-sitter only)`, ""];
+	const lines: string[] = [
+		`## Symbol: \`${_sanitizeMarkdown(name)}\` (${matches.length} matches) (tree-sitter only)`,
+		"",
+	];
 	for (const s of matches) {
-		lines.push(`${s.kind} \`${s.name}\` — ${s.file}:${s.line}-${s.endLine} [${s.visibility}]`);
+		lines.push(`${s.kind} \`${_sanitizeMarkdown(s.name)}\` — ${s.file}:${s.line}-${s.endLine} [${s.visibility}]`);
 		lines.push(`  PageRank: ${s.pagerank.toFixed(4)}`);
 		lines.push(`  signature: ${s.signature}`);
 		lines.push("");
@@ -959,4 +1000,20 @@ export function executeFileDetail(graph: RepoGraph, file: string): string {
 
 export function executeFileDetailJson(graph: RepoGraph, file: string): string {
 	return _executeFileDetailJson(graph, file);
+}
+
+/** Async LSP-enriched symbol lookup for MCP clients. See _executeLookupAsync. */
+export async function executeLookupAsync(
+	graph: RepoGraph,
+	name: string,
+	file: string | undefined,
+	direction: "both" | "supertypes" | "subtypes",
+	showCallbacks: boolean,
+): Promise<string> {
+	return _executeLookupAsync(graph, name, file, direction, showCallbacks);
+}
+
+/** Async LSP-enriched file detail for MCP clients. See _executeFileDetailAsync. */
+export async function executeFileDetailAsync(graph: RepoGraph, file: string): Promise<string> {
+	return _executeFileDetailAsync(graph, file, false, undefined);
 }

@@ -226,9 +226,16 @@ function tryDecode(buffer: Buffer, encoding: string): string | null {
 
 		// For iconv-lite encodings, decode and check for errors
 		const str = iconv.decode(buffer, encoding);
-		// iconv-lite uses replacement chars, so check if the result seems valid
-		// by verifying the decoded content doesn't have too many unknown chars
+		// Empty result with non-empty buffer: definitely wrong encoding
 		if (str.length === 0 && buffer.length > 0) return null;
+		// Replacement-character ratio check (#368): iconv-lite emits U+FFFD for
+		// unmappable bytes.  If >5% of decoded characters are replacements,
+		// the encoding is wrong — reject to try the next fallback.
+		let replacementCount = 0;
+		for (const ch of str) {
+			if (ch === "�") replacementCount++;
+		}
+		if (replacementCount / str.length > 0.05) return null;
 		return str;
 	} catch {
 		return null;

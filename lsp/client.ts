@@ -173,6 +173,8 @@ export class LspClient {
 
 	// Store notifications (e.g., diagnostics) received outside request-response.
 	// Deduplicated per URI: only the latest notification per URI is kept.
+	// Capped to prevent unbounded growth in long-running sessions.
+	private static readonly MAX_NOTIFICATIONS = 2000;
 	private _notifications: PublishDiagnosticsParams[] = [];
 
 	// Track in-flight LSP requests with their reject callbacks so close()
@@ -247,6 +249,10 @@ export class LspClient {
 				this._notifications.splice(idx, 1);
 			}
 			this._notifications.push(params);
+			// Cap to prevent unbounded growth in long-running sessions
+			if (this._notifications.length > LspClient.MAX_NOTIFICATIONS) {
+				this._notifications.splice(0, this._notifications.length - LspClient.MAX_NOTIFICATIONS);
+			}
 		});
 
 		this.connection.listen();
@@ -829,8 +835,13 @@ export class LspClient {
 	/**
 	 * Collect diagnostics for a set of file paths.
 	 * Returns the newest notification per URI (iterates in reverse).
+	 *
+	 * When `consume` is true (default), matched notifications are removed from
+	 * the internal buffer, so a second call for the same files returns empty.
+	 * When `consume` is false, the internal buffer is left intact — safe for
+	 * concurrent or repeated calls.
 	 */
-	collectDiagnostics(filePaths: string[]): PublishDiagnosticsParams[] {
+	collectDiagnostics(filePaths: string[], consume = true): PublishDiagnosticsParams[] {
 		const expectedUris = new Set(
 			filePaths.filter((f) => this.isFileOpened(f)).map((f) => pathToUri(this.resolveRel(f))),
 		);
@@ -850,7 +861,9 @@ export class LspClient {
 				remaining.push(notif);
 			}
 		}
-		this._notifications = remaining;
+		if (consume) {
+			this._notifications = remaining;
+		}
 
 		return results;
 	}
@@ -984,6 +997,8 @@ export class LspClient {
 			this._openedFiles.clear();
 			this._notifications = [];
 			this._serverCapabilities = {};
+			this._initialized = false;
+			this._closePromise = null;
 			this._closing = false;
 		}
 	}

@@ -92,7 +92,9 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 	if (files.length === 0) {
 		lines.push("## Project Overview");
 		lines.push("");
-		lines.push("No matching source files found. Try without --filter to see the full overview, or check the spelling of your filter keyword.");
+		lines.push(
+			"No matching source files found. Try without --filter to see the full overview, or check the spelling of your filter keyword.",
+		);
 		return lines.join("\n");
 	}
 
@@ -196,7 +198,13 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 			const out = graph.outgoing.get(id);
 			if (out) outgoing += out.length;
 		}
-		fileStats.set(file, { count: symIds.length, pagerank: totalPR, topSym: topName, incomingRefs: incoming, outgoingRefs: outgoing });
+		fileStats.set(file, {
+			count: symIds.length,
+			pagerank: totalPR,
+			topSym: topName,
+			incomingRefs: incoming,
+			outgoingRefs: outgoing,
+		});
 	}
 
 	// Top files by PageRank

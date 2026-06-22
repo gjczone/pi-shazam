@@ -24,7 +24,8 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 import { existsSync } from "node:fs";
-import { readFileAdaptive } from "../core/encoding.js";
+import { redact } from "../core/redact.js";
+import { readFileAdaptiveAsync } from "../core/encoding.js";
 import { resolve } from "node:path";
 import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 import { getLspManager } from "./_context.js";
@@ -145,7 +146,9 @@ export async function executeVerifyJsonAsync(projectRoot: string, options: Verif
 		};
 	}
 
-	const risk = assessRisk(graph, internalOrphans, gitChangedFiles, preCommit);
+	const lspErrors = lspDiagnostics.filter((d) => d.severity === "error").length;
+	const lspWarnings = lspDiagnostics.filter((d) => d.severity === "warning").length;
+	const risk = assessRisk(graph, internalOrphans, gitChangedFiles, preCommit, lspErrors, lspWarnings);
 
 	let verdict = "PASS";
 	if (lspDiagnostics.some((d) => d.severity === "error")) {
@@ -308,7 +311,9 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 		lines.push("### Orphan Symbols: None detected", "");
 	}
 
-	const risk = assessRisk(graph, internalOrphans, gitChangedFiles, preCommit);
+	const lspErrors = lspResult.diagnostics.filter((d) => d.severity === "error").length;
+	const lspWarnings = lspResult.diagnostics.filter((d) => d.severity === "warning").length;
+	const risk = assessRisk(graph, internalOrphans, gitChangedFiles, preCommit, lspErrors, lspWarnings);
 	lines.push("### Risk Level");
 	lines.push(`**${risk.level}** — ${risk.reason}`);
 	lines.push("");
@@ -405,7 +410,7 @@ async function runLspDiagnostics(
 			const serverInfo = await lspManager.getServerForFile(filePath);
 			if (!serverInfo) return { filePath, opened: false, serverName: "" };
 			try {
-				const content = readFileAdaptive(resolve(projectRoot, filePath));
+				const content = await readFileAdaptiveAsync(resolve(projectRoot, filePath));
 				await serverInfo.client.didOpen(filePath, content);
 				// Track for crash recovery
 				lspManager.trackOpenedFile(serverInfo.language, filePath);
@@ -566,7 +571,7 @@ async function runSubprocessDiagnostics(projectRoot: string): Promise<LspDiagRes
 			// execFile rejects on non-zero exit code, but the output is still valid
 			return { stdout: err.stdout ?? "", stderr: err.stderr ?? "" };
 		});
-		const output = ((stdout ?? "") + (stderr ?? "")).trim();
+		const output = redact(((stdout ?? "") + (stderr ?? "")).trim());
 		if (output) {
 			for (const line of output.split("\n").slice(0, 100)) {
 				if (line.trim()) {
@@ -633,12 +638,14 @@ function assessRisk(
 	_internalOrphans: { name: string; kind: string; file: string; line: number }[],
 	gitChangedFiles?: string[],
 	preCommit?: boolean,
+	lspErrors = 0,
+	lspWarnings = 0,
 ): RiskResult {
 	const baselineChanges = 0; // diffBaseline removed (issue #319)
 	const gitFileCount = gitChangedFiles?.length ?? 0;
 
 	// Compute orphan delta from session baseline (not absolute count)
-	const baselineDiff = diffFromBaseline(_graph, 0, 0);
+	const baselineDiff = diffFromBaseline(_graph, lspErrors, lspWarnings);
 	const orphanDelta = baselineDiff?.orphanSymbols ?? _internalOrphans.length;
 	const newOrphanCount = baselineDiff?.newOrphans?.length ?? _internalOrphans.length;
 

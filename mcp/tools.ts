@@ -8,7 +8,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RepoGraph } from "../core/graph.js";
 import { executeOverview } from "../tools/overview.js";
 import { executeImpact, executeCallChain, getFlatReferences, formatFlatReferences } from "../tools/impact.js";
-import { executeSymbolWithMode, executeFileDetail } from "../tools/lookup.js";
+import { executeLookupAsync, executeFileDetailAsync, executeStateMap } from "../tools/lookup.js";
 import { executeFindTests, formatFindTestsResult } from "../tools/find_tests.js";
 import { executeFormat } from "../tools/format.js";
 import { executeVerifyTextAsync, executeVerifyJsonAsync } from "../tools/verify.js";
@@ -120,21 +120,29 @@ export function registerAllTools(
 			description: lookupDef.description,
 			inputSchema: lookupDef.zodParams,
 		},
-		withLogging("shazam_lookup", async ({ name, mode, file, maxTokens }) => {
+		withLogging("shazam_lookup", async ({ name, mode, file, showCallbacks, direction, maxTokens }) => {
 			const nameStr = name as string;
+			if (!nameStr) {
+				return { content: [{ type: "text", text: "Error: name parameter is required" }] };
+			}
 			const isFilePath =
 				nameStr.includes("/") ||
 				nameStr.includes("\\") ||
-				/\.(ts|tsx|js|jsx|py|go|rs|dart|json|yaml|yml|mjs|cjs|rb|java|cs|c|cpp|h|hpp|css|scss|less|sh|bash|toml|html|htm|md)$/.test(nameStr);
+				/\.(ts|tsx|js|jsx|py|go|rs|dart|json|yaml|yml|mjs|cjs|rb|java|cs|c|cpp|h|hpp|css|scss|less|sh|bash|toml|html|htm|md)$/.test(
+					nameStr,
+				);
 			let text: string;
 			if (isFilePath) {
-				text = executeFileDetail(getGraph(), nameStr);
+				text = await executeFileDetailAsync(getGraph(), nameStr);
+			} else if (mode === "state") {
+				text = executeStateMap(getGraph(), nameStr);
 			} else {
-				text = executeSymbolWithMode(
+				text = await executeLookupAsync(
 					getGraph(),
 					nameStr,
-					mode as string | undefined,
 					file as string | undefined,
+					(direction as "both" | "supertypes" | "subtypes") ?? "both",
+					(showCallbacks as boolean) ?? false,
 				);
 			}
 			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
@@ -170,7 +178,14 @@ export function registerAllTools(
 			// File mode: impact analysis
 			const filesArr = files as string[] | undefined;
 			if (!filesArr || filesArr.length === 0) {
-				return { content: [{ type: "text", text: "Error: either --symbol (for call chain) or --files (for impact analysis) is required" }] };
+				return {
+					content: [
+						{
+							type: "text",
+							text: "Error: either --symbol (for call chain) or --files (for impact analysis) is required",
+						},
+					],
+				};
 			}
 			let text = executeImpact(getGraph(), filesArr, {
 				withSymbols: (withSymbols as boolean) ?? false,
