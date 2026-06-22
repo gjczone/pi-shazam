@@ -40,7 +40,7 @@ async function main(): Promise<void> {
 
 	const server = new McpServer({
 		name: "pi-shazam",
-		version: "0.14.2",
+		version: "0.15.0",
 	});
 
 	// Share LspManager with tools layer so LSP enrichment works in MCP mode
