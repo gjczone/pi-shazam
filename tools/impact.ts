@@ -405,7 +405,7 @@ function _executeCallChainJson(
 				: [],
 	}));
 
-	return buildEnvelope("shazam_call_chain", process.cwd(), "ok", result);
+	return buildEnvelope("shazam_impact", process.cwd(), "ok", result);
 }
 
 function _traceIncoming(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, { kind: string }][] {

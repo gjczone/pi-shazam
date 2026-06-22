@@ -676,7 +676,7 @@ export function executeHotspots(graph: RepoGraph, topN: number = 10): string {
 
 export function executeHotspotsJson(graph: RepoGraph, topN: number): string {
 	const hotspots = _computeHotspots(graph, topN);
-	return buildEnvelope("shazam_hotspots", process.cwd(), "ok", {
+	return buildEnvelope("shazam_overview", process.cwd(), "ok", {
 		hotspots: hotspots.map((h) => ({
 			file: h.file,
 			symbolCount: h.symbolCount,

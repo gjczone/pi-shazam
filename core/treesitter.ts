@@ -209,7 +209,11 @@ export class TreeSitterAdapter {
 				_parserStatus.set("tsx", { status: "loaded" });
 				this.log("Parser loaded: tsx (dedicated)");
 			} catch {
-				_parserStatus.set("tsx", { status: "unavailable", reason: "TSX grammar load failed", suggestion: "Falls back to TypeScript parser." });
+				_parserStatus.set("tsx", {
+					status: "unavailable",
+					reason: "TSX grammar load failed",
+					suggestion: "Falls back to TypeScript parser.",
+				});
 				this.log("TSX parser unavailable");
 			}
 		} catch {
@@ -221,7 +225,10 @@ export class TreeSitterAdapter {
 				_parserStatus.set("tsx", { status: "loaded", reason: "Fell back to JavaScript parser" });
 				this.log("TypeScript parser unavailable, falling back to JavaScript parser");
 			} else {
-				_parserStatus.set("typescript", { status: "unavailable", reason: "TypeScript and JavaScript parsers both failed" });
+				_parserStatus.set("typescript", {
+					status: "unavailable",
+					reason: "TypeScript and JavaScript parsers both failed",
+				});
 				_parserStatus.set("tsx", { status: "unavailable", reason: "TypeScript and JavaScript parsers both failed" });
 			}
 		}
