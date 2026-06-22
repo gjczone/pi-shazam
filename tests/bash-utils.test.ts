@@ -51,7 +51,13 @@ describe("tokenizeCommand", () => {
 
 	it("splits mixed separators", () => {
 		expect(tokenizeCommand("echo foo | grep bar && echo done; ls")).toEqual([
-			"echo", "foo", "grep", "bar", "echo", "done", "ls",
+			"echo",
+			"foo",
+			"grep",
+			"bar",
+			"echo",
+			"done",
+			"ls",
 		]);
 	});
 
@@ -74,9 +80,7 @@ describe("tokenizeCommand", () => {
 	it("handles pipe with git commit (safety gate scenario)", () => {
 		// git commit detection uses argv[0]; this test ensures the safety loop
 		// sees "git" in the flat token list even when it's the second command
-		expect(tokenizeCommand("echo done && git commit -m 'msg'")).toEqual([
-			"echo", "done", "git", "commit", "-m", "msg",
-		]);
+		expect(tokenizeCommand("echo done && git commit -m 'msg'")).toEqual(["echo", "done", "git", "commit", "-m", "msg"]);
 	});
 });
 

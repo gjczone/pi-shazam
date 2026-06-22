@@ -31,10 +31,7 @@ import { resolve } from "node:path";
  * 先 resolve 为绝对路径，再检测是否以 projectRoot + "/" 开头或等于 projectRoot。
  * 不在项目范围内的路径返回 false。
  */
-export function validatePathInProject(
-	rawPath: string,
-	projectRoot: string = process.cwd(),
-): boolean {
+export function validatePathInProject(rawPath: string, projectRoot: string = process.cwd()): boolean {
 	const resolved = resolve(projectRoot, rawPath);
 	const rootResolved = resolve(projectRoot);
 	return resolved.startsWith(rootResolved + "/") || resolved === rootResolved;

@@ -128,7 +128,9 @@ export function registerAllTools(
 			const isFilePath =
 				nameStr.includes("/") ||
 				nameStr.includes("\\") ||
-				/\.(ts|tsx|js|jsx|py|go|rs|dart|json|yaml|yml|mjs|cjs|rb|java|cs|c|cpp|h|hpp|css|scss|less|sh|bash|toml|html|htm|md)$/.test(nameStr);
+				/\.(ts|tsx|js|jsx|py|go|rs|dart|json|yaml|yml|mjs|cjs|rb|java|cs|c|cpp|h|hpp|css|scss|less|sh|bash|toml|html|htm|md)$/.test(
+					nameStr,
+				);
 			let text: string;
 			if (isFilePath) {
 				text = await executeFileDetailAsync(getGraph(), nameStr);
@@ -176,7 +178,14 @@ export function registerAllTools(
 			// File mode: impact analysis
 			const filesArr = files as string[] | undefined;
 			if (!filesArr || filesArr.length === 0) {
-				return { content: [{ type: "text", text: "Error: either --symbol (for call chain) or --files (for impact analysis) is required" }] };
+				return {
+					content: [
+						{
+							type: "text",
+							text: "Error: either --symbol (for call chain) or --files (for impact analysis) is required",
+						},
+					],
+				};
 			}
 			let text = executeImpact(getGraph(), filesArr, {
 				withSymbols: (withSymbols as boolean) ?? false,

@@ -131,7 +131,9 @@ function _isFilePath(name: string): boolean {
 	return (
 		name.includes("/") ||
 		name.includes("\\") ||
-		/\.(ts|tsx|js|jsx|py|go|rs|dart|json|yaml|yml|mjs|cjs|rb|java|cs|c|cpp|h|hpp|css|scss|less|sh|bash|toml|html|htm|md)$/.test(name)
+		/\.(ts|tsx|js|jsx|py|go|rs|dart|json|yaml|yml|mjs|cjs|rb|java|cs|c|cpp|h|hpp|css|scss|less|sh|bash|toml|html|htm|md)$/.test(
+			name,
+		)
 	);
 }
 
@@ -222,18 +224,18 @@ async function _executeLookupAsync(
 	lines.push("");
 
 	// Hover info — fetch in parallel for all matches
-		const hoverResults = await Promise.all(namedMatches.map((e) => _getHoverInfo(e.sym)));
+	const hoverResults = await Promise.all(namedMatches.map((e) => _getHoverInfo(e.sym)));
 
-		for (let i = 0; i < namedMatches.length; i++) {
-			const e = namedMatches[i]!;
-			const s = e.sym;
+	for (let i = 0; i < namedMatches.length; i++) {
+		const e = namedMatches[i]!;
+		const s = e.sym;
 		lines.push(`${s.kind} \`${_sanitizeMarkdown(s.name)}\` — ${s.file}:${s.line}-${e.endLine} [${s.visibility}]`);
 		if (e.container) lines.push(`  container: ${e.container}`);
 		lines.push(`  PageRank: ${s.pagerank.toFixed(4)}`);
 		lines.push(`  signature: ${s.signature}`);
 
 		// Hover info (inline, from hover.ts)
-			const hoverInfo = hoverResults[i]!;
+		const hoverInfo = hoverResults[i]!;
 		if (hoverInfo.lspHover) {
 			lines.push(`  hover: ${_sanitizeMarkdown(hoverInfo.lspHover.split("\n")[0]!.slice(0, 120))}`);
 		} else if (hoverInfo.docstring) {
@@ -258,11 +260,13 @@ async function _executeLookupAsync(
 			lines.push("");
 			if (hierarchy.supertypes.length > 0) {
 				lines.push(`Supertypes (${hierarchy.supertypes.length}):`);
-				for (const st of hierarchy.supertypes) lines.push(`  - ${st.kind} \`${_sanitizeMarkdown(st.name)}\` — ${st.file}:${st.line}`);
+				for (const st of hierarchy.supertypes)
+					lines.push(`  - ${st.kind} \`${_sanitizeMarkdown(st.name)}\` — ${st.file}:${st.line}`);
 			}
 			if (hierarchy.subtypes.length > 0) {
 				lines.push(`Subtypes (${hierarchy.subtypes.length}):`);
-				for (const st of hierarchy.subtypes) lines.push(`  - ${st.kind} \`${_sanitizeMarkdown(st.name)}\` — ${st.file}:${st.line}`);
+				for (const st of hierarchy.subtypes)
+					lines.push(`  - ${st.kind} \`${_sanitizeMarkdown(st.name)}\` — ${st.file}:${st.line}`);
 			}
 			if (hierarchy.implementations.length > 0) {
 				lines.push(`Implementations (${hierarchy.implementations.length}):`);
@@ -594,7 +598,7 @@ async function _getTypeHierarchy(
 		}
 	}
 
-// Graph-based hierarchy fallback
+	// Graph-based hierarchy fallback
 	const inheritanceKinds = new Set(["class", "interface", "type_alias"]);
 
 	if (direction === "both" || direction === "supertypes") {
@@ -905,7 +909,9 @@ function _executeStateMap(graph: RepoGraph, symbolName: string): string {
 		if (!STATE_MAP_KINDS.has(target.kind)) {
 			lines.push(`## ${target.kind} \`${_sanitizeMarkdown(target.name)}\` — cannot generate state map`);
 			lines.push("");
-			lines.push(`Symbol \`${_sanitizeMarkdown(target.name)}\` is a ${target.kind}, not an enum, const group, or state machine.`);
+			lines.push(
+				`Symbol \`${_sanitizeMarkdown(target.name)}\` is a ${target.kind}, not an enum, const group, or state machine.`,
+			);
 			lines.push("State map analysis requires: enum, class, interface, type_alias, or const.");
 			lines.push("");
 			lines.push(`Use \`shazam_lookup --name ${_sanitizeMarkdown(target.name)}\` instead.`);
@@ -962,7 +968,10 @@ function _executeStateMap(graph: RepoGraph, symbolName: string): string {
 
 export function executeSymbol(graph: RepoGraph, name: string, file?: string): string {
 	const matches = _findSymbols(graph, name, file);
-	const lines: string[] = [`## Symbol: \`${_sanitizeMarkdown(name)}\` (${matches.length} matches) (tree-sitter only)`, ""];
+	const lines: string[] = [
+		`## Symbol: \`${_sanitizeMarkdown(name)}\` (${matches.length} matches) (tree-sitter only)`,
+		"",
+	];
 	for (const s of matches) {
 		lines.push(`${s.kind} \`${_sanitizeMarkdown(s.name)}\` — ${s.file}:${s.line}-${s.endLine} [${s.visibility}]`);
 		lines.push(`  PageRank: ${s.pagerank.toFixed(4)}`);
@@ -1005,9 +1014,6 @@ export async function executeLookupAsync(
 }
 
 /** Async LSP-enriched file detail for MCP clients. See _executeFileDetailAsync. */
-export async function executeFileDetailAsync(
-	graph: RepoGraph,
-	file: string,
-): Promise<string> {
+export async function executeFileDetailAsync(graph: RepoGraph, file: string): Promise<string> {
 	return _executeFileDetailAsync(graph, file, false, undefined);
 }
