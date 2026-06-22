@@ -195,6 +195,7 @@ function _evictOldestMtime(): void {
  * Reads file content via fs.promises and sends didOpen if not already opened.
  * If the file was already opened but its mtime changed, sends didChange.
  * Returns `justOpened: true` when didOpen was called (first request needs more time).
+ * Callers MUST validate filePath is within project root before calling.
  */
 export async function ensureFileOpened(
 	ctx: LspEnrichContext,

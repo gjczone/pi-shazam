@@ -19,8 +19,7 @@ import { getNextForTool, formatNextSection, truncateOutput } from "../core/outpu
 import { getLspManager } from "./_context.js";
 import { lspDocumentSymbols, lspCodeLens, lspImplementation, ensureFileOpened } from "./lsp_enrich.js";
 import type { DocumentSymbol } from "vscode-languageserver-protocol";
-import { createTool } from "./_factory.js";
-import { buildEnvelope } from "./_factory.js";
+import { createTool, buildEnvelope, validatePathInProject } from "./_factory.js";
 import { statSync } from "node:fs";
 import { readFileAdaptive } from "../core/encoding.js";
 import { resolve } from "node:path";
@@ -93,6 +92,22 @@ export function registerLookup(pi: ExtensionAPI): void {
 			}
 
 			const graph = scanProject(".");
+
+			// Path traversal guard: reject file paths outside project root
+			const projectRoot = process.cwd();
+			if (_isFilePath(name) && !validatePathInProject(name, projectRoot)) {
+				const text = buildEnvelope("shazam_lookup", projectRoot, "error", {
+					error: `Path '${name}' is outside the project root and cannot be read.`,
+				});
+				return { content: [{ type: "text", text }] };
+			}
+			const fileParam = params.file as string | undefined;
+			if (fileParam && !validatePathInProject(fileParam, projectRoot)) {
+				const text = buildEnvelope("shazam_lookup", projectRoot, "error", {
+					error: `File path '${fileParam}' is outside the project root.`,
+				});
+				return { content: [{ type: "text", text }] };
+			}
 
 			let text: string;
 
