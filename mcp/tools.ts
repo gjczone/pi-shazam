@@ -8,7 +8,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RepoGraph } from "../core/graph.js";
 import { executeOverview } from "../tools/overview.js";
 import { executeImpact, executeCallChain, getFlatReferences, formatFlatReferences } from "../tools/impact.js";
-import { executeSymbolWithMode } from "../tools/lookup.js";
+import { executeSymbolWithMode, executeFileDetail } from "../tools/lookup.js";
 import { executeFindTests, formatFindTestsResult } from "../tools/find_tests.js";
 import { executeFormat } from "../tools/format.js";
 import { executeVerifyTextAsync, executeVerifyJsonAsync } from "../tools/verify.js";
@@ -121,12 +121,22 @@ export function registerAllTools(
 			inputSchema: lookupDef.zodParams,
 		},
 		withLogging("shazam_lookup", async ({ name, mode, file, maxTokens }) => {
-			let text = executeSymbolWithMode(
-				getGraph(),
-				name as string,
-				mode as string | undefined,
-				file as string | undefined,
-			);
+			const nameStr = name as string;
+			const isFilePath =
+				nameStr.includes("/") ||
+				nameStr.includes("\\") ||
+				/\.(ts|tsx|js|jsx|py|go|rs|dart|json|yaml|yml|mjs|cjs|rb|java|cs|c|cpp|h|hpp|css|scss|less|sh|bash|toml|html|htm|md)$/.test(nameStr);
+			let text: string;
+			if (isFilePath) {
+				text = executeFileDetail(getGraph(), nameStr);
+			} else {
+				text = executeSymbolWithMode(
+					getGraph(),
+					nameStr,
+					mode as string | undefined,
+					file as string | undefined,
+				);
+			}
 			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return { content: [{ type: "text", text }] };
 		}),
@@ -158,7 +168,11 @@ export function registerAllTools(
 			}
 
 			// File mode: impact analysis
-			let text = executeImpact(getGraph(), (files as string[]) ?? [], {
+			const filesArr = files as string[] | undefined;
+			if (!filesArr || filesArr.length === 0) {
+				return { content: [{ type: "text", text: "Error: either --symbol (for call chain) or --files (for impact analysis) is required" }] };
+			}
+			let text = executeImpact(getGraph(), filesArr, {
 				withSymbols: (withSymbols as boolean) ?? false,
 				compact: (compact as boolean) ?? false,
 				depth: d,

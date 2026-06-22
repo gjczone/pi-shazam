@@ -109,7 +109,7 @@ function _isFilePath(name: string): boolean {
 	return (
 		name.includes("/") ||
 		name.includes("\\") ||
-		/\.(ts|tsx|js|jsx|py|go|rs|dart|json|mjs|cjs|rb|java|cs|c|cpp|h|hpp)$/.test(name)
+		/\.(ts|tsx|js|jsx|py|go|rs|dart|json|yaml|yml|mjs|cjs|rb|java|cs|c|cpp|h|hpp|css|scss|less|sh|bash|toml|html|htm|md)$/.test(name)
 	);
 }
 
@@ -281,7 +281,6 @@ function _executeSymbolJson(graph: RepoGraph, name: string, file?: string): stri
 interface HoverInfo {
 	lspHover?: string;
 	docstring?: string;
-	contextLines?: string[];
 	signatureHelp?: string;
 }
 
@@ -335,7 +334,6 @@ async function _getHoverInfo(symbol: Symbol): Promise<HoverInfo> {
 	if (!result.lspHover) {
 		const filePath = resolve(process.cwd(), symbol.file);
 		result.docstring = _extractDocstring(filePath, symbol.line);
-		result.contextLines = _extractContextLines(filePath, symbol.line);
 	}
 
 	return result;
@@ -437,23 +435,6 @@ function _extractDocstringTextFallback(content: string, symbolLine: number): str
 	}
 
 	return undefined;
-}
-
-function _extractContextLines(filePath: string, symbolLine: number, contextSize: number = 5): string[] | undefined {
-	try {
-		const content = readFileSync(filePath, "utf-8");
-		const lines = content.split("\n");
-		const lineIdx = symbolLine - 1;
-		const start = Math.max(0, lineIdx);
-		const end = Math.min(lines.length, lineIdx + contextSize);
-		const context: string[] = [];
-		for (let i = start; i < end; i++) {
-			context.push(`L${i + 1}: ${lines[i] || ""}`);
-		}
-		return context;
-	} catch {
-		return undefined;
-	}
 }
 
 // ── Type hierarchy (from type_hierarchy.ts) ──────────────────────────────
