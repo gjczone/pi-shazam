@@ -781,12 +781,12 @@ function collectSourceFiles(root: string, maxFiles: number): string[] {
 
 function _walkDirectory(
 	dir: string,
-	_depth: number,
+	depth: number,
 	options: { root: string; maxFiles: number; maxDepth: number; files: string[]; visitedSymlinks: Set<string> },
 ): void {
 	const { root, maxFiles, maxDepth, files, visitedSymlinks } = options;
 	if (files.length >= maxFiles) return;
-	if (_depth > maxDepth) return;
+	if (depth > maxDepth) return;
 
 	let entries;
 	try {
@@ -810,7 +810,7 @@ function _walkDirectory(
 		if (entry.isDirectory()) {
 			if (SKIP_DIRS.has(entry.name)) continue;
 			if (entry.name.startsWith(".") && entry.name !== ".github") continue;
-			_walkDirectory(join(dir, entry.name), _depth + 1, options);
+			_walkDirectory(join(dir, entry.name), depth + 1, options);
 		} else if (entry.isSymbolicLink()) {
 			// Resolve symlink to check whether it points to a directory or file.
 			// Use statSync (not lstatSync) to follow the symlink and get the

@@ -14,7 +14,8 @@ import { buildEnvelope } from "./_factory.js";
 import { findOrphans } from "../core/filter.js";
 import { getGraphEdgeCount } from "../core/graph.js";
 import { diffFromBaseline } from "../core/baseline.js";
-import { safeGitExec } from "../core/git-utils.js";
+import { assessRisk } from "../core/risk.js";
+import { getGitChangedFiles } from "../core/git-utils.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerChanges(pi: ExtensionAPI): void {
@@ -36,8 +37,7 @@ export function registerChanges(pi: ExtensionAPI): void {
 }
 
 export function executeChanges(graph: RepoGraph, projectRoot: string): string {
-	const gitDir = _resolveGitWorkdir(projectRoot);
-	const changedFiles = _getGitChangedFiles(gitDir);
+	const changedFiles = getGitChangedFiles(projectRoot);
 	const orphanResult = findOrphans(graph);
 	const internalOrphans = orphanResult.internal;
 	const baselineDiff = diffFromBaseline(graph, 0, 0);
@@ -91,8 +91,7 @@ export function executeChanges(graph: RepoGraph, projectRoot: string): string {
 }
 
 export function executeChangesJson(graph: RepoGraph, projectRoot: string): string {
-	const gitDir = _resolveGitWorkdir(projectRoot);
-	const changedFiles = _getGitChangedFiles(gitDir);
+	const changedFiles = getGitChangedFiles(projectRoot);
 	const orphanResult = findOrphans(graph);
 	const internalOrphans = orphanResult.internal;
 	const risk = _assessChangeRisk(graph, internalOrphans, changedFiles);
@@ -108,41 +107,16 @@ export function executeChangesJson(graph: RepoGraph, projectRoot: string): strin
 	});
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────
-
-function _resolveGitWorkdir(cwd: string): string {
-	const result = safeGitExec(["rev-parse", "--show-toplevel"], cwd, 5000);
-	return result || cwd;
-}
-
-function _getGitChangedFiles(gitDir: string): string[] {
-	const unstaged = safeGitExec(["diff", "--name-only", "--diff-filter=ACMR"], gitDir, 5000);
-	const staged = safeGitExec(["diff", "--cached", "--name-only", "--diff-filter=ACMR"], gitDir, 5000);
-	const combined = [unstaged, staged].filter(Boolean).join("\n").trim();
-	if (!combined) return [];
-	return [...new Set(combined.split("\n").filter(Boolean))];
-}
-
+/**
+ * 适配器：将 changes 工具的参数转换为统一的 assessRisk 调用。
+ */
 function _assessChangeRisk(
-	_graph: RepoGraph,
+	graph: RepoGraph,
 	internalOrphans: { name: string; kind: string; file: string; line: number }[],
 	gitChangedFiles: string[],
 ): { level: string; reason: string } {
-	const baselineDiff = diffFromBaseline(_graph, 0, 0);
+	const baselineDiff = diffFromBaseline(graph, 0, 0);
 	const orphanDelta = baselineDiff?.orphanSymbols ?? internalOrphans.length;
 	const newOrphanCount = baselineDiff?.newOrphans?.length ?? internalOrphans.length;
-	const gitFileCount = gitChangedFiles.length;
-	const totalImpact = gitFileCount + orphanDelta;
-
-	if (totalImpact === 0) return { level: "low", reason: "No changes detected, no new orphan symbols." };
-	if (newOrphanCount > 10 || totalImpact > 60) {
-		return { level: "high", reason: `${newOrphanCount} new orphans, ${gitFileCount} git-modified files.` };
-	}
-	if (newOrphanCount > 0 || totalImpact > 20) {
-		return {
-			level: "medium",
-			reason: `${newOrphanCount} new orphans, ${gitFileCount} modified files — review recommended.`,
-		};
-	}
-	return { level: "low", reason: `${newOrphanCount} new orphans, ${gitFileCount} modified files — acceptable.` };
+	return assessRisk({ gitFileCount: gitChangedFiles.length, newOrphanCount, orphanDelta });
 }

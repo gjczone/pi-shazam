@@ -372,63 +372,6 @@ function buildRoutesSection(graph: RepoGraph): string | null {
 	return lines.join("\n");
 }
 
-/**
- * Full route inventory output (exported for backward-compatible testing).
- */
-export function executeRoutes(graph: RepoGraph, _projectRoot: string): string {
-	const lines: string[] = [];
-	lines.push("## HTTP Route Inventory");
-	lines.push("");
-
-	const hasWebFramework = detectWebFramework(graph);
-	if (!hasWebFramework) {
-		lines.push("No web framework detected in this project.");
-		lines.push("");
-		lines.push("Route inventory is only available for projects using recognized web frameworks.");
-		lines.push(`Supported frameworks: ${WEB_FRAMEWORK_INDICATORS.slice(0, 6).join(", ")}, etc.`);
-		lines.push("");
-		lines.push("If this project uses a web framework not in the supported list, route detection will not find routes.");
-		return lines.join("\n");
-	}
-
-	const routeSymbols = findRouteSymbols(graph);
-	if (routeSymbols.length === 0) {
-		lines.push(`Web framework detected (${hasWebFramework}), but no route registration patterns found.`);
-		lines.push("");
-		lines.push("This may mean:");
-		lines.push("- Routes are defined in a non-standard way (factory pattern, decorators)");
-		lines.push("- Routes are in a file not parsed by tree-sitter");
-		lines.push("- The project imports the framework but doesn't register routes");
-		return lines.join("\n");
-	}
-
-	lines.push(`Framework: **${hasWebFramework}** | Found ${routeSymbols.length} route-related symbols`);
-	lines.push("");
-
-	const byFile = new Map<string, Symbol[]>();
-	for (const sym of routeSymbols) {
-		const arr = byFile.get(sym.file) || [];
-		arr.push(sym);
-		byFile.set(sym.file, arr);
-	}
-
-	for (const [file, syms] of [...byFile.entries()].sort()) {
-		lines.push("");
-		lines.push(`### ${file}`);
-		for (const sym of syms) {
-			lines.push(`- ${sym.kind} \`${sym.name}\` L${sym.line} — ${sym.signature.slice(0, 80)}`);
-		}
-	}
-
-	const nextItems = getNextForTool("overview", { handlerFile: routeSymbols[0]?.file });
-	if (nextItems.length > 0) {
-		lines.push("");
-		lines.push(formatNextSection(nextItems));
-	}
-
-	return lines.join("\n");
-}
-
 function detectWebFramework(graph: RepoGraph): string | null {
 	for (const [, imports] of graph.fileImports) {
 		for (const imp of imports) {
@@ -639,7 +582,7 @@ interface FileHotspot {
 	hotspotScore: number;
 }
 
-function _computeHotspots(
+export function _computeHotspots(
 	graph: RepoGraph,
 	topN: number,
 	precomputed?: Map<string, { count: number; pagerank: number; incomingRefs: number; outgoingRefs: number }>,
@@ -691,36 +634,3 @@ function _computeHotspots(
 	return hotspots.sort((a, b) => b.hotspotScore - a.hotspotScore).slice(0, topN);
 }
 
-// ── Backward-compatible exports (for hotspots tests) ───────────────────
-
-export function executeHotspots(graph: RepoGraph, topN: number = 10): string {
-	const hotspots = _computeHotspots(graph, topN);
-	const lines: string[] = [];
-	lines.push(`## Complexity Hotspots (Top ${topN})`);
-	lines.push("");
-	lines.push("Ranked by symbol density x PageRank score.");
-	lines.push("");
-	for (let i = 0; i < hotspots.length; i++) {
-		const h = hotspots[i]!;
-		lines.push(`${i + 1}. \`${h.file}\` — score: ${h.hotspotScore.toFixed(2)}`);
-		lines.push(
-			`   ${h.symbolCount} symbols | PageRank: ${h.totalPagerank.toFixed(2)} | in:${h.incomingRefs} out:${h.outgoingRefs}`,
-		);
-		lines.push("");
-	}
-	return lines.join("\n");
-}
-
-export function executeHotspotsJson(graph: RepoGraph, topN: number): string {
-	const hotspots = _computeHotspots(graph, topN);
-	return buildEnvelope("shazam_overview", process.cwd(), "ok", {
-		hotspots: hotspots.map((h) => ({
-			file: h.file,
-			symbolCount: h.symbolCount,
-			totalPagerank: Number(h.totalPagerank.toFixed(4)),
-			incomingRefs: h.incomingRefs,
-			outgoingRefs: h.outgoingRefs,
-			hotspotScore: Number(h.hotspotScore.toFixed(2)),
-		})),
-	});
-}

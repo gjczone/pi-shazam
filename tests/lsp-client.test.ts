@@ -621,3 +621,52 @@ describe("LspClient edge cases", () => {
 		});
 	});
 });
+
+// ═══ didClose + collectDiagnostics bug tests ═══
+
+describe("LspClient didClose and collectDiagnostics", () => {
+	it("should send textDocument/didClose notification when closing a file", async () => {
+		const { client, conn } = createStartedClient();
+
+		// Manually add a file to opened files (bypass didOpen)
+		(client as any)._openedFiles.add("/test/file.ts");
+
+		await client.didClose("/test/file.ts");
+
+		// Bug: didClose never sends the notification — this assertion fails
+		expect(conn.sendNotification).toHaveBeenCalledWith(
+			"textDocument/didClose",
+			expect.objectContaining({
+				textDocument: expect.objectContaining({
+					uri: expect.stringContaining("file.ts"),
+				}),
+			}),
+		);
+	});
+
+	it("should preserve notification order after consume", () => {
+		const { client } = createStartedClient();
+
+		// Open three files
+		(client as any)._openedFiles.add("/test/fileA.ts");
+		(client as any)._openedFiles.add("/test/fileB.ts");
+		(client as any)._openedFiles.add("/test/fileC.ts");
+
+		// Push 3 mock notifications in order: A, B, C
+		const notifA = { uri: "file:///test/fileA.ts", diagnostics: [] };
+		const notifB = { uri: "file:///test/fileB.ts", diagnostics: [] };
+		const notifC = { uri: "file:///test/fileC.ts", diagnostics: [] };
+		(client as any)._notifications = [notifA, notifB, notifC];
+
+		// Consume fileA — remaining should be [B, C] in original order
+		client.collectDiagnostics(["/test/fileA.ts"]);
+
+		const remaining = (client as any)._notifications as typeof notifA[];
+		// Bug: remaining.push() in reverse iteration reverses the order,
+		// so remaining would be [C, B] instead of [B, C].
+		expect(remaining).toHaveLength(2);
+		expect(remaining[0]).toBe(notifB);
+		expect(remaining[1]).toBe(notifC);
+	});
+});
+

@@ -17,9 +17,10 @@ import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { getGraphEdgeCount } from "../core/graph.js";
 import { diffFromBaseline } from "../core/baseline.js";
+import { assessRisk } from "../core/risk.js";
 import { isNonSourceFile, findOrphans } from "../core/filter.js";
 import { execFile } from "node:child_process";
-import { safeGitExec } from "../core/git-utils.js";
+import { getGitChangedFiles } from "../core/git-utils.js";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -148,7 +149,7 @@ export async function executeVerifyJsonAsync(projectRoot: string, options: Verif
 
 	const lspErrors = lspDiagnostics.filter((d) => d.severity === "error").length;
 	const lspWarnings = lspDiagnostics.filter((d) => d.severity === "warning").length;
-	const risk = assessRisk(graph, internalOrphans, gitChangedFiles, preCommit, lspErrors, lspWarnings);
+	const risk = _assessVerifyRisk(graph, internalOrphans, gitChangedFiles, preCommit, lspErrors, lspWarnings);
 
 	let verdict = "PASS";
 	if (lspDiagnostics.some((d) => d.severity === "error")) {
@@ -313,7 +314,7 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 
 	const lspErrors = lspResult.diagnostics.filter((d) => d.severity === "error").length;
 	const lspWarnings = lspResult.diagnostics.filter((d) => d.severity === "warning").length;
-	const risk = assessRisk(graph, internalOrphans, gitChangedFiles, preCommit, lspErrors, lspWarnings);
+	const risk = _assessVerifyRisk(graph, internalOrphans, gitChangedFiles, preCommit, lspErrors, lspWarnings);
 	lines.push("### Risk Level");
 	lines.push(`**${risk.level}** — ${risk.reason}`);
 	lines.push("");
@@ -474,28 +475,30 @@ async function runLspDiagnostics(
 	// lspManager already declared above
 	const errorsAndWarnings = diagnostics.filter((d) => d.severity === "error" || d.severity === "warning");
 	if (lspManager && errorsAndWarnings.length > 0) {
-		for (const diag of errorsAndWarnings.slice(0, 10)) {
-			try {
-				const actions = await lspCodeActions(
-					lspManager,
-					diag.file,
-					diag.line - 1,
-					diag.col - 1,
-					diag.endLine ? diag.endLine - 1 : diag.line - 1,
-					diag.endCol ? diag.endCol - 1 : diag.col,
-				);
-				if (actions && actions.length > 0) {
-					diag.suggestedFixes = actions
-						.map((a) => {
-							if ("title" in a && a.title) return `Fix: ${a.title}`;
-							return null;
-						})
-						.filter(Boolean) as string[];
+		await Promise.all(
+			errorsAndWarnings.slice(0, 10).map(async (diag) => {
+				try {
+					const actions = await lspCodeActions(
+						lspManager,
+						diag.file,
+						diag.line - 1,
+						diag.col - 1,
+						diag.endLine ? diag.endLine - 1 : diag.line - 1,
+						diag.endCol ? diag.endCol - 1 : diag.col,
+					);
+					if (actions && actions.length > 0) {
+						diag.suggestedFixes = actions
+							.map((a) => {
+								if ("title" in a && a.title) return `Fix: ${a.title}`;
+								return null;
+							})
+							.filter(Boolean) as string[];
+					}
+				} catch {
+					console.warn(`[pi-shazam] codeAction fetch failed for ${diag.file}:${diag.line}:${diag.col}`);
 				}
-			} catch {
-				console.warn(`[pi-shazam] codeAction fetch failed for ${diag.file}:${diag.line}:${diag.col}`);
-			}
-		}
+			}),
+		);
 	}
 
 	// Annotate output if files failed to open
@@ -605,73 +608,29 @@ async function runSubprocessDiagnostics(projectRoot: string): Promise<LspDiagRes
 	return { diagnostics, available: true };
 }
 
+// ── Re-exports for backward compatibility (tests import from here) ──────────
+export { resolveGitWorkdir } from "../core/git-utils.js";
+
 // ── Graph analysis helpers ──────────────────────────────────────────────────
 
-interface RiskResult {
-	level: "low" | "medium" | "high";
-	reason: string;
-}
-
 /**
- * Resolve the actual git working directory for the given path.
- * Uses `git rev-parse --show-toplevel` which correctly returns the worktree
- * root when called from within a git worktree (issue #226).
- *
- * Falls back to `cwd` when the path is not inside a git repository.
+ * 适配器：将 verify 工具的参数转换为统一的 assessRisk 调用。
+ * 从图和孤儿列表计算 gitFileCount/newOrphanCount/orphanDelta，
+ * 然后委托给 core/risk.ts 的统一函数。
  */
-export function resolveGitWorkdir(cwd: string): string {
-	const result = safeGitExec(["rev-parse", "--show-toplevel"], cwd, 5000);
-	return result || cwd;
-}
-
-function getGitChangedFiles(projectRoot: string): string[] {
-	const gitDir = resolveGitWorkdir(projectRoot);
-	const unstaged = safeGitExec(["diff", "--name-only", "--diff-filter=ACMR"], gitDir, 5000);
-	const staged = safeGitExec(["diff", "--cached", "--name-only", "--diff-filter=ACMR"], gitDir, 5000);
-	const combined = [unstaged, staged].filter(Boolean).join("\n").trim();
-	if (!combined) return [];
-	return [...new Set(combined.split("\n").filter(Boolean))];
-}
-
-function assessRisk(
-	_graph: RepoGraph,
-	_internalOrphans: { name: string; kind: string; file: string; line: number }[],
+function _assessVerifyRisk(
+	graph: RepoGraph,
+	internalOrphans: { name: string; kind: string; file: string; line: number }[],
 	gitChangedFiles?: string[],
 	preCommit?: boolean,
 	lspErrors = 0,
 	lspWarnings = 0,
-): RiskResult {
-	const baselineChanges = 0; // diffBaseline removed (issue #319)
+): { level: "low" | "medium" | "high"; reason: string } {
 	const gitFileCount = gitChangedFiles?.length ?? 0;
-
-	// Compute orphan delta from session baseline (not absolute count)
-	const baselineDiff = diffFromBaseline(_graph, lspErrors, lspWarnings);
-	const orphanDelta = baselineDiff?.orphanSymbols ?? _internalOrphans.length;
-	const newOrphanCount = baselineDiff?.newOrphans?.length ?? _internalOrphans.length;
-
-	const totalImpact = baselineChanges + gitFileCount + orphanDelta;
-
-	if (totalImpact === 0) return { level: "low", reason: "No changes detected, no new orphan symbols." };
-
-	const highThreshold = preCommit ? 30 : 60;
-	const mediumThreshold = preCommit ? 10 : 20;
-
-	if (newOrphanCount > 10 || totalImpact > highThreshold) {
-		return {
-			level: "high",
-			reason: `${newOrphanCount} new orphans, ${baselineChanges} graph changes, ${gitFileCount} git-modified files.`,
-		};
-	}
-	if (newOrphanCount > 0 || totalImpact > mediumThreshold) {
-		return {
-			level: "medium",
-			reason: `${newOrphanCount} new orphans, ${baselineChanges} graph changes, ${gitFileCount} modified files — review recommended.`,
-		};
-	}
-	return {
-		level: "low",
-		reason: `${newOrphanCount} new orphans, ${baselineChanges} changes, ${gitFileCount} modified files — acceptable.`,
-	};
+	const baselineDiff = diffFromBaseline(graph, lspErrors, lspWarnings);
+	const orphanDelta = baselineDiff?.orphanSymbols ?? internalOrphans.length;
+	const newOrphanCount = baselineDiff?.newOrphans?.length ?? internalOrphans.length;
+	return assessRisk({ gitFileCount, newOrphanCount, orphanDelta, lspErrors, lspWarnings, preCommit });
 }
 
 // ── Synchronous execute functions (for test compatibility) ──────────────────
@@ -747,7 +706,7 @@ export function executeVerify(graph: RepoGraph, projectRoot: string, options: Ve
 		lines.push("### Orphan Symbols: None detected", "");
 	}
 
-	const risk = assessRisk(graph, internalOrphans, gitChangedFiles, options.preCommit);
+	const risk = _assessVerifyRisk(graph, internalOrphans, gitChangedFiles, options.preCommit);
 	lines.push("### Risk Level");
 	lines.push(`**${risk.level}** — ${risk.reason}`);
 	lines.push("");
@@ -768,7 +727,7 @@ export function executeVerifyJson(graph: RepoGraph, projectRoot: string, options
 	const internalOrphans = orphanResult.internal;
 	const exportedOrphans = orphanResult.exported;
 	const gitChangedFiles = getGitChangedFiles(projectRoot);
-	const risk = assessRisk(graph, internalOrphans, gitChangedFiles, options.preCommit);
+	const risk = _assessVerifyRisk(graph, internalOrphans, gitChangedFiles, options.preCommit);
 
 	const edgeCount = getGraphEdgeCount(graph);
 

@@ -560,6 +560,4 @@ function runFormatterCommand(args: string[], cwd: string): void {
 	}
 }
 
-// ── Backward-compatible exports (for tests) ────────────────────────────────
-export { executeFormat as executeFix, executeFormatJson as executeFixJson };
-export type { FormatOptions as FixOptions };
+

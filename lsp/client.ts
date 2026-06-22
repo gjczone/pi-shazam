@@ -441,6 +441,11 @@ export class LspClient {
 
 	async didClose(filePath: string): Promise<void> {
 		const uri = pathToUri(filePath);
+		if (this.connection) {
+			await this.connection.sendNotification("textDocument/didClose", {
+				textDocument: { uri },
+			});
+		}
 		this._docVersions.delete(uri);
 		this._openedFiles.delete(this.resolveRel(filePath));
 	}
@@ -858,7 +863,7 @@ export class LspClient {
 				results.push(notif);
 				expectedUris.delete(notif.uri);
 			} else {
-				remaining.push(notif);
+				remaining.unshift(notif);
 			}
 		}
 		if (consume) {

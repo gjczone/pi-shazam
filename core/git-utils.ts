@@ -120,6 +120,37 @@ export function safeGitExec(args: string[], cwd: string, timeout = 5000): string
 }
 
 /**
+ * 解析 git 工作目录的实际路径。
+ *
+ * 使用 `git rev-parse --show-toplevel` 解析，在 git worktree 中会返回
+ * worktree 根目录而非主仓库目录（issue #226）。
+ *
+ * 当路径不在 git 仓库中时返回 `cwd`。
+ */
+export function resolveGitWorkdir(cwd: string): string {
+	const result = safeGitExec(["rev-parse", "--show-toplevel"], cwd, 5000);
+	return result || cwd;
+}
+
+/**
+ * 获取 git 工作树中已变更的文件列表。
+ *
+ * 同时检查未暂存 (`git diff`) 和已暂存 (`git diff --cached`) 的变更，
+ * 仅包含新增、修改、复制、重命名类型的变更（ACMR），自动去重。
+ *
+ * @param projectRoot - 项目根目录（会内部解析 git 工作目录）
+ * @returns 已变更文件的相对路径数组
+ */
+export function getGitChangedFiles(projectRoot: string): string[] {
+	const gitDir = resolveGitWorkdir(projectRoot);
+	const unstaged = safeGitExec(["diff", "--name-only", "--diff-filter=ACMR"], gitDir, 5000);
+	const staged = safeGitExec(["diff", "--cached", "--name-only", "--diff-filter=ACMR"], gitDir, 5000);
+	const combined = [unstaged, staged].filter(Boolean).join("\n").trim();
+	if (!combined) return [];
+	return [...new Set(combined.split("\n").filter(Boolean))];
+}
+
+/**
  * 重置 git 缓存。仅在测试中使用。
  */
 export function _resetGitCache(): void {

@@ -4,7 +4,7 @@
  * Single source of truth for tool names, descriptions, and parameter schemas.
  * Both Pi (TypeBox) and MCP (Zod) import from here to avoid duplication.
  *
- * Updated for tool consolidation 14→8+1 (issue #362):
+ * Updated for tool consolidation 14→9 (issue #362):
  *   overview, lookup, impact, verify, changes, format, find_tests,
  *   rename_symbol, safe_delete
  */

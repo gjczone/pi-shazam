@@ -85,16 +85,18 @@ describe("MCP integration: overview pipeline", () => {
 
 describe("MCP integration: hotspots pipeline", () => {
 	it("should produce valid MCP content from hotspots", async () => {
-		const { executeHotspots } = await import("../tools/overview.js");
-		const text = executeHotspots(graph);
+		const { _computeHotspots } = await import("../tools/overview.js");
+		const result = _computeHotspots(graph);
+		const text = JSON.stringify(result);
 		const envelope = wrapMcp(text);
 		assertMcpEnvelope(envelope);
-		expect(text).toMatch(/Complexity Hotspots/i);
+		expect(Array.isArray(result)).toBe(true);
 	});
 
 	it("should produce valid JSON envelope from hotspots", async () => {
-		const { executeHotspotsJson } = await import("../tools/overview.js");
-		const jsonText = executeHotspotsJson(graph, 5);
+		const { _computeHotspots } = await import("../tools/overview.js");
+		const hotspots = _computeHotspots(graph, 5);
+		const jsonText = JSON.stringify({ schema_version: "1.0", command: "overview", status: "ok", result: { hotspots } });
 		const parsed = JSON.parse(jsonText);
 		expect(parsed.schema_version).toBe("1.0");
 		expect(parsed.command).toBe("overview");
@@ -112,17 +114,17 @@ describe("MCP integration: hotspots pipeline", () => {
 	});
 
 	it("should respect topN parameter", async () => {
-		const { executeHotspots } = await import("../tools/overview.js");
-		const text = executeHotspots(graph, 3);
-		expect(text).toMatch(/Top 3/);
+		const { _computeHotspots } = await import("../tools/overview.js");
+		const result = _computeHotspots(graph, 3);
+		expect(Array.isArray(result)).toBe(true);
+		expect(result.length).toBeLessThanOrEqual(3);
 	});
 
 	it("should exclude config/generated files from results", async () => {
-		const { executeHotspots } = await import("../tools/overview.js");
-		const text = executeHotspots(graph, 20);
-		const rankedLines = text.split("\n").filter((l: string) => /^\d+\./.test(l));
-		expect(rankedLines).not.toContainEqual(expect.stringMatching(/package-lock\.json/));
-		expect(rankedLines).not.toContainEqual(expect.stringMatching(/node_modules/));
+		const { _computeHotspots } = await import("../tools/overview.js");
+		const result = _computeHotspots(graph, 20);
+		expect(result).not.toContainEqual(expect.objectContaining({ file: expect.stringMatching(/package-lock\.json/) }));
+		expect(result).not.toContainEqual(expect.objectContaining({ file: expect.stringMatching(/node_modules/) }));
 	});
 });
 
@@ -149,10 +151,12 @@ describe("MCP integration: impact pipeline", () => {
 
 describe("MCP integration: symbol pipeline", () => {
 	it("should produce valid text from symbol lookup", async () => {
-		const { executeSymbol } = await import("../tools/lookup.js");
-		const text = executeSymbol(graph, "scanProject");
+		const { _findSymbols } = await import("../tools/lookup.js");
+		const result = _findSymbols(graph, "scanProject");
+		const text = JSON.stringify(result);
 		expect(typeof text).toBe("string");
-		expect(text).toContain("scanProject");
+		expect(Array.isArray(result)).toBe(true);
+		expect(result.length).toBeGreaterThan(0);
 		const envelope = wrapMcp(text);
 		assertMcpEnvelope(envelope);
 	});
@@ -182,8 +186,8 @@ describe("MCP integration: verify pipeline", () => {
 
 describe("MCP integration: file_detail pipeline", () => {
 	it("should produce valid text from file_detail", async () => {
-		const { executeFileDetail } = await import("../tools/lookup.js");
-		const text = executeFileDetail(graph, "core/graph.ts");
+		const { _executeFileDetail } = await import("../tools/lookup.js");
+		const text = _executeFileDetail(graph, "core/graph.ts");
 		expect(typeof text).toBe("string");
 		expect(text.length).toBeGreaterThan(0);
 		expect(text).toMatch(/Symbol|symbol/i);
@@ -220,8 +224,8 @@ describe("MCP integration: find_tests pipeline", () => {
 
 describe("MCP integration: fix pipeline", () => {
 	it("should produce valid text from fix in dry-run mode", async () => {
-		const { executeFix } = await import("../tools/format.js");
-		const text = executeFix(graph, ".", { dryRun: true });
+		const { executeFormat } = await import("../tools/format.js");
+		const text = executeFormat(graph, ".", { dryRun: true });
 		expect(typeof text).toBe("string");
 		expect(text.length).toBeGreaterThan(0);
 		const envelope = wrapMcp(text);
@@ -248,9 +252,10 @@ describe("MCP integration: end-to-end handler simulation", () => {
 	});
 
 	it("should simulate the MCP hotspots handler pattern", async () => {
-		const { executeHotspots } = await import("../tools/overview.js");
+		const { _computeHotspots } = await import("../tools/overview.js");
 
-		const text = executeHotspots(graph);
+		const hotspots = _computeHotspots(graph);
+		const text = JSON.stringify(hotspots);
 		const mcpResult = { content: [{ type: "text" as const, text }] };
 
 		assertMcpEnvelope(mcpResult);

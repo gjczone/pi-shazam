@@ -149,6 +149,7 @@ pi-shazam (npm package)
 │   ├── verify-state.ts                 Shared verify tracking state for safety + stop-verify
 │   ├── impact-state.ts                 Shared impact tracking state for issue-guard + pre-edit
 │   ├── issue-guard.ts                  Detect gh issue create, set pending impact flag
+│   ├── agent-context-guard.ts           Block agent spawn without structural context
 │   ├── rename-state.ts                Session-scoped rename review state
 │   └── _bash-utils.ts                 Shared bash command utilities
 │

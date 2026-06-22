@@ -94,9 +94,9 @@ describe("MCP: tool output format", () => {
 	});
 
 	it("overview hotspots returns text content", async () => {
-		const { executeHotspots } = await import("../tools/overview.js");
-		const result = executeHotspots(getGraph());
-		expect(typeof result).toBe("string");
+		const { _computeHotspots } = await import("../tools/overview.js");
+		const result = _computeHotspots(getGraph());
+		expect(Array.isArray(result)).toBe(true);
 		expect(result.length).toBeGreaterThan(0);
 	});
 
@@ -104,6 +104,7 @@ describe("MCP: tool output format", () => {
 		const { executeCallChain } = await import("../tools/impact.js");
 		const result = executeCallChain(getGraph(), "index.ts", 1);
 		expect(typeof result).toBe("string");
+		expect(result.length).toBeGreaterThan(0);
 	});
 
 	it("find_tests returns result object", async () => {

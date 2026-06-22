@@ -304,5 +304,5 @@ Review EVERY companion .md file. For each one, ask: "Did this release change any
 [ ] 17. Git clean state confirmed
 [ ] 18. Self-improvement retrospective completed (Phase 8)
 [ ] 19. Kimi Code hooks synced (Phase 7)
-[ ] 19. All companion .md files audited for staleness
+[ ] 20. All companion .md files audited for staleness
 ```

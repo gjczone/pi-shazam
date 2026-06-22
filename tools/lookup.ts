@@ -146,7 +146,7 @@ interface EnrichedMatch {
 	source: "lsp" | "tree-sitter";
 }
 
-function _findSymbols(graph: RepoGraph, name: string, file?: string): Symbol[] {
+export function _findSymbols(graph: RepoGraph, name: string, file?: string): Symbol[] {
 	const candidates = graph.nameIndex.get(name) ?? [];
 	const results = file ? candidates.filter((sym) => sym.file === file) : [...candidates];
 	return results.sort((a, b) => b.pagerank - a.pagerank);
@@ -284,7 +284,7 @@ async function _executeLookupAsync(
 	return lines.join("\n").trim();
 }
 
-function _executeSymbolJson(graph: RepoGraph, name: string, file?: string): string {
+export function _executeSymbolJson(graph: RepoGraph, name: string, file?: string): string {
 	const matches = _findSymbols(graph, name, file);
 	return buildEnvelope(
 		"shazam_lookup",
@@ -758,7 +758,7 @@ function _formatHierarchy(syms: DocumentSymbol[], depth: number): string[] {
 	return out;
 }
 
-function _executeFileDetail(graph: RepoGraph, file: string): string {
+export function _executeFileDetail(graph: RepoGraph, file: string): string {
 	const symIds = graph.fileSymbols.get(file);
 	if (!symIds || symIds.length === 0) {
 		return `File not found in graph or has no symbols: ${file}`;
@@ -801,19 +801,43 @@ function _executeFileDetail(graph: RepoGraph, file: string): string {
 	const containers: { sym: (typeof symbols)[0]; members: typeof symbols }[] = [];
 	const standalone: typeof symbols = [];
 
-	for (const sym of symbols) {
+	// O(N log N) stack-based single-pass traversal (was O(N²) filter).
+	// 预排序：按行号升序、同行时结束行降序（外层容器优先）、列号升序保证稳定。
+	const sorted = [...symbols].sort((a, b) => a.line - b.line || b.endLine - a.endLine || a.col - b.col);
+	const containerMap = new Map<string, { sym: (typeof symbols)[0]; members: typeof symbols }>();
+	const stack: (typeof symbols)[0][] = [];
+
+	for (const sym of sorted) {
+		// 符号起始行已超出栈顶容器结束行 → 弹出已关闭的容器。
+		while (stack.length > 0 && sym.line > stack[stack.length - 1].endLine) {
+			stack.pop();
+		}
+
 		if (CONTAINER_KINDS.has(sym.kind)) {
-			const members = symbols.filter((other) => {
-				if (other.id === sym.id) return false;
-				return other.line >= sym.line && other.endLine <= sym.endLine;
-			});
-			if (members.length > 0) {
-				containers.push({ sym, members });
-			} else {
+			const entry = { sym, members: [] as typeof symbols };
+			containerMap.set(sym.id, entry);
+			// 扁平包含：该容器属于栈上所有父容器的成员。
+			for (const parent of stack) {
+				containerMap.get(parent.id)!.members.push(sym);
+			}
+			stack.push(sym);
+		} else {
+			// 非容器符号：属于栈上所有父容器的成员。
+			for (const parent of stack) {
+				containerMap.get(parent.id)!.members.push(sym);
+			}
+			if (stack.length === 0) {
 				standalone.push(sym);
 			}
+		}
+	}
+
+	// 有成员的容器保留为容器展示，无成员的容器降为独立符号。
+	for (const entry of containerMap.values()) {
+		if (entry.members.length > 0) {
+			containers.push(entry);
 		} else {
-			standalone.push(sym);
+			standalone.push(entry.sym);
 		}
 	}
 
@@ -896,7 +920,7 @@ function _executeFileDetailJson(graph: RepoGraph, file: string): string {
 
 // ── State map (from symbol.ts) ───────────────────────────────────────────
 
-function _executeStateMap(graph: RepoGraph, symbolName: string): string {
+export function _executeStateMap(graph: RepoGraph, symbolName: string): string {
 	const targets: Symbol[] = [];
 	for (const sym of graph.symbols.values()) {
 		if (sym.name === symbolName) targets.push(sym);
@@ -964,38 +988,8 @@ function _executeStateMap(graph: RepoGraph, symbolName: string): string {
 	return lines.join("\n");
 }
 
-// ── Backward-compatible exports (for tests) ─────────────────────────────
-
-export function executeSymbol(graph: RepoGraph, name: string, file?: string): string {
-	const matches = _findSymbols(graph, name, file);
-	const lines: string[] = [
-		`## Symbol: \`${_sanitizeMarkdown(name)}\` (${matches.length} matches) (tree-sitter only)`,
-		"",
-	];
-	for (const s of matches) {
-		lines.push(`${s.kind} \`${_sanitizeMarkdown(s.name)}\` — ${s.file}:${s.line}-${s.endLine} [${s.visibility}]`);
-		lines.push(`  PageRank: ${s.pagerank.toFixed(4)}`);
-		lines.push(`  signature: ${s.signature}`);
-		lines.push("");
-	}
-	return lines.join("\n").trim();
-}
-
-export function executeSymbolWithMode(graph: RepoGraph, name: string, mode?: string, file?: string): string {
-	if (mode === "state") return _executeStateMap(graph, name);
-	return executeSymbol(graph, name, file);
-}
-
-export function executeSymbolJson(graph: RepoGraph, name: string, file?: string): string {
-	return _executeSymbolJson(graph, name, file);
-}
-
 export function executeStateMap(graph: RepoGraph, symbolName: string): string {
 	return _executeStateMap(graph, symbolName);
-}
-
-export function executeFileDetail(graph: RepoGraph, file: string): string {
-	return _executeFileDetail(graph, file);
 }
 
 export function executeFileDetailJson(graph: RepoGraph, file: string): string {

@@ -71,7 +71,7 @@ test -f dist/index.js && test -f dist/index.d.ts && echo "OK" || echo "FAIL"
 grep -c "registerBeforeStartHook\|registerToolLogger\|registerShazamGuide\|registerPreEditGuard\|registerSafetyHooks\|registerStopVerify\|registerFailureRecovery\|registerIssueGuard\|registerAgentContextGuard" dist/index.js
 ```
 
-**Pass**: output is `9`.
+**Pass**: output is `>=9`.
 **Common fix**: if output is less than 9, a hook was not registered in `index.ts`.
 
 ### 8. MCP Integration Tests

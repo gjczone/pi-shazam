@@ -238,6 +238,7 @@ pi-shazam auto-detects language servers for supported languages:
 | Go                    | gopls                      | yes         |
 | JSON                  | vscode-json-languageserver | yes         |
 | YAML                  | yaml-language-server       | yes         |
+| Dart                  | dart                       | yes         |
 
 When a language server is unavailable, tools fall back to tree-sitter only and annotate output with `(tree-sitter only, LSP unavailable)`.
 
@@ -265,5 +266,5 @@ pi-shazam reads source files with adaptive encoding: UTF-8 -> GBK -> GB2312. It 
 
 - **Runtime**: Node.js >=18, TypeScript ES2022, ESM
 - **Grammar support**: 7 languages via tree-sitter (Python, TypeScript, JavaScript, Go, Rust, Dart, JSON)
-- **LSP**: 6 languages with auto-spawned language servers (Python, TypeScript, JavaScript, Go, Rust, JSON)
+- **LSP**: 7 languages with auto-spawned language servers (Python, TypeScript, JavaScript, Go, Rust, JSON, YAML)
 - **Install**: `npm install pi-shazam` in Pi extensions directory

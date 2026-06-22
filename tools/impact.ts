@@ -12,6 +12,7 @@ import { createTool } from "./_factory.js";
 import { buildEnvelope } from "./_factory.js";
 import { executeFindTests } from "./find_tests.js";
 import { isNonSourceFile } from "../core/filter.js";
+import { assessRisk } from "../core/risk.js";
 import { recordCallChain } from "../hooks/rename-state.js";
 
 export function registerImpact(pi: ExtensionAPI): void {
@@ -272,25 +273,7 @@ export function executeImpact(
 }
 
 function assessImpactRisk(affectedFileCount: number, affectedSymbolCount: number): { level: string; reason: string } {
-	if (affectedFileCount === 0 && affectedSymbolCount === 0) {
-		return { level: "low", reason: "No external impact detected." };
-	}
-	if (affectedFileCount > 10 || affectedSymbolCount > 30) {
-		return {
-			level: "high",
-			reason: `${affectedFileCount} files, ${affectedSymbolCount} symbols affected — extensive blast radius.`,
-		};
-	}
-	if (affectedFileCount > 3 || affectedSymbolCount > 10) {
-		return {
-			level: "medium",
-			reason: `${affectedFileCount} files, ${affectedSymbolCount} symbols affected — moderate blast radius.`,
-		};
-	}
-	return {
-		level: "low",
-		reason: `${affectedFileCount} files, ${affectedSymbolCount} symbols affected — contained blast radius.`,
-	};
+	return assessRisk({ gitFileCount: affectedFileCount, newOrphanCount: affectedSymbolCount, orphanDelta: 0 });
 }
 
 export function executeImpactJson(graph: RepoGraph, files: string[], depth: number = 3): string {
