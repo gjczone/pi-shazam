@@ -5,7 +5,8 @@
  * Requires prior call_chain verification for safety.
  * This is a write operation with side effects.
  */
-import { writeFileSync } from "node:fs";
+import { writeFileSync, renameSync } from "node:fs";
+import { join } from "node:path";
 import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
@@ -18,6 +19,16 @@ import { uriToPath } from "../lsp/client.js";
 import { createTool, buildEnvelope, validatePathInProject } from "./_factory.js";
 import { scanProject } from "../core/scanner.js";
 import { hasCallChainChecked } from "../hooks/rename-state.js";
+
+/**
+ * Atomic write: write to temp file then rename over target.
+ * Prevents partial/corrupt files if the process crashes mid-write.
+ */
+function atomicWriteFile(filePath: string, content: string): void {
+	const tmpPath = join(filePath + ".tmp." + process.pid);
+	writeFileSync(tmpPath, content, "utf-8");
+	renameSync(tmpPath, filePath);
+}
 
 export function registerRenameSymbol(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -68,7 +79,8 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 				// call_chain was checked — proceed with actual rename below
 			}
 			// Scan project to get graph (fixes #209 — customExecute must not rely on module-level variable)
-			const graph = scanProject(".");
+			const projectRoot = (params.project as string) || process.cwd();
+			const graph = scanProject(projectRoot);
 			if (!graph?.symbols) {
 				return {
 					content: [
@@ -79,7 +91,7 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 					],
 				};
 			}
-			const result = await executeRenameSymbol(graph, symbolName, newName, dryRun);
+			const result = await executeRenameSymbol(graph, symbolName, newName, dryRun, projectRoot);
 			const text = json
 				? buildEnvelope("shazam_rename_symbol", process.cwd(), "ok", result)
 				: formatRenameResult(result, symbolName, newName, dryRun);
@@ -135,6 +147,7 @@ export async function executeRenameSymbol(
 	symbolName: string,
 	newName: string,
 	dryRun: boolean = false,
+	projectRoot: string = process.cwd(),
 ): Promise<RenameResult> {
 	// Find all matching symbols (fix #216: show all matches, not just first)
 	const matchingSymbols: Symbol[] = [];
@@ -272,7 +285,7 @@ export async function executeRenameSymbol(
 	}
 
 	// Apply the workspace edit
-	const applied = await applyWorkspaceEdit(workspaceEdit, dryRun);
+	const applied = await applyWorkspaceEdit(workspaceEdit, dryRun, projectRoot);
 
 	return {
 		status: "ok",
@@ -293,7 +306,11 @@ interface ApplyResult {
 	preview: { file: string; line: number; text: string }[];
 }
 
-async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise<ApplyResult> {
+async function applyWorkspaceEdit(
+	edit: WorkspaceEdit,
+	dryRun: boolean,
+	projectRoot: string = process.cwd(),
+): Promise<ApplyResult> {
 	let fileCount = 0;
 	let totalChanges = 0;
 	const preview: { file: string; line: number; text: string }[] = [];
@@ -325,7 +342,7 @@ async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise
 		const filePath = uriToPath(uri);
 
 		// 路径穿越校验：确保 LSP 返回的文件路径在项目根目录内
-		if (!validatePathInProject(filePath)) {
+		if (!validatePathInProject(filePath, projectRoot)) {
 			preview.push({
 				file: filePath,
 				line: 0,
@@ -379,7 +396,7 @@ async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise
 				}
 			}
 
-			writeFileSync(filePath, lines.join("\n"), "utf-8");
+			atomicWriteFile(filePath, lines.join("\n"));
 			written.push(filePath);
 		} catch (err) {
 			// Rollback all already-written files to their backups
@@ -388,7 +405,7 @@ async function applyWorkspaceEdit(edit: WorkspaceEdit, dryRun: boolean): Promise
 				const backup = backups.find((b) => b.filePath === writtenPath);
 				if (backup) {
 					try {
-						writeFileSync(backup.filePath, backup.content, "utf-8");
+						atomicWriteFile(backup.filePath, backup.content);
 					} catch (rollbackErr) {
 						console.error(`[pi-shazam] Rollback failed for ${backup.filePath}:`, rollbackErr);
 						rollbackFailures.push(backup.filePath);

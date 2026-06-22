@@ -26,6 +26,13 @@ const HIGH_RISK_PATTERNS: Array<{ regex: RegExp; label: string }> = [
 	{ regex: /\bparted\b/, label: "parted" },
 	{ regex: /\bsfdisk\b/, label: "sfdisk" },
 	{ regex: /:\(\)\s*\{.*:\s*\|\s*:.*&\s*\}.*;/, label: ":(){ :|:& };:" }, // fork bomb (flexible — catches spacing / padding variants)
+	{ regex: /\beval\b/, label: "eval" },
+	{ regex: /\bsource\s+\S/, label: "source" },
+	{ regex: /^\.\s+\S/, label: "source (.)" },
+	{ regex: /\b(curl|wget)\b[^|]*\|\s*(sh|bash|zsh)\b/, label: "curl|sh" },
+	{ regex: /\bbase64\b[^|]*\|\s*(sh|bash)\b/, label: "base64|sh" },
+	{ regex: /`[^`]+`/, label: "backtick substitution" },
+	{ regex: /<\(/, label: "process substitution" },
 ];
 
 /**
