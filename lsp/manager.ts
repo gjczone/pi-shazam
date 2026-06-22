@@ -387,6 +387,12 @@ export class LspManager {
 		// Skip vendored / generated / cache directories
 		if (shouldSkipPath(filePath)) return null;
 
+		// Reject paths outside project root
+		const absPath = resolve(this.projectRoot, filePath);
+		if (!absPath.startsWith(resolve(this.projectRoot) + "/") && absPath !== resolve(this.projectRoot)) {
+			return null;
+		}
+
 		const ext = filePath.substring(filePath.lastIndexOf(".")).toLowerCase();
 		const language = languageForSuffix(ext);
 		if (!language) return null;
