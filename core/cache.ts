@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import { serializeGraphV2, deserializeGraphV2 } from "./graph.js";
 import type { RepoGraph, GraphCacheData as GraphCacheDataExport } from "./graph.js";
 
-// ── Cache directory management ───────────────────────────────────────────────
+// -- Cache directory management -----------------------------------------------
 
 const CACHE_ROOT = join(homedir(), ".cache", "repomap");
 
@@ -30,7 +30,7 @@ export function getProjectCacheDir(projectPath: string): string {
 	return cacheDir;
 }
 
-// ── Persistent graph cache (V2) ──────────────────────────────────────────────
+// -- Persistent graph cache (V2) ----------------------------------------------
 
 /** Max age for a cached graph file before it is considered stale. */
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 1 day — prevents stale cache in active projects (fixes #100)

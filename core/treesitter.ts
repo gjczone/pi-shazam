@@ -7,7 +7,7 @@
  * - Parser = require("tree-sitter") (default export is the Parser)
  * - Query = require("tree-sitter").Query (named export)
  * - parser.setLanguage(grammarModule) — pass grammar module directly
- * - query.captures(node) → {name: string, node: SyntaxNode}[]
+ * - query.captures(node) -> {name: string, node: SyntaxNode}[]
  *
  * Grammar modules (tree-sitter-python etc.) export objects with
  * {name, language, nodeTypeInfo} — they are passed directly to
@@ -33,7 +33,7 @@ import { createSymbol } from "./graph.js";
 import type { Symbol, JSImportBinding } from "./graph.js";
 import { QUERIES } from "./treesitter-queries.js";
 
-// ── Runtime type stubs for tree-sitter (no @types available) ─────────────────
+// -- Runtime type stubs for tree-sitter (no @types available) -----------------
 
 interface ParserInstance {
 	setLanguage(language: unknown): void;
@@ -61,7 +61,7 @@ interface QueryInstance {
 	captures(node: SyntaxNode, options?: Record<string, unknown>): { name: string; node: SyntaxNode }[];
 }
 
-// ── File extension → tree-sitter language mapping ────────────────────────────
+// -- File extension -> tree-sitter language mapping ----------------------------
 
 export const EXT_TO_LANG: Record<string, string> = {
 	".py": "python",
@@ -80,10 +80,10 @@ export const EXT_TO_LANG: Record<string, string> = {
 	".json": "json",
 };
 
-// ── Parser availability tracking ────────────────────────────────────────────
-// 模块级状态记录，追踪每个语言的 parser 加载结果。
-// 让 overview 和 before-start hook 能向 LLM 报告哪些语言不可用，
-// 避免"静默失败"——工具返回空结果但 LLM 不知道原因。
+// -- Parser availability tracking --------------------------------------------
+// Module-level state tracking for each language's parser load result.
+// Lets overview and before-start hook report unavailable languages to the LLM,
+// avoiding "silent failures" where tools return empty results but the LLM doesn't know why.
 
 export interface ParserStatusInfo {
 	status: "loaded" | "unavailable";
@@ -94,11 +94,11 @@ export interface ParserStatusInfo {
 const _parserStatus = new Map<string, ParserStatusInfo>();
 
 /**
- * 获取所有注册语言的 parser 加载状态。
- * overview 和 before-start hook 用此函数向 LLM 报告语言可用性。
+ * Get parser load status for all registered languages.
+ * Overview and before-start hook use this to report language availability to the LLM.
  */
 export function getParserStatus(): Map<string, ParserStatusInfo> {
-	// 确保所有 EXT_TO_LANG 语言都有记录（即使 adapter 未构造）
+	// Ensure all EXT_TO_LANG languages have a record (even if adapter was never constructed)
 	for (const lang of Object.values(EXT_TO_LANG)) {
 		if (!_parserStatus.has(lang)) {
 			_parserStatus.set(lang, { status: "unavailable", reason: "Parser not yet initialized" });
@@ -108,17 +108,18 @@ export function getParserStatus(): Map<string, ParserStatusInfo> {
 }
 
 /**
- * 根据项目实际使用的文件，返回只对当前项目相关的不可用 parser 警告。
+ * Return unavailable parser warnings only for languages actually used in the project.
  *
- * 纯 TypeScript 项目不会看到 Dart 警告，Python + TS 全栈项目也不会——
- * 只有项目中确实存在某语言的源文件且该 parser 不可用时才警告。
- * 避免“无差别广播”导致的噪音。
+ * A pure TypeScript project won't see Dart warnings, and a Python + TS full-stack
+ * project won't either -- only languages whose source files exist in the project
+ * AND whose parser is unavailable will produce warnings.
+ * This avoids noise from "indiscriminate broadcast".
  *
- * @param filePaths - 项目中的文件相对路径列表（如 graph.fileSymbols.keys()）
- * @returns 仅包含项目实际用到但 parser 不可用的语言
+ * @param filePaths - List of relative file paths in the project (e.g., graph.fileSymbols.keys())
+ * @returns Only languages that the project uses but whose parser is unavailable
  */
 export function getProjectParserWarnings(filePaths: Iterable<string>): [string, ParserStatusInfo][] {
-	// 检测项目中实际使用了哪些语言
+	// Detect which languages the project actually uses
 	const projectLangs = new Set<string>();
 	for (const filePath of filePaths) {
 		const dotIdx = filePath.lastIndexOf(".");
@@ -128,7 +129,7 @@ export function getProjectParserWarnings(filePaths: Iterable<string>): [string, 
 		if (lang) projectLangs.add(lang);
 	}
 
-	// 只返回项目中用到且 parser 不可用的语言
+	// Only return languages that the project uses AND whose parser is unavailable
 	const status = getParserStatus();
 	const warnings: [string, ParserStatusInfo][] = [];
 	for (const lang of projectLangs) {
@@ -150,7 +151,7 @@ export class TreeSitterAdapter {
 		this._initParsers();
 	}
 
-	// ── Initialization ─────────────────────────────────────────────────────────
+	// -- Initialization ---------------------------------------------------------
 
 	private _initParsers(): void {
 		const grammars: [string, string, string?][] = [
@@ -261,7 +262,7 @@ export class TreeSitterAdapter {
 		}
 	}
 
-	// ── Public API ─────────────────────────────────────────────────────────────
+	// -- Public API -------------------------------------------------------------
 
 	hasLanguage(lang: string): boolean {
 		return this.parsers.has(lang);
@@ -306,7 +307,7 @@ export class TreeSitterAdapter {
 		return this._extractStandardSymbols(tree, lang, file);
 	}
 
-	// ── Standard symbol extraction (function/class via query) ──────────────────
+	// -- Standard symbol extraction (function/class via query) ------------------
 
 	private _extractStandardSymbols(tree: Tree, lang: string, file: string): Symbol[] {
 		const symbolsById = new Map<string, Symbol>();
@@ -358,10 +359,10 @@ export class TreeSitterAdapter {
 				});
 
 				for (const [defNode, defCap] of matchingDefs) {
-					// 跳过函数体内的局部变量声明（非文件顶层）。
-					// 例如 `scanFull()` 内的 `const graph = createRepoGraph()`，
-					// 因为 `createRepoGraph` 匹配到了 `create*` 模式，
-					// 但 `graph` 是局部变量，不应被提取为项目级符号。
+					// Skip local variable declarations inside function bodies (not file-level).
+					// For example, `const graph = createRepoGraph()` inside `scanFull()`,
+					// where `createRepoGraph` matches the `create*` pattern,
+					// but `graph` is a local variable and should not be extracted as a project-level symbol.
 					if (this._isInsideFunction(defNode)) break;
 
 					const kind = defCap.includes(".") ? defCap.split(".").pop()! : defCap;
@@ -398,7 +399,7 @@ export class TreeSitterAdapter {
 		});
 	}
 
-	// ── JSON symbol extraction ───────────────────────────────────────────────────
+	// -- JSON symbol extraction ---------------------------------------------------
 
 	private _extractJsonSymbols(tree: Tree, file: string): Symbol[] {
 		const symbolsById = new Map<string, Symbol>();
@@ -434,7 +435,7 @@ export class TreeSitterAdapter {
 		);
 	}
 
-	// ── Import extraction ──────────────────────────────────────────────────────
+	// -- Import extraction ------------------------------------------------------
 
 	extractImports(tree: Tree, lang: string): [string, number][] {
 		const langQueries = this.queries.get(lang);
@@ -466,7 +467,7 @@ export class TreeSitterAdapter {
 			.sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]));
 	}
 
-	// ── Call extraction ────────────────────────────────────────────────────────
+	// -- Call extraction --------------------------------------------------------
 
 	extractCalls(tree: Tree, lang: string): [string, number, string][] {
 		const langQueries = this.queries.get(lang);
@@ -493,16 +494,16 @@ export class TreeSitterAdapter {
 			.sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]) || a[2].localeCompare(b[2]));
 	}
 
-	// ── Reference extraction ──────────────────────────────────────────────────
+	// -- Reference extraction --------------------------------------------------
 
 	/**
-	 * 提取函数调用参数位置和 return 语句中的标识符引用。
-	 *
-	 * 用于发现同一文件内的回调/事件处理器引用
-	 *（例如 `arr.map(edgeIdentity)` 或 `process.on("SIGTERM", onSignal)`），
-	 * 这些引用不会出现在 call 提取结果中（因为被引用者不是被调用者），
-	 * 但它们是有效的符号使用，不应被判定为 orphan。
-	 */
+		 * Extract identifier references from function call argument positions and return statements.
+		 *
+		 * Used to discover same-file callback/event handler references
+		 * (e.g., `arr.map(edgeIdentity)` or `process.on("SIGTERM", onSignal)`),
+		 * which do not appear in call extraction results (because the callee is not being called),
+		 * but are valid symbol usages that should not be classified as orphans.
+		 */
 	extractRefs(tree: Tree, lang: string): [string, number][] {
 		const langQueries = this.queries.get(lang);
 		const query = langQueries?.get("ref");
@@ -530,7 +531,7 @@ export class TreeSitterAdapter {
 			.sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]));
 	}
 
-	// ── JS/TS import/export binding extraction ─────────────────────────────────
+	// -- JS/TS import/export binding extraction ---------------------------------
 
 	extractJsTsImportBindings(tree: Tree, lang: string): JSImportBinding[] {
 		if (!["javascript", "typescript", "tsx"].includes(lang)) return [];
@@ -599,7 +600,7 @@ export class TreeSitterAdapter {
 		);
 	}
 
-	// ── AST helpers ────────────────────────────────────────────────────────────
+	// -- AST helpers ------------------------------------------------------------
 
 	private _walkTree(root: SyntaxNode, maxNodes = 500_000): SyntaxNode[] {
 		const nodes = [root];
@@ -654,8 +655,8 @@ export class TreeSitterAdapter {
 		return startOk && endOk;
 	}
 
-	// 检查节点的祖先链中是否存在函数/方法/箭头函数节点，
-	// 用于排除函数体内的局部变量声明（非文件顶层符号）。
+	// Check whether any ancestor of the node is a function/method/arrow function,
+	// used to exclude local variable declarations inside function bodies (not file-level symbols).
 	private _isInsideFunction(node: SyntaxNode): boolean {
 		const FUNCTION_TYPES = new Set([
 			"function_declaration",
@@ -696,7 +697,7 @@ export class TreeSitterAdapter {
 		return "direct";
 	}
 
-	// ── Text helpers ───────────────────────────────────────────────────────────
+	// -- Text helpers -----------------------------------------------------------
 
 	private _moduleLiteral(node: SyntaxNode): string | null {
 		for (const child of node.children) {

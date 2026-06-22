@@ -60,11 +60,11 @@ import type {
 	CodeLens,
 } from "vscode-languageserver-protocol";
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// -- Constants ----------------------------------------------------------------
 
 const MAX_LSP_FILE_SIZE = 1_048_576; // 1 MiB
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// -- Types --------------------------------------------------------------------
 
 /**
  * Discriminated union for LSP protocol method results.
@@ -104,7 +104,7 @@ export interface LspLocation {
 	endCol: number;
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// -- Helpers ------------------------------------------------------------------
 
 function pathToUri(filePath: string): string {
 	const resolved = path.resolve(filePath);
@@ -152,7 +152,7 @@ function lspLanguageId(language: string, filePath: string): string {
 	return language;
 }
 
-// ── LspClient ────────────────────────────────────────────────────────────────
+// -- LspClient ----------------------------------------------------------------
 
 export class LspClient {
 	readonly command: readonly string[];
@@ -188,7 +188,7 @@ export class LspClient {
 		this._log = log ?? (() => {});
 	}
 
-	// ── State ──────────────────────────────────────────────────────────────────
+	// -- State ------------------------------------------------------------------
 
 	isRunning(): boolean {
 		return this._running;
@@ -206,7 +206,7 @@ export class LspClient {
 		return this._serverCapabilities;
 	}
 
-	// ── Lifecycle ──────────────────────────────────────────────────────────────
+	// -- Lifecycle --------------------------------------------------------------
 
 	start(): void {
 		if (this._running) return;
@@ -483,7 +483,7 @@ export class LspClient {
 		return this._sendRequest(method, params);
 	}
 
-	// ── Protocol methods ───────────────────────────────────────────────────────
+	// -- Protocol methods -------------------------------------------------------
 
 	async definition(filePath: string, line: number, character: number): Promise<LspResult<Location | Location[]>> {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
@@ -847,7 +847,7 @@ export class LspClient {
 		this._inFlightRequests.clear();
 	}
 
-	// ── Diagnostics ────────────────────────────────────────────────────────────
+	// -- Diagnostics ------------------------------------------------------------
 
 	/**
 	 * Collect diagnostics for a set of file paths.
@@ -879,7 +879,7 @@ export class LspClient {
 		return results;
 	}
 
-	// ── Crash cleanup ────────────────────────────────────────────────────────────
+	// -- Crash cleanup ------------------------------------------------------------
 
 	/**
 	 * Clean up after an unexpected process crash or error.
@@ -919,7 +919,7 @@ export class LspClient {
 		this._initialized = false;
 	}
 
-	// ── Close ──────────────────────────────────────────────────────────────────
+	// -- Close ------------------------------------------------------------------
 
 	async close(): Promise<void> {
 		// Concurrent-close guard: if already closing, return existing promise.
@@ -982,8 +982,9 @@ export class LspClient {
 			if (proc && proc.exitCode === null) {
 				try {
 					proc.kill();
-				} catch {
+				} catch (err) {
 					// Process may have already exited — ignore
+					console.warn("[pi-shazam] _doClose: proc.kill() failed", err);
 				}
 			}
 
@@ -1025,7 +1026,7 @@ export class LspClient {
 		}
 	}
 
-	// ── Internal ───────────────────────────────────────────────────────────────
+	// -- Internal ---------------------------------------------------------------
 
 	private _detectLanguage(filePath: string): string {
 		// Extension-based detection for LSP didOpen.
@@ -1065,7 +1066,7 @@ export class LspClient {
 	}
 }
 
-// ── Diagnostic conversion helpers ────────────────────────────────────────────
+// -- Diagnostic conversion helpers --------------------------------------------
 
 export interface RawLspDiagnostic {
 	range: {
@@ -1088,7 +1089,7 @@ export function convertDiagnostics(
 
 	return rawDiagnostics.map((d) => ({
 		file: relFile,
-		line: d.range.start.line + 1, // LSP 0-based → 1-based
+		line: d.range.start.line + 1, // LSP 0-based -> 1-based
 		col: d.range.start.character + 1,
 		endLine: d.range.end.line + 1,
 		endCol: d.range.end.character + 1,

@@ -143,7 +143,7 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 		// -- Check 1: Destructive command detection --
 		const destructive = detectDestructiveCommand(cmd);
 		if (destructive) {
-			const emoji = destructive.level === "HIGH" ? "!!!" : "!";
+			const emoji = destructive.level === "HIGH" ? "[HIGH]" : "[MED]";
 			const message = [
 				`[${emoji}] Destructive command detected [${emoji}]`,
 				"",
@@ -166,8 +166,9 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 
 				// User confirmed, allow the command
 				ctx.ui.notify(`Proceeding with ${destructive.level}-risk command...`, "warning");
-			} catch {
+			} catch (err) {
 				// If confirm dialog fails (e.g., non-interactive mode), block high-risk
+				console.warn("[pi-shazam] registerSafetyHooks: confirm dialog failed", err);
 				if (destructive.level === "HIGH") {
 					return {
 						block: true,

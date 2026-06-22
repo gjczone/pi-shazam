@@ -1,24 +1,24 @@
 /**
- * pi-shazam core/git-utils — 共享 git 工具函数。
+ * pi-shazam core/git-utils — Shared git utility functions.
  *
- * 解决 issue #350：在非 git 仓库目录下，扩展会输出 git 的 stderr 错误
- * （"fatal: not a git repository"），污染用户终端/UI。
+ * Fixes issue #350: in non-git-repo directories, the extension would output
+ * git's stderr errors ("fatal: not a git repository"), polluting the user's terminal/UI.
  *
- * 本模块提供：
- * - isGitRepo: 一次性检测目录是否为 git 仓库，结果缓存，避免反复 spawn git 进程
- * - isProjectDir: 检测目录是否为项目目录（有标记文件或 git 仓库），用于快速短路
- * - safeGitExec: 安全执行 git 命令，自动抑制 stderr，非 git 仓库直接返回 null
+ * This module provides:
+ * - isGitRepo: one-time check whether a directory is a git repo, cached to avoid repeated git process spawns
+ * - isProjectDir: check whether a directory is a project directory (has marker files or git repo), for fast short-circuit
+ * - safeGitExec: safely execute git commands, auto-suppress stderr, return null for non-git repos
  */
 
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-// ── 项目标记文件列表 ────────────────────────────────────────────────────────
+// -- Project marker file list ------------------------------------------------
 
 /**
- * 判断目录是否为项目根目录的标记文件。
- * 任一文件存在即视为项目目录。
+ * Marker files that indicate a directory is a project root.
+ * If any of these files exist, the directory is treated as a project directory.
  */
 const PROJECT_MARKERS: readonly string[] = [
 	"package.json",
@@ -35,23 +35,23 @@ const PROJECT_MARKERS: readonly string[] = [
 	".git",
 ];
 
-// ── Git 可用性缓存 ──────────────────────────────────────────────────────────
+// -- Git availability cache --------------------------------------------------
 
 /**
- * 缓存已检测的 git 仓库状态。key = 目录绝对路径，value = 是否为 git 仓库。
- * 进程生命周期内缓存，避免对同一目录反复 spawn git 进程。
+ * Cache of git repo detection results. key = directory absolute path, value = whether it's a git repo.
+ * Cached for the process lifetime to avoid repeatedly spawning git processes for the same directory.
  */
 const gitRepoCache = new Map<string, boolean>();
 
-// ── 核心函数 ────────────────────────────────────────────────────────────────
+// -- Core functions ----------------------------------------------------------
 
 /**
- * 检测目录是否为 git 仓库。
- * 结果缓存到进程生命周期，同一目录只检测一次。
+ * Check whether a directory is a git repository.
+ * Result is cached for the process lifetime; each directory is checked only once.
  *
- * 使用 `git rev-parse --is-inside-work-tree` 检测，
- * stderr 被完全抑制（stdio: ["ignore", "pipe", "ignore"]），
- * 避免 "fatal: not a git repository" 泄漏到用户终端。
+ * Uses `git rev-parse --is-inside-work-tree` for detection,
+ * with stderr fully suppressed (stdio: ["ignore", "pipe", "ignore"]),
+ * preventing "fatal: not a git repository" from leaking to the user's terminal.
  */
 export function isGitRepo(projectRoot: string): boolean {
 	const cached = gitRepoCache.get(projectRoot);
@@ -63,12 +63,12 @@ export function isGitRepo(projectRoot: string): boolean {
 			cwd: projectRoot,
 			encoding: "utf-8",
 			timeout: 3000,
-			// 抑制 stderr，防止 "fatal: not a git repository" 泄漏到用户终端
+			// Suppress stderr to prevent "fatal: not a git repository" from leaking to user's terminal
 			stdio: ["ignore", "pipe", "ignore"],
 		});
 		result = output.trim() === "true";
-	} catch {
-		// git 不可用或非 git 仓库 — 正常情况，不报错
+	} catch (err) {
+		console.warn(`[pi-shazam] isGitRepo: git rev-parse failed for ${projectRoot}`, err);
 		result = false;
 	}
 
@@ -77,11 +77,11 @@ export function isGitRepo(projectRoot: string): boolean {
 }
 
 /**
- * 检测目录是否为项目目录（有标记文件或 git 仓库）。
- * 用于 before_agent_start hook 的快速短路判断。
+ * Check whether a directory is a project directory (has marker files or is a git repo).
+ * Used for fast short-circuit in the before_agent_start hook.
  *
- * 非项目目录（如 /tmp、/var、/home）跳过 scanProject，
- * 避免在大型临时目录下同步扫描导致阻塞。
+ * Non-project directories (e.g., /tmp, /var, /home) skip scanProject,
+ * avoiding synchronous blocking on large temporary directories.
  */
 export function isProjectDir(projectRoot: string): boolean {
 	for (const marker of PROJECT_MARKERS) {
@@ -93,17 +93,17 @@ export function isProjectDir(projectRoot: string): boolean {
 }
 
 /**
- * 安全执行 git 命令。
- * - 非 git 仓库：直接返回 null（不 spawn git 进程）
- * - git 仓库：执行命令，抑制 stderr，返回 stdout；失败返回 null
+ * Safely execute a git command.
+ * - Non-git repo: returns null immediately (no git process spawned)
+ * - Git repo: executes command, suppresses stderr, returns stdout; returns null on failure
  *
- * @param args - git 子命令参数（如 ["log", "--oneline", "-10"]）
- * @param cwd - 工作目录
- * @param timeout - 超时毫秒数（默认 5000）
- * @returns stdout 字符串，或 null（非 git 仓库/执行失败）
+ * @param args - git subcommand arguments (e.g., ["log", "--oneline", "-10"])
+ * @param cwd - working directory
+ * @param timeout - timeout in milliseconds (default 5000)
+ * @returns stdout string, or null (non-git repo / execution failure)
  */
 export function safeGitExec(args: string[], cwd: string, timeout = 5000): string | null {
-	// 非 git 仓库直接返回，避免 spawn 注定失败的 git 进程
+	// Non-git repo: return early to avoid spawning a git process that will fail
 	if (!isGitRepo(cwd)) return null;
 
 	try {
@@ -111,21 +111,23 @@ export function safeGitExec(args: string[], cwd: string, timeout = 5000): string
 			cwd,
 			encoding: "utf-8",
 			timeout,
-			// 抑制 stderr，防止 git 错误信息泄漏到用户终端
+			// Suppress stderr to prevent git error messages from leaking to user's terminal
 			stdio: ["ignore", "pipe", "ignore"],
 		}).trim();
-	} catch {
+	} catch (err) {
+		console.warn(`[pi-shazam] safeGitExec: git ${args.join(" ")} failed for ${cwd}`, err);
 		return null;
 	}
 }
 
 /**
- * 解析 git 工作目录的实际路径。
+ * Resolve the actual path of the git working directory.
  *
- * 使用 `git rev-parse --show-toplevel` 解析，在 git worktree 中会返回
- * worktree 根目录而非主仓库目录（issue #226）。
+ * Uses `git rev-parse --show-toplevel` for resolution. In a git worktree,
+ * this returns the worktree root directory rather than the main repo
+ * directory (issue #226).
  *
- * 当路径不在 git 仓库中时返回 `cwd`。
+ * Returns `cwd` when the path is not inside a git repository.
  */
 export function resolveGitWorkdir(cwd: string): string {
 	const result = safeGitExec(["rev-parse", "--show-toplevel"], cwd, 5000);
@@ -133,13 +135,14 @@ export function resolveGitWorkdir(cwd: string): string {
 }
 
 /**
- * 获取 git 工作树中已变更的文件列表。
+ * Get the list of changed files in the git working tree.
  *
- * 同时检查未暂存 (`git diff`) 和已暂存 (`git diff --cached`) 的变更，
- * 仅包含新增、修改、复制、重命名类型的变更（ACMR），自动去重。
+ * Checks both unstaged (`git diff`) and staged (`git diff --cached`) changes,
+ * including only added, modified, copied, and renamed change types (ACMR),
+ * with automatic deduplication.
  *
- * @param projectRoot - 项目根目录（会内部解析 git 工作目录）
- * @returns 已变更文件的相对路径数组
+ * @param projectRoot - project root directory (internally resolves git working directory)
+ * @returns array of relative paths of changed files
  */
 export function getGitChangedFiles(projectRoot: string): string[] {
 	const gitDir = resolveGitWorkdir(projectRoot);
@@ -151,7 +154,7 @@ export function getGitChangedFiles(projectRoot: string): string[] {
 }
 
 /**
- * 重置 git 缓存。仅在测试中使用。
+ * Reset git cache. Used only in tests.
  */
 export function _resetGitCache(): void {
 	gitRepoCache.clear();

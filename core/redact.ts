@@ -19,6 +19,10 @@ export const SECRET_PATTERNS: RegExp[] = [
 	/AKIA[0-9A-Z]{16}/g,
 	/(?:sk|rk)-[a-zA-Z0-9]{24,}/g,
 	/(?:eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,})/g,
+	/glpat-[\w-]{20,}/g,
+	/AIza[\w-]{35}/g,
+	/SG\.[\w-]{22,}/g,
+	/SK[\w-]{32,}/g,
 ];
 
 /** PEM header pattern for line-by-line detection. */

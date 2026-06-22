@@ -80,7 +80,7 @@ function countSourceFilesUpTo(root: string, limit: number): number {
 }
 
 /**
- * 统计未提交的变更文件数（issue #350：使用 safeGitExec 抑制 stderr）。
+ * Count uncommitted changed files (issue #350: uses safeGitExec to suppress stderr).
  */
 function getUncommittedChangeCount(projectRoot: string): number {
 	const unstaged = safeGitExec(["diff", "--name-only", "--diff-filter=ACMR"], projectRoot, 3000);
@@ -129,8 +129,9 @@ function buildProactiveRecommendations(projectRoot: string, graph: RepoGraph): s
 
 		// Core workflow tools
 		lines.push("- After every edit: \`shazam_verify\` to check for errors");
-	} catch {
+	} catch (err) {
 		// If scan fails, provide minimal recommendations
+		console.warn("[pi-shazam] buildProactiveRecommendations: scan failed", err);
 		lines.push("### Recommendations");
 		lines.push("");
 		lines.push("- \`shazam_overview\` to understand project structure");
@@ -160,15 +161,16 @@ function buildSessionBaselineSection(_projectRoot: string, graph: RepoGraph): st
 
 		const baseline = getBaseline();
 		return baseline ? formatBaselineSummary(baseline) : "";
-	} catch {
+	} catch (err) {
+		console.warn("[pi-shazam] buildSessionBaselineSection: createBaseline failed", err);
 		return "";
 	}
 }
 
 /**
- * 构建 parser 可用性警告段落，注入 system prompt。
- * 只对项目中实际存在且 parser 不可用的语言发出警告。
- * 纯 TS 项目不会看到 Dart 警告，避免无差别广播噪音。
+ * Build a parser availability warning section for injection into the system prompt.
+ * Only warns for languages that actually exist in the project and whose parser is unavailable.
+ * A pure TS project won't see Dart warnings, avoiding indiscriminate broadcast noise.
  */
 function buildParserWarningSection(graph: RepoGraph): string {
 	const unavailable = getProjectParserWarnings(graph.fileSymbols.keys());
@@ -205,9 +207,9 @@ export function generateOverviewForPrompt(projectRoot: string, isContinuation = 
 		return "[pi-shazam] Session continuation — use shazam_overview for project structure.";
 	}
 
-	// 非项目目录快速短路（issue #350）：
-	// 若目录既不是 git 仓库，也没有任何项目标记文件（package.json 等），
-	// 跳过 scanProject，避免在 /tmp 等大型临时目录下同步阻塞。
+	// Fast short-circuit for non-project directories (issue #350):
+	// If the directory is neither a git repo nor has any project marker files (package.json etc.),
+	// skip scanProject to avoid synchronous blocking on large temp directories like /tmp.
 	if (!isProjectDir(projectRoot)) {
 		_hasShownOverview = true;
 		return [

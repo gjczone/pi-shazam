@@ -39,7 +39,7 @@ export function registerFormat(pi: ExtensionAPI): void {
 	});
 }
 
-// ── Format options ────────────────────────────────────────────────────────
+// -- Format options --------------------------------------------------------
 
 export interface FormatOptions {
 	/** Dry-run mode: preview changes without applying */
@@ -48,7 +48,7 @@ export interface FormatOptions {
 	file?: string;
 }
 
-// ── Execute functions (testable without Pi) ────────────────────────────────
+// -- Execute functions (testable without Pi) --------------------------------
 
 /**
  * Run format analysis. In dry-run mode (default), only reports issues.
@@ -64,7 +64,7 @@ export function executeFormat(graph: RepoGraph, projectRoot: string, options: Fo
 		dryRun ? "**Mode: DRY RUN** (preview only, no changes applied)" : "**Mode: APPLY** (changes will be written)",
 	);
 
-	// 文件路径穿越校验：必须在 runFormatters 之前执行，防止格式化工具操作项目外文件
+	// Path traversal validation: must run before runFormatters to prevent formatters from operating on files outside the project
 	if (options.file && !validatePathInProject(options.file, projectRoot)) {
 		return "Error: file path escapes project root";
 	}
@@ -86,7 +86,7 @@ export function executeFormat(graph: RepoGraph, projectRoot: string, options: Fo
 	}
 	lines.push("");
 
-	// ── Detect available formatters ──────────────────────────────────────
+	// -- Detect available formatters --
 	const formatters = detectFormatters(projectRoot);
 	lines.push("### Detected Formatters");
 	if (formatters.length === 0) {
@@ -98,11 +98,7 @@ export function executeFormat(graph: RepoGraph, projectRoot: string, options: Fo
 	}
 	lines.push("");
 
-	if (options.file && !validatePathInProject(options.file, projectRoot)) {
-		return "Error: file path escapes project root";
-	}
-
-	// ── Scan files for common issues ─────────────────────────────────────
+	// -- Scan files for common issues --
 	const rawFiles = options.file ? [options.file] : [...graph.fileSymbols.keys()];
 	const targetFiles = rawFiles.filter((f) => !isNonSourceFile(f));
 
@@ -125,7 +121,7 @@ export function executeFormat(graph: RepoGraph, projectRoot: string, options: Fo
 	}
 	lines.push("");
 
-	// ── Recommendations ────────────────────────────────────────────────
+	// -- Recommendations ------------------------------------------------
 	if (issues.length > 0) {
 		lines.push("### Recommended Fix Commands");
 		lines.push("");
@@ -204,7 +200,7 @@ export function executeFormatJson(graph: RepoGraph, projectRoot: string, options
 	});
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// -- Helpers -----------------------------------------------------------------
 
 interface FormatIssue {
 	file: string;
@@ -441,7 +437,7 @@ function scanFormatIssues(projectRoot: string, files: string[], _graph: RepoGrap
 	return issues;
 }
 
-// ── Formatter execution ──────────────────────────────────────────────────────
+// -- Formatter execution ------------------------------------------------------
 
 interface FormatterResult {
 	formatter: string;

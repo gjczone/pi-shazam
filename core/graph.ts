@@ -5,7 +5,7 @@
  * All other core/ modules depend on these types.
  */
 
-// ── Core data types ──────────────────────────────────────────────────────────
+// -- Core data types ----------------------------------------------------------
 
 /** A code symbol (function, class, interface, etc.) */
 export interface Symbol {
@@ -44,7 +44,7 @@ export interface RepoGraph {
 	fileImportBindings: Map<string, JSImportBinding[]>;
 	/** Index symbols by name for O(1) lookup in findCalleeSymbols / findSymbolByNameInFile */
 	nameIndex: Map<string, Symbol[]>;
-	/** Reverse edge index: target symbol ID → set of source symbol IDs pointing to it, speeds up cross-file edge cleanup in removeEdgesForFile */
+	/** Reverse edge index: target symbol ID -> set of source symbol IDs pointing to it, speeds up cross-file edge cleanup in removeEdgesForFile */
 	targetToSources: Map<string, Set<string>>;
 }
 
@@ -57,7 +57,7 @@ export interface JSImportBinding {
 	kind: "default" | "named" | "namespace";
 }
 
-// ── Edge counting ────────────────────────────────────────────────────────────
+// -- Edge counting ------------------------------------------------------------
 
 /** Count total edges in the graph (sum of outgoing edge list lengths). */
 export function getGraphEdgeCount(graph: RepoGraph): number {
@@ -68,7 +68,7 @@ export function getGraphEdgeCount(graph: RepoGraph): number {
 	return count;
 }
 
-// ── Factory ──────────────────────────────────────────────────────────────────
+// -- Factory ------------------------------------------------------------------
 
 const VALID_VISIBILITY = new Set(["public", "private", "exported"]);
 
@@ -86,7 +86,7 @@ export function createRepoGraph(): RepoGraph {
 	};
 }
 
-// ── Symbol factory ───────────────────────────────────────────────────────────
+// -- Symbol factory -----------------------------------------------------------
 
 export function createSymbol(
 	id: string,
@@ -113,7 +113,7 @@ export function createSymbol(
 	};
 }
 
-// ── Edge factory ─────────────────────────────────────────────────────────────
+// -- Edge factory -------------------------------------------------------------
 
 export function createEdge(
 	source: string,
@@ -298,7 +298,7 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 	return graph;
 }
 
-// ── Graph snapshot comparison ────────────────────────────────────────────────
+// -- Graph snapshot comparison ------------------------------------------------
 
 export interface GraphDiff {
 	summary: {

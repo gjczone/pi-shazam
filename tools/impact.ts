@@ -246,10 +246,12 @@ export function executeImpact(
 
 	// Discover tests for target files
 	const discoveredTests: string[] = [];
+	const discoveredTestsSet = new Set<string>();
 	for (const file of files) {
 		const testResult = executeFindTests(graph, ".", { sourceFile: file });
 		for (const match of testResult.matches) {
-			if (!discoveredTests.includes(match.testFile)) {
+			if (!discoveredTestsSet.has(match.testFile)) {
+				discoveredTestsSet.add(match.testFile);
 				discoveredTests.push(match.testFile);
 			}
 		}
@@ -281,10 +283,12 @@ export function executeImpactJson(graph: RepoGraph, files: string[], depth: numb
 
 	// Discover tests for target files
 	const discoveredTests: string[] = [];
+	const discoveredTestsSet = new Set<string>();
 	for (const file of files) {
 		const testResult = executeFindTests(graph, ".", { sourceFile: file });
 		for (const match of testResult.matches) {
-			if (!discoveredTests.includes(match.testFile)) {
+			if (!discoveredTestsSet.has(match.testFile)) {
+				discoveredTestsSet.add(match.testFile);
 				discoveredTests.push(match.testFile);
 			}
 		}
@@ -309,7 +313,7 @@ export function executeImpactJson(graph: RepoGraph, files: string[], depth: numb
 	});
 }
 
-// ── Call chain (absorbed from tools/call_chain.ts) ──────────────────────
+// -- Call chain (absorbed from tools/call_chain.ts) ----------------------
 
 const MAX_DISPLAY_REFS = 50;
 
@@ -520,7 +524,7 @@ function _formatFlatReferences(refs: FlatReference[], symbolName: string): strin
 	return lines.join("\n");
 }
 
-// ── Backward-compatible exports (for call_chain tests) ─────────────────
+// -- Backward-compatible exports (for call_chain tests) -----------------
 
 export function executeCallChain(
 	graph: RepoGraph,

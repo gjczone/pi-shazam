@@ -26,8 +26,9 @@ async function ensureDir(): Promise<void> {
 	// Restrict access to audit directory and file
 	try {
 		await chmod(AUDIT_DIR, 0o700);
-	} catch {
+	} catch (err) {
 		/* best-effort */
+		console.warn("[pi-shazam] ensureDir: chmod failed for audit dir", err);
 	}
 }
 
@@ -56,8 +57,9 @@ function write(entry: Record<string, unknown>): void {
 			await appendFile(LOG_FILE, json + "\n", "utf-8");
 			try {
 				await chmod(LOG_FILE, 0o600);
-			} catch {
+			} catch (err) {
 				/* best-effort */
+				console.warn("[pi-shazam] write: chmod failed for audit log file", err);
 			}
 			_writeFailed = false;
 		} catch (err) {

@@ -17,7 +17,7 @@ import type { RepoGraph } from "./graph.js";
 import { getGraphEdgeCount } from "./graph.js";
 import { execSync } from "node:child_process";
 
-// ── Next recommendation system ────────────────────────────────────────────
+// -- Next recommendation system --------------------------------------------
 
 export type NextLevel = "required" | "recommended" | "also";
 
@@ -62,7 +62,7 @@ export interface NextRule {
 	recommendation: (ctx: NextContext) => NextRecommendation | null;
 }
 
-// ── Graph-aware filter helpers ───────────────────────────────────────────────
+// -- Graph-aware filter helpers -----------------------------------------------
 
 const TEST_FILE_PATTERNS = [
 	/(?:^|[/.])tests?\//,
@@ -98,7 +98,7 @@ export function hasHierarchyKinds(graph?: RepoGraph): boolean {
 	return false;
 }
 
-// ── Rules ────────────────────────────────────────────────────────────────────
+// -- Rules --------------------------------------------------------------------
 
 /**
  * The single source of truth for Next recommendations. Each rule is a pure
@@ -312,7 +312,7 @@ export function getNextForTool(toolName: string, context?: NextContext, graph?: 
 	return out;
 }
 
-// ── Section builders ──────────────────────────────────────────────────────
+// -- Section builders ------------------------------------------------------
 
 /**
  * Build a standardized Result Summary section with key-value pairs.
@@ -350,7 +350,7 @@ export function buildToolOutput(
 	return parts.join("\n\n") + "\n";
 }
 
-// ── Context helpers ───────────────────────────────────────────────────────
+// -- Context helpers -------------------------------------------------------
 
 /**
  * Get the number of uncommitted git changes (for context in output).
@@ -361,7 +361,8 @@ export function getGitChangeCount(): number {
 		const output = execSync("git diff --stat 2>/dev/null | tail -1", { encoding: "utf-8", timeout: 3000 }).trim();
 		const match = output.match(/(\d+)\s+file/);
 		return match ? parseInt(match[1]!, 10) : 0;
-	} catch {
+	} catch (err) {
+		console.warn("[pi-shazam] getGitChangeCount: git diff --stat failed", err);
 		return 0;
 	}
 }
@@ -378,7 +379,7 @@ export function getGraphSummary(graph: RepoGraph): { symbols: number; files: num
 	};
 }
 
-// ── Token budget truncation ─────────────────────────────────────────────────
+// -- Token budget truncation -------------------------------------------------
 
 const CHARS_PER_TOKEN = 4;
 

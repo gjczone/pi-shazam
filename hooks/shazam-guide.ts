@@ -47,8 +47,9 @@ function hasManyCallers(content: unknown[] | undefined): string | null {
 						return name;
 					}
 				}
-			} catch {
+			} catch (err) {
 				// Not JSON — fall back to text-based
+				console.warn("[pi-shazam] hasManyCallers: JSON.parse failed", err);
 			}
 
 			// Look for caller count patterns: "N callers" or "N references"
@@ -100,7 +101,7 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 	const absPath = filePath.startsWith("/") ? filePath : join(ctx.cwd, filePath);
 	const projectRoot = ctx.cwd;
 
-	// 路径穿越守卫：确保格式化操作不会越出项目根目录
+	// Path traversal guard: ensure formatting operations don't escape the project root
 	if (!absPath.startsWith(projectRoot + "/") && absPath !== projectRoot) return false;
 
 	if (!existsSync(absPath)) return false;

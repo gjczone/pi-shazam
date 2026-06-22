@@ -5,7 +5,7 @@
  * 7 languages (Python, TypeScript, Go, JSON, YAML, Rust, Dart).
  */
 
-// ── LSP server spec ──────────────────────────────────────────────────────────
+// -- LSP server spec ----------------------------------------------------------
 
 export interface LspServerSpec {
 	/** Language identifier (e.g., "python", "typescript") */
@@ -24,10 +24,10 @@ export interface LspServerSpec {
 	projectRelativeCandidates?: readonly string[];
 }
 
-// ── Server specs ─────────────────────────────────────────────────────────────
+// -- Server specs -------------------------------------------------------------
 
 export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
-	// ── Python ──────────────────────────────────────────────────────────────
+	// -- Python --------------------------------------------------------------
 	{
 		language: "python",
 		serverName: "pyright-langserver",
@@ -47,7 +47,7 @@ export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
 		projectRelativeCandidates: [".venv/bin/pylsp"] as const,
 	},
 
-	// ── TypeScript ──────────────────────────────────────────────────────────
+	// -- TypeScript ----------------------------------------------------------
 	{
 		language: "typescript",
 		serverName: "typescript-language-server",
@@ -58,7 +58,7 @@ export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
 		projectRelativeCandidates: ["node_modules/.bin/typescript-language-server"] as const,
 	},
 
-	// ── Go ────────────────────────────────────────────────────────────────────
+	// -- Go --------------------------------------------------------------------
 	{
 		language: "go",
 		serverName: "gopls",
@@ -68,7 +68,7 @@ export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
 		rootMarkers: ["go.mod", "go.work"] as const,
 	},
 
-	// ── YAML ──────────────────────────────────────────────────────────────────
+	// -- YAML ------------------------------------------------------------------
 	{
 		language: "yaml",
 		serverName: "yaml-language-server",
@@ -78,7 +78,7 @@ export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
 		rootMarkers: [".github"] as const,
 	},
 
-	// ── JSON ──────────────────────────────────────────────────────────────────
+	// -- JSON ------------------------------------------------------------------
 	{
 		language: "json",
 		serverName: "vscode-json-languageserver",
@@ -88,7 +88,7 @@ export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
 		rootMarkers: [".git", "package.json"] as const,
 	},
 
-	// ── Rust ──────────────────────────────────────────────────────────────────
+	// -- Rust ------------------------------------------------------------------
 	{
 		language: "rust",
 		serverName: "rust-analyzer",
@@ -98,7 +98,7 @@ export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
 		rootMarkers: ["Cargo.toml"] as const,
 	},
 
-	// ── Dart (Flutter) ──────────────────────────────────────────────────────────────
+	// -- Dart (Flutter) --------------------------------------------------------------
 	{
 		language: "dart",
 		serverName: "dart-language-server",
@@ -109,9 +109,9 @@ export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
 	},
 ];
 
-// ── Suffix → language mapping ────────────────────────────────────────────────
+// -- Suffix -> language mapping ------------------------------------------------
 
-/** File suffix → LSP language mapping, derived from LSP_SERVER_SPECS. */
+/** File suffix -> LSP language mapping, derived from LSP_SERVER_SPECS. */
 export const suffixToLanguage: Record<string, string> = {};
 
 for (const spec of LSP_SERVER_SPECS) {
@@ -122,7 +122,7 @@ for (const spec of LSP_SERVER_SPECS) {
 	}
 }
 
-// ── Lookup helpers ───────────────────────────────────────────────────────────
+// -- Lookup helpers -----------------------------------------------------------
 
 /**
  * Get the LSP language for a file based on its extension.
@@ -150,7 +150,7 @@ export function languagesForSuffixes(suffixes: string[]): string[] {
 	return [...langs].sort();
 }
 
-// ── LSP timeouts by language ─────────────────────────────────────────────────
+// -- LSP timeouts by language -------------------------------------------------
 
 const LSP_TIMEOUT_BY_LANGUAGE: Record<string, number> = {
 	typescript: 15_000,

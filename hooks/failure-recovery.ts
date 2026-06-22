@@ -19,7 +19,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 interface FailureInfo {
 	count: number;
 	lastError: string;
-	/** 最近一次写入的 Unix 毫秒时间戳，用于 TTL 驱逐。 */
+	/** Unix millisecond timestamp of the most recent write, used for TTL eviction. */
 	timestamp: number;
 }
 

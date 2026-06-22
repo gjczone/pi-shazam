@@ -4,7 +4,7 @@
  * Entry point. Registered as a default export.
  *
  * Layers:
- *   hooks/  → tools/  → core/ + lsp/
+ *   hooks/  -> tools/  -> core/ + lsp/
  *
  * Core has zero Pi or LSP imports. LSP may import from core.
  */
@@ -15,7 +15,7 @@ import { generateSetupReport } from "./lsp/setup.js";
 import { setLspManager, awaitPreviousShutdown } from "./tools/_context.js";
 import { installPreCommitHook, removePreCommitHook, runPreCommitVerify } from "./core/git-hooks.js";
 
-// ── Hook registrations ───────────────────────────────────────────────────
+// -- Hook registrations ---------------------------------------------------
 import { registerBeforeStartHook } from "./hooks/before-start.js";
 import { registerToolLogger } from "./hooks/tool-logger.js";
 import { registerShazamGuide } from "./hooks/shazam-guide.js";
@@ -27,7 +27,7 @@ import { registerIssueGuard } from "./hooks/issue-guard.js";
 import { registerAgentContextGuard } from "./hooks/agent-context-guard.js";
 import { clearRenameState } from "./hooks/rename-state.js";
 
-// ── Tool registrations ────────────────────────────────────────────────────
+// -- Tool registrations ----------------------------------------------------
 import { registerOverview } from "./tools/overview.js";
 import { registerLookup } from "./tools/lookup.js";
 import { registerImpact } from "./tools/impact.js";
@@ -44,7 +44,7 @@ export default function (pi: ExtensionAPI): void {
 		pi.logger?.info?.(`[pi-shazam] ${msg}`);
 	};
 
-	// ── LSP manager ─────────────────────────────────────────────────────────
+	// -- LSP manager ---------------------------------------------------------
 
 	const lspManager = new LspManager(projectRoot, log);
 
@@ -84,8 +84,8 @@ export default function (pi: ExtensionAPI): void {
 				// to prevent orphaned processes until session_shutdown (fixes #312).
 				try {
 					await lspManager.shutdown();
-				} catch {
-					/* best effort cleanup */
+				} catch (err) {
+					console.warn("[pi-shazam] LSP shutdown on init timeout failed", err);
 				}
 			}
 			log(`LSP init error: ${err}`);
@@ -105,14 +105,14 @@ export default function (pi: ExtensionAPI): void {
 		try {
 			const { resetCache } = await import("./core/scanner.js");
 			resetCache();
-		} catch {
-			/* best effort */
+		} catch (err) {
+			console.warn("[pi-shazam] session_shutdown: scanner cache reset failed", err);
 		}
 		try {
 			const { resetLspEnrichState } = await import("./tools/lsp_enrich.js");
 			resetLspEnrichState();
-		} catch {
-			/* best effort */
+		} catch (err) {
+			console.warn("[pi-shazam] session_shutdown: lsp enrich state reset failed", err);
 		}
 	});
 
@@ -121,7 +121,7 @@ export default function (pi: ExtensionAPI): void {
 		clearRenameState();
 	});
 
-	// ── Hooks ────────────────────────────────────────────────────────────────
+	// -- Hooks ----------------------------------------------------------------
 	registerBeforeStartHook(pi);
 	registerToolLogger(pi);
 	registerShazamGuide(pi);
@@ -132,7 +132,7 @@ export default function (pi: ExtensionAPI): void {
 	registerIssueGuard(pi);
 	registerAgentContextGuard(pi);
 
-	// ── /shazam-setup command ───────────────────────────────────────────────
+	// -- /shazam-setup command -----------------------------------------------
 
 	pi.registerCommand("shazam-setup", {
 		description: "Detect and report LSP server availability with install instructions",
@@ -148,7 +148,7 @@ export default function (pi: ExtensionAPI): void {
 		},
 	});
 
-	// ── /shazam-doctor command ──────────────────────────────────────────────
+	// -- /shazam-doctor command ----------------------------------------------
 
 	pi.registerCommand("shazam-doctor", {
 		description: "Health check: tree-sitter grammars, LSP servers, cache integrity",
@@ -164,7 +164,7 @@ export default function (pi: ExtensionAPI): void {
 		},
 	});
 
-	// ── /shazam-install-git-hooks command ────────────────────────────────────
+	// -- /shazam-install-git-hooks command ------------------------------------
 
 	pi.registerCommand("shazam-install-git-hooks", {
 		description: "Install git pre-commit hook that runs shazam_verify --preCommit",
@@ -193,7 +193,7 @@ export default function (pi: ExtensionAPI): void {
 		},
 	});
 
-	// ── /shazam-remove-git-hooks command ─────────────────────────────────────
+	// -- /shazam-remove-git-hooks command -------------------------------------
 
 	pi.registerCommand("shazam-remove-git-hooks", {
 		description: "Remove the shazam git pre-commit hook",
@@ -218,7 +218,7 @@ export default function (pi: ExtensionAPI): void {
 		},
 	});
 
-	// ── /shazam-pre-commit-verify command (for hook script) ──────────────────
+	// -- /shazam-pre-commit-verify command (for hook script) ------------------
 
 	pi.registerCommand("shazam-pre-commit-verify", {
 		description: "Run pre-commit verification (used by git hook)",
@@ -230,7 +230,7 @@ export default function (pi: ExtensionAPI): void {
 		},
 	});
 
-	// ── Tools (LLM-visible) ────────────────────────────────────────────────
+	// -- Tools (LLM-visible) ------------------------------------------------
 	registerOverview(pi);
 	registerLookup(pi);
 	registerImpact(pi);

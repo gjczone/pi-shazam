@@ -1,13 +1,13 @@
 /**
- * pi-shazam core/risk — 统一风险评估函数。
+ * pi-shazam core/risk — Unified risk assessment function.
  *
- * 提供单一 `assessRisk` 函数，被 verify、changes、impact 三个工具共用，
- * 避免风险阈值逻辑在多处重复定义（issue #371）。
+ * Provides a single `assessRisk` function shared by verify, changes, and impact tools,
+ * avoiding duplicated risk threshold logic across multiple locations (issue #371).
  *
- * 阈值说明：
- * - preCommit 模式：high >= 30, medium >= 10（更严格的预提交门禁）
- * - 正常模式：      high >= 60, medium >= 20
- * - impact 模式：   high: >10 文件 或 >30 符号，medium: >3 文件 或 >10 符号
+ * Threshold reference:
+ * - preCommit mode: high >= 30, medium >= 10 (stricter pre-commit gate)
+ * - Normal mode:    high >= 60, medium >= 20
+ * - Impact mode:    high: >10 files or >30 symbols, medium: >3 files or >10 symbols
  */
 
 export interface RiskResult {
@@ -16,26 +16,26 @@ export interface RiskResult {
 }
 
 export interface AssessRiskParams {
-	/** 变更的文件数（verify/changes 为 git 变更文件数，impact 为受影响文件数） */
+	/** Number of changed files (git changed files for verify/changes, affected files for impact) */
 	gitFileCount: number;
-	/** 新增孤立符号数（impact 模式下为受影响符号数） */
+	/** Number of new orphan symbols (affected symbol count in impact mode) */
 	newOrphanCount: number;
-	/** 孤立符号增量 */
+	/** Orphan symbol delta */
 	orphanDelta: number;
-	/** LSP 错误数（可选，verify 专用） */
+	/** Number of LSP errors (optional, verify only) */
 	lspErrors?: number;
-	/** LSP 警告数（可选，verify 专用） */
+	/** Number of LSP warnings (optional, verify only) */
 	lspWarnings?: number;
-	/** 是否为预提交门禁 */
+	/** Whether this is a pre-commit gate */
 	preCommit?: boolean;
 }
 
 /**
- * 统一风险评估。
+ * Unified risk assessment.
  *
- * 当 `orphanDelta === 0` 且 `gitFileCount` 在 impact 典型范围内时，
- * 使用 impact 风格阈值（基于文件数和符号数分别判断）。
- * 否则使用 verify/changes 风格阈值（基于 totalImpact = gitFileCount + orphanDelta）。
+ * When `orphanDelta === 0` and `gitFileCount` is within impact's typical range,
+ * uses impact-style thresholds (based on file count and symbol count separately).
+ * Otherwise uses verify/changes-style thresholds (based on totalImpact = gitFileCount + orphanDelta).
  */
 export function assessRisk(params: AssessRiskParams): RiskResult {
 	const { gitFileCount, newOrphanCount, orphanDelta, preCommit } = params;
@@ -44,10 +44,10 @@ export function assessRisk(params: AssessRiskParams): RiskResult {
 		return { level: "low", reason: "No changes detected." };
 	}
 
-	// impact 模式：orphanDelta 为 0 且数据量在 impact 典型范围内
-	// （impact 不计算 orphanDelta，始终传 0）
+	// Impact mode: orphanDelta is 0 and data volume is within impact's typical range
+	// (impact does not compute orphanDelta, always passes 0)
 	if (orphanDelta === 0) {
-		// impact 风格阈值：基于文件数和符号数分别判断
+		// Impact-style thresholds: based on file count and symbol count separately
 		if (gitFileCount > 10 || newOrphanCount > 30) {
 			return {
 				level: "high",
@@ -66,7 +66,7 @@ export function assessRisk(params: AssessRiskParams): RiskResult {
 		};
 	}
 
-	// verify/changes 风格阈值：基于 totalImpact
+	// verify/changes-style thresholds: based on totalImpact
 	const totalImpact = gitFileCount + orphanDelta;
 	const highThreshold = preCommit ? 30 : 60;
 	const mediumThreshold = preCommit ? 10 : 20;

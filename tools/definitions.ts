@@ -4,14 +4,14 @@
  * Single source of truth for tool names, descriptions, and parameter schemas.
  * Both Pi (TypeBox) and MCP (Zod) import from here to avoid duplication.
  *
- * Updated for tool consolidation 14→9 (issue #362):
+ * Updated for tool consolidation 14->9 (issue #362):
  *   overview, lookup, impact, verify, changes, format, find_tests,
  *   rename_symbol, safe_delete
  */
 import { Type } from "typebox";
 import { z } from "zod";
 
-// ── Tool Definition Interface ──────────────────────────────────────────────
+// -- Tool Definition Interface ----------------------------------------------
 
 export interface ToolDefinition {
 	name: string;
@@ -21,7 +21,7 @@ export interface ToolDefinition {
 	zodParams: z.ZodObject<Record<string, z.ZodType>>;
 }
 
-// ── Shared Tool Definitions ────────────────────────────────────────────────
+// -- Shared Tool Definitions ------------------------------------------------
 
 export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 	shazam_overview: {
@@ -215,7 +215,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 	},
 };
 
-// ── Helper Functions ────────────────────────────────────────────────────────
+// -- Helper Functions --------------------------------------------------------
 
 /**
  * Get all tool definitions as an array.

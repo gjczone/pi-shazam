@@ -84,7 +84,7 @@ export function registerVerify(pi: ExtensionAPI): void {
 	});
 }
 
-// ── Verify options ──────────────────────────────────────────────────────────
+// -- Verify options ----------------------------------------------------------
 
 export interface VerifyOptions {
 	quick?: boolean;
@@ -96,7 +96,7 @@ export interface VerifyOptions {
 	noSecrets?: boolean;
 }
 
-// ── Async verify (LSP + graph, used by the tool) ────────────────────────────
+// -- Async verify (LSP + graph, used by the tool) ----------------------------
 
 export async function executeVerifyJsonAsync(projectRoot: string, options: VerifyOptions) {
 	const { scanProject } = await import("../core/scanner.js");
@@ -360,7 +360,7 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 	return lines.join("\n");
 }
 
-// ── LSP diagnostics (absorbed from tools/check.ts) ─────────────────────────
+// -- LSP diagnostics (absorbed from tools/check.ts) -------------------------
 
 interface LspDiagEntry {
 	file: string;
@@ -521,7 +521,7 @@ async function runLspDiagnostics(
 	};
 }
 
-// ── Subprocess fallback diagnostics ─────────────────────────────────────────
+// -- Subprocess fallback diagnostics -----------------------------------------
 
 function detectProjectType(projectRoot: string): string | null {
 	if (existsSync(resolve(projectRoot, "tsconfig.json"))) return "typescript";
@@ -614,15 +614,15 @@ async function runSubprocessDiagnostics(projectRoot: string): Promise<LspDiagRes
 	return { diagnostics, available: true };
 }
 
-// ── Re-exports for backward compatibility (tests import from here) ──────────
+// -- Re-exports for backward compatibility (tests import from here) ----------
 export { resolveGitWorkdir } from "../core/git-utils.js";
 
-// ── Graph analysis helpers ──────────────────────────────────────────────────
+// -- Graph analysis helpers --------------------------------------------------
 
 /**
- * 适配器：将 verify 工具的参数转换为统一的 assessRisk 调用。
- * 从图和孤儿列表计算 gitFileCount/newOrphanCount/orphanDelta，
- * 然后委托给 core/risk.ts 的统一函数。
+ * Adapter: converts verify tool parameters into a unified assessRisk call.
+ * Computes gitFileCount/newOrphanCount/orphanDelta from the graph and orphan list,
+ * then delegates to the unified function in core/risk.ts.
  */
 function _assessVerifyRisk(
 	graph: RepoGraph,
@@ -639,7 +639,7 @@ function _assessVerifyRisk(
 	return assessRisk({ gitFileCount, newOrphanCount, orphanDelta, lspErrors, lspWarnings, preCommit });
 }
 
-// ── Synchronous execute functions (for test compatibility) ──────────────────
+// -- Synchronous execute functions (for test compatibility) ------------------
 
 /**
  * Synchronous verify (no LSP, graph-only).

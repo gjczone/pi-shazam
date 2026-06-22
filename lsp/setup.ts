@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import { detectLspServer, detectProjectLanguages } from "./manager.js";
 import type { LspServerDetection } from "./manager.js";
 
-// ── Install instructions ─────────────────────────────────────────────────────
+// -- Install instructions -----------------------------------------------------
 
 interface InstallInstruction {
 	language: string;
@@ -65,11 +65,11 @@ const INSTALL_INSTRUCTIONS: InstallInstruction[] = [
 	},
 ];
 
-// ── Re-export for convenience ────────────────────────────────────────────────
+// -- Re-export for convenience ------------------------------------------------
 
 export type { LspServerDetection };
 
-// ── Detection ────────────────────────────────────────────────────────────────
+// -- Detection ----------------------------------------------------------------
 
 /**
  * Detect LSP servers for specified languages or auto-detect from project.
@@ -79,7 +79,7 @@ export function detectLspServers(projectRoot: string, languages?: string[]): Lsp
 	return detected.map((lang) => detectLspServer(projectRoot, lang));
 }
 
-// ── Setup command handler ────────────────────────────────────────────────────
+// -- Setup command handler ----------------------------------------------------
 
 /**
  * Generate the /shazam-setup output as a formatted string.

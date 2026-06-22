@@ -14,7 +14,7 @@ import type { LspDiagnostic, LspLocation } from "./client.js";
 import { LSP_SERVER_SPECS, languageForSuffix, lspTimeoutFor } from "./servers.js";
 import { SKIP_DIRS } from "../core/filter.js";
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// -- Types --------------------------------------------------------------------
 
 export interface LspServerInfo {
 	language: string;
@@ -48,7 +48,7 @@ export interface LspRunResult {
 	durationMs: number;
 }
 
-// ── Project language detection ───────────────────────────────────────────────
+// -- Project language detection -----------------------------------------------
 
 /**
  * Check if a path contains any skip directory segment.
@@ -78,7 +78,8 @@ export function detectProjectLanguages(projectRoot: string, maxFiles: number = 2
 		try {
 			// Use resolve to normalize; rely on visited map for cycle detection
 			real = resolve(dir);
-		} catch {
+		} catch (err) {
+			console.warn(`[pi-shazam] detectProjectLanguages: resolve failed for ${dir}`, err);
 			return;
 		}
 		if (visited.has(real)) return;
@@ -124,7 +125,7 @@ export function detectProjectLanguages(projectRoot: string, maxFiles: number = 2
 	return [...langs].sort();
 }
 
-// ── LSP server detection ─────────────────────────────────────────────────────
+// -- LSP server detection -----------------------------------------------------
 
 /**
  * Find the LSP workspace root by walking up from a file path
@@ -188,7 +189,7 @@ function detectWorkspaceRoot(projectRoot: string, filePath: string | null, langu
 	return root;
 }
 
-// ── Executable search ────────────────────────────────────────────────────────
+// -- Executable search --------------------------------------------------------
 
 function isExecutable(filePath: string): boolean {
 	try {
@@ -202,7 +203,8 @@ function isExecutable(filePath: string): boolean {
 		// On POSIX, check the executable permission bit
 		// eslint-disable-next-line no-bitwise
 		return (st.mode & 0o111) !== 0;
-	} catch {
+	} catch (err) {
+		console.warn(`[pi-shazam] isExecutable: statSync failed for ${filePath}`, err);
 		return false;
 	}
 }
@@ -252,7 +254,7 @@ function trustedUserCandidates(commandName: string): string[] {
 	return results;
 }
 
-// ── Detection ────────────────────────────────────────────────────────────────
+// -- Detection ----------------------------------------------------------------
 
 export function detectLspServer(projectRoot: string, language: string, filePath?: string | null): LspServerDetection {
 	const root = resolve(projectRoot);
@@ -329,7 +331,7 @@ export function detectLspServer(projectRoot: string, language: string, filePath?
 	};
 }
 
-// ── LspManager ───────────────────────────────────────────────────────────────
+// -- LspManager ---------------------------------------------------------------
 
 export class LspManager {
 	private projectRoot: string;
@@ -361,7 +363,7 @@ export class LspManager {
 		}
 	}
 
-	// ── Detection ──────────────────────────────────────────────────────────────
+	// -- Detection --------------------------------------------------------------
 
 	/**
 	 * Auto-detect languages in the project and return what was found.
@@ -377,7 +379,7 @@ export class LspManager {
 		return detectLspServer(this.projectRoot, language, filePath ?? null);
 	}
 
-	// ── Server management ──────────────────────────────────────────────────────
+	// -- Server management ------------------------------------------------------
 
 	/**
 	 * Get the LSP client for a given file, creating one if needed.
@@ -432,7 +434,7 @@ export class LspManager {
 			if (existing) {
 				this.servers.delete(language);
 				// Close the old client to release resources
-				await existing.client.close().catch(() => {});
+				await existing.client.close().catch((err) => this.log(`close old client for ${language} failed: ${err}`));
 			}
 
 			// Detect and spawn
@@ -455,7 +457,7 @@ export class LspManager {
 				await client.initialize(signal);
 				// Check if cancelled during init
 				if (signal?.aborted) {
-					await client.close().catch(() => {});
+					await client.close().catch((err) => this.log(`close on abort for ${language} failed: ${err}`));
 					return null;
 				}
 				// Successful init — reset restart budget
@@ -467,7 +469,7 @@ export class LspManager {
 				cur.failures++;
 				cur.nextRetryAt = Date.now() + Math.min(2 ** cur.failures * 1000, 60_000);
 				this._restartBudget.set(language, cur);
-				await client.close().catch(() => {});
+				await client.close().catch((err) => this.log(`close on failure for ${language} failed: ${err}`));
 				return null;
 			}
 
@@ -490,8 +492,9 @@ export class LspManager {
 						const absPath = resolve(detection.workspaceRoot, filePath);
 						const content = readFileSync(absPath, "utf-8");
 						await client.didOpen(filePath, content);
-					} catch {
+					} catch (err) {
 						// File may have been deleted; remove from tracking
+						console.warn(`[pi-shazam] _initServerForLanguage: re-open failed for ${filePath}`, err);
 						prevOpened.delete(filePath);
 					}
 				}
@@ -563,10 +566,14 @@ export class LspManager {
 				// Race client.close() against a timeout to prevent hung processes
 				// from leaking. client.close() has its own internal timeouts, but
 				// a stuck process can still cause indefinite hangs.
+				let timer: ReturnType<typeof setTimeout> | undefined;
 				await Promise.race([
 					info.client.close(),
-					new Promise<void>((_, reject) => setTimeout(() => reject(new Error("close timed out")), SHUTDOWN_TIMEOUT_MS)),
+					new Promise<void>((_, reject) => {
+						timer = setTimeout(() => reject(new Error("close timed out")), SHUTDOWN_TIMEOUT_MS);
+					}),
 				]);
+				if (timer) clearTimeout(timer);
 				this.log(`LSP shutdown: ${language}`);
 			} catch (err) {
 				this.log(`LSP shutdown error for ${language}: ${err}`);

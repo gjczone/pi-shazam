@@ -108,7 +108,7 @@ export function executeChangesJson(graph: RepoGraph, projectRoot: string): strin
 }
 
 /**
- * 适配器：将 changes 工具的参数转换为统一的 assessRisk 调用。
+ * Adapter: converts changes tool parameters into a unified assessRisk call.
  */
 function _assessChangeRisk(
 	graph: RepoGraph,

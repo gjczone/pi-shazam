@@ -7,7 +7,7 @@
  * and safe event input extraction.
  */
 
-/* ─── internal helpers ──────────────────────────────────────────── */
+/* --- internal helpers -------------------------------------------- */
 
 /**
  * Skip past a quoted string, returning the index AFTER the closing quote.
@@ -23,7 +23,7 @@ function _skipQuoted(cmd: string, start: number): number {
 			continue;
 		}
 		// Bash single-quote escape pattern: '\'' produces a literal '
-		// e.g., 'it'\''s' → the token content should be "it's"
+		// e.g., 'it'\''s' -> the token content should be "it's"
 		if (
 			quote === "'" &&
 			cmd[i] === "'" &&
@@ -135,7 +135,7 @@ function _tokenizeOne(cmd: string): string[] {
 	return tokens;
 }
 
-/* ─── public API ────────────────────────────────────────────────── */
+/* --- public API -------------------------------------------------- */
 
 /**
  * Tokenize a bash command string into argv, respecting quotes, escapes,
@@ -148,7 +148,7 @@ function _tokenizeOne(cmd: string): string[] {
  * Handles:
  *   - Single quotes: literal content (bash '\'' escape produces literal ')
  *   - Double quotes: backslash escapes (\"  becomes ")
- *   - Unquoted backslash escapes: \X → X
+ *   - Unquoted backslash escapes: \X -> X
  *   - $(…) command substitution: treated as a single token
  *   - Command separators: | ; && || split into segments before tokenizing
  */

@@ -15,7 +15,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { safeGitExec } from "../core/git-utils.js";
 import { join } from "node:path";
 
-// ── Route detection (absorbed from tools/routes.ts) ──────────────────────
+// -- Route detection (absorbed from tools/routes.ts) ----------------------
 
 const WEB_FRAMEWORK_INDICATORS = [
 	"express",
@@ -84,7 +84,7 @@ export function executeOverview(graph: RepoGraph, projectRoot: string, filter?: 
 function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: string): string {
 	const lines: string[] = [];
 
-	// ── Apply file filtering ───────────────────────────────────────
+	// -- Apply file filtering ---------------------------------------
 	const files = filter
 		? [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f) && f.includes(filter))
 		: [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
@@ -122,9 +122,9 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 			"Note: Only Python, TypeScript, JavaScript, Go, Rust, Dart, and JSON are analyzed. Other file types are skipped.",
 		);
 
-		// Parser 可用性警告（follow-up to #349）：
-		// 只对项目中实际存在且 parser 不可用的语言发出警告。
-		// 纯 TS 项目不会看到 Dart 警告，避免无差别广播噪音。
+		// Parser availability warning (follow-up to #349):
+		// Only warn for languages that actually exist in the project and whose parser is unavailable.
+		// A pure TS project won't see Dart warnings, avoiding indiscriminate broadcast noise.
 		const unavailable = getProjectParserWarnings(graph.fileSymbols.keys());
 		if (unavailable.length > 0) {
 			lines.push("");
@@ -338,7 +338,7 @@ export function executeOverviewJson(graph: RepoGraph, projectRoot: string, filte
 	});
 }
 
-// ── Route inventory (absorbed from tools/routes.ts) ─────────────────────
+// -- Route inventory (absorbed from tools/routes.ts) ---------------------
 
 /**
  * Build a concise "HTTP Routes" section for the overview.
@@ -410,7 +410,7 @@ function findRouteSymbols(graph: RepoGraph): Symbol[] {
 	return results;
 }
 
-// ── Key Dependencies section ────────────────────────────────────────
+// -- Key Dependencies section ----------------------------------------
 
 /**
  * Build a "Key Dependencies" section for the overview.
@@ -447,7 +447,8 @@ export function buildKeyDependenciesSection(projectRoot: string): string | null 
 		}
 
 		return lines.join("\n");
-	} catch {
+	} catch (err) {
+		console.warn(`[pi-shazam] buildKeyDependenciesSection: failed to read package.json for ${projectRoot}`, err);
 		return null;
 	}
 }
@@ -478,7 +479,8 @@ function buildPythonDepsSection(projectRoot: string): string | null {
 				}
 				return lines.join("\n");
 			}
-		} catch {
+		} catch (err) {
+			console.warn(`[pi-shazam] buildPythonDepsSection: failed to read pyproject.toml for ${projectRoot}`, err);
 			/* ignore */
 		}
 	}
@@ -495,7 +497,8 @@ function buildPythonDepsSection(projectRoot: string): string | null {
 				lines.push(`| ${dep.trim()} |`);
 			}
 			return lines.join("\n");
-		} catch {
+		} catch (err) {
+			console.warn(`[pi-shazam] buildPythonDepsSection: failed to read requirements.txt for ${projectRoot}`, err);
 			/* ignore */
 		}
 	}
@@ -522,7 +525,8 @@ function buildRustDepsSection(projectRoot: string): string | null {
 			if (match) lines.push(`| ${match[1]!.trim()} | ${match[2]?.trim() || ""} |`);
 		}
 		return lines.join("\n");
-	} catch {
+	} catch (err) {
+		console.warn(`[pi-shazam] buildRustDepsSection: failed to read Cargo.toml for ${projectRoot}`, err);
 		return null;
 	}
 }
@@ -537,19 +541,20 @@ function buildGoDepsSection(projectRoot: string): string | null {
 	if (!existsSync(goModPath)) return null;
 	try {
 		const content = readFileSync(goModPath, "utf-8");
-		const deps = content.split("\n").filter((l) => l.trim().startsWith("\t") && !l.includes("go "));
+		const deps = content.split("\n").filter((l) => l.trim().startsWith("\t") && !/^\s*go\s+\d/.test(l));
 		const lines: string[] = ["### Key Go Dependencies", "", "| Module | Version |", "|--------|---------|"];
 		for (const dep of deps.slice(0, 15)) {
 			const parts = dep.trim().split(/\s+/);
 			if (parts.length >= 2) lines.push(`| ${parts[0]} | ${parts[1]} |`);
 		}
 		return lines.join("\n");
-	} catch {
+	} catch (err) {
+		console.warn(`[pi-shazam] buildGoDepsSection: failed to read go.mod for ${projectRoot}`, err);
 		return null;
 	}
 }
 
-// ── Recent Changes section ──────────────────────────────────────────
+// -- Recent Changes section ------------------------------------------
 
 /**
  * Build a "Recent Changes" section for the overview.
@@ -571,7 +576,7 @@ export function buildRecentChangesSection(projectRoot: string): string | null {
 	return lines.join("\n");
 }
 
-// ── Hotspots (absorbed from tools/hotspots.ts) ─────────────────────────
+// -- Hotspots (absorbed from tools/hotspots.ts) -------------------------
 
 interface FileHotspot {
 	file: string;

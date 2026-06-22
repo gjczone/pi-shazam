@@ -41,7 +41,7 @@ const _ctsCtor = (
 ).CancellationTokenSource;
 type CtsInstance = InstanceType<typeof _ctsCtor>;
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// -- Constants ----------------------------------------------------------------
 
 export const DEFAULT_LSP_ENRICH_TIMEOUT_MS = 5000;
 
@@ -61,7 +61,7 @@ function effectiveTimeout(justOpened: boolean, timeoutMs: number): number {
 	return timeoutMs;
 }
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// -- Types --------------------------------------------------------------------
 
 /**
  * Minimal LspManager-like surface used by helpers.
@@ -93,7 +93,7 @@ export interface EnrichedSymbolHit {
 	source: "lsp";
 }
 
-// ── Timeout helper ───────────────────────────────────────────────────────────
+// -- Timeout helper -----------------------------------------------------------
 
 /**
  * Race a promise against a timeout. Returns null on timeout.
@@ -126,7 +126,7 @@ function withEnrichTimeout<T>(
 	});
 }
 
-// ── SymbolKind mapping ───────────────────────────────────────────────────────
+// -- SymbolKind mapping -------------------------------------------------------
 
 /**
  * Map LSP SymbolKind numeric enum (1..26) to the string kind values
@@ -191,15 +191,15 @@ export function mapSymbolKindNumber(kind: number): string {
 	}
 }
 
-// ── File opening helper ──────────────────────────────────────────────────────
+// -- File opening helper ------------------------------------------------------
 
-// 上限：防止 _openedFileMtimes 在长会话中无限增长（issue #368）。
+// Upper bound: prevents _openedFileMtimes from growing unbounded in long sessions (issue #368).
 const MAX_OPENED_MTIMES = 500;
 
 // Track file modification times for opened files to detect edits.
 const _openedFileMtimes = new Map<string, number>();
 
-/** 若超过上限则驱逐最早条目（Map 迭代顺序 = 插入顺序，最早 = 最先插入）。 */
+/** Evict the oldest entry when the upper bound is exceeded (Map iteration order = insertion order, oldest = first inserted). */
 function _evictOldestMtime(): void {
 	if (_openedFileMtimes.size > MAX_OPENED_MTIMES) {
 		const oldest = _openedFileMtimes.keys().next().value;
@@ -246,13 +246,14 @@ export async function ensureFileOpened(
 				_evictOldestMtime();
 			}
 		}
-	} catch {
+	} catch (err) {
+		console.warn(`[pi-shazam] ensureFileOpened: failed for ${filePath}`, err);
 		return null;
 	}
 	return { client: info.client, workspaceRoot: info.workspaceRoot, justOpened: false };
 }
 
-// ── workspace/symbol ─────────────────────────────────────────────────────────
+// -- workspace/symbol ---------------------------------------------------------
 
 /**
  * Query workspace/symbol across all active LSP servers.
@@ -282,7 +283,8 @@ export async function lspWorkspaceSearch(
 			).finally(() => cts.dispose());
 			if (!raw) return [];
 			return raw.map((s) => toEnrichedHit(s)).filter(Boolean) as EnrichedSymbolHit[];
-		} catch {
+		} catch (err) {
+			console.warn(`[pi-shazam] lspWorkspaceSearch: workspace/symbol failed for ${srv.language}`, err);
 			return [];
 		}
 	});
@@ -318,7 +320,7 @@ function toEnrichedHit(s: SymbolInformation | WorkspaceSymbol): EnrichedSymbolHi
 	return null;
 }
 
-// ── documentSymbol enrichment ────────────────────────────────────────────────
+// -- documentSymbol enrichment ------------------------------------------------
 
 /**
  * Fetch LSP documentSymbol hierarchy for a file.
@@ -352,7 +354,7 @@ export function resetLspEnrichState(): void {
 	_openedFileMtimes.clear();
 }
 
-// ── codeAction ──────────────────────────────────────────────────────────────
+// -- codeAction --------------------------------------------------------------
 
 /**
  * Fetch LSP code actions for a diagnostic range.
@@ -385,7 +387,7 @@ export async function lspCodeActions(
 	return result;
 }
 
-// ── signatureHelp ───────────────────────────────────────────────────────────
+// -- signatureHelp -----------------------------------------------------------
 
 /**
  * Fetch LSP signature help at a position.
@@ -414,7 +416,7 @@ export async function lspSignatureHelp(
 	return result;
 }
 
-// ── implementation ──────────────────────────────────────────────────────────
+// -- implementation ----------------------------------------------------------
 
 /**
  * Fetch LSP implementation locations for a symbol at a position.
@@ -500,7 +502,7 @@ export async function lspReferences(
 	return result;
 }
 
-// ── codeLens ────────────────────────────────────────────────────────────────
+// -- codeLens ----------------------------------------------------------------
 
 /**
  * Fetch LSP codeLens for a file (reference counts, test status, etc.).

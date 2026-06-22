@@ -26,7 +26,7 @@ import { resolve } from "node:path";
 import { TreeSitterAdapter } from "../core/treesitter.js";
 import { uriToPath } from "../lsp/client.js";
 
-// ── Markdown sanitization ────────────────────────────────────────────────
+// -- Markdown sanitization ------------------------------------------------
 
 /**
  * Escape backticks in user-controlled content to prevent markdown injection.
@@ -37,31 +37,31 @@ function _sanitizeMarkdown(s: string): string {
 	return s.replace(/`/g, "\\`");
 }
 
-// ── State map kinds (from symbol.ts) ─────────────────────────────────────
+// -- State map kinds (from symbol.ts) -------------------------------------
 
 const STATE_MAP_KINDS = new Set(["enum", "class", "interface", "type_alias", "const"]);
 
-// ── File detail cache (from file_detail.ts) ─────────────────────────────
+// -- File detail cache (from file_detail.ts) -----------------------------
 
 const MAX_DETAIL_CACHE_SIZE = 200;
 const fileDetailCache = new Map<string, { text: string; timestamp: number; mtimeMs: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-// LRU 访问顺序追踪（issue #368）：数组头部 = 最近访问，尾部 = 最久未访问。
+// LRU access-order tracking (issue #368): array head = most recently accessed, tail = least recently accessed.
 const _detailAccessOrder: string[] = [];
 
-/** 从缓存和访问顺序中同时移除一个 key。 */
+/** Remove a key from both the cache and the access-order array. */
 function _removeFromDetailCache(key: string): void {
 	fileDetailCache.delete(key);
 	const idx = _detailAccessOrder.indexOf(key);
 	if (idx >= 0) _detailAccessOrder.splice(idx, 1);
 }
 
-// ── LSP SymbolKind constants ─────────────────────────────────────────────
+// -- LSP SymbolKind constants ---------------------------------------------
 
 const LOCAL_KINDS = new Set([13, 14]);
 
-// ── Registration ─────────────────────────────────────────────────────────
+// -- Registration ---------------------------------------------------------
 
 export function registerLookup(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -140,7 +140,7 @@ export function registerLookup(pi: ExtensionAPI): void {
 	});
 }
 
-// ── Dispatch helper ──────────────────────────────────────────────────────
+// -- Dispatch helper ------------------------------------------------------
 
 function _isFilePath(name: string): boolean {
 	return (
@@ -152,7 +152,7 @@ function _isFilePath(name: string): boolean {
 	);
 }
 
-// ── Symbol lookup (from symbol.ts + hover.ts + type_hierarchy.ts) ────────
+// -- Symbol lookup (from symbol.ts + hover.ts + type_hierarchy.ts) --------
 
 interface EnrichedMatch {
 	sym: Symbol;
@@ -321,7 +321,7 @@ export function _executeSymbolJson(graph: RepoGraph, name: string, file?: string
 	);
 }
 
-// ── Hover info extraction (from hover.ts) ────────────────────────────────
+// -- Hover info extraction (from hover.ts) --------------------------------
 
 interface HoverInfo {
 	lspHover?: string;
@@ -480,7 +480,7 @@ function _extractDocstringTextFallback(content: string, symbolLine: number): str
 	return undefined;
 }
 
-// ── Type hierarchy (from type_hierarchy.ts) ──────────────────────────────
+// -- Type hierarchy (from type_hierarchy.ts) ------------------------------
 
 interface TypeHierarchyEntry {
 	name: string;
@@ -675,7 +675,7 @@ function _deduplicateHierarchy(entries: TypeHierarchyEntry[]): TypeHierarchyEntr
 	});
 }
 
-// ── File detail (from file_detail.ts) ────────────────────────────────────
+// -- File detail (from file_detail.ts) ------------------------------------
 
 async function _executeFileDetailAsync(
 	graph: RepoGraph,
@@ -689,7 +689,7 @@ async function _executeFileDetailAsync(
 		try {
 			const st = statSync(file);
 			if (st.mtimeMs === cached.mtimeMs) {
-				// LRU: 将当前 key 移到访问顺序头部
+				// LRU: move current key to the head of access order
 				const idx = _detailAccessOrder.indexOf(cacheKey);
 				if (idx >= 0) {
 					_detailAccessOrder.splice(idx, 1);
@@ -750,12 +750,12 @@ async function _executeFileDetailAsync(
 		// File may not exist
 	}
 	if (fileDetailCache.size >= MAX_DETAIL_CACHE_SIZE) {
-		// LRU: 驱逐访问顺序最尾部的 key（最久未访问，而非最早插入）
+		// LRU: evict the tail key of access order (least recently accessed, not earliest inserted)
 		const lruKey = _detailAccessOrder.pop();
 		if (lruKey !== undefined) fileDetailCache.delete(lruKey);
 	}
 	fileDetailCache.set(cacheKey, { text, timestamp: Date.now(), mtimeMs });
-	// LRU: 将新 key 插入访问顺序头部
+	// LRU: insert new key at the head of access order
 	_detailAccessOrder.unshift(cacheKey);
 
 	return text;
@@ -826,13 +826,13 @@ export function _executeFileDetail(graph: RepoGraph, file: string): string {
 	const standalone: typeof symbols = [];
 
 	// O(N log N) stack-based single-pass traversal (was O(N²) filter).
-	// 预排序：按行号升序、同行时结束行降序（外层容器优先）、列号升序保证稳定。
+	// Pre-sort: by line ascending, same line by endLine descending (outer container first), then col ascending for stability.
 	const sorted = [...symbols].sort((a, b) => a.line - b.line || b.endLine - a.endLine || a.col - b.col);
 	const containerMap = new Map<string, { sym: (typeof symbols)[0]; members: typeof symbols }>();
 	const stack: (typeof symbols)[0][] = [];
 
 	for (const sym of sorted) {
-		// 符号起始行已超出栈顶容器结束行 → 弹出已关闭的容器。
+		// Symbol start line exceeds top-of-stack container end line -> pop closed containers.
 		while (stack.length > 0 && sym.line > stack[stack.length - 1].endLine) {
 			stack.pop();
 		}
@@ -840,13 +840,13 @@ export function _executeFileDetail(graph: RepoGraph, file: string): string {
 		if (CONTAINER_KINDS.has(sym.kind)) {
 			const entry = { sym, members: [] as typeof symbols };
 			containerMap.set(sym.id, entry);
-			// 扁平包含：该容器属于栈上所有父容器的成员。
+			// Flat containment: this container is a member of all parent containers on the stack.
 			for (const parent of stack) {
 				containerMap.get(parent.id)!.members.push(sym);
 			}
 			stack.push(sym);
 		} else {
-			// 非容器符号：属于栈上所有父容器的成员。
+			// Non-container symbol: belongs to all parent containers on the stack.
 			for (const parent of stack) {
 				containerMap.get(parent.id)!.members.push(sym);
 			}
@@ -856,7 +856,7 @@ export function _executeFileDetail(graph: RepoGraph, file: string): string {
 		}
 	}
 
-	// 有成员的容器保留为容器展示，无成员的容器降为独立符号。
+	// Containers with members keep container display; containers without members are demoted to standalone symbols.
 	for (const entry of containerMap.values()) {
 		if (entry.members.length > 0) {
 			containers.push(entry);
@@ -876,7 +876,7 @@ export function _executeFileDetail(graph: RepoGraph, file: string): string {
 				const mInc = graph.incoming.get(member.id);
 				const mOut = graph.outgoing.get(member.id);
 				lines.push(
-					`  └ ${member.kind} \`${_sanitizeMarkdown(member.name)}\` L${member.line}-${member.endLine} [${member.visibility}] PR ${member.pagerank.toFixed(4)} | in:${mInc ? mInc.length : 0} out:${mOut ? mOut.length : 0}`,
+					`  - ${member.kind} \`${_sanitizeMarkdown(member.name)}\` L${member.line}-${member.endLine} [${member.visibility}] PR ${member.pagerank.toFixed(4)} | in:${mInc ? mInc.length : 0} out:${mOut ? mOut.length : 0}`,
 				);
 			}
 		}
@@ -942,7 +942,7 @@ function _executeFileDetailJson(graph: RepoGraph, file: string): string {
 	});
 }
 
-// ── State map (from symbol.ts) ───────────────────────────────────────────
+// -- State map (from symbol.ts) -------------------------------------------
 
 export function _executeStateMap(graph: RepoGraph, symbolName: string): string {
 	const targets: Symbol[] = [];

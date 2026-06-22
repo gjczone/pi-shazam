@@ -25,12 +25,12 @@ import { truncateOutput } from "../core/output.js";
 import { resolve } from "node:path";
 import { realpathSync } from "node:fs";
 
-// ── Path traversal guard ────────────────────────────────────────────────────
+// -- Path traversal guard ----------------------------------------------------
 
 /**
- * 校验给定路径是否在项目根目录内，防止路径穿越攻击。
- * 先 resolve 为绝对路径，再检测是否以 projectRoot + "/" 开头或等于 projectRoot。
- * 不在项目范围内的路径返回 false。
+ * Validate that a given path is within the project root, preventing path traversal attacks.
+ * First resolves to an absolute path, then checks whether it starts with projectRoot + "/" or equals projectRoot.
+ * Returns false for paths outside the project scope.
  */
 export function validatePathInProject(rawPath: string, projectRoot: string = process.cwd()): boolean {
 	const resolved = resolve(projectRoot, rawPath);
@@ -42,12 +42,13 @@ export function validatePathInProject(rawPath: string, projectRoot: string = pro
 		const realResolved = realpathSync(resolved);
 		const realRoot = realpathSync(rootResolved);
 		return realResolved.startsWith(realRoot + "/") || realResolved === realRoot;
-	} catch {
+	} catch (err) {
+		console.warn(`[pi-shazam] validatePathInProject: realpathSync failed for ${resolved}`, err);
 		return false;
 	}
 }
 
-// ── Envelope helper ────────────────────────────────────────────────────────
+// -- Envelope helper --------------------------------------------------------
 
 /**
  * Build a standardized JSON envelope for tool output.
@@ -67,7 +68,7 @@ export function buildEnvelope(name: string, project: string, status: "ok" | "err
 	);
 }
 
-// ── Factory types ──────────────────────────────────────────────────────────
+// -- Factory types ----------------------------------------------------------
 
 export interface ToolSpec<T extends TProperties> {
 	name: string;
@@ -93,7 +94,7 @@ export interface ToolSpec<T extends TProperties> {
 	) => Promise<AgentToolResult>;
 }
 
-// ── Factory function ───────────────────────────────────────────────────────
+// -- Factory function -------------------------------------------------------
 
 /**
  * Register a tool with automatic parameter merging and optional boilerplate.
@@ -158,7 +159,8 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 				try {
 					const parsed = JSON.parse(text);
 					text = JSON.stringify(parsed, null, 2);
-				} catch {
+				} catch (err) {
+					console.warn(`[pi-shazam] createTool: JSON.parse failed for ${spec.name} output`, err);
 					text = JSON.stringify(
 						{
 							schema_version: "1.0",

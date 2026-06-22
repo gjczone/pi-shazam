@@ -8,7 +8,7 @@
  *   - Max 10 MB per log file before rotation
  *   - Keep up to 5 archived copies (shazam-calls.log.1 through .5)
  *   - Max 30 days age for any single log file
- *   - On rotation: cascade-rename .4→.5, .3→.4, …, .log→.log.1
+ *   - On rotation: cascade-rename .4->.5, .3->.4, …, .log->.log.1
  *   - On age: delete the entire log file (content older than 30 days is stale)
  */
 
@@ -31,9 +31,9 @@ export const MAX_AUDIT_LOG_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 /**
  * Rotate the audit log at `logPath`.
  *
- * - If file size exceeds MAX_AUDIT_LOG_SIZE → cascade-rename archived copies
- *   (log.4→log.5, …, log→log.1) and let a new log file be created on next write.
- * - If file age exceeds MAX_AUDIT_LOG_AGE_MS → delete the file (it will be
+ * - If file size exceeds MAX_AUDIT_LOG_SIZE -> cascade-rename archived copies
+ *   (log.4->log.5, …, log->log.1) and let a new log file be created on next write.
+ * - If file age exceeds MAX_AUDIT_LOG_AGE_MS -> delete the file (it will be
  *   recreated on next write with fresh content).
  */
 export async function rotateAuditLog(logPath: string): Promise<void> {
@@ -49,8 +49,9 @@ export async function rotateAuditLog(logPath: string): Promise<void> {
 				const dst = `${logPath}.${i + 1}`;
 				try {
 					await rename(src, dst);
-				} catch {
+				} catch (err) {
 					// file may not exist yet
+					console.warn(`[pi-shazam] rotateAuditLog: rename ${src} -> ${dst} failed`, err);
 				}
 			}
 			// Move current log to .1
@@ -59,7 +60,8 @@ export async function rotateAuditLog(logPath: string): Promise<void> {
 			// Delete the entire log — it will be recreated on next write
 			await unlink(logPath);
 		}
-	} catch {
+	} catch (err) {
 		// File may not exist yet — first write creates it
+		console.warn(`[pi-shazam] rotateAuditLog: stat/unlink failed for ${logPath}`, err);
 	}
 }

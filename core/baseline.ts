@@ -14,7 +14,7 @@ import type { RepoGraph } from "./graph.js";
 import { getGraphEdgeCount } from "./graph.js";
 import { findOrphans } from "./filter.js";
 
-// ── Baseline data structure ───────────────────────────────────────────────────
+// -- Baseline data structure ---------------------------------------------------
 
 export interface SessionBaseline {
 	branch: string;
@@ -40,7 +40,7 @@ export interface BaselineDiff {
 	addedEdges: number;
 }
 
-// ── Session baseline state (in-memory) ────────────────────────────────────────
+// -- Session baseline state (in-memory) ----------------------------------------
 
 let _baseline: SessionBaseline | null = null;
 let _previousOrphans: Map<string, { name: string; kind: string; file: string; line: number }> = new Map();

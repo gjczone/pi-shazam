@@ -46,7 +46,7 @@ echo "[shazam] Checking $CHANGED_FILES changed file(s)..."
 
 ERRORS=0
 
-# ── TypeScript/JavaScript ──────────────────────────────────────────────
+# -- TypeScript/JavaScript ----------------------------------------------
 if [ -f "tsconfig.json" ] || [ -f "package.json" ]; then
   # Type check
   if command -v npx &>/dev/null; then
@@ -75,7 +75,7 @@ if [ -f "tsconfig.json" ] || [ -f "package.json" ]; then
   fi
 fi
 
-# ── Rust ───────────────────────────────────────────────────────────────
+# -- Rust ---------------------------------------------------------------
 if [ -f "Cargo.toml" ]; then
   if command -v cargo &>/dev/null; then
     echo "[shazam] Running cargo check..."
@@ -95,7 +95,7 @@ if [ -f "Cargo.toml" ]; then
   fi
 fi
 
-# ── Go ─────────────────────────────────────────────────────────────────
+# -- Go -----------------------------------------------------------------
 if [ -f "go.mod" ]; then
   if command -v go &>/dev/null; then
     echo "[shazam] Running go vet..."
@@ -115,7 +115,7 @@ if [ -f "go.mod" ]; then
   fi
 fi
 
-# ── Python ─────────────────────────────────────────────────────────────
+# -- Python -------------------------------------------------------------
 if [ -f "pyproject.toml" ] || [ -f "setup.py" ] || [ -f "requirements.txt" ]; then
   # Type check (pyright or mypy)
   if command -v pyright &>/dev/null; then
@@ -142,7 +142,7 @@ if [ -f "pyproject.toml" ] || [ -f "setup.py" ] || [ -f "requirements.txt" ]; th
   fi
 fi
 
-# ── Summary ────────────────────────────────────────────────────────────
+# -- Summary ------------------------------------------------------------
 if [ $ERRORS -gt 0 ]; then
   echo "[shazam] FAIL: $ERRORS check(s) failed."
   echo "[shazam] Fix errors or use 'git commit --no-verify' to bypass."
@@ -308,7 +308,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 		const changedFiles = changedOutput.split("\n").filter(Boolean);
 		const errors: string[] = [];
 
-		// ── TypeScript/JavaScript ──────────────────────────────────────────
+		// -- TypeScript/JavaScript ------------------------------------------
 		if (existsSync(join(projectRoot, "tsconfig.json"))) {
 			try {
 				execFileSync("npx", ["--no-install", "tsc", "--noEmit"], {
@@ -323,7 +323,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 			}
 		}
 
-		// ── Rust ───────────────────────────────────────────────────────────
+		// -- Rust -----------------------------------------------------------
 		if (existsSync(join(projectRoot, "Cargo.toml"))) {
 			try {
 				execFileSync("cargo", ["check"], {
@@ -338,7 +338,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 			}
 		}
 
-		// ── Go ─────────────────────────────────────────────────────────────
+		// -- Go -------------------------------------------------------------
 		if (existsSync(join(projectRoot, "go.mod"))) {
 			try {
 				execFileSync("go", ["vet", "./..."], {
@@ -353,7 +353,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 			}
 		}
 
-		// ── Python ─────────────────────────────────────────────────────────
+		// -- Python ---------------------------------------------------------
 		if (existsSync(join(projectRoot, "pyproject.toml")) || existsSync(join(projectRoot, "setup.py"))) {
 			// Try pyright first, then mypy
 			let pyrightAvailable = false;
@@ -392,7 +392,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 			}
 		}
 
-		// ── Summary ────────────────────────────────────────────────────────
+		// -- Summary --------------------------------------------------------
 		if (errors.length > 0) {
 			return {
 				verdict: "FAIL",

@@ -174,7 +174,7 @@ describe("Tool: file_detail", () => {
 
 		// Class should appear as a container with myMethod as its member
 		expect(result).toMatch(/container class.*MyClass/);
-		expect(result).toMatch(/└ method.*myMethod/);
+		expect(result).toMatch(/- method.*myMethod/);
 
 		// myFunction should be in "Other symbols" (standalone, not a container member)
 		expect(result).toContain("Other symbols:");

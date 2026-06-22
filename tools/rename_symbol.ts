@@ -341,7 +341,7 @@ async function applyWorkspaceEdit(
 	for (const { uri, edits: textEdits } of textDocEdits) {
 		const filePath = uriToPath(uri);
 
-		// 路径穿越校验：确保 LSP 返回的文件路径在项目根目录内
+		// Path traversal validation: ensure LSP-returned file path is within project root
 		if (!validatePathInProject(filePath, projectRoot)) {
 			preview.push({
 				file: filePath,

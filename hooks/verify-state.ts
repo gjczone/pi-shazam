@@ -5,7 +5,7 @@
  * Used by both safety.ts (pre-commit gate) and stop-verify.ts (turn-end reminder).
  *
  * State machine:
- *   idle → verified (markVerifyCalled) → idle (onNewEdit or timeout)
+ *   idle -> verified (markVerifyCalled) -> idle (onNewEdit or timeout)
  */
 
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
@@ -54,8 +54,9 @@ export function markVerifyCalled(content?: string): void {
 			// Structured envelope but no clear verdict: fail-closed
 			_lastVerifyPassed = false;
 			return;
-		} catch {
+		} catch (err) {
 			// Not JSON: use text-based parsing
+			console.warn("[pi-shazam] markVerifyCalled: JSON.parse failed for verify content", err);
 		}
 
 		const isFail =

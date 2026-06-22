@@ -1,7 +1,7 @@
 /**
  * pi-shazam core/encoding — Adaptive file encoding reader.
  *
- * Reads files with UTF-8 → GBK → GB2312 fallback.
+ * Reads files with UTF-8 -> GBK -> GB2312 fallback.
  * Includes OOM protection via file size limits (2MB max) and
  * encoding validation on first 64KB chunk to reduce memory pressure.
  */
@@ -38,7 +38,7 @@ export class FileTooLargeError extends Error {
 // to avoid allocating huge strings for large files
 const VALIDATION_CHUNK_SIZE = 64 * 1024;
 
-// ── Encoding detection and reading ───────────────────────────────────────────
+// -- Encoding detection and reading -------------------------------------------
 
 /**
  * Read a file with adaptive encoding fallback:
@@ -98,7 +98,7 @@ export function readFileAdaptive(filePath: string): string {
 
 /**
  * Async variant of readFileAdaptive using fs.promises.
- * Same encoding fallback logic (UTF-8 → GBK → GB2312) but non-blocking.
+ * Same encoding fallback logic (UTF-8 -> GBK -> GB2312) but non-blocking.
  * Use this in async contexts (e.g., LSP enrichment) to avoid blocking the event loop.
  */
 export async function readFileAdaptiveAsync(filePath: string): Promise<string> {
@@ -143,7 +143,7 @@ export async function readFileAdaptiveAsync(filePath: string): Promise<string> {
 	return buffer.toString("utf-8");
 }
 
-// ── Internal helpers ─────────────────────────────────────────────────────────
+// -- Internal helpers ---------------------------------------------------------
 
 /**
  * Validate that a buffer contains only valid UTF-8 byte sequences.

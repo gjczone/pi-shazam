@@ -17,7 +17,7 @@ import { readFileAdaptive, FileTooLargeError } from "./encoding.js";
 import { getProjectCacheDir, saveGraphCache, loadGraphCache } from "./cache.js";
 import { SKIP_DIRS } from "./filter.js";
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// -- Constants ----------------------------------------------------------------
 
 /** Maximum files to scan (safety limit) */
 const MAX_FILES = 20_000;
@@ -25,12 +25,12 @@ const MAX_FILES = 20_000;
 /** File extensions to scan */
 const SOURCE_EXTS = new Set(Object.keys(EXT_TO_LANG));
 
-// ── In-memory cache ─────────────────────────────────────────────────────────
+// -- In-memory cache ---------------------------------------------------------
 
 let cachedGraph: RepoGraph | null = null;
 let cachedProjectPath: string = "";
 
-// ── Concurrency guard (issue #92) ───────────────────────────────────────────
+// -- Concurrency guard (issue #92) -------------------------------------------
 // While Node.js is single-threaded and scanProject() is fully synchronous,
 // this mutex prevents re-entrant calls (e.g., scanProject called from within
 // a tool that itself was triggered by another scanProject invocation).
@@ -90,7 +90,7 @@ export function getProjectGraph(projectRoot: string = ".", log?: (msg: string) =
 	return scanProject(root, log);
 }
 
-// ── Scanner ──────────────────────────────────────────────────────────────────
+// -- Scanner ------------------------------------------------------------------
 
 /**
  * Remove only the edges for a single file (not symbols).
@@ -383,7 +383,7 @@ function buildEdgesForFile(graph: RepoGraph, root: string, relPath: string, entr
 		}
 	}
 
-	// Ref edges — 同一文件内的标识符引用（回调/事件处理器等）
+	// Ref edges -- same-file identifier references (callbacks/event handlers etc.)
 	if (entry.refs.length > 0) {
 		for (const [refName, refLine] of entry.refs) {
 			const callerSyms = findCallerSymbols(thisFileSymIds, graph.symbols, refLine);
@@ -783,7 +783,7 @@ function scanIncremental(
 	return graph;
 }
 
-// ── File collection ──────────────────────────────────────────────────────────
+// -- File collection ----------------------------------------------------------
 
 function collectSourceFiles(root: string, maxFiles: number): string[] {
 	const options = {
@@ -859,7 +859,7 @@ function _walkDirectory(
 	}
 }
 
-// ── Edge helpers ─────────────────────────────────────────────────────────────
+// -- Edge helpers -------------------------------------------------------------
 
 // Per-scan set of seen edge keys to prevent duplicates (#319).
 let _scanSeenEdges: Set<string> | null = null;
@@ -889,11 +889,11 @@ function addEdge(graph: RepoGraph, edge: Edge): void {
 	}
 }
 
-// ── Import resolution ─────────────────────────────────────────────────────────
+// -- Import resolution ---------------------------------------------------------
 
 /**
  * Resolve a relative import path to a file path that matches the fileSymbols keys.
- * Handles extensionless imports (e.g., "./foo" → "./foo.ts" or "./foo/index.ts").
+ * Handles extensionless imports (e.g., "./foo" -> "./foo.ts" or "./foo/index.ts").
  * Accepts projectRoot for absolute-path disk validation (fixes #102).
  */
 function resolveImport(importPath: string, fromFile: string, root: string, graph?: RepoGraph): string {
@@ -935,7 +935,7 @@ function resolveImport(importPath: string, fromFile: string, root: string, graph
 	return importPath;
 }
 
-// ── Symbol lookup helpers ────────────────────────────────────────────────────
+// -- Symbol lookup helpers ----------------------------------------------------
 
 function findCallerSymbols(fileSymIds: string[], symbols: Map<string, Symbol>, callLine: number): Symbol[] {
 	// Find symbols in the file that contain this call line within their range

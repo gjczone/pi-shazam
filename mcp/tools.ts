@@ -2,7 +2,7 @@
  * pi-shazam MCP tools — register all analysis tools as MCP tools.
  * Each handler is wrapped with withLogging() for usage analytics.
  *
- * Updated for tool consolidation 14→9 (issue #362).
+ * Updated for tool consolidation 14->9 (issue #362).
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RepoGraph } from "../core/graph.js";
@@ -23,7 +23,7 @@ import { truncateOutput } from "../core/output.js";
 import { redact } from "../core/redact.js";
 import { AUDIT_LOG_DIR, rotateAuditLog } from "../core/audit-log.js";
 
-// ── Logging ──────────────────────────────────────────────────────
+// -- Logging ------------------------------------------------------
 
 const LOG_DIR = AUDIT_LOG_DIR;
 
@@ -89,7 +89,7 @@ function withLogging(
 	};
 }
 
-// ── Registration ─────────────────────────────────────────────────
+// -- Registration -------------------------------------------------
 
 export function registerAllTools(
 	server: McpServer,
