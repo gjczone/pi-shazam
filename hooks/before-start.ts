@@ -46,13 +46,15 @@ const OVERVIEW_FILE_COUNT_THRESHOLD = 5000;
  * Quickly count source files in a project up to a limit.
  * Uses only readdirSync (no tree-sitter parsing) so it's fast.
  * Returns as soon as count >= limit to avoid unnecessary work.
+ * Limits walk depth to MAX_COUNT_DEPTH to prevent unbounded recursion (issue #368).
  */
 function countSourceFilesUpTo(root: string, limit: number): number {
+	const MAX_COUNT_DEPTH = 50;
 	let count = 0;
 	const resolvedRoot = resolve(root);
 
-	function walk(dir: string) {
-		if (count >= limit) return;
+	function walk(dir: string, depth: number = 0) {
+		if (count >= limit || depth > MAX_COUNT_DEPTH) return;
 		let entries;
 		try {
 			entries = readdirSync(dir, { withFileTypes: true });
@@ -64,7 +66,7 @@ function countSourceFilesUpTo(root: string, limit: number): number {
 			if (entry.isDirectory()) {
 				if (SKIP_DIRS.has(entry.name)) continue;
 				if (entry.name.startsWith(".")) continue;
-				walk(join(dir, entry.name));
+				walk(join(dir, entry.name), depth + 1);
 			} else if (entry.isFile()) {
 				const ext = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();
 				if (SOURCE_EXTS.has(ext)) count++;

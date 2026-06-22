@@ -14,22 +14,42 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 
 /**
- * Stored failure info per tool: consecutive failure count and last error message.
+ * Stored failure info per tool: consecutive failure count, last error message, and timestamp.
  */
 interface FailureInfo {
 	count: number;
 	lastError: string;
+	/** 最近一次写入的 Unix 毫秒时间戳，用于 TTL 驱逐。 */
+	timestamp: number;
 }
 
 /**
- * Failure tracker: tool name -> failure info (count and last error).
+ * Failure tracker: tool name -> failure info (count, last error, timestamp).
  */
 const _failureCounts = new Map<string, FailureInfo>();
 
 /**
- * Track which tools have been warned about (to avoid repeated warnings).
+ * Track which tools have been warned about, with timestamp for TTL expiry.
+ * Map<toolName, timestampMs>
  */
-const _warnedTools = new Set<string>();
+const _warnedTools = new Map<string, number>();
+
+/** TTL for failure/warning entries: 1 hour in milliseconds. */
+const FAILURE_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Clean up entries older than FAILURE_TTL_MS from both maps.
+ * Called on every write to prevent unbounded growth (issue #368).
+ */
+function _cleanupExpiredEntries(): void {
+	const cutoff = Date.now() - FAILURE_TTL_MS;
+	for (const [tool, info] of _failureCounts) {
+		if (info.timestamp < cutoff) _failureCounts.delete(tool);
+	}
+	for (const [tool, ts] of _warnedTools) {
+		if (ts < cutoff) _warnedTools.delete(tool);
+	}
+}
 
 /**
  * Reset failure count for a tool (called on success).
@@ -44,9 +64,10 @@ function resetFailure(toolName: string): void {
  * Returns the new failure count.
  */
 function incrementFailure(toolName: string, errorMessage: string): number {
+	_cleanupExpiredEntries();
 	const current = _failureCounts.get(toolName);
 	const newCount = (current?.count || 0) + 1;
-	_failureCounts.set(toolName, { count: newCount, lastError: errorMessage });
+	_failureCounts.set(toolName, { count: newCount, lastError: errorMessage, timestamp: Date.now() });
 	return newCount;
 }
 
@@ -96,7 +117,7 @@ function getSuggestion(toolName: string, failCount: number, errorMessage: string
 
 	// After 3 failures: specific suggestions
 	if (failCount >= 3 && !_warnedTools.has(toolName)) {
-		_warnedTools.add(toolName);
+		_warnedTools.set(toolName, Date.now());
 
 		// Error-type-specific suggestions
 		if (lowerError.includes("file not found") || lowerError.includes("enoent")) {

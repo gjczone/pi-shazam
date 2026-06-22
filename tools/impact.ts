@@ -178,8 +178,8 @@ export function executeImpact(
 	const affectedSymbols = opts.withSymbols ? bfs.affectedSymbols : [];
 
 	if (opts.compact) {
-		const files = [...bfs.affectedFiles].sort();
-		return `## Impact (Compact)\n\n${files.length} affected file(s):\n\n${files.join("\n")}`;
+		const affected = [...bfs.affectedFiles].sort();
+		return `## Impact (Compact)\n\n${affected.length} affected file(s):\n\n${affected.join("\n")}`;
 	}
 
 	const lines: string[] = [];

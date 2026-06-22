@@ -84,7 +84,7 @@ export function createBaseline(
 	// Cache current orphan set for future diff
 	_previousOrphans = new Map();
 	for (const orphan of orphanResult.all) {
-		_previousOrphans.set(`${orphan.name}::${orphan.file}`, orphan);
+		_previousOrphans.set(`${orphan.name}::${orphan.file}::${orphan.kind}::${orphan.line}`, orphan);
 	}
 
 	return baseline;
@@ -104,7 +104,7 @@ export function diffFromBaseline(graph: RepoGraph, lspErrors: number, lspWarning
 	const currentOrphanCount = currentOrphans.length;
 
 	// Find new orphans (not in previous baseline)
-	const newOrphans = currentOrphans.filter((o) => !_previousOrphans.has(`${o.name}::${o.file}`));
+	const newOrphans = currentOrphans.filter((o) => !_previousOrphans.has(`${o.name}::${o.file}::${o.kind}::${o.line}`));
 
 	// Count edge changes
 	const previousEdges = _baseline.graphEdges;

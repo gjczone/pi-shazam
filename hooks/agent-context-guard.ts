@@ -45,17 +45,27 @@ const CODING_CONTEXT_THRESHOLD = 1;
 /**
  * Compute a structural context score for a prompt.
  * Each detected context marker adds 1 point:
- *   - File paths (e.g., src/foo.ts)
- *   - Inline code references (backtick-wrapped symbols)
- *   - Line number references (e.g., line 42, :42)
+ *   - File paths: must contain a path with a recognized source-code extension
+ *   - Symbol references: backtick-wrapped identifiers (e.g., `MyClass`)
+ *   - File:line references: combined file-path + line number (e.g., src/foo.ts:42)
  *   - shazam_ tool references
+ *
+ * Standalone line numbers (e.g., "line 42" or ":42") no longer count —
+ * they are trivially gamed and do not provide structural context.
  */
 function computeContextScore(prompt: string): number {
-	const hasFilePaths = /[\w-]+\/[\w-]+|\.\w{1,4}$/.test(prompt);
-	const hasSymbols = prompt.includes("`");
-	const hasLineNums = /line\s+\d+|:\d+/.test(prompt);
+	// File paths: at least one `/` component + recognized code extension
+	const hasFilePaths =
+		/(?:\/[\w.-]+|[\w.-]+\/(?:[\w.-]+\/)*[\w.-]+)\.(?:tsx?|jsx?|mjs|cjs|py|go|rs|java|cs|rb|swift|kt|kts|c|cpp|cc|cxx|h|hpp|hh|hxx|vue|svelte|css|scss|less|html|json|ya?ml|md|toml|xml|sql|sh|bash|proto|graphql|prisma)\b/i.test(
+			prompt,
+		);
+	// Symbol references: backtick-wrapped content with at least one non-whitespace char
+	const hasSymbols = /`[^`\s]+`/.test(prompt);
+	// File:line combos (e.g., foo.ts:42, src/bar.py:120-125)
+	const hasPathLine = /[\w.-]+\.[a-z]{1,8}:\d+([-–]\d+)?\b/i.test(prompt);
+	// shazam_ tool references
 	const hasShazam = /shazam_/i.test(prompt);
-	return [hasFilePaths, hasSymbols, hasLineNums, hasShazam].filter(Boolean).length;
+	return [hasFilePaths, hasSymbols, hasPathLine, hasShazam].filter(Boolean).length;
 }
 
 /**

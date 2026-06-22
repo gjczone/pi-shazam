@@ -6,7 +6,7 @@
  * Supports multiple detection sources: project-local, PATH, and user home.
  */
 
-import { readdirSync, statSync, existsSync } from "node:fs";
+import { readdirSync, statSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve, delimiter } from "node:path";
 import { homedir } from "node:os";
 import { LspClient } from "./client.js";
@@ -465,8 +465,6 @@ export class LspManager {
 			// Re-open previously opened files after server crash/reconnection
 			const prevOpened = this._openedFilePaths.get(language);
 			if (prevOpened && prevOpened.size > 0) {
-				const { readFileSync } = await import("node:fs");
-				const { resolve } = await import("node:path");
 				for (const filePath of prevOpened) {
 					try {
 						const absPath = resolve(detection.workspaceRoot, filePath);

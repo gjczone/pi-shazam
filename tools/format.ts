@@ -8,10 +8,10 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
-import { createTool } from "./_factory.js";
+import { createTool, validatePathInProject } from "./_factory.js";
 import { readFileAdaptive } from "../core/encoding.js";
 import { existsSync, readFileSync } from "node:fs";
-import { join, resolve as pathResolve } from "node:path";
+import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { isNonSourceFile } from "../core/filter.js";
@@ -64,6 +64,11 @@ export function executeFormat(graph: RepoGraph, projectRoot: string, options: Fo
 		dryRun ? "**Mode: DRY RUN** (preview only, no changes applied)" : "**Mode: APPLY** (changes will be written)",
 	);
 
+	// 文件路径穿越校验：必须在 runFormatters 之前执行，防止格式化工具操作项目外文件
+	if (options.file && !validatePathInProject(options.file, projectRoot)) {
+		return "Error: file path escapes project root";
+	}
+
 	if (!dryRun) {
 		const formatters = detectFormatters(projectRoot);
 		const results = runFormatters(projectRoot, formatters, options.file);
@@ -93,13 +98,8 @@ export function executeFormat(graph: RepoGraph, projectRoot: string, options: Fo
 	}
 	lines.push("");
 
-	// Validate file path does not escape project root
-	if (options.file) {
-		const resolved = pathResolve(projectRoot, options.file);
-		const rootResolved = pathResolve(projectRoot);
-		if (!resolved.startsWith(rootResolved + "/") && resolved !== rootResolved) {
-			return "Error: file path escapes project root";
-		}
+	if (options.file && !validatePathInProject(options.file, projectRoot)) {
+		return "Error: file path escapes project root";
 	}
 
 	// ── Scan files for common issues ─────────────────────────────────────
@@ -175,19 +175,14 @@ export function executeFormatJson(graph: RepoGraph, projectRoot: string, options
 	const dryRun = options.dryRun ?? true;
 	const formatters = detectFormatters(projectRoot);
 
-	// Validate file path does not escape project root
-	if (options.file) {
-		const resolved = pathResolve(projectRoot, options.file);
-		const rootResolved = pathResolve(projectRoot);
-		if (!resolved.startsWith(rootResolved + "/") && resolved !== rootResolved) {
-			return JSON.stringify({
-				schema_version: "1.0",
-				command: "format",
-				project: projectRoot,
-				status: "error",
-				result: { error: "file path escapes project root" },
-			});
-		}
+	if (options.file && !validatePathInProject(options.file, projectRoot)) {
+		return JSON.stringify({
+			schema_version: "1.0",
+			command: "format",
+			project: projectRoot,
+			status: "error",
+			result: { error: "file path escapes project root" },
+		});
 	}
 
 	const rawFiles = options.file ? [options.file] : [...graph.fileSymbols.keys()];

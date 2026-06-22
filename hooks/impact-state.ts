@@ -9,6 +9,11 @@
  */
 
 let _pendingImpact = false;
+/** 设置 pending 时的 Unix 毫秒时间戳，用于 TTL 自动清除。 */
+let _pendingImpactSetAt: number | null = null;
+
+/** 30 分钟 TTL，超时自动清除 pending 状态（issue #368）。 */
+const PENDING_IMPACT_TTL_MS = 30 * 60 * 1000;
 
 /**
  * Mark that a GitHub issue was created and impact analysis is needed
@@ -16,6 +21,7 @@ let _pendingImpact = false;
  */
 export function setPendingImpact(): void {
 	_pendingImpact = true;
+	_pendingImpactSetAt = Date.now();
 }
 
 /**
@@ -24,6 +30,7 @@ export function setPendingImpact(): void {
  */
 export function clearPendingImpact(): void {
 	_pendingImpact = false;
+	_pendingImpactSetAt = null;
 }
 
 /**
@@ -31,6 +38,11 @@ export function clearPendingImpact(): void {
  * shazam_impact not yet run).
  */
 export function hasPendingImpact(): boolean {
+	if (_pendingImpact && _pendingImpactSetAt !== null && Date.now() - _pendingImpactSetAt > PENDING_IMPACT_TTL_MS) {
+		// TTL 过期，自动清除 pending 状态，防止永久阻塞编辑（issue #368）。
+		_pendingImpact = false;
+		_pendingImpactSetAt = null;
+	}
 	return _pendingImpact;
 }
 
@@ -39,4 +51,5 @@ export function hasPendingImpact(): boolean {
  */
 export function resetImpactState(): void {
 	_pendingImpact = false;
+	_pendingImpactSetAt = null;
 }

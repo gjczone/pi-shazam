@@ -771,6 +771,7 @@ function collectSourceFiles(root: string, maxFiles: number): string[] {
 	const options = {
 		root,
 		maxFiles,
+		maxDepth: 50,
 		files: [] as string[],
 		visitedSymlinks: new Set<string>(),
 	};
@@ -781,10 +782,11 @@ function collectSourceFiles(root: string, maxFiles: number): string[] {
 function _walkDirectory(
 	dir: string,
 	_depth: number,
-	options: { root: string; maxFiles: number; files: string[]; visitedSymlinks: Set<string> },
+	options: { root: string; maxFiles: number; maxDepth: number; files: string[]; visitedSymlinks: Set<string> },
 ): void {
-	const { root, maxFiles, files, visitedSymlinks } = options;
+	const { root, maxFiles, maxDepth, files, visitedSymlinks } = options;
 	if (files.length >= maxFiles) return;
+	if (_depth > maxDepth) return;
 
 	let entries;
 	try {
@@ -807,7 +809,7 @@ function _walkDirectory(
 
 		if (entry.isDirectory()) {
 			if (SKIP_DIRS.has(entry.name)) continue;
-			if (entry.name.startsWith(".")) continue;
+			if (entry.name.startsWith(".") && entry.name !== ".github") continue;
 			_walkDirectory(join(dir, entry.name), _depth + 1, options);
 		} else if (entry.isSymbolicLink()) {
 			// Resolve symlink to check whether it points to a directory or file.
@@ -846,7 +848,7 @@ let _scanSeenEdges: Set<string> | null = null;
 function addEdge(graph: RepoGraph, edge: Edge): void {
 	// Deduplicate edges within a single scan using a compound key.
 	if (_scanSeenEdges) {
-		const key = `${edge.source}::${edge.target}::"${edge.kind}"`;
+		const key = `${edge.source}::${edge.target}::${edge.kind}`;
 		if (_scanSeenEdges.has(key)) return;
 		_scanSeenEdges.add(key);
 	}

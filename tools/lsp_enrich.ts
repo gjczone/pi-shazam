@@ -185,8 +185,19 @@ export function mapSymbolKindNumber(kind: number): string {
 
 // ── File opening helper ──────────────────────────────────────────────────────
 
+// 上限：防止 _openedFileMtimes 在长会话中无限增长（issue #368）。
+const MAX_OPENED_MTIMES = 500;
+
 // Track file modification times for opened files to detect edits.
 const _openedFileMtimes = new Map<string, number>();
+
+/** 若超过上限则驱逐最早条目（Map 迭代顺序 = 插入顺序，最早 = 最先插入）。 */
+function _evictOldestMtime(): void {
+	if (_openedFileMtimes.size > MAX_OPENED_MTIMES) {
+		const oldest = _openedFileMtimes.keys().next().value;
+		if (oldest !== undefined) _openedFileMtimes.delete(oldest);
+	}
+}
 
 /**
  * Ensure a file is opened in its LSP server (best-effort, swallow errors).
@@ -210,6 +221,7 @@ export async function ensureFileOpened(
 			// Track the mtime after opening
 			const fileStat = await stat(absPath);
 			_openedFileMtimes.set(filePath, fileStat.mtimeMs);
+			_evictOldestMtime();
 			return { client: info.client, workspaceRoot: info.workspaceRoot, justOpened: true };
 		} else {
 			// File already opened — check if mtime changed
@@ -220,6 +232,7 @@ export async function ensureFileOpened(
 				const content = await readFileAdaptiveAsync(absPath);
 				await info.client.didChange(filePath, content);
 				_openedFileMtimes.set(filePath, currentMtime);
+				_evictOldestMtime();
 			}
 		}
 	} catch {

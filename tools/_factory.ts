@@ -22,6 +22,23 @@ import { Type, type TProperties, type TObject } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { truncateOutput } from "../core/output.js";
+import { resolve } from "node:path";
+
+// ── Path traversal guard ────────────────────────────────────────────────────
+
+/**
+ * 校验给定路径是否在项目根目录内，防止路径穿越攻击。
+ * 先 resolve 为绝对路径，再检测是否以 projectRoot + "/" 开头或等于 projectRoot。
+ * 不在项目范围内的路径返回 false。
+ */
+export function validatePathInProject(
+	rawPath: string,
+	projectRoot: string = process.cwd(),
+): boolean {
+	const resolved = resolve(projectRoot, rawPath);
+	const rootResolved = resolve(projectRoot);
+	return resolved.startsWith(rootResolved + "/") || resolved === rootResolved;
+}
 
 // ── Envelope helper ────────────────────────────────────────────────────────
 

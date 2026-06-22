@@ -98,10 +98,14 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 
 	// Resolve relative paths
 	const absPath = filePath.startsWith("/") ? filePath : join(ctx.cwd, filePath);
+	const projectRoot = ctx.cwd;
+
+	// 路径穿越守卫：确保格式化操作不会越出项目根目录
+	if (!absPath.startsWith(projectRoot + "/") && absPath !== projectRoot) return false;
+
 	if (!existsSync(absPath)) return false;
 
 	const ext = extname(absPath).toLowerCase();
-	const projectRoot = ctx.cwd;
 
 	try {
 		// Python: ruff format
