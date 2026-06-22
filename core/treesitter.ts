@@ -356,6 +356,12 @@ export class TreeSitterAdapter {
 				});
 
 				for (const [defNode, defCap] of matchingDefs) {
+					// 跳过函数体内的局部变量声明（非文件顶层）。
+					// 例如 `scanFull()` 内的 `const graph = createRepoGraph()`，
+					// 因为 `createRepoGraph` 匹配到了 `create*` 模式，
+					// 但 `graph` 是局部变量，不应被提取为项目级符号。
+					if (this._isInsideFunction(defNode)) break;
+
 					const kind = defCap.includes(".") ? defCap.split(".").pop()! : defCap;
 					let vis: Symbol["visibility"] = this._isExported(defNode) ? "exported" : "public";
 					const name = nameNode.text;
@@ -485,6 +491,43 @@ export class TreeSitterAdapter {
 			.sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]) || a[2].localeCompare(b[2]));
 	}
 
+	// ── Reference extraction ──────────────────────────────────────────────────
+
+	/**
+	 * 提取函数调用参数位置和 return 语句中的标识符引用。
+	 *
+	 * 用于发现同一文件内的回调/事件处理器引用
+	 *（例如 `arr.map(edgeIdentity)` 或 `process.on("SIGTERM", onSignal)`），
+	 * 这些引用不会出现在 call 提取结果中（因为被引用者不是被调用者），
+	 * 但它们是有效的符号使用，不应被判定为 orphan。
+	 */
+	extractRefs(tree: Tree, lang: string): [string, number][] {
+		const langQueries = this.queries.get(lang);
+		const query = langQueries?.get("ref");
+		if (!query) return [];
+
+		const results = new Map<string, number>();
+
+		for (const { name: capName, node } of query.captures(tree.rootNode)) {
+			if (capName !== "name") continue;
+			const name = node.text;
+			if (!name) continue;
+
+			const line = node.startPosition.row + 1;
+			const key = `${name}::${line}`;
+			if (!results.has(key)) {
+				results.set(key, line);
+			}
+		}
+
+		return [...results.entries()]
+			.map(([k, line]) => {
+				const idx = k.lastIndexOf("::");
+				return [k.slice(0, idx), line] as [string, number];
+			})
+			.sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]));
+	}
+
 	// ── JS/TS import/export binding extraction ─────────────────────────────────
 
 	extractJsTsImportBindings(tree: Tree, lang: string): JSImportBinding[] {
@@ -607,6 +650,33 @@ export class TreeSitterAdapter {
 			inner.endPosition.row < outer.endPosition.row ||
 			(inner.endPosition.row === outer.endPosition.row && inner.endPosition.column <= outer.endPosition.column);
 		return startOk && endOk;
+	}
+
+	// 检查节点的祖先链中是否存在函数/方法/箭头函数节点，
+	// 用于排除函数体内的局部变量声明（非文件顶层符号）。
+	private _isInsideFunction(node: SyntaxNode): boolean {
+		const FUNCTION_TYPES = new Set([
+			"function_declaration",
+			"function_definition",
+			"function_item",
+			"function_expression",
+			"arrow_function",
+			"method_definition",
+			"method_declaration",
+			"function_signature",
+			"method_signature",
+			"constructor_signature",
+			"constructor_declaration",
+			"local_function_statement",
+			"method",
+			"function_signature_item",
+		]);
+		let ancestor: SyntaxNode | null = node.parent;
+		while (ancestor) {
+			if (FUNCTION_TYPES.has(ancestor.type)) return true;
+			ancestor = ancestor.parent;
+		}
+		return false;
 	}
 
 	private _callRefKind(node: SyntaxNode): string {

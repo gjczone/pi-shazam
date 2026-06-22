@@ -11,6 +11,7 @@ export interface QueryDict {
 		class?: string;
 		import?: string;
 		call?: string;
+		ref?: string;
 	};
 }
 
@@ -56,6 +57,10 @@ export const QUERIES: QueryDict = {
 (call_expression function: (identifier) @name) @reference.call
 (call_expression function: (member_expression property: (property_identifier) @name)) @reference.call
 `,
+		ref: `\
+	(call_expression arguments: (arguments (identifier) @name))
+	(return_statement (identifier) @name)
+	`,
 	},
 	typescript: {
 		function: `\
@@ -79,6 +84,10 @@ export const QUERIES: QueryDict = {
 (call_expression function: (identifier) @name) @reference.call
 (call_expression function: (member_expression property: (property_identifier) @name)) @reference.call
 `,
+		ref: `\
+	(call_expression arguments: (arguments (identifier) @name))
+	(return_statement (identifier) @name)
+	`,
 	},
 	go: {
 		function: `\
