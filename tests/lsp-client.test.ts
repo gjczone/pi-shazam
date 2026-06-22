@@ -661,7 +661,7 @@ describe("LspClient didClose and collectDiagnostics", () => {
 		// Consume fileA — remaining should be [B, C] in original order
 		client.collectDiagnostics(["/test/fileA.ts"]);
 
-		const remaining = (client as any)._notifications as typeof notifA[];
+		const remaining = (client as any)._notifications as (typeof notifA)[];
 		// Bug: remaining.push() in reverse iteration reverses the order,
 		// so remaining would be [C, B] instead of [B, C].
 		expect(remaining).toHaveLength(2);
@@ -669,4 +669,3 @@ describe("LspClient didClose and collectDiagnostics", () => {
 		expect(remaining[1]).toBe(notifC);
 	});
 });
-

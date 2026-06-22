@@ -559,5 +559,3 @@ function runFormatterCommand(args: string[], cwd: string): void {
 		// Formatter may fail on individual files — non-fatal
 	}
 }
-
-

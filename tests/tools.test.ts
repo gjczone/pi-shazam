@@ -198,7 +198,7 @@ describe("Tool: hotspots", () => {
 	it("should NOT rank config/generated files like package-lock.json in top results", async () => {
 		const { _computeHotspots } = await import("../tools/overview.js");
 		const result = _computeHotspots(getGraph(), 20);
-			expect(result).not.toContainEqual(expect.objectContaining({ file: expect.stringMatching(/package-lock\.json/) }));
+		expect(result).not.toContainEqual(expect.objectContaining({ file: expect.stringMatching(/package-lock\.json/) }));
 	});
 });
 
@@ -295,7 +295,6 @@ describe("Tool: verify", () => {
 		expect(result).not.toMatch(/LSP diagnostics.*pyright.*tsc.*rust-analyzer.*gopls/);
 	});
 });
-
 
 describe("Tool: verify — N+1 sequential lspCodeActions (issue #370)", () => {
 	it("should use Promise.all for parallel lspCodeActions, not serial for-await", async () => {

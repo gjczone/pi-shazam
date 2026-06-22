@@ -633,4 +633,3 @@ export function _computeHotspots(
 
 	return hotspots.sort((a, b) => b.hotspotScore - a.hotspotScore).slice(0, topN);
 }
-
