@@ -59,6 +59,7 @@ function countSourceFilesUpTo(root: string, limit: number): number {
 		try {
 			entries = readdirSync(dir, { withFileTypes: true });
 		} catch {
+			console.warn(`[pi-shazam] countSourceFilesUpTo: permission denied or unreadable directory: ${dir}`);
 			return; // permission denied or unreadable directory
 		}
 		for (const entry of entries) {

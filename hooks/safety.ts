@@ -180,7 +180,11 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 		const isGitCommit = argv[0] === "git" && argv.length >= 2 && argv[1] === "commit";
 		if (isGitCommit) {
 			// Skip if --no-verify or -n flag is present
-			if (argv.includes("--no-verify") || argv.includes("-n")) {
+			// Use argv.some to handle combined short flags like -nq, -qn
+			const hasNoVerify = argv.includes("--no-verify") || argv.some(
+				(a) => a.startsWith("-") && !a.startsWith("--") && a.includes("n"),
+			);
+			if (hasNoVerify) {
 				return;
 			}
 

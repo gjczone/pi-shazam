@@ -207,10 +207,20 @@ function isExecutable(filePath: string): boolean {
 	}
 }
 
+const SAFE_PATH_DIRS = new Set([
+	"/usr/local/bin",
+	"/usr/bin",
+	"/bin",
+	"/usr/local/sbin",
+	"/usr/sbin",
+	"/sbin",
+]);
+
 function findInPath(command: string): string | null {
 	const pathEnv = process.env.PATH ?? "";
 	const dirs = pathEnv.split(delimiter);
 	for (const dir of dirs) {
+		if (!SAFE_PATH_DIRS.has(dir)) continue; // only search trusted directories
 		const candidate = join(dir, command);
 		if (isExecutable(candidate)) return candidate;
 	}
@@ -413,6 +423,8 @@ export class LspManager {
 			// Remove dead client so re-detection can happen
 			if (existing) {
 				this.servers.delete(language);
+				// Close the old client to release resources
+				await existing.client.close().catch(() => {});
 			}
 
 			// Detect and spawn

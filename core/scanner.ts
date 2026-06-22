@@ -847,6 +847,7 @@ function _walkDirectory(
 				}
 				// Fall through: file symlink -> treat as regular file below
 			} catch {
+				console.warn(`[pi-shazam] _walkDirectory: broken symlink: ${relPath}`);
 				continue; // broken symlink, skip
 			}
 		} else if (entry.isFile()) {

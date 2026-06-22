@@ -353,6 +353,7 @@ async function _getHoverInfo(symbol: Symbol): Promise<HoverInfo> {
 				}
 			}
 		} catch {
+			console.warn("[pi-shazam] _getHoverInfo: LSP hover failed");
 			// LSP hover failed — fall back to tree-sitter docstring
 		}
 	}
@@ -389,6 +390,7 @@ function _extractDocstring(filePath: string, symbolLine: number): string | undef
 
 		return _extractDocstringTextFallback(content, symbolLine);
 	} catch {
+		console.warn("[pi-shazam] _extractDocstring: docstring extraction failed");
 		return undefined;
 	}
 }
@@ -514,6 +516,7 @@ async function _getTypeHierarchy(
 					await client.didOpen(symbol.file, fileContent);
 				}
 			} catch {
+				console.warn("[pi-shazam] _getTypeHierarchy: file open failed");
 				// File open failed — skip LSP hierarchy
 			}
 
@@ -525,6 +528,7 @@ async function _getTypeHierarchy(
 					position,
 				});
 			} catch {
+				console.warn("[pi-shazam] _getTypeHierarchy: prepareTypeHierarchy not supported");
 				// prepareTypeHierarchy not supported by server
 			}
 
@@ -549,6 +553,7 @@ async function _getTypeHierarchy(
 							}
 						}
 					} catch {
+						console.warn("[pi-shazam] _getTypeHierarchy: supertypes request failed");
 						// supertypes request failed — fall through
 					}
 				}
@@ -571,6 +576,7 @@ async function _getTypeHierarchy(
 							}
 						}
 					} catch {
+						console.warn("[pi-shazam] _getTypeHierarchy: subtypes request failed");
 						// subtypes request failed — fall through
 					}
 				}
@@ -592,6 +598,7 @@ async function _getTypeHierarchy(
 						}
 					}
 				} catch {
+					console.warn("[pi-shazam] _getTypeHierarchy: implementation lookup failed");
 					// implementation lookup failed — silent
 				}
 			}
@@ -677,6 +684,7 @@ async function _executeFileDetailAsync(
 			}
 			_removeFromDetailCache(cacheKey);
 		} catch {
+			console.warn("[pi-shazam] _executeFileDetailAsync: stat failed for cache entry");
 			return cached.text;
 		}
 	}
@@ -723,6 +731,7 @@ async function _executeFileDetailAsync(
 	try {
 		mtimeMs = statSync(file).mtimeMs;
 	} catch {
+		console.warn(`[pi-shazam] _executeFileDetailAsync: stat failed for ${file}`);
 		// File may not exist
 	}
 	if (fileDetailCache.size >= MAX_DETAIL_CACHE_SIZE) {

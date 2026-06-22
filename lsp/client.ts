@@ -790,6 +790,7 @@ export class LspClient {
 					try {
 						onCancel();
 					} catch {
+						console.warn("[pi-shazam] withTimeout: onCancel callback failed");
 						// ignore cancel errors
 					}
 				}
@@ -819,8 +820,12 @@ export class LspClient {
 			return Promise.reject(new Error("LSP connection not available"));
 		}
 		const cts = new rpc.CancellationTokenSource();
-		const promise = this.connection.sendRequest<R>(method, params, cts.token);
-		return this.withTimeout(promise, timeoutMs, () => cts.cancel()).finally(() => cts.dispose());
+		try {
+			const promise = this.connection.sendRequest<R>(method, params, cts.token);
+			return this.withTimeout(promise, timeoutMs, () => cts.cancel());
+		} finally {
+			cts.dispose();
+		}
 	}
 
 	/**
@@ -898,6 +903,7 @@ export class LspClient {
 			try {
 				this.connection.dispose();
 			} catch {
+				console.warn("[pi-shazam] _cleanupAfterCrash: connection.dispose failed on crash");
 				// ignore dispose errors on crash
 			}
 		}
@@ -907,6 +913,7 @@ export class LspClient {
 		this.process = null;
 		this._openedFiles.clear();
 		this._notifications = [];
+		this._docVersions.clear();
 		this._serverCapabilities = {};
 		this._initialized = false;
 	}
@@ -955,6 +962,9 @@ export class LspClient {
 			// 2. Remove our event listeners before kill to prevent crash handler
 			//    from firing during intentional close.
 			if (proc) {
+				// Check exitCode before removing listeners to avoid race:
+				// if process exits between removeAllListeners and exitCode check,
+				// the fallback SIGKILL may fire unnecessarily.
 				proc.removeAllListeners("exit");
 				proc.removeAllListeners("error");
 				try {
@@ -962,13 +972,18 @@ export class LspClient {
 						proc.stderr.removeAllListeners("data");
 					}
 				} catch {
+					console.warn("[pi-shazam] _doClose: proc.stderr.removeAllListeners failed");
 					// stderr may not be an EventEmitter (e.g., in tests).
 				}
 			}
 
 			// 3. Kill the process if it hasn't exited after the shutdown handshake.
 			if (proc && proc.exitCode === null) {
-				proc.kill();
+				try {
+					proc.kill();
+				} catch {
+					// Process may have already exited — ignore
+				}
 			}
 
 			// 4. Wait for process exit with fallback SIGKILL if it refuses to exit.
@@ -978,7 +993,7 @@ export class LspClient {
 						try {
 							proc.kill("SIGKILL");
 						} catch {
-							/* ignore */
+							console.warn("[pi-shazam] _doClose: proc.kill(SIGKILL) failed");
 						}
 						resolve();
 					}, 2000);
@@ -1001,6 +1016,7 @@ export class LspClient {
 			this.process = null;
 			this._openedFiles.clear();
 			this._notifications = [];
+			this._docVersions.clear();
 			this._serverCapabilities = {};
 			this._initialized = false;
 			this._closePromise = null;

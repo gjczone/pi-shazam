@@ -34,8 +34,6 @@ import { lspCodeActions } from "./lsp_enrich.js";
 import { createTool } from "./_factory.js";
 import { uriToPath } from "../lsp/client.js";
 
-/** Time in ms to wait for LSP servers to publish diagnostics after didOpen. */
-const LSP_DIAGNOSTIC_SETTLE_MS = 500;
 
 export function registerVerify(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -440,11 +438,20 @@ async function runLspDiagnostics(
 		}
 	}
 
-	// Wait for LSP servers to process files and publish diagnostics.
-	// Servers push diagnostics asynchronously after parsing — calling
-	// collectDiagnostics immediately returns empty/stale results.
+	// Poll for diagnostics with retries instead of fixed wait.
+	// Some LSP servers need more time to publish diagnostics for large files.
+	const MAX_POLL_ATTEMPTS = 5;
+	const POLL_INTERVAL_MS = 200;
+	const lspManagerForPolling = lspManager; // capture reference
 	if (serversUsed.size > 0) {
-		await new Promise((r) => setTimeout(r, LSP_DIAGNOSTIC_SETTLE_MS));
+		for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+			await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+			// Check if any server has published diagnostics
+			const hasDiagnostics = lspManagerForPolling.getActiveServers().some(
+				(srv) => srv.client.collectDiagnostics(targetFiles, false).length > 0,
+			);
+			if (hasDiagnostics) break;
+		}
 	}
 
 	// Collect diagnostics from all active LSP servers. Each server's

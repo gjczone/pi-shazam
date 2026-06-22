@@ -85,6 +85,35 @@ describe("hooks/safety pre-commit gate", () => {
 		expect(result).toBeUndefined();
 	});
 
+	it("should allow git commit with combined short flag -nq (fix #376 F2)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+
+		const ctx = buildCtx();
+		const result = await handler.current!(buildBashEvent("git commit -nq -m skip"), ctx);
+		expect(result).toBeUndefined();
+	});
+
+	it("should allow git commit with combined short flag -qn (fix #376 F2)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+
+		const ctx = buildCtx();
+		const result = await handler.current!(buildBashEvent("git commit -qn -m skip"), ctx);
+		expect(result).toBeUndefined();
+	});
+
+	it("should block git commit when combined flags don't contain 'n' (fix #376 F2)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+
+		const ctx = buildCtx();
+		// -qm does NOT contain 'n', so should be blocked
+		const result = await handler.current!(buildBashEvent("git commit -qm 'msg'"), ctx);
+		expect(result).toBeDefined();
+		expect((result as any)?.block).toBe(true);
+	});
+
 	it("should ignore non-bash tool calls", async () => {
 		const { pi, handler } = buildFakePi();
 		registerSafetyHooks(pi);

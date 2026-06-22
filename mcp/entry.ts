@@ -9,7 +9,7 @@
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanProject } from "../core/scanner.js";
@@ -18,7 +18,19 @@ import { LspManager, detectProjectLanguages } from "../lsp/manager.js";
 import { setLspManager } from "../tools/_context.js";
 import { registerAllTools } from "./tools.js";
 
-const PROJECT_ROOT = process.argv[2] || ".";
+const PROJECT_ROOT = resolve(process.argv[2] || ".");
+// Validate PROJECT_ROOT is within allowed directories
+try {
+	const realRoot = realpathSync(PROJECT_ROOT);
+	const homeDir = process.env.HOME || "/home";
+	if (!realRoot.startsWith(homeDir) && realRoot !== "/") {
+		console.error("[pi-shazam mcp] PROJECT_ROOT must be within user home directory");
+		process.exit(1);
+	}
+} catch {
+	console.error("[pi-shazam mcp] Invalid PROJECT_ROOT path");
+	process.exit(1);
+}
 
 // Read version from package.json to keep it in sync automatically
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -28,6 +40,7 @@ try {
 	const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
 	VERSION = pkg.version || VERSION;
 } catch {
+	console.warn("[pi-shazam mcp] failed to read package.json version");
 	// Fallback — version will be inaccurate but MCP will still work
 }
 
@@ -71,6 +84,7 @@ async function main(): Promise<void> {
 		try {
 			await lspManager.shutdown();
 		} catch {
+			console.warn("[pi-shazam mcp] shutdown: lspManager.shutdown failed");
 			/* best effort */
 		}
 	};

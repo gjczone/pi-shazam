@@ -52,7 +52,7 @@ async function logMCP(entry: Record<string, unknown>): Promise<void> {
 				"utf-8",
 			);
 		} catch {
-			/* silent */
+			console.warn("[pi-shazam mcp] logMCP: audit log write failed");
 		}
 	});
 }

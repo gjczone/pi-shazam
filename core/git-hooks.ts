@@ -12,7 +12,7 @@
 
 import { writeFileSync, chmodSync, existsSync, readFileSync, unlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 /**
  * Pre-commit hook script content.
@@ -162,17 +162,18 @@ exit 0
  */
 export function getGitHooksDir(projectRoot: string): string {
 	try {
-		const hooksPath = execSync("git rev-parse --git-path hooks", {
+		const hooksPath = execFileSync("git", ["rev-parse", "--git-path", "hooks"], {
 			cwd: projectRoot,
 			encoding: "utf-8",
 			timeout: 5000,
-		}).trim();
+		}).toString().trim();
 		// If the path is relative, resolve against project root
 		if (hooksPath.startsWith("/")) {
 			return hooksPath;
 		}
 		return resolve(projectRoot, hooksPath);
 	} catch {
+		console.warn("[pi-shazam] getGitHooksDir: git rev-parse failed, falling back to .git/hooks");
 		// Fallback to .git/hooks for non-git directories
 		const gitDir = resolve(projectRoot, ".git");
 		return join(gitDir, "hooks");
@@ -290,11 +291,11 @@ export function removePreCommitHook(projectRoot: string): boolean {
 export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FAIL" | "WARN"; message: string } {
 	try {
 		// Check for uncommitted changes
-		const changedOutput = execSync("git diff --cached --name-only --diff-filter=ACMR 2>/dev/null", {
+		const changedOutput = execFileSync("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMR"], {
 			cwd: projectRoot,
 			encoding: "utf-8",
 			timeout: 5000,
-		}).trim();
+		}).toString().trim();
 
 		if (!changedOutput) {
 			return { verdict: "PASS", message: "No staged changes to verify." };
@@ -306,7 +307,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 		// ── TypeScript/JavaScript ──────────────────────────────────────────
 		if (existsSync(join(projectRoot, "tsconfig.json"))) {
 			try {
-				execSync("npx --no-install tsc --noEmit", {
+				execFileSync("npx", ["--no-install", "tsc", "--noEmit"], {
 					cwd: projectRoot,
 					encoding: "utf-8",
 					timeout: 60000,
@@ -321,7 +322,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 		// ── Rust ───────────────────────────────────────────────────────────
 		if (existsSync(join(projectRoot, "Cargo.toml"))) {
 			try {
-				execSync("cargo check", {
+				execFileSync("cargo", ["check"], {
 					cwd: projectRoot,
 					encoding: "utf-8",
 					timeout: 120000,
@@ -336,7 +337,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 		// ── Go ─────────────────────────────────────────────────────────────
 		if (existsSync(join(projectRoot, "go.mod"))) {
 			try {
-				execSync("go vet ./...", {
+				execFileSync("go", ["vet", "./..."], {
 					cwd: projectRoot,
 					encoding: "utf-8",
 					timeout: 60000,
@@ -353,7 +354,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 			// Try pyright first, then mypy
 			let pyrightAvailable = false;
 			try {
-				execSync("pyright .", {
+				execFileSync("pyright", ["."], {
 					cwd: projectRoot,
 					encoding: "utf-8",
 					timeout: 60000,
@@ -374,7 +375,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 
 			if (!pyrightAvailable) {
 				try {
-					execSync("mypy .", {
+					execFileSync("mypy", ["."], {
 						cwd: projectRoot,
 						encoding: "utf-8",
 						timeout: 60000,

@@ -266,6 +266,7 @@ function parseEditorconfig(projectRoot: string): { style?: string; size?: number
 
 		return { style, size };
 	} catch {
+		console.warn("[pi-shazam] parseEditorconfig: failed to parse .editorconfig");
 		return null;
 	}
 }
@@ -305,6 +306,7 @@ function detectIndentationStyle(files: string[], projectRoot: string): "tabs" | 
 			if (tabCount > spaceCount) tabFiles++;
 			else if (spaceCount > tabCount) spaceFiles++;
 		} catch {
+			console.warn("[pi-shazam] detectIndentationStyle: failed to read file");
 			// Skip unreadable files
 		}
 	}
@@ -327,6 +329,7 @@ function hasUseTabsInConfig(projectRoot: string): boolean {
 					return content.includes('"useTabs": true') || content.includes("'useTabs': true");
 				}
 			} catch {
+				console.warn("[pi-shazam] hasUseTabsInConfig: failed to read config file");
 				// Skip unreadable configs
 			}
 		}
@@ -340,6 +343,7 @@ function hasUseTabsInConfig(projectRoot: string): boolean {
 			if (pkg.prettier?.useTabs === true) return true;
 		}
 	} catch {
+		console.warn("[pi-shazam] hasUseTabsInConfig: failed to read package.json");
 		// Skip
 	}
 
@@ -429,6 +433,7 @@ function scanFormatIssues(projectRoot: string, files: string[], _graph: RepoGrap
 				}
 			}
 		} catch {
+			console.warn("[pi-shazam] scanFormatIssues: failed to read file");
 			// Skip files that can't be read
 		}
 	}
@@ -556,6 +561,7 @@ function runFormatterCommand(args: string[], cwd: string): void {
 	try {
 		execFileSync(cmd, cmdArgs, { cwd, stdio: "pipe", timeout: 30000 });
 	} catch {
+		console.warn("[pi-shazam] runFormatterCommand: formatter may fail on individual files — non-fatal");
 		// Formatter may fail on individual files — non-fatal
 	}
 }

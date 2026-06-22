@@ -89,18 +89,9 @@ export interface EnrichedSymbolHit {
 function withEnrichTimeout<T>(
 	promise: Promise<T | null | undefined>,
 	ms: number = DEFAULT_LSP_ENRICH_TIMEOUT_MS,
-	cts?: { cancel(): void },
 ): Promise<T | null> {
 	return new Promise<T | null>((resolve) => {
 		const timer = setTimeout(() => {
-			// Cancel the CTS so the server stops work
-			if (cts) {
-				try {
-					cts.cancel();
-				} catch {
-					/* ignore */
-				}
-			}
 			// Silence the original promise to prevent unhandled rejections
 			// if it resolves/rejects after timeout.
 			void promise.catch(() => {});

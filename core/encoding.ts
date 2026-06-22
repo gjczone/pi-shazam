@@ -64,6 +64,7 @@ export function readFileAdaptive(filePath: string): string {
 		if (err instanceof FileTooLargeError) {
 			throw err; // re-throw our size error
 		}
+		console.warn(`[pi-shazam] readFileAdaptive: stat failed for ${filePath}: ${err}`);
 		// stat failed (permission, missing) — fall through to readFileSync which will error with a clearer message
 	}
 	const buffer = readFileSync(filePath);
@@ -111,6 +112,7 @@ export async function readFileAdaptiveAsync(filePath: string): Promise<string> {
 		if (err instanceof FileTooLargeError) {
 			throw err;
 		}
+		console.warn(`[pi-shazam] readFileAdaptiveAsync: stat failed for ${filePath}: ${err}`);
 		// stat failed — fall through to readFile which will error with a clearer message
 	}
 	const buffer = await readFileAsync(filePath);
@@ -238,6 +240,7 @@ function tryDecode(buffer: Buffer, encoding: string): string | null {
 		if (replacementCount / str.length > 0.05) return null;
 		return str;
 	} catch {
+		console.warn("[pi-shazam] tryDecode: encoding decode failed");
 		return null;
 	}
 }

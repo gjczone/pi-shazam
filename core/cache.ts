@@ -48,7 +48,7 @@ function atomicRename(tmpPath: string, targetPath: string): void {
 			try {
 				unlinkSync(targetPath);
 			} catch {
-				/* target may not exist */
+				console.warn("[pi-shazam] atomicRename: unlinkSync target failed (may not exist)");
 			}
 			renameSync(tmpPath, targetPath);
 		} else {
@@ -73,7 +73,7 @@ export function saveGraphCache(graph: RepoGraph, fileMtimes: Map<string, number>
 		try {
 			unlinkSync(tmpPath);
 		} catch {
-			/* ignore cleanup error */
+			console.warn("[pi-shazam] saveGraphCache: failed to clean up tmp file");
 		}
 		throw err;
 	}

@@ -23,6 +23,7 @@ import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { truncateOutput } from "../core/output.js";
 import { resolve } from "node:path";
+import { realpathSync } from "node:fs";
 
 // ── Path traversal guard ────────────────────────────────────────────────────
 
@@ -34,7 +35,16 @@ import { resolve } from "node:path";
 export function validatePathInProject(rawPath: string, projectRoot: string = process.cwd()): boolean {
 	const resolved = resolve(projectRoot, rawPath);
 	const rootResolved = resolve(projectRoot);
-	return resolved.startsWith(rootResolved + "/") || resolved === rootResolved;
+	const pathOk = resolved.startsWith(rootResolved + "/") || resolved === rootResolved;
+	if (!pathOk) return false;
+	// Verify resolved real path is also within project root (prevents symlink escape)
+	try {
+		const realResolved = realpathSync(resolved);
+		const realRoot = realpathSync(rootResolved);
+		return realResolved.startsWith(realRoot + "/") || realResolved === realRoot;
+	} catch {
+		return false;
+	}
 }
 
 // ── Envelope helper ────────────────────────────────────────────────────────

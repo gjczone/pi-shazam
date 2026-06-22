@@ -51,6 +51,7 @@ export function detectFormatters(projectRoot: string): string[] {
 		if (pkg.prettier) formatters.push("prettier");
 		if (pkg.eslintConfig) formatters.push("eslint");
 	} catch {
+		console.warn("[pi-shazam] detectFormatters: package.json not found or invalid");
 		// package.json not found or invalid — continue
 	}
 
@@ -67,7 +68,7 @@ export function detectFormatters(projectRoot: string): string[] {
 			const pyproject = readFileSync(join(projectRoot, "pyproject.toml"), "utf-8");
 			if (pyproject.includes("[tool.ruff")) formatters.push("ruff");
 		} catch {
-			/* ignore */
+			console.warn("[pi-shazam] detectFormatters: pyproject.toml parse failed");
 		}
 	}
 
@@ -81,7 +82,7 @@ export function detectFormatters(projectRoot: string): string[] {
 			const cargo = readFileSync(join(projectRoot, "Cargo.toml"), "utf-8");
 			if (cargo.includes("[package]")) formatters.push("rustfmt");
 		} catch {
-			/* ignore */
+			console.warn("[pi-shazam] detectFormatters: Cargo.toml parse failed");
 		}
 	}
 
