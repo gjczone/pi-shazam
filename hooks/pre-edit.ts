@@ -13,6 +13,74 @@ import { resolve } from "node:path";
 import { isTrackableEditedPath } from "../core/filter.js";
 import { hasPendingImpact } from "./impact-state.js";
 
+/**
+ * Filenames that represent project-wide configuration files.
+ * Editing any of these can affect the entire project even when only
+ * a single file is touched, so they trigger an impact warning regardless
+ * of edit count.
+ */
+const GLOBAL_CONFIG_FILENAMES = new Set([
+	"package.json",
+	"tsconfig.json",
+	"tsconfig.base.json",
+	"tsconfig.build.json",
+	"jsconfig.json",
+	"Cargo.toml",
+	"Cargo.lock",
+	"pyproject.toml",
+	"setup.py",
+	"setup.cfg",
+	"go.mod",
+	"go.sum",
+	"Makefile",
+	"CMakeLists.txt",
+	"Dockerfile",
+	"docker-compose.yml",
+	"docker-compose.yaml",
+	".env",
+	".env.example",
+	".env.local",
+	"vite.config.ts",
+	"vite.config.js",
+	"webpack.config.js",
+	"rollup.config.js",
+	"eslint.config.js",
+	"eslint.config.mjs",
+	"pnpm-workspace.yaml",
+	"lerna.json",
+	"nx.json",
+	"turbo.json",
+	"renovate.json",
+	".github/dependabot.yml",
+	"ci.yml",
+]);
+
+/**
+ * Track warned file groups to prevent repeated impact notifications
+ * for the same set of files within a session.
+ * Map<sorted-key, timestampMs>. TTL auto-evicts after 5 minutes.
+ */
+const _warnedFileGroups = new Map<string, number>();
+const WARN_GROUP_TTL_MS = 5 * 60 * 1000;
+
+function _pruneWarnedGroups(): void {
+	const cutoff = Date.now() - WARN_GROUP_TTL_MS;
+	for (const [key, ts] of _warnedFileGroups) {
+		if (ts < cutoff) _warnedFileGroups.delete(key);
+	}
+}
+
+function _wasGroupWarned(files: string[]): boolean {
+	_pruneWarnedGroups();
+	const key = [...files].sort().join(",");
+	return _warnedFileGroups.has(key);
+}
+
+function _markGroupWarned(files: string[]): void {
+	const key = [...files].sort().join(",");
+	_warnedFileGroups.set(key, Date.now());
+}
+
 /** Maximum number of edited files tracked in the set. */
 const MAX_EDITED_FILES = 100;
 
@@ -79,6 +147,7 @@ export function clearEditedFiles(): void {
 	_editedFiles.clear();
 	_editCounter = 0;
 	_tentativeFiles.clear();
+	_warnedFileGroups.clear();
 }
 
 /**
@@ -180,13 +249,48 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 
 		// Check conditions for suggesting impact analysis
 		const reasons: string[] = [];
+		let hasGlobalConfig = false;
 
 		// Condition 1: Multiple files edited in this session
 		if (allFiles.length >= 2) {
 			reasons.push(`This session has touched ${allFiles.length} files`);
 		}
 
-		if (reasons.length > 0) {
+		// Condition 2: At least one file is a global configuration file.
+		// Global configs affect the entire project and warrant an impact
+		// analysis even when only a single file is being edited.
+		for (const f of allFiles) {
+			const basename = f.split("/").pop() ?? "";
+			if (GLOBAL_CONFIG_FILENAMES.has(basename)) {
+				hasGlobalConfig = true;
+				reasons.push(`editing global config \`${basename}\``);
+				break;
+			}
+			// Also match well-known config sub-paths like ".github/workflows/ci.yml"
+			if (f.includes("/.github/") || f.includes("/.config/")) {
+				const relName = f.split("/").slice(-2).join("/");
+				if (GLOBAL_CONFIG_FILENAMES.has(relName)) {
+					hasGlobalConfig = true;
+					reasons.push(`editing global config \`${relName}\``);
+					break;
+				}
+			}
+		}
+
+		// Condition 3: Current files include a global config (single-file warning)
+		if (!hasGlobalConfig) {
+			for (const f of files) {
+				const basename = f.split("/").pop() ?? "";
+				if (GLOBAL_CONFIG_FILENAMES.has(basename)) {
+					hasGlobalConfig = true;
+					reasons.push(`editing global config \`${basename}\``);
+					break;
+				}
+			}
+		}
+
+		if (reasons.length > 0 && !_wasGroupWarned(allFiles)) {
+			_markGroupWarned(allFiles);
 			ctx.ui.notify(
 				`[shazam] Caution: ${reasons.join("; ")}. Run \`shazam_impact --files ${allFiles.join(" ")}\` to assess blast radius before editing.`,
 				"warning",

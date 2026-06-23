@@ -19,6 +19,7 @@ import { existsSync } from "node:fs";
 import { readFileAdaptive } from "../core/encoding.js";
 import { join, extname } from "node:path";
 import { detectFormatters } from "../core/formatters.js";
+import { hasRecentPassingVerify } from "./verify-state.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -208,9 +209,14 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 			const filePath = extractFilePath(input);
 			const formatted = filePath ? await autoFormatFile(filePath, ctx) : false;
 
-			// If no native formatter found, suggest shazam_format
+			// If no native formatter found: check whether any formatter is configured
+			// in the project before suggesting shazam_format. If none is available,
+			// skip the suggestion entirely to avoid noise.
 			if (!formatted) {
-				ctx.ui.notify("run shazam_format to auto-format (prettier/ruff/gofmt/rustfmt)", "info");
+				const availableFormatters = detectFormatters(ctx.cwd);
+				if (availableFormatters.length > 0) {
+					ctx.ui.notify("run shazam_format to auto-format (prettier/ruff/gofmt/rustfmt)", "info");
+				}
 			}
 
 			// Check if multi-file edit was done -- suggest impact analysis
@@ -256,9 +262,12 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 	pi.on("tool_call", (event, ctx) => {
 		const name = event.toolName;
 
-		// Before impact: suggest verifying first if there are uncommitted changes
+		// Before impact: suggest verifying first if there are uncommitted changes.
+		// Skip the tip when a recent PASS verify already exists (noise reduction).
 		if (name === "shazam_impact") {
-			ctx.ui.notify("tip: run shazam_verify first to establish a baseline before assessing impact", "info");
+			if (!hasRecentPassingVerify()) {
+				ctx.ui.notify("tip: run shazam_verify first to establish a baseline before assessing impact", "info");
+			}
 			return;
 		}
 
