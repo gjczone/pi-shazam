@@ -12,16 +12,22 @@ import type { LspManager } from "../lsp/manager.js";
 let _manager: LspManager | null = null;
 let _shutdownPromise: Promise<void> | null = null;
 
-export function setLspManager(mgr: LspManager): void {
-	// Wait for previous manager shutdown to complete before overwriting.
-	// Store the shutdown promise so getLspManager callers can await it if needed.
+/**
+ * Set the LspManager reference, awaiting the previous manager's shutdown
+ * before swapping. This prevents the race where two LspManagers run
+ * concurrently (issue #397).
+ */
+export async function setLspManager(mgr: LspManager): Promise<void> {
+	// Wait for previous manager shutdown to complete before overwriting
 	const prev = _manager;
 	if (prev) {
-		_shutdownPromise = prev.shutdown().catch((err) => {
+		try {
+			await prev.shutdown();
+		} catch (err) {
 			console.warn(
 				`[pi-shazam] Previous LspManager shutdown failed: ${err instanceof Error ? err.message : String(err)}`,
 			);
-		});
+		}
 	}
 	_manager = mgr;
 }
