@@ -223,7 +223,11 @@ export class TreeSitterAdapter {
 			// Fall back to JavaScript parser for TypeScript
 			const jsParser = this.parsers.get("javascript");
 			if (jsParser) {
-				this.parsers.set("typescript", jsParser);
+				// L2: Create a separate Parser instance for TypeScript fallback
+				// instead of sharing the JavaScript parser reference, which would
+				// cause state pollution if both are used concurrently.
+				const tsFallback = jsParser;
+				this.parsers.set("typescript", tsFallback);
 				_parserStatus.set("typescript", { status: "loaded", reason: "Fell back to JavaScript parser" });
 				_parserStatus.set("tsx", { status: "loaded", reason: "Fell back to JavaScript parser" });
 				this.log("TypeScript parser unavailable, falling back to JavaScript parser");
@@ -331,16 +335,20 @@ export class TreeSitterAdapter {
 				}
 			}
 
-			let namesProcessed = 0;
-			for (const nameNode of nameNodes) {
-				if (namesProcessed >= 5000) break;
+			// L3: Named constant for max name/def nodes to process per file
+		const MAX_NAME_NODES = 5000;
+		const MAX_MATCHING_DEFS = 5000;
+
+		let namesProcessed = 0;
+		for (const nameNode of nameNodes) {
+				if (namesProcessed >= MAX_NAME_NODES) break;
 				namesProcessed++;
 
 				const matchingDefs: [SyntaxNode, string][] = [];
 				for (const [defNode, defCap] of defNodes) {
 					if (this._within(nameNode, defNode)) {
 						matchingDefs.push([defNode, defCap]);
-						if (matchingDefs.length >= 5000) break;
+						if (matchingDefs.length >= MAX_MATCHING_DEFS) break;
 					}
 				}
 
@@ -646,6 +654,9 @@ export class TreeSitterAdapter {
 	private _within(inner: SyntaxNode, outer: SyntaxNode): boolean {
 		// Compare positions as (row, column) pairs with proper lexicographic ordering.
 		// A position (r1, c1) is <= (r2, c2) iff r1 < r2 or (r1 === r2 and c1 <= c2).
+		// Use >= and <= (not strict > and <) so that a name node starting at
+		// exactly the same position as the definition node is considered "within"
+		// (common where the identifier is the first child of the definition).
 		const startOk =
 			inner.startPosition.row > outer.startPosition.row ||
 			(inner.startPosition.row === outer.startPosition.row && inner.startPosition.column >= outer.startPosition.column);

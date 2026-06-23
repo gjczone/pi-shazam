@@ -168,6 +168,7 @@ export class LspClient {
 	private _initialized = false;
 	private _initPromise: Promise<void> | null = null;
 	private _closing = false;
+	private _cleanedUp = false;
 	private _closePromise: Promise<void> | null = null;
 	private _log: (msg: string) => void;
 
@@ -993,6 +994,9 @@ export class LspClient {
 		// During intentional close(), the finally block handles cleanup.
 		// Suppress double-cleanup from the exit handler firing after kill().
 		if (this._closing) return;
+		// M3: Prevent double cleanup when both error and exit events fire.
+		if (this._cleanedUp) return;
+		this._cleanedUp = true;
 
 		const closeError = new Error("LSP process exited unexpectedly");
 

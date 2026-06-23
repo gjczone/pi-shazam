@@ -5,8 +5,9 @@
  * configured in a project. Consumed by tools/fix.ts and hooks/shazam-guide.ts.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { readFileAdaptive } from "./encoding.js";
 
 /**
  * Detect available formatters from project config files.
@@ -46,7 +47,7 @@ export function detectFormatters(projectRoot: string): string[] {
 
 	// Check package.json for embedded config
 	try {
-		const pkgRaw = readFileSync(join(projectRoot, "package.json"), "utf-8");
+		const pkgRaw = readFileAdaptive(join(projectRoot, "package.json"));
 		const pkg = JSON.parse(pkgRaw);
 		if (pkg.prettier) formatters.push("prettier");
 		if (pkg.eslintConfig) formatters.push("eslint");
@@ -65,7 +66,7 @@ export function detectFormatters(projectRoot: string): string[] {
 		formatters.push("ruff");
 	} else if (existsSync(join(projectRoot, "pyproject.toml"))) {
 		try {
-			const pyproject = readFileSync(join(projectRoot, "pyproject.toml"), "utf-8");
+			const pyproject = readFileAdaptive(join(projectRoot, "pyproject.toml"));
 			if (pyproject.includes("[tool.ruff")) formatters.push("ruff");
 		} catch {
 			console.warn("[pi-shazam] detectFormatters: pyproject.toml parse failed");
@@ -79,7 +80,7 @@ export function detectFormatters(projectRoot: string): string[] {
 		formatters.push("rustfmt");
 	} else if (existsSync(join(projectRoot, "Cargo.toml"))) {
 		try {
-			const cargo = readFileSync(join(projectRoot, "Cargo.toml"), "utf-8");
+			const cargo = readFileAdaptive(join(projectRoot, "Cargo.toml"));
 			if (cargo.includes("[package]")) formatters.push("rustfmt");
 		} catch {
 			console.warn("[pi-shazam] detectFormatters: Cargo.toml parse failed");

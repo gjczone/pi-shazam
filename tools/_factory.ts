@@ -20,7 +20,7 @@ import type {
 } from "../types/pi-extension.js";
 import { Type, type TProperties, type TObject } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
-import { scanProject } from "../core/scanner.js";
+import { scanProject, setProjectRoot as scannerSetProjectRoot } from "../core/scanner.js";
 import { truncateOutput } from "../core/output.js";
 import { resolve } from "node:path";
 import { realpathSync } from "node:fs";
@@ -136,8 +136,11 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 		async execute(_toolCallId: string, params: Record<string, unknown>): Promise<AgentToolResult> {
 			const json = (params.json as boolean) ?? false;
 			const maxTokens = params.maxTokens as number | undefined;
-			const project = process.cwd();
-			params.project = project;
+			// C3: Use scanner's effective project root (respects setProjectRoot override)
+			// instead of process.cwd() so scanner and LSP use the same root.
+			const project = resolve(".");
+			// L7: Avoid mutating caller's params object -- use spread to create a new one
+			const effectiveParams = { ...params, project };
 			const graph = scanProject(".");
 
 			let text: string;

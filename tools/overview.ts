@@ -11,7 +11,8 @@ import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool } from "./_factory.js";
 import { buildEnvelope } from "./_factory.js";
 import { EXT_TO_LANG, getProjectParserWarnings } from "../core/treesitter.js";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { readFileAdaptive } from "../core/encoding.js";
 import { safeGitExec } from "../core/git-utils.js";
 import { join } from "node:path";
 
@@ -420,7 +421,7 @@ function findRouteSymbols(graph: RepoGraph): Symbol[] {
 export function buildKeyDependenciesSection(projectRoot: string): string | null {
 	try {
 		const pkgPath = join(projectRoot, "package.json");
-		const raw = readFileSync(pkgPath, "utf-8");
+		const raw = readFileAdaptive(pkgPath);
 		const pkg = JSON.parse(raw);
 		const lines: string[] = [];
 		lines.push("### Key Dependencies");
@@ -467,7 +468,7 @@ function buildPythonDepsSection(projectRoot: string): string | null {
 	const pyprojectPath = join(projectRoot, "pyproject.toml");
 	if (existsSync(pyprojectPath)) {
 		try {
-			const content = readFileSync(pyprojectPath, "utf-8");
+			const content = readFileAdaptive(pyprojectPath);
 			const depsMatch = content.match(/\[project\.dependencies\]\s*\n([\s\S]*?)(?=\n\[|\n*$)/);
 			if (depsMatch) {
 				const deps = depsMatch[1]!.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#"));
@@ -489,7 +490,7 @@ function buildPythonDepsSection(projectRoot: string): string | null {
 	const reqPath = join(projectRoot, "requirements.txt");
 	if (existsSync(reqPath)) {
 		try {
-			const content = readFileSync(reqPath, "utf-8");
+			const content = readFileAdaptive(reqPath);
 			const deps = content.split("\n").filter((l) => l.trim() && !l.startsWith("#") && !l.startsWith("-"));
 			lines.push("| Package |");
 			lines.push("|---------|");
@@ -515,7 +516,7 @@ function buildRustDepsSection(projectRoot: string): string | null {
 	const cargoPath = join(projectRoot, "Cargo.toml");
 	if (!existsSync(cargoPath)) return null;
 	try {
-		const content = readFileSync(cargoPath, "utf-8");
+		const content = readFileAdaptive(cargoPath);
 		const depsMatch = content.match(/\[dependencies\]\s*\n([\s\S]*?)(?=\n\[|\n*$)/);
 		if (!depsMatch) return null;
 		const deps = depsMatch[1]!.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#"));
@@ -540,7 +541,7 @@ function buildGoDepsSection(projectRoot: string): string | null {
 	const goModPath = join(projectRoot, "go.mod");
 	if (!existsSync(goModPath)) return null;
 	try {
-		const content = readFileSync(goModPath, "utf-8");
+		const content = readFileAdaptive(goModPath);
 		const deps = content.split("\n").filter((l) => l.trim().startsWith("\t") && !/^\s*go\s+\d/.test(l));
 		const lines: string[] = ["### Key Go Dependencies", "", "| Module | Version |", "|--------|---------|"];
 		for (const dep of deps.slice(0, 15)) {

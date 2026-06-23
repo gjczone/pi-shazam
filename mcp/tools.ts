@@ -134,7 +134,7 @@ export function registerAllTools(
 					nameStr,
 				);
 			// Path traversal guard: reject file paths outside project root (issue #395)
-			const projectRoot = process.cwd();
+			// M9: Use configured projectRoot instead of process.cwd()
 			if (isFilePath && !validatePathInProject(nameStr, projectRoot)) {
 				return {
 					content: [{ type: "text", text: `Error: Path '${nameStr}' is outside the project root and cannot be read.` }],

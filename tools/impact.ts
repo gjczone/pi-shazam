@@ -8,8 +8,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
-import { createTool } from "./_factory.js";
-import { buildEnvelope } from "./_factory.js";
+import { createTool, buildEnvelope, validatePathInProject } from "./_factory.js";
 import { executeFindTests } from "./find_tests.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { assessRisk } from "../core/risk.js";
@@ -67,6 +66,12 @@ export function registerImpact(pi: ExtensionAPI): void {
 				return "Error: either --files (array of file paths) or --symbol (symbol name) is required";
 			}
 			const files = params.files as string[];
+			// M8: Validate user-supplied file paths against project root
+			for (const f of files) {
+				if (!validatePathInProject(f)) {
+					return `Error: File path '${f}' is outside the project root and cannot be accessed.`;
+				}
+			}
 			return json
 				? executeImpactJson(graph, files, depth)
 				: executeImpact(graph, files, {

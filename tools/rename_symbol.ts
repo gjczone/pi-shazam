@@ -7,6 +7,7 @@
  */
 import { writeFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
@@ -25,7 +26,8 @@ import { hasCallChainChecked } from "../hooks/rename-state.js";
  * Prevents partial/corrupt files if the process crashes mid-write.
  */
 function atomicWriteFile(filePath: string, content: string): void {
-	const tmpPath = join(filePath + ".tmp." + process.pid);
+	// M10: Use random UUID in temp filename to prevent symlink attacks
+	const tmpPath = join(filePath + ".tmp." + randomUUID());
 	writeFileSync(tmpPath, content, "utf-8");
 	renameSync(tmpPath, filePath);
 }

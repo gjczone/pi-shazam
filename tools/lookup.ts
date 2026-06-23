@@ -367,8 +367,8 @@ async function _getHoverInfo(symbol: Symbol): Promise<HoverInfo> {
 					}
 				}
 			}
-		} catch {
-			console.warn("[pi-shazam] _getHoverInfo: LSP hover failed");
+		} catch (err) {
+			console.warn("[pi-shazam] _getHoverInfo: LSP hover failed", err);
 			// LSP hover failed -- fall back to tree-sitter docstring
 		}
 	}
@@ -413,8 +413,8 @@ function _extractDocstring(filePath: string, symbolLine: number): string | undef
 		}
 
 		return _extractDocstringTextFallback(content, symbolLine);
-	} catch {
-		console.warn("[pi-shazam] _extractDocstring: docstring extraction failed");
+	} catch (err) {
+		console.warn("[pi-shazam] _extractDocstring: docstring extraction failed", err);
 		return undefined;
 	}
 }
@@ -539,8 +539,8 @@ async function _getTypeHierarchy(
 					const fileContent = readFileAdaptive(filePath);
 					await client.didOpen(symbol.file, fileContent);
 				}
-			} catch {
-				console.warn("[pi-shazam] _getTypeHierarchy: file open failed");
+			} catch (err) {
+				console.warn("[pi-shazam] _getTypeHierarchy: file open failed", err);
 				// File open failed -- skip LSP hierarchy
 			}
 
@@ -551,8 +551,8 @@ async function _getTypeHierarchy(
 					textDocument: { uri },
 					position,
 				});
-			} catch {
-				console.warn("[pi-shazam] _getTypeHierarchy: prepareTypeHierarchy not supported");
+			} catch (err) {
+				console.warn("[pi-shazam] _getTypeHierarchy: prepareTypeHierarchy not supported", err);
 				// prepareTypeHierarchy not supported by server
 			}
 
@@ -618,8 +618,8 @@ async function _getTypeHierarchy(
 							});
 						}
 					}
-				} catch {
-					console.warn("[pi-shazam] _getTypeHierarchy: implementation lookup failed");
+				} catch (err) {
+					console.warn("[pi-shazam] _getTypeHierarchy: implementation lookup failed", err);
 					// implementation lookup failed -- silent
 				}
 			}
@@ -708,8 +708,8 @@ async function _executeFileDetailAsync(
 				return cached.text;
 			}
 			_removeFromDetailCache(cacheKey);
-		} catch {
-			console.warn("[pi-shazam] _executeFileDetailAsync: stat failed for cache entry");
+		} catch (err) {
+			console.warn("[pi-shazam] _executeFileDetailAsync: stat failed for cache entry", err);
 			return cached.text;
 		}
 	}
@@ -755,8 +755,8 @@ async function _executeFileDetailAsync(
 	let mtimeMs = 0;
 	try {
 		mtimeMs = statSync(file).mtimeMs;
-	} catch {
-		console.warn(`[pi-shazam] _executeFileDetailAsync: stat failed for ${file}`);
+	} catch (err) {
+		console.warn(`[pi-shazam] _executeFileDetailAsync: stat failed for ${file}`, err);
 		// File may not exist
 	}
 	if (fileDetailCache.size >= MAX_DETAIL_CACHE_SIZE) {

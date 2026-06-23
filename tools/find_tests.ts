@@ -7,15 +7,16 @@
  * (test_*.rs / *_test.rs), Java (Test*.java / *Test.java), and
  * C# (Test*.cs / *Test.cs).
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join, basename, dirname } from "node:path";
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
-import { createTool } from "./_factory.js";
+import { createTool, validatePathInProject } from "./_factory.js";
 import { buildEnvelope } from "./_factory.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
+import { readFileAdaptive } from "../core/encoding.js";
 
 export function registerFindTests(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -37,6 +38,10 @@ export function registerFindTests(pi: ExtensionAPI): void {
 			const json = params.json ?? false;
 			const sourceFile = params.sourceFile as string | undefined;
 			const module = params.module as string | undefined;
+			// M8: Validate user-supplied file paths against project root
+			if (sourceFile && !validatePathInProject(sourceFile)) {
+				return `Error: Source file path '${sourceFile}' is outside the project root and cannot be accessed.`;
+			}
 			const result = executeFindTests(graph, (params.project as string) || ".", { sourceFile, module });
 			return json
 				? buildEnvelope("shazam_find_tests", (params.project as string) ?? process.cwd(), "ok", result)
@@ -175,7 +180,7 @@ function extractTests(
 ): TestFileMatch {
 	const tests: string[] = [];
 	try {
-		const content = readFileSync(join(projectRoot, file), "utf-8");
+		const content = readFileAdaptive(join(projectRoot, file));
 		const testRegex = /(?:(?:it|test|describe)\(['"`])([^'"`]+)/g;
 		let m: RegExpExecArray | null;
 		while ((m = testRegex.exec(content)) !== null) {

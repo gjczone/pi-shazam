@@ -500,8 +500,8 @@ async function runLspDiagnostics(
 							})
 							.filter(Boolean) as string[];
 					}
-				} catch {
-					console.warn(`[pi-shazam] codeAction fetch failed for ${diag.file}:${diag.line}:${diag.col}`);
+				} catch (err) {
+					console.warn(`[pi-shazam] codeAction fetch failed for ${diag.file}:${diag.line}:${diag.col}`, err);
 				}
 			}),
 		);

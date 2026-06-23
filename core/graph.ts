@@ -41,6 +41,7 @@ export interface RepoGraph {
 	fileSymbols: Map<string, string[]>;
 	fileImports: Map<string, string[]>;
 	fileCalls: Map<string, [string, number, string][]>;
+	fileRefs: Map<string, [string, number][]>;
 	fileImportBindings: Map<string, JSImportBinding[]>;
 	/** Index symbols by name for O(1) lookup in findCalleeSymbols / findSymbolByNameInFile */
 	nameIndex: Map<string, Symbol[]>;
@@ -80,6 +81,7 @@ export function createRepoGraph(): RepoGraph {
 		fileSymbols: new Map(),
 		fileImports: new Map(),
 		fileCalls: new Map(),
+		fileRefs: new Map(),
 		fileImportBindings: new Map(),
 		nameIndex: new Map(),
 		targetToSources: new Map(),
@@ -183,7 +185,8 @@ export interface SerializedGraphV2 {
 	symbols: SerializedSymbol[];
 	edges: SerializedEdge[];
 	fileSymbols: Record<string, string[]>;
-	fileImports: Record<string, string[]>;
+	fileImports: Record<string, [string, number][]>;
+	fileRefs: Record<string, [string, number][]>;
 	fileCalls: Record<string, [string, number, string][]>;
 	fileImportBindings: Record<string, JSImportBinding[]>;
 	fileMtimes: Record<string, number>;
@@ -204,11 +207,14 @@ export function serializeGraphV2(graph: RepoGraph, fileMtimes: Map<string, numbe
 	const fileSymbols: Record<string, string[]> = {};
 	for (const [k, v] of graph.fileSymbols) fileSymbols[k] = v;
 
-	const fileImports: Record<string, string[]> = {};
-	for (const [k, v] of graph.fileImports) fileImports[k] = v;
+	const fileImports: Record<string, [string, number][]> = {};
+	for (const [k, v] of graph.fileImports) fileImports[k] = v.map((m) => [m, 0]);
 
 	const fileCalls: Record<string, [string, number, string][]> = {};
 	for (const [k, v] of graph.fileCalls) fileCalls[k] = v;
+
+	const fileRefs: Record<string, [string, number][]> = {};
+	for (const [k, v] of graph.fileRefs) fileRefs[k] = v;
 
 	const fileImportBindings: Record<string, JSImportBinding[]> = {};
 	for (const [k, v] of graph.fileImportBindings) fileImportBindings[k] = v;
@@ -223,6 +229,7 @@ export function serializeGraphV2(graph: RepoGraph, fileMtimes: Map<string, numbe
 		edges,
 		fileSymbols,
 		fileImports,
+		fileRefs,
 		fileCalls,
 		fileImportBindings,
 		fileMtimes: fileMtimesObj,
@@ -259,6 +266,11 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 	}
 
 	for (const e of data.edges) {
+		// H6: Skip edges with dangling source/target (corrupted or version-mismatched cache)
+		if (!graph.symbols.has(e.source) || !graph.symbols.has(e.target)) {
+			console.warn(`[pi-shazam] deserializeGraphV2: skipping dangling edge ${e.source} -> ${e.target}`);
+			continue;
+		}
 		const edge: Edge = {
 			source: e.source,
 			target: e.target,
@@ -287,10 +299,17 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 		graph.fileSymbols.set(k, v);
 	}
 	for (const [k, v] of Object.entries(data.fileImports)) {
-		graph.fileImports.set(k, v);
+		// M4: fileImports serialized as [string, number][] to preserve line numbers
+		const imports = Array.isArray(v) && v.length > 0 && Array.isArray(v[0])
+			? (v as [string, number][]).map(([m]) => m)
+			: (v as unknown as string[]);
+		graph.fileImports.set(k, imports);
 	}
 	for (const [k, v] of Object.entries(data.fileCalls)) {
 		graph.fileCalls.set(k, v);
+	}
+	for (const [k, v] of Object.entries(data.fileRefs ?? {})) {
+		graph.fileRefs.set(k, v);
 	}
 	for (const [k, v] of Object.entries(data.fileImportBindings)) {
 		graph.fileImportBindings.set(k, v);
@@ -333,11 +352,13 @@ export interface ModifiedSymbol {
 }
 
 function edgeIdentity(edge: Edge): string {
-	return `${edge.source}::${edge.target}::${edge.kind}`;
+	// M5: Include weight and confidence in edge identity so that
+	// compareGraphSnapshots detects modified edges, not just added/removed ones.
+	return `${edge.source}::${edge.target}::${edge.kind}::${edge.weight}::${edge.confidence}`;
 }
 
 function edgeIdentityFromRow(row: SerializedEdge): string {
-	return `${row.source}::${row.target}::${row.kind}`;
+	return `${row.source}::${row.target}::${row.kind}::${row.weight}::${row.confidence ?? 1.0}`;
 }
 
 function stableKey(sym: { file: string; name: string; kind: string }): string {

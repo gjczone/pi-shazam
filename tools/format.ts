@@ -9,9 +9,9 @@ import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { createTool, validatePathInProject } from "./_factory.js";
-import { readFileAdaptiveAsync } from "../core/encoding.js";
+import { readFileAdaptive, readFileAdaptiveAsync } from "../core/encoding.js";
 import { scanProject } from "../core/scanner.js";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { readFile as readFileAsync } from "node:fs/promises";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -233,7 +233,7 @@ function parseEditorconfig(projectRoot: string): { style?: string; size?: number
 	if (!existsSync(editorconfigPath)) return null;
 
 	try {
-		const content = readFileSync(editorconfigPath, "utf-8");
+		const content = readFileAdaptive(editorconfigPath);
 		const lines = content.split("\n");
 		let inRootSection = false;
 		let style: string | undefined;
@@ -337,7 +337,7 @@ function hasUseTabsInConfig(projectRoot: string): boolean {
 		const configPath = join(projectRoot, configFile);
 		if (existsSync(configPath)) {
 			try {
-				const content = readFileSync(configPath, "utf-8");
+				const content = readFileAdaptive(configPath);
 				if (content.includes('"useTabs"') || content.includes("'useTabs'")) {
 					return content.includes('"useTabs": true') || content.includes("'useTabs': true");
 				}
@@ -352,7 +352,7 @@ function hasUseTabsInConfig(projectRoot: string): boolean {
 	try {
 		const pkgPath = join(projectRoot, "package.json");
 		if (existsSync(pkgPath)) {
-			const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+			const pkg = JSON.parse(readFileAdaptive(pkgPath));
 			if (pkg.prettier?.useTabs === true) return true;
 		}
 	} catch {

@@ -70,7 +70,7 @@ function write(entry: Record<string, unknown>): void {
 		}
 	});
 	// Prevent unhandled rejections from fire-and-forget writes
-	_writePromise.catch(() => {});
+	_writePromise.catch((err) => console.error("[pi-shazam] Unexpected audit log error:", err));
 }
 
 function isShazam(name: string): boolean {

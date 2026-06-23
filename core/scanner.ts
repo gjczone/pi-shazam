@@ -7,7 +7,7 @@
  * This is the main entry point that all tools compose from.
  */
 
-import { readdirSync, statSync, existsSync } from "node:fs";
+import { readdirSync, statSync, lstatSync, existsSync, realpathSync } from "node:fs";
 import { join, relative, resolve, dirname } from "node:path";
 import { TreeSitterAdapter, EXT_TO_LANG } from "./treesitter.js";
 import { createRepoGraph, createEdge } from "./graph.js";
@@ -29,6 +29,26 @@ const SOURCE_EXTS = new Set(Object.keys(EXT_TO_LANG));
 
 let cachedGraph: RepoGraph | null = null;
 let cachedProjectPath: string = "";
+
+// C3: Module-level project root override. When Pi detects the project in a
+// subdirectory (ctx.cwd != process.cwd()), index.ts calls setProjectRoot()
+// so the scanner uses the same root as LSP, not process.cwd().
+let _projectRootOverride: string | null = null;
+
+/**
+ * Override the project root used by scanProject(".") and getProjectGraph(".").
+ * Called from index.ts when Pi's ctx.cwd differs from process.cwd().
+ */
+export function setProjectRoot(root: string): void {
+	_projectRootOverride = resolve(root);
+}
+
+/**
+ * Get the effective project root, respecting any override set by setProjectRoot().
+ */
+function getEffectiveProjectRoot(): string {
+	return _projectRootOverride ?? process.cwd();
+}
 
 // -- Concurrency guard (issue #92) -------------------------------------------
 // While Node.js is single-threaded and scanProject() is fully synchronous,
@@ -61,6 +81,7 @@ export function resetCache(): void {
 	cachedGraph = null;
 	cachedProjectPath = "";
 	cachedFiles = new Map();
+	_projectRootOverride = null;
 }
 
 /**
@@ -283,7 +304,8 @@ function collectStringsFromNode(
 	if (node.type === "string") {
 		const text = node.text;
 		// Strip quotes: 'x', "x", '''x''', """x"""
-		const inner = text.replace(/^([fruUbB]*)(["'])/, "").replace(/["']$/, "");
+		// Handle triple-quoted strings by matching 1-3 quote characters
+		const inner = text.replace(/^([fruUbB]*)["']{1,3}/, "").replace(/["']{1,3}$/, "");
 		out.add(inner);
 		return;
 	}
@@ -385,6 +407,7 @@ function buildEdgesForFile(graph: RepoGraph, root: string, relPath: string, entr
 
 	// Ref edges -- same-file identifier references (callbacks/event handlers etc.)
 	if (entry.refs.length > 0) {
+		graph.fileRefs.set(relPath, entry.refs);
 		for (const [refName, refLine] of entry.refs) {
 			const callerSyms = findCallerSymbols(thisFileSymIds, graph.symbols, refLine);
 			const calleeSym = findSymbolByNameInFile(refName, relPath, graph);
@@ -439,6 +462,8 @@ export function scanProject(projectPath: string, log?: (msg: string) => void): R
 		return _scanProject(projectPath, log);
 	} finally {
 		exitScan();
+		// M11: Reset _scanSeenEdges in finally block so it doesn't leak across scans
+		_scanSeenEdges = null;
 	}
 }
 
@@ -549,7 +574,7 @@ function reconstructFileCache(graph: RepoGraph, fileMtimes: Map<string, number>)
 		const imports: [string, number][] = importModules.map((m) => [m, 0]);
 
 		const calls = graph.fileCalls.get(relPath) || [];
-		const refs: [string, number][] = [];
+		const refs: [string, number][] = graph.fileRefs.get(relPath) || [];
 		const jsImportBindings = graph.fileImportBindings.get(relPath) || [];
 
 		entries.set(relPath, { mtime, symbols, imports, calls, refs, jsImportBindings });
@@ -725,8 +750,8 @@ function scanIncremental(
 	// Find files that import from changed files (dependents)
 	const dependentFiles = new Set<string>();
 	for (const relPath of changedFiles) {
-		// Remove old edges for this file only
-		removeEdgesForFile(graph, relPath);
+		// L1: Skip redundant removeEdgesForFile here -- it's done in the
+		// dependentFiles loop below which includes changedFiles as a subset.
 		dependentFiles.add(relPath);
 		// Find all files that import from this changed file
 		for (const [importer, imports] of graph.fileImports) {
@@ -837,15 +862,27 @@ function _walkDirectory(
 				const realStat = statSync(join(dir, entry.name));
 				if (realStat.isDirectory()) {
 					// Symlink cycle detection: skip if we already visited this realpath
-					const realPath = realStat.isDirectory() ? join(dir, entry.name) : "";
-					if (realPath && visitedSymlinks.has(realPath)) {
+					const realPath = realpathSync(join(dir, entry.name));
+					if (visitedSymlinks.has(realPath)) {
 						console.warn(`[pi-shazam] _walkDirectory: skipping symlink cycle: ${relPath}`);
 						continue;
 					}
-					if (realPath) visitedSymlinks.add(realPath);
-					continue; // skip directory symlinks to avoid cycles
+					visitedSymlinks.add(realPath);
+					_walkDirectory(realPath, depth + 1, options);
+					continue;
 				}
-				// Fall through: file symlink -> treat as regular file below
+				// File symlink: validate target is within project root (C4: path traversal),
+				// then treat as regular file (C1: was silently skipped before).
+				const realPath = realpathSync(join(dir, entry.name));
+				const resolvedRoot = resolve(root);
+				if (!realPath.startsWith(resolvedRoot + "/") && realPath !== resolvedRoot) {
+					console.warn(`[pi-shazam] _walkDirectory: symlink target outside project root, skipping: ${relPath} -> ${realPath}`);
+					continue;
+				}
+				const ext = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();
+				if (SOURCE_EXTS.has(ext)) {
+					files.push(relPath);
+				}
 			} catch {
 				console.warn(`[pi-shazam] _walkDirectory: broken symlink: ${relPath}`);
 				continue; // broken symlink, skip

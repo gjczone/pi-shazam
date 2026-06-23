@@ -15,7 +15,8 @@
 import type { ExtensionAPI, ExtensionContext } from "../types/pi-extension.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { readFileAdaptive } from "../core/encoding.js";
 import { join, extname } from "node:path";
 import { detectFormatters } from "../core/formatters.js";
 
@@ -114,7 +115,7 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 			const hasRuff =
 				existsSync(join(projectRoot, "ruff.toml")) ||
 				(existsSync(join(projectRoot, "pyproject.toml")) &&
-					readFileSync(join(projectRoot, "pyproject.toml"), "utf-8").includes("[tool.ruff"));
+					readFileAdaptive(join(projectRoot, "pyproject.toml")).includes("[tool.ruff"));
 			if (hasRuff) {
 				await execFileAsync("ruff", ["format", absPath], { cwd: projectRoot, timeout: 10000 });
 				ctx.ui.notify(`[auto-format] Formatted ${filePath} with ruff`, "info");

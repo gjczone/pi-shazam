@@ -14,6 +14,7 @@ import { LspManager } from "./lsp/manager.js";
 import { generateSetupReport } from "./lsp/setup.js";
 import { setLspManager, awaitPreviousShutdown } from "./tools/_context.js";
 import { installPreCommitHook, removePreCommitHook, runPreCommitVerify } from "./core/git-hooks.js";
+import { setProjectRoot as scannerSetProjectRoot } from "./core/scanner.js";
 
 // -- Hook registrations ---------------------------------------------------
 import { registerBeforeStartHook } from "./hooks/before-start.js";
@@ -63,6 +64,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 			if (ctx.cwd && ctx.cwd !== projectRoot) {
 				projectRoot = ctx.cwd;
 				lspManager.setProjectRoot(ctx.cwd);
+				scannerSetProjectRoot(ctx.cwd);
 				log(`Project root updated from Pi context: ${ctx.cwd}`);
 			}
 
