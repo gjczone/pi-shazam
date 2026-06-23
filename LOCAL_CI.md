@@ -44,7 +44,8 @@ npx prettier --check "*.ts" "core/*.ts" "tools/*.ts" "hooks/*.ts" "lsp/*.ts" "mc
 npm test
 ```
 
-**Pass**: all test files pass, 0 failures.
+**Pass**: all test files pass, 0 failures, 0 skipped (the 1 intentional skip for removed `codesearch` is exempt).
+**Coverage**: includes `tests/smoke.test.ts` (15 tests covering scan -> graph -> overview/lookup/impact/format/changes/find_tests/safe_delete/verify pipeline).
 **Common fix**: read the failing test output, fix the code, re-run.
 
 ### 5. Build

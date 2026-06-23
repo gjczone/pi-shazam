@@ -263,20 +263,4 @@ describe("MCP integration: end-to-end handler simulation", () => {
 		const deserialized = JSON.parse(serialized);
 		assertMcpEnvelope(deserialized);
 	});
-
-	// codesearch removed in #362
-	it.skip("should simulate the MCP codesearch handler pattern", async () => {
-		const { executeCodesearch } = await import("../tools/codesearch.js");
-
-		// MCP codesearch serializes results as JSON
-		const scored = executeCodesearch(graph, "scan");
-		const jsonText = JSON.stringify(scored, null, 2);
-		const mcpResult = { content: [{ type: "text" as const, text: jsonText }] };
-
-		assertMcpEnvelope(mcpResult);
-		// Verify the JSON content is parseable
-		const parsed = JSON.parse(jsonText);
-		expect(Array.isArray(parsed)).toBe(true);
-		expect(parsed.length).toBeGreaterThan(0);
-	});
 });
