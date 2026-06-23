@@ -15,6 +15,15 @@ let _lastVerifyTimestamp = 0;
 let _lastVerifyPassed = false;
 
 /**
+ * Tracks whether a verification reminder has already been sent for the
+ * current batch of unverified edits. Prevents the same reminder from
+ * firing on every turn_end until the agent runs shazam_verify.
+ *
+ * Reset when: new edits occur, verify is called, or session resets.
+ */
+let _reminderSent = false;
+
+/**
  * Record that shazam_verify completed, with optional content for verdict parsing.
  * The content parameter is the concatenated text from the tool result's content blocks.
  *
@@ -24,6 +33,7 @@ let _lastVerifyPassed = false;
 export function markVerifyCalled(content?: string): void {
 	_verifyCalled = true;
 	_lastVerifyTimestamp = Date.now();
+	_reminderSent = false;
 
 	if (content) {
 		// Try parsing structured JSON envelope first
@@ -96,6 +106,7 @@ export function hasRecentPassingVerify(): boolean {
 export function onNewEdit(): void {
 	_verifyCalled = false;
 	_lastVerifyPassed = false;
+	_reminderSent = false;
 }
 
 /**
@@ -105,4 +116,22 @@ export function resetVerifyState(): void {
 	_verifyCalled = false;
 	_lastVerifyTimestamp = 0;
 	_lastVerifyPassed = false;
+	_reminderSent = false;
+}
+
+/**
+ * Record that a verification reminder was sent for the current batch
+ * of unverified edits. Prevents the same reminder from firing again
+ * on subsequent turn_end events.
+ */
+export function markReminderSent(): void {
+	_reminderSent = true;
+}
+
+/**
+ * Check whether a reminder has already been sent for the current
+ * batch of unverified edits.
+ */
+export function wasReminderSent(): boolean {
+	return _reminderSent;
 }

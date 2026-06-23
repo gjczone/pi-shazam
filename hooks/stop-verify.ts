@@ -13,7 +13,14 @@
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { getEditedFiles, clearEditedFiles } from "./pre-edit.js";
-import { markVerifyCalled, hasRecentVerify, onNewEdit, resetVerifyState } from "./verify-state.js";
+import {
+	markVerifyCalled,
+	hasRecentVerify,
+	onNewEdit,
+	resetVerifyState,
+	markReminderSent,
+	wasReminderSent,
+} from "./verify-state.js";
 
 /**
  * Register the stop-verify hook.
@@ -62,6 +69,9 @@ export function registerStopVerify(pi: ExtensionAPI): void {
 		// Check if shazam_verify was run recently
 		if (hasRecentVerify()) return;
 
+		// Skip if a reminder was already sent for this batch of unverified edits
+		if (wasReminderSent()) return;
+
 		// Send reminder via sendMessage (injected into next turn context)
 		const fileList =
 			editedFiles.length <= 3 ? editedFiles.map((f) => `\`${f}\``).join(", ") : `${editedFiles.length} files`;
@@ -76,5 +86,7 @@ export function registerStopVerify(pi: ExtensionAPI): void {
 			].join("\n"),
 			display: false,
 		});
+
+		markReminderSent();
 	});
 }
