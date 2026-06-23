@@ -84,15 +84,6 @@ function detectDestructiveCommand(cmd: string): { level: "HIGH" | "MEDIUM"; patt
 	// Check via argv for more precise detection
 	const argv0 = argv[0]?.toLowerCase() ?? "";
 	const isRm = argv0 === "rm" || argv0.endsWith("/rm");
-	const isGitCommit = argv0 === "git" && argv.length >= 2 && argv[1] === "commit";
-
-	// git commit detection: check for --no-verify flag
-	if (isGitCommit) {
-		if (argv.includes("--no-verify") || argv.includes("-n")) {
-			return null; // explicitly allowed by user
-		}
-		return null; // git commit is handled by the pre-commit gate separately
-	}
 
 	// rm detection: check for recursive flag
 	if (isRm) {
