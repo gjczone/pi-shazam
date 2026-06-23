@@ -485,7 +485,12 @@ export class LspClient {
 
 	// -- Protocol methods -------------------------------------------------------
 
-	async definition(filePath: string, line: number, character: number): Promise<LspResult<Location | Location[]>> {
+	async definition(
+		filePath: string,
+		line: number,
+		character: number,
+		externalToken?: import("vscode-jsonrpc").CancellationToken,
+	): Promise<LspResult<Location | Location[]>> {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		if (!cap || !(cap as Record<string, unknown>).definitionProvider) {
@@ -498,7 +503,12 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<Location | Location[] | null>("textDocument/definition", params);
+			const result = await this._sendRequest<Location | Location[] | null>(
+				"textDocument/definition",
+				params,
+				undefined,
+				externalToken,
+			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -508,7 +518,12 @@ export class LspClient {
 		}
 	}
 
-	async references(filePath: string, line: number, character: number): Promise<LspResult<Location[]>> {
+	async references(
+		filePath: string,
+		line: number,
+		character: number,
+		externalToken?: import("vscode-jsonrpc").CancellationToken,
+	): Promise<LspResult<Location[]>> {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		if (!cap || !(cap as Record<string, unknown>).referencesProvider) {
@@ -522,7 +537,12 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<Location[] | null>("textDocument/references", params);
+			const result = await this._sendRequest<Location[] | null>(
+				"textDocument/references",
+				params,
+				undefined,
+				externalToken,
+			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -532,7 +552,12 @@ export class LspClient {
 		}
 	}
 
-	async hover(filePath: string, line: number, character: number): Promise<LspResult<Hover>> {
+	async hover(
+		filePath: string,
+		line: number,
+		character: number,
+		externalToken?: import("vscode-jsonrpc").CancellationToken,
+	): Promise<LspResult<Hover>> {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		if (!cap || !(cap as Record<string, unknown>).hoverProvider) {
@@ -545,7 +570,7 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<Hover | null>("textDocument/hover", params);
+			const result = await this._sendRequest<Hover | null>("textDocument/hover", params, undefined, externalToken);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -555,7 +580,10 @@ export class LspClient {
 		}
 	}
 
-	async documentSymbols(filePath: string): Promise<LspResult<DocumentSymbol[] | SymbolInformation[]>> {
+	async documentSymbols(
+		filePath: string,
+		externalToken?: import("vscode-jsonrpc").CancellationToken,
+	): Promise<LspResult<DocumentSymbol[] | SymbolInformation[]>> {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		if (!cap || !(cap as Record<string, unknown>).documentSymbolProvider) {
@@ -570,6 +598,8 @@ export class LspClient {
 			const result = await this._sendRequest<DocumentSymbol[] | SymbolInformation[] | null>(
 				"textDocument/documentSymbol",
 				params,
+				undefined,
+				externalToken,
 			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
@@ -580,7 +610,10 @@ export class LspClient {
 		}
 	}
 
-	async workspaceSymbol(query: string): Promise<LspResult<SymbolInformation[] | WorkspaceSymbol[]>> {
+	async workspaceSymbol(
+		query: string,
+		externalToken?: import("vscode-jsonrpc").CancellationToken,
+	): Promise<LspResult<SymbolInformation[] | WorkspaceSymbol[]>> {
 		if (!this.connection) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		if (!cap || !(cap as Record<string, unknown>).workspaceSymbolProvider) {
@@ -593,6 +626,8 @@ export class LspClient {
 			const result = await this._sendRequest<SymbolInformation[] | WorkspaceSymbol[] | null>(
 				"workspace/symbol",
 				params,
+				undefined,
+				externalToken,
 			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
@@ -603,7 +638,10 @@ export class LspClient {
 		}
 	}
 
-	async semanticTokens(filePath: string): Promise<LspResult<SemanticTokens>> {
+	async semanticTokens(
+		filePath: string,
+		externalToken?: import("vscode-jsonrpc").CancellationToken,
+	): Promise<LspResult<SemanticTokens>> {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		const stProvider = (cap as Record<string, unknown> | undefined)?.semanticTokensProvider;
@@ -616,7 +654,12 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<SemanticTokens | null>("textDocument/semanticTokens/full", params);
+			const result = await this._sendRequest<SemanticTokens | null>(
+				"textDocument/semanticTokens/full",
+				params,
+				undefined,
+				externalToken,
+			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -626,7 +669,10 @@ export class LspClient {
 		}
 	}
 
-	async foldingRange(filePath: string): Promise<LspResult<FoldingRange[]>> {
+	async foldingRange(
+		filePath: string,
+		externalToken?: import("vscode-jsonrpc").CancellationToken,
+	): Promise<LspResult<FoldingRange[]>> {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		if (!cap || !(cap as Record<string, unknown>).foldingRangeProvider) {
@@ -638,7 +684,12 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<FoldingRange[] | null>("textDocument/foldingRange", params);
+			const result = await this._sendRequest<FoldingRange[] | null>(
+				"textDocument/foldingRange",
+				params,
+				undefined,
+				externalToken,
+			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -652,7 +703,13 @@ export class LspClient {
 	 * Request a cross-file rename via LSP textDocument/rename.
 	 * Returns a WorkspaceEdit describing all changes, or null on failure.
 	 */
-	async rename(filePath: string, line: number, character: number, newName: string): Promise<LspResult<WorkspaceEdit>> {
+	async rename(
+		filePath: string,
+		line: number,
+		character: number,
+		newName: string,
+		externalToken?: import("vscode-jsonrpc").CancellationToken,
+	): Promise<LspResult<WorkspaceEdit>> {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 
 		const params = {
@@ -662,7 +719,12 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<WorkspaceEdit | null>("textDocument/rename", params);
+			const result = await this._sendRequest<WorkspaceEdit | null>(
+				"textDocument/rename",
+				params,
+				undefined,
+				externalToken,
+			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -678,6 +740,7 @@ export class LspClient {
 		startChar: number,
 		endLine: number,
 		endChar: number,
+		externalToken?: import("vscode-jsonrpc").CancellationToken,
 	): Promise<LspResult<(CodeAction | import("vscode-languageserver-protocol").Command)[]>> {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
@@ -698,6 +761,8 @@ export class LspClient {
 			const result = await this._sendRequest<(CodeAction | import("vscode-languageserver-protocol").Command)[] | null>(
 				"textDocument/codeAction",
 				params,
+				undefined,
+				externalToken,
 			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
@@ -708,7 +773,12 @@ export class LspClient {
 		}
 	}
 
-	async signatureHelp(filePath: string, line: number, character: number): Promise<LspResult<SignatureHelp>> {
+	async signatureHelp(
+		filePath: string,
+		line: number,
+		character: number,
+		externalToken?: import("vscode-jsonrpc").CancellationToken,
+	): Promise<LspResult<SignatureHelp>> {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		if (!cap || !(cap as Record<string, unknown>).signatureHelpProvider) {
@@ -721,7 +791,12 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<SignatureHelp | null>("textDocument/signatureHelp", params);
+			const result = await this._sendRequest<SignatureHelp | null>(
+				"textDocument/signatureHelp",
+				params,
+				undefined,
+				externalToken,
+			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -731,7 +806,12 @@ export class LspClient {
 		}
 	}
 
-	async implementation(filePath: string, line: number, character: number): Promise<LspResult<Location | Location[]>> {
+	async implementation(
+		filePath: string,
+		line: number,
+		character: number,
+		externalToken?: import("vscode-jsonrpc").CancellationToken,
+	): Promise<LspResult<Location | Location[]>> {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		if (!cap || !(cap as Record<string, unknown>).implementationProvider) {
@@ -744,7 +824,12 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<Location | Location[] | null>("textDocument/implementation", params);
+			const result = await this._sendRequest<Location | Location[] | null>(
+				"textDocument/implementation",
+				params,
+				undefined,
+				externalToken,
+			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -754,7 +839,10 @@ export class LspClient {
 		}
 	}
 
-	async codeLens(filePath: string): Promise<LspResult<CodeLens[]>> {
+	async codeLens(
+		filePath: string,
+		externalToken?: import("vscode-jsonrpc").CancellationToken,
+	): Promise<LspResult<CodeLens[]>> {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 		const cap = this._serverCapabilities;
 		if (!cap || !(cap as Record<string, unknown>).codeLensProvider) {
@@ -766,7 +854,12 @@ export class LspClient {
 		};
 
 		try {
-			const result = await this._sendRequest<CodeLens[] | null>("textDocument/codeLens", params);
+			const result = await this._sendRequest<CodeLens[] | null>(
+				"textDocument/codeLens",
+				params,
+				undefined,
+				externalToken,
+			);
 			return { status: "ok", data: result ?? null };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
@@ -820,12 +913,23 @@ export class LspClient {
 	 * Send an LSP request with automatic cancellation on timeout.
 	 * Creates a CancellationTokenSource, passes the token to sendRequest,
 	 * and cancels it if the timeout fires — so the server can stop work.
+	 * If an externalToken is provided, cancelling it also cancels the internal CTS.
 	 */
-	private _sendRequest<R>(method: string, params: unknown, timeoutMs?: number): Promise<R> {
+	private _sendRequest<R>(
+		method: string,
+		params: unknown,
+		timeoutMs?: number,
+		externalToken?: import("vscode-jsonrpc").CancellationToken,
+	): Promise<R> {
 		if (!this.connection) {
 			return Promise.reject(new Error("LSP connection not available"));
 		}
 		const cts = new rpc.CancellationTokenSource();
+		// Link external token to internal CTS so enrich-layer cancellation
+		// propagates to the actual LSP request (issue #396)
+		if (externalToken) {
+			externalToken.onCancellationRequested(() => cts.cancel());
+		}
 		try {
 			const promise = this.connection.sendRequest<R>(method, params, cts.token);
 			return this.withTimeout(promise, timeoutMs, () => cts.cancel()).finally(() => cts.dispose());

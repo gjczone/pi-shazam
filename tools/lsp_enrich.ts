@@ -277,7 +277,7 @@ export async function lspWorkspaceSearch(
 		try {
 			const cts = new _ctsCtor();
 			const raw = await withEnrichTimeout(
-				srv.client.workspaceSymbol(query).then((r) => (r.status === "ok" ? r.data : null)),
+				srv.client.workspaceSymbol(query, cts.token).then((r) => (r.status === "ok" ? r.data : null)),
 				timeoutMs,
 				cts,
 			).finally(() => cts.dispose());
@@ -340,7 +340,7 @@ export async function lspDocumentSymbols(
 	}
 	const cts = new _ctsCtor();
 	const result = await withEnrichTimeout(
-		opened.client.documentSymbols(filePath).then((r) => (r.status === "ok" ? r.data : null)),
+		opened.client.documentSymbols(filePath, cts.token).then((r) => (r.status === "ok" ? r.data : null)),
 		effectiveTimeout(opened.justOpened, timeoutMs),
 		cts,
 	).finally(() => cts.dispose());
@@ -379,7 +379,7 @@ export async function lspCodeActions(
 	const cts = new _ctsCtor();
 	const result = await withEnrichTimeout(
 		opened.client
-			.codeAction(filePath, startLine, startChar, endLine, endChar)
+			.codeAction(filePath, startLine, startChar, endLine, endChar, cts.token)
 			.then((r) => (r.status === "ok" ? r.data : null)),
 		effectiveTimeout(opened.justOpened, timeoutMs),
 		cts,
@@ -409,7 +409,7 @@ export async function lspSignatureHelp(
 	}
 	const cts = new _ctsCtor();
 	const result = await withEnrichTimeout(
-		opened.client.signatureHelp(filePath, line, character).then((r) => (r.status === "ok" ? r.data : null)),
+		opened.client.signatureHelp(filePath, line, character, cts.token).then((r) => (r.status === "ok" ? r.data : null)),
 		effectiveTimeout(opened.justOpened, timeoutMs),
 		cts,
 	).finally(() => cts.dispose());
@@ -439,7 +439,7 @@ export async function lspImplementation(
 	}
 	const cts = new _ctsCtor();
 	const result = await withEnrichTimeout(
-		opened.client.implementation(filePath, line, character).then((r) => {
+		opened.client.implementation(filePath, line, character, cts.token).then((r) => {
 			if (r.status !== "ok" || !r.data) return null;
 			const arr = Array.isArray(r.data) ? r.data : [r.data];
 			// Detect LocationLink[] by checking for "targetUri" property
@@ -481,7 +481,7 @@ export async function lspReferences(
 	}
 	const cts = new _ctsCtor();
 	const result = await withEnrichTimeout(
-		opened.client.references(filePath, line, character).then((r) => {
+		opened.client.references(filePath, line, character, cts.token).then((r) => {
 			if (r.status !== "ok" || !r.data) return null;
 			const arr = Array.isArray(r.data) ? r.data : [r.data];
 			// Detect LocationLink[] by checking for "targetUri" property
@@ -522,7 +522,7 @@ export async function lspCodeLens(
 	}
 	const cts = new _ctsCtor();
 	const result = await withEnrichTimeout(
-		opened.client.codeLens(filePath).then((r) => (r.status === "ok" ? r.data : null)),
+		opened.client.codeLens(filePath, cts.token).then((r) => (r.status === "ok" ? r.data : null)),
 		effectiveTimeout(opened.justOpened, timeoutMs),
 		cts,
 	).finally(() => cts.dispose());
