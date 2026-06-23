@@ -114,3 +114,29 @@ describe("LspManager.getServerForFile path traversal guard", () => {
 		expect(result).toBeNull();
 	});
 });
+
+describe("MCP shazam_lookup path traversal guard (issue #395)", () => {
+	it("executeFileDetailAsync should reject /etc/passwd", async () => {
+		const { executeFileDetailAsync } = await import("../tools/lookup.js");
+		const { scanProject } = await import("../core/scanner.js");
+		const graph = scanProject(".");
+		const result = await executeFileDetailAsync(graph, "/etc/passwd");
+		expect(result).toMatch(/outside the project root/);
+	});
+
+	it("executeFileDetailAsync should reject ../../../etc/passwd", async () => {
+		const { executeFileDetailAsync } = await import("../tools/lookup.js");
+		const { scanProject } = await import("../core/scanner.js");
+		const graph = scanProject(".");
+		const result = await executeFileDetailAsync(graph, "../../../etc/passwd");
+		expect(result).toMatch(/outside the project root/);
+	});
+
+	it("executeLookupAsync should reject file param outside project root", async () => {
+		const { executeLookupAsync } = await import("../tools/lookup.js");
+		const { scanProject } = await import("../core/scanner.js");
+		const graph = scanProject(".");
+		const result = await executeLookupAsync(graph, "someSymbol", "/etc/shadow", "both", false);
+		expect(result).toMatch(/outside the project root/);
+	});
+});

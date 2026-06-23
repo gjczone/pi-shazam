@@ -683,6 +683,10 @@ async function _executeFileDetailAsync(
 	_json: boolean,
 	_maxTokens: number | undefined,
 ): Promise<string> {
+	// Defense-in-depth: reject paths outside project root (issue #395)
+	if (!validatePathInProject(file, process.cwd())) {
+		return `Error: Path '${file}' is outside the project root and cannot be read.`;
+	}
 	const cacheKey = `${file}:text`;
 	const cached = fileDetailCache.get(cacheKey);
 	if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
@@ -1028,6 +1032,10 @@ export async function executeLookupAsync(
 	direction: "both" | "supertypes" | "subtypes",
 	showCallbacks: boolean,
 ): Promise<string> {
+	// Defense-in-depth: reject file paths outside project root (issue #395)
+	if (file && !validatePathInProject(file, process.cwd())) {
+		return `Error: File path '${file}' is outside the project root.`;
+	}
 	return _executeLookupAsync(graph, name, file, direction, showCallbacks);
 }
 

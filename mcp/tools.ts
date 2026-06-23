@@ -19,6 +19,7 @@ import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { LspManager } from "../lsp/manager.js";
 import { getToolDefinition } from "../tools/definitions.js";
+import { validatePathInProject } from "../tools/_factory.js";
 import { truncateOutput } from "../core/output.js";
 import { redact } from "../core/redact.js";
 import { AUDIT_LOG_DIR, rotateAuditLog } from "../core/audit-log.js";
@@ -131,6 +132,17 @@ export function registerAllTools(
 				/\.(ts|tsx|js|jsx|py|go|rs|dart|json|yaml|yml|mjs|cjs|rb|java|cs|c|cpp|h|hpp|css|scss|less|sh|bash|toml|html|htm|md)$/.test(
 					nameStr,
 				);
+			// Path traversal guard: reject file paths outside project root (issue #395)
+			const projectRoot = process.cwd();
+			if (isFilePath && !validatePathInProject(nameStr, projectRoot)) {
+				return {
+					content: [{ type: "text", text: `Error: Path '${nameStr}' is outside the project root and cannot be read.` }],
+				};
+			}
+			const fileParam = file as string | undefined;
+			if (fileParam && !validatePathInProject(fileParam, projectRoot)) {
+				return { content: [{ type: "text", text: `Error: File path '${fileParam}' is outside the project root.` }] };
+			}
 			let text: string;
 			if (isFilePath) {
 				text = await executeFileDetailAsync(getGraph(), nameStr);
