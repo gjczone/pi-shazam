@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-06-23
+
+### Security
+
+- **fix(#394): safety.ts git commit early-return bypasses ALL destructive command checks** — removed the `isGitCommit` early return in `detectDestructiveCommand` that allowed commands like `git commit -m x && rm -rf /` to bypass all safety checks; the `--no-verify` handling is already covered by the pre-commit gate (Check 2)
+- **fix(#395): MCP shazam_lookup path traversal** — added `validatePathInProject` checks in the MCP handler and as defense-in-depth in `_executeFileDetailAsync` and `executeLookupAsync`, closing the path-traversal hole where MCP clients could read arbitrary files outside the project root
+- **fix(#402-P2-3): MCP rename bypasses safety gate + dryRun defaults to destructive** — MCP `shazam_rename_symbol` now defaults `dryRun` to `true` (matching Pi path) and enforces the `hasCallChainChecked` impact-check safety gate
+- **fix(#402-P2-4): MCP entry allows PROJECT_ROOT "/"** — removed `realRoot === "/"` allowance; replaced `startsWith(homeDir)` with path separator boundary check to prevent prefix confusion
+
+### Bug Fixes
+
+- **fix(#393): indefinite repeated verification reminder** — added `_reminderSent` flag to `verify-state.ts`; reminder is sent once per edit cycle and resets on new edit, verify call, or session reset
+- **fix(#396): lsp_enrich CTS cancellation disconnected from client request** — added `externalToken` parameter to all 12 public LSP client methods; linked external token to internal CTS in `_sendRequest` so enrich-layer cancellation now propagates to the actual LSP request
+- **fix(#397): setLspManager swaps manager before previous shutdown completes** — made `setLspManager` async, awaiting previous manager shutdown before swapping; MCP entry point now properly awaits
+- **fix(#402-P2-1): runFormatterCommand swallows execFileSync failure** — `runFormatterCommand` now rethrows on formatter failure so `runFormatters` pushes `[FAIL]` instead of `[OK]`
+- **fix(#402-P2-2): hand-built file:// URI instead of pathToUri** — replaced `file://${filePath}` with `pathToUri(filePath)` in type-hierarchy request for correct URI encoding
+
+### Performance
+
+- **fix(#398): scanner.ts O(N*M) imports.includes on incremental scan hot path** — built `fileImportedBy: Map<string, Set<string>>` reverse import index for O(1) dependent lookup; incremental scan no longer scans every file's import list
+- **fix(#399): lookup.ts constructs new TreeSitterAdapter per _extractDocstring call** — replaced per-call `new TreeSitterAdapter()` with module-scoped lazy singleton; hover batch of 20 symbols no longer triggers 20 full grammar loads
+- **fix(#402-P3-1): sequential await of independent supertypes/subtypes** — changed to `Promise.all` for parallel type hierarchy requests
+- **fix(#402-P3-2): sequential await + readFileSync in crash re-open loop** — changed to async file reads with `Promise.allSettled` for didOpen calls
+- **fix(#402-P3-3): Array.includes on BFS hot path** — converted `files` to `Set<string>` for O(1) lookup in impact analysis
+- **fix(#402-P3-5): sync readFileSync in format scan loops** — changed `detectIndentationStyle` and `scanFormatIssues` to async concurrent file reads
+
+### Refactoring
+
+- **fix(#400): pi-extension.d.ts stub gaps force as-unknown-as casts** — added `input?: unknown` and `toolCallId?: string` to `ToolCallEventBase`; removed 9 `as unknown as` double-casts across hooks and tools; added `isLocationLinkArray` type guard in `lsp_enrich.ts`
+- **fix(#401): decorative Unicode in 48 source files** — replaced 272 occurrences of em-dash (U+2014) and arrow (U+2192) with ASCII equivalents (`--`/`-` and `->`) across all non-test source files and tool output
+
+### Housekeeping
+
+- **fix(#402-P3-4): silent 100-file cap without truncation flag** — `scanFormatIssues` now emits `... and N more files not scanned` when `files.length > 100`
+
 ## [0.16.0] - 2026-06-23
 
 ### Security
