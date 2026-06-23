@@ -1,6 +1,6 @@
 {
 	"name": "pi-shazam",
-	"version": "0.17.0",
+	"version": "0.18.0",
 	"description": "Pi coding agent native codebase awareness toolkit — 9 structural analysis tools. Also supports MCP (Cursor, Claude Desktop, Windsurf, etc.)",
 	"type": "module",
 	"main": "dist/index.js",

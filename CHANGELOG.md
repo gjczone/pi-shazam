@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2026-06-23
+
+### Security
+
+- **fix(#413-C4): file symlink path traversal (reading outside project root)** — resolved symlink realpath is now validated to be within project root before adding to files array; malicious symlinks like `src/evil.ts -> /etc/shadow` are now skipped with a warning
+- **fix(#413-M8): missing path validation in impact and find_tests tools** — added `validatePathInProject` checks for user-supplied file path parameters in `shazam_impact` and `shazam_find_tests` as defense-in-depth
+- **fix(#413-M9): MCP path validation uses process.cwd() not configured projectRoot** — MCP `registerAllTools` now accepts `projectRoot` parameter and uses it consistently for all path validations
+- **fix(#413-M10): predictable temp file name in rename_symbol atomicWriteFile** — replaced `filePath + ".tmp." + process.pid` with `crypto.randomUUID()` based filename to prevent symlink attacks on multi-user systems
+
+### Bug Fixes
+
+- **fix(#413-C1): file symlinks silently skipped in directory walk** — fixed the `else if` chain fall-through bug; file symlinks are now properly detected and treated as regular files after validating their target is within project root
+- **fix(#413-C2): LSP server process leak — concurrent shutdown + init race** — added `_shuttingDown` check inside `_initServerForLanguage` right before `this.servers.set()`; if shutdown was triggered during init, the client is closed immediately instead of leaking the process
+- **fix(#413-C3): scanner and LSP use different project roots** — scanner now uses `_projectRootOverride` when caller passes `"."` (default path), ensuring tree-sitter analysis and LSP analysis run on the same directory when Pi detects the project in a subdirectory
+- **fix(#413-H1): ref edges lost after disk cache load + incremental scan** — added `fileRefs` to `SerializedGraphV2`; refs are now serialized and restored from disk cache, fixing the silent loss of same-file ref edges after the first incremental scan following a cache load
+- **fix(#413-H2): LSP crash recovery re-reads files with UTF-8 only (encoding bypass)** — replaced `readFileAsync(absPath, "utf-8")` with `readFileAdaptiveAsync` for the crash recovery re-open path
+- **fix(#413-H3): encoding blindness — 15+ call sites bypass readFileAdaptive** — replaced all project-file reads with `readFileAdaptive` / `readFileAdaptiveAsync` across `tools/overview.ts`, `tools/find_tests.ts`, `tools/format.ts`, `core/formatters.ts`, `core/git-hooks.ts`, and `hooks/shazam-guide.ts`
+- **fix(#413-H4): Python __all__ triple-quoted strings not stripped correctly** — updated regex to handle 1-3 quotes (`['"]{1,3}`) on both ends; triple-quoted strings like `'''foo'''` now correctly match real symbols
+- **fix(#413-H5): TreeSitter _within() uses strict inequality — boundary symbols missed** — changed strict `>`/`<` to `>=`/`<=` for start/end position comparison; symbols starting at exactly the same row+column as the definition node are now correctly considered "within"
+- **fix(#413-H6): deserialized graph may have dangling edges** — `deserializeGraphV2` now skips edges where source or target symbol IDs don't exist in `graph.symbols`, logging a warning for each skipped edge to prevent crashes in downstream code
+- **fix(#413-M2): saveGraphCache has no size limit — OOM risk for huge projects** — added 20MB size limit check on save (matching the load-side limit); `JSON.stringify` result is checked before writing, and cache is skipped with a warning if too large
+- **fix(#413-M3): _cleanupAfterCrash called twice (error + exit events)** — added `_cleanedUp` flag that `_cleanupAfterCrash` checks and sets on first entry, separate from `_closing` which is for intentional shutdown only
+- **fix(#413-M4): import line numbers lost after cache deserialization** — `fileImports` now serialized as `[string, number][]` tuples to preserve line numbers instead of flattening to `string[]`
+- **fix(#413-M5): compareGraphSnapshots edge diff ignores weight and confidence changes** — edge identity now includes weight and confidence (`${source}::${target}::${kind}::${weight}::${confidence}`), so modified edges are detected not just added/removed ones
+- **fix(#413-M6): error object discarded in multiple catch blocks** — all catch blocks in `tools/lookup.ts` and `tools/verify.ts` now capture and log the actual error object instead of just a fixed-string warning
+- **fix(#413-M7): fire-and-forget audit log promise with empty catch** — replaced `_writePromise.catch(() => {})` with proper error logging so unexpected errors from `redact()` or `JSON.stringify()` are surfaced
+- **fix(#413-M11): _scanSeenEdges not reset to null on scan exception** — `_scanSeenEdges` is now reset to null in the `finally` block of `scanProject` alongside `exitScan()`, preventing state leakage across scans
+- **fix(#413-L1): redundant removeEdgesForFile calls in incremental scan** — removed duplicate `removeEdgesForFile` call for changed files (was called once in changedFiles loop and again in dependentFiles loop)
+- **fix(#413-L2): same Parser instance shared between javascript and typescript keys** — TypeScript grammar fallback now creates a separate Parser instance instead of storing the same object under both keys
+- **fix(#413-L3): hardcoded magic numbers in _extractStandardSymbols** — extracted `MAX_NAME_NODES` and `MAX_MATCHING_DEFS` named constants (5000 each) from the method body
+- **fix(#413-L7): params.project = project mutates caller's params object** — factory now uses spread operator to create a new params object (`effectiveParams`) instead of mutating the caller's object
+- **fix(#413-L8): LspClient cmd! non-null assertion on command array** — added explicit validation that the command array has at least one element; logs error and triggers cleanup if empty
+
+### Housekeeping
+
+- **fix(#413-L4): dead symlink cycle detection code removed** — cleaned up dead code that tracked symlink paths instead of real target paths
+- **fix(#413-L5): trivial getProjectGraph wrapper removed** — eliminated the no-value wrapper that just called `scanProject()` unconditionally (caching is already inside scanProject)
+- **fix(#413-L6): dead ternary — condition always true** — removed redundant ternary inside an already-guarded `if (realStat.isDirectory())` block
+
 ## [0.17.0] - 2026-06-23
 
 ### Security
