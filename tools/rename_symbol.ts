@@ -18,7 +18,7 @@ import { ensureFileOpened } from "./lsp_enrich.js";
 import type { WorkspaceEdit, TextEdit } from "vscode-languageserver-protocol";
 import { uriToPath } from "../lsp/client.js";
 import { createTool, buildEnvelope, validatePathInProject } from "./_factory.js";
-import { scanProject } from "../core/scanner.js";
+import { scanProject, getEffectiveRoot } from "../core/scanner.js";
 import { hasCallChainChecked } from "../hooks/rename-state.js";
 
 /**
@@ -81,7 +81,7 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 				// call_chain was checked -- proceed with actual rename below
 			}
 			// Scan project to get graph (fixes #209 -- customExecute must not rely on module-level variable)
-			const projectRoot = (params.project as string) || process.cwd();
+			const projectRoot = getEffectiveRoot();
 			const graph = scanProject(projectRoot);
 			if (!graph?.symbols) {
 				return {
@@ -95,7 +95,7 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 			}
 			const result = await executeRenameSymbol(graph, symbolName, newName, dryRun, projectRoot);
 			const text = json
-				? buildEnvelope("shazam_rename_symbol", process.cwd(), "ok", result)
+				? buildEnvelope("shazam_rename_symbol", projectRoot, "ok", result)
 				: formatRenameResult(result, symbolName, newName, dryRun);
 			return { content: [{ type: "text", text }] };
 		},

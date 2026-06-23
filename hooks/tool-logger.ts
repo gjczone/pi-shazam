@@ -13,6 +13,7 @@ import { appendFile, mkdir, chmod } from "node:fs/promises";
 import { join } from "node:path";
 import { redact } from "../core/redact.js";
 import { AUDIT_LOG_DIR, rotateAuditLog } from "../core/audit-log.js";
+import { _logWarn } from "../core/output.js";
 
 const AUDIT_DIR = AUDIT_LOG_DIR;
 const LOG_FILE = join(AUDIT_DIR, "shazam-calls.log");
@@ -28,7 +29,7 @@ async function ensureDir(): Promise<void> {
 		await chmod(AUDIT_DIR, 0o700);
 	} catch (err) {
 		/* best-effort */
-		console.warn("[pi-shazam] ensureDir: chmod failed for audit dir", err);
+		_logWarn("ensureDir", "chmod failed for audit dir", err);
 	}
 }
 
@@ -59,7 +60,7 @@ function write(entry: Record<string, unknown>): void {
 				await chmod(LOG_FILE, 0o600);
 			} catch (err) {
 				/* best-effort */
-				console.warn("[pi-shazam] write: chmod failed for audit log file", err);
+				_logWarn("write", "chmod failed for audit log file", err);
 			}
 			_writeFailed = false;
 		} catch (err) {
@@ -70,7 +71,7 @@ function write(entry: Record<string, unknown>): void {
 		}
 	});
 	// Prevent unhandled rejections from fire-and-forget writes
-	_writePromise.catch((err) => console.error("[pi-shazam] Unexpected audit log error:", err));
+	_writePromise.catch((err) => _logWarn("write", "Unexpected audit log error", err));
 }
 
 function isShazam(name: string): boolean {

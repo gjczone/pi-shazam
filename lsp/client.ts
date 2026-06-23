@@ -9,6 +9,7 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import * as path from "node:path";
+import { _logWarn } from "../core/output.js";
 import { createRequire } from "node:module";
 
 const _require = createRequire(import.meta.url);
@@ -1099,7 +1100,7 @@ export class LspClient {
 					proc.kill();
 				} catch (err) {
 					// Process may have already exited -- ignore
-					console.warn("[pi-shazam] _doClose: proc.kill() failed", err);
+					_logWarn("_doClose", "proc.kill() failed", err);
 				}
 			}
 

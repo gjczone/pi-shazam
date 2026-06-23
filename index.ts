@@ -15,6 +15,7 @@ import { generateSetupReport } from "./lsp/setup.js";
 import { setLspManager, awaitPreviousShutdown } from "./tools/_context.js";
 import { installPreCommitHook, removePreCommitHook, runPreCommitVerify } from "./core/git-hooks.js";
 import { setProjectRoot as scannerSetProjectRoot } from "./core/scanner.js";
+import { _logWarn } from "./core/output.js";
 
 // -- Hook registrations ---------------------------------------------------
 import { registerBeforeStartHook } from "./hooks/before-start.js";
@@ -87,7 +88,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 				try {
 					await lspManager.shutdown();
 				} catch (err) {
-					console.warn("[pi-shazam] LSP shutdown on init timeout failed", err);
+					_logWarn("lspInitTimeout", "LSP shutdown on init timeout failed", err);
 				}
 			}
 			log(`LSP init error: ${err}`);
@@ -108,13 +109,13 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 			const { resetCache } = await import("./core/scanner.js");
 			resetCache();
 		} catch (err) {
-			console.warn("[pi-shazam] session_shutdown: scanner cache reset failed", err);
+			_logWarn("sessionShutdown", "scanner cache reset failed", err);
 		}
 		try {
 			const { resetLspEnrichState } = await import("./tools/lsp_enrich.js");
 			resetLspEnrichState();
 		} catch (err) {
-			console.warn("[pi-shazam] session_shutdown: lsp enrich state reset failed", err);
+			_logWarn("sessionShutdown", "lsp enrich state reset failed", err);
 		}
 	});
 

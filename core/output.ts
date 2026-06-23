@@ -362,7 +362,7 @@ export function getGitChangeCount(): number {
 		const match = output.match(/(\d+)\s+file/);
 		return match ? parseInt(match[1]!, 10) : 0;
 	} catch (err) {
-		console.warn("[pi-shazam] getGitChangeCount: git diff --stat failed", err);
+		_logWarn("getGitChangeCount", "git diff --stat failed", err);
 		return 0;
 	}
 }
@@ -440,4 +440,25 @@ export function truncateOutput(lines: string[], maxTokens: number): string {
 	}
 
 	return kept.join("\n");
+}
+
+/**
+ * Log a warning without printing the full error stack trace.
+ *
+ * For ENOENT (file not found — expected when a configured binary is not
+ * installed), suppress log output entirely to avoid noise.
+ *
+ * For other errors, prints a concise one-line message: "tag: msg - reason".
+ * Never passes the raw Error object to console, as Node.js would print the
+ * full stack trace, making normal degradation look like a crash.
+ *
+ * Usage:
+ *   _logWarn("isExecutable", "statSync failed for /path/to/binary", err)
+ */
+export function _logWarn(tag: string, message: string, err: unknown): void {
+	if (err instanceof Error && (err as NodeJS.ErrnoException).code === "ENOENT") {
+		return; // expected: file not found, suppress completely
+	}
+	const reason = err instanceof Error ? err.message : String(err);
+	console.warn(`[pi-shazam] ${tag}: ${message} - ${reason}`);
 }

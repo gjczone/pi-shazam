@@ -8,6 +8,8 @@
  *   idle -> verified (markVerifyCalled) -> idle (onNewEdit or timeout)
  */
 
+import { _logWarn } from "../core/output.js";
+
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 let _verifyCalled = false;
@@ -66,7 +68,7 @@ export function markVerifyCalled(content?: string): void {
 			return;
 		} catch (err) {
 			// Not JSON: use text-based parsing
-			console.warn("[pi-shazam] markVerifyCalled: JSON.parse failed for verify content", err);
+			_logWarn("markVerifyCalled", "JSON.parse failed for verify content", err);
 		}
 
 		const isFail =

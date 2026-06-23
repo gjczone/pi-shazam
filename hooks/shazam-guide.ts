@@ -20,6 +20,7 @@ import { readFileAdaptive } from "../core/encoding.js";
 import { join, extname } from "node:path";
 import { detectFormatters } from "../core/formatters.js";
 import { hasRecentPassingVerify } from "./verify-state.js";
+import { _logWarn } from "../core/output.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -51,7 +52,7 @@ function hasManyCallers(content: unknown[] | undefined): string | null {
 				}
 			} catch (err) {
 				// Not JSON -- fall back to text-based
-				console.warn("[pi-shazam] hasManyCallers: JSON.parse failed", err);
+				_logWarn("hasManyCallers", "JSON.parse failed", err);
 			}
 
 			// Look for caller count patterns: "N callers" or "N references"

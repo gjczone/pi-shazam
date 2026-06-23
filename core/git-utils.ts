@@ -12,6 +12,7 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { _logWarn } from "./output.js";
 import { join } from "node:path";
 
 // -- Project marker file list ------------------------------------------------
@@ -68,7 +69,7 @@ export function isGitRepo(projectRoot: string): boolean {
 		});
 		result = output.trim() === "true";
 	} catch (err) {
-		console.warn(`[pi-shazam] isGitRepo: git rev-parse failed for ${projectRoot}`, err);
+		_logWarn("isGitRepo", `git rev-parse failed for ${projectRoot}`, err);
 		result = false;
 	}
 
@@ -115,7 +116,7 @@ export function safeGitExec(args: string[], cwd: string, timeout = 5000): string
 			stdio: ["ignore", "pipe", "ignore"],
 		}).trim();
 	} catch (err) {
-		console.warn(`[pi-shazam] safeGitExec: git ${args.join(" ")} failed for ${cwd}`, err);
+		_logWarn("safeGitExec", `git ${args.join(" ")} failed for ${cwd}`, err);
 		return null;
 	}
 }

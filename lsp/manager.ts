@@ -14,6 +14,7 @@ import type { LspDiagnostic, LspLocation } from "./client.js";
 import { LSP_SERVER_SPECS, languageForSuffix, lspTimeoutFor } from "./servers.js";
 import { SKIP_DIRS } from "../core/filter.js";
 import { readFileAdaptiveAsync } from "../core/encoding.js";
+import { _logWarn } from "../core/output.js";
 
 // -- Types --------------------------------------------------------------------
 
@@ -80,7 +81,7 @@ export function detectProjectLanguages(projectRoot: string, maxFiles: number = 2
 			// Use resolve to normalize; rely on visited map for cycle detection
 			real = resolve(dir);
 		} catch (err) {
-			console.warn(`[pi-shazam] detectProjectLanguages: resolve failed for ${dir}`, err);
+			_logWarn("detectProjectLanguages", `resolve failed for ${dir}`, err);
 			return;
 		}
 		if (visited.has(real)) return;
@@ -205,7 +206,7 @@ function isExecutable(filePath: string): boolean {
 		// eslint-disable-next-line no-bitwise
 		return (st.mode & 0o111) !== 0;
 	} catch (err) {
-		console.warn(`[pi-shazam] isExecutable: statSync failed for ${filePath}`, err);
+		_logWarn("isExecutable", `statSync failed for ${filePath}`, err);
 		return false;
 	}
 }
@@ -220,6 +221,44 @@ const SAFE_PATH_DIRS = new Set([
 	"/opt/homebrew/bin",
 	"/snap/bin",
 ]);
+
+/**
+ * Resolve bin directories for mainstream Node.js version managers (nvm, fnm, volta).
+ *
+ * These managers install global binaries into version-dependent directories that
+ * cannot be hardcoded. Each exposes the active directory via a well-known env var.
+ *
+ * Only directories that actually exist on disk are returned; missing ones are
+ * silently skipped (the env var may be stale from a previous session).
+ */
+const VERSION_MANAGER_ENV_VARS: Array<{ env: string; subPath?: string }> = [
+	{ env: "NVM_BIN" },
+	{ env: "FNM_MULTISHELL_PATH" },
+	{ env: "FNM_DIR", subPath: "current/bin" },
+	{ env: "VOLTA_HOME", subPath: "bin" },
+];
+
+export function _getVersionManagerBinDirs(): string[] {
+	const dirs: string[] = [];
+	for (const { env, subPath } of VERSION_MANAGER_ENV_VARS) {
+		const base = process.env[env];
+		if (!base) continue;
+		const dir = subPath ? join(base, subPath) : base;
+		try {
+			if (statSync(dir).isDirectory()) {
+				dirs.push(dir);
+			}
+		} catch {
+			// Directory does not exist — skip silently
+		}
+	}
+	return dirs;
+}
+
+// Wire version-manager bin dirs into trusted paths at module init.
+for (const dir of _getVersionManagerBinDirs()) {
+	SAFE_PATH_DIRS.add(dir);
+}
 
 function findInPath(command: string): string | null {
 	const pathEnv = process.env.PATH ?? "";
@@ -248,6 +287,13 @@ function trustedUserCandidates(commandName: string): string[] {
 	// Return all matching executables, not just the first (fixes for-of with immediate return)
 	const results: string[] = [];
 	for (const candidate of candidates) {
+		if (isExecutable(candidate)) {
+			results.push(candidate);
+		}
+	}
+	// Version manager bin dirs (nvm, fnm, volta) — dynamic, version-dependent
+	for (const dir of _getVersionManagerBinDirs()) {
+		const candidate = join(dir, commandName);
 		if (isExecutable(candidate)) {
 			results.push(candidate);
 		}
@@ -510,13 +556,13 @@ export class LspManager {
 							try {
 								await client.didOpen(result.value.filePath, result.value.content);
 							} catch (err) {
-								console.warn(`[pi-shazam] _initServerForLanguage: re-open failed for ${result.value.filePath}`, err);
+								_logWarn("_initServerForLanguage", `re-open failed for ${result.value.filePath}`, err);
 								prevOpened.delete(result.value.filePath);
 							}
 						} else {
 							// File read failed -- likely deleted; remove from tracking
 							const filePath = entries[readResults.indexOf(result)]!;
-							console.warn(`[pi-shazam] _initServerForLanguage: read failed for ${filePath}`, result.reason);
+							_logWarn("_initServerForLanguage", `read failed for ${filePath}`, result.reason);
 							prevOpened.delete(filePath);
 						}
 					}),
