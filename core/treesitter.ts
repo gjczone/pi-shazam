@@ -184,10 +184,14 @@ export class TreeSitterAdapter {
 			this.log(`Parser loaded: ${lang}`);
 		} catch (e) {
 			const reason = e instanceof Error ? e.message : String(e);
+			const suggestion =
+				lang === "dart"
+					? "LSP support still works (hover, verify, fix). Tree-sitter parsing for Dart requires tree-sitter >=0.24; current version is 0.22.x."
+					: "LSP support still works (hover, verify, fix). Tree-sitter parsing unavailable.";
 			_parserStatus.set(lang, {
 				status: "unavailable",
 				reason,
-				suggestion: `LSP support still works (hover, verify, fix). Tree-sitter parsing unavailable - upgrade tree-sitter to enable.`,
+				suggestion,
 			});
 			this.log(`Parser unavailable [${lang}]: ${e}`);
 		}
@@ -220,14 +224,19 @@ export class TreeSitterAdapter {
 				this.log("TSX parser unavailable");
 			}
 		} catch {
-			// Fall back to JavaScript parser for TypeScript
+			// Fall back to JavaScript parser for TypeScript.
+			// Create independent Parser instances for typescript and tsx fallbacks
+			// instead of sharing the JavaScript parser reference -- the Parser holds
+			// WASM state and concurrent parse() calls on the same instance corrupt it.
 			const jsParser = this.parsers.get("javascript");
 			if (jsParser) {
-				// L2: Create a separate Parser instance for TypeScript fallback
-				// instead of sharing the JavaScript parser reference, which would
-				// cause state pollution if both are used concurrently.
-				const tsFallback = jsParser;
+				const jsLang = jsParser.getLanguage();
+				const tsFallback = new Parser();
+				tsFallback.setLanguage(jsLang);
+				const tsxFallback = new Parser();
+				tsxFallback.setLanguage(jsLang);
 				this.parsers.set("typescript", tsFallback);
+				this.parsers.set("tsx", tsxFallback);
 				_parserStatus.set("typescript", { status: "loaded", reason: "Fell back to JavaScript parser" });
 				_parserStatus.set("tsx", { status: "loaded", reason: "Fell back to JavaScript parser" });
 				this.log("TypeScript parser unavailable, falling back to JavaScript parser");
@@ -631,20 +640,23 @@ export class TreeSitterAdapter {
 	}
 
 	private _isExported(node: SyntaxNode): boolean {
-		// Walk up the parent chain looking for an export node
-		// (e.g., export_statement in tree-sitter-typescript/tree-sitter-javascript)
-		let ancestor: SyntaxNode | null = node;
+		// Check the immediate node for Rust-style visibility_modifier (pub, pub(crate), etc.).
+		// In Rust grammar, visibility_modifier is a direct child of the item node
+		// (function_item, struct_item, etc.), not an ancestor wrapper.
+		// We only check the immediate node's children to avoid false positives from
+		// nested items (e.g., a pub field inside a private struct).
+		for (const child of node.children) {
+			if (child.type === "visibility_modifier" && child.text.startsWith("pub")) {
+				return true;
+			}
+		}
+
+		// Walk up parent chain for JS/TS-style export wrappers
+		// (export_statement, export_declaration, etc.)
+		let ancestor: SyntaxNode | null = node.parent;
 		while (ancestor) {
 			if (ancestor.type.includes("export")) {
 				return true;
-			}
-			// Rust: check for visibility_modifier (pub, pub(crate), pub(super), etc.)
-			// The visibility_modifier is a sibling/child of the definition node in
-			// Rust's tree-sitter grammar, not an ancestor wrapper.
-			for (const child of ancestor.children) {
-				if (child.type === "visibility_modifier" && child.text.startsWith("pub")) {
-					return true;
-				}
 			}
 			ancestor = ancestor.parent;
 		}

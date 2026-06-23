@@ -120,10 +120,10 @@ export const QUERIES: QueryDict = {
 (mod_item name: (identifier) @name) @definition.module
 `,
 		import: `\
-(use_declaration argument: (scoped_identifier) @full_path)
-(use_declaration argument: (scoped_use_list) @full_path)
-(extern_crate_declaration name: (identifier) @name)
+(use_declaration argument: (scoped_identifier) @name)
 (use_declaration argument: (identifier) @name)
+(extern_crate_declaration name: (identifier) @name)
+(mod_item name: (identifier) @name)
 `,
 		call: `\
 (call_expression function: (identifier) @name) @reference.call
@@ -220,30 +220,35 @@ export const QUERIES: QueryDict = {
 	html: {},
 	css: {},
 	json: {},
-	// Dart queries -- based on tree-sitter-dart grammar node types.
-	// NOTE: tree-sitter-dart grammar currently requires tree-sitter >=0.24.
-	// With tree-sitter 0.22.4, parser loading fails gracefully (try-catch in
-	// _loadGrammar). These queries become active when tree-sitter is upgraded.
+	// Dart queries -- based on @sengac/tree-sitter-dart grammar node types.
+	// NOTE: @sengac/tree-sitter-dart@1.x requires tree-sitter >=0.24 (ABI mismatch
+	// with tree-sitter 0.22.4). Parser loading fails gracefully via try-catch in
+	// _loadGrammar until tree-sitter is upgraded. Queries are matched against
+	// node-types.json in the grammar package and will activate once tree-sitter
+	// is upgraded to a compatible version.
 	dart: {
 		function: `\
 (function_signature name: (identifier) @name) @definition.function
-(method_signature name: (identifier) @name) @definition.method
 (getter_signature name: (identifier) @name) @definition.method
 (setter_signature name: (identifier) @name) @definition.method
 (constructor_signature name: (identifier) @name) @definition.method
+(factory_constructor_signature (identifier) @name) @definition.method
+(local_function_declaration (lambda_expression parameters: (function_signature name: (identifier) @name))) @definition.function
 `,
 		class: `\
 (class_definition name: (identifier) @name) @definition.class
-(mixin_declaration name: (identifier) @name) @definition.class
+(mixin_declaration (identifier) @name) @definition.class
 (enum_declaration name: (identifier) @name) @definition.class
 (extension_declaration name: (identifier) @name) @definition.class
 `,
 		import: `\
-(import_specification (uri) @source)
+(import_specification (configurable_uri (uri (string_literal) @source)))
 `,
 		call: `\
-(method_invocation name: (identifier) @name) @reference.call
-(method_invocation name: (unconditional_assignable_selector (identifier) @name)) @reference.call
+(constructor_invocation (identifier) @name) @reference.call
+(constructor_invocation (type_identifier) @name) @reference.call
+(new_expression (identifier) @name) @reference.call
+(new_expression (type_identifier) @name) @reference.call
 `,
 	},
 };

@@ -63,6 +63,12 @@ const INSTALL_INSTRUCTIONS: InstallInstruction[] = [
 		packages: ["rust-analyzer"],
 		commands: ["rustup component add rust-analyzer", "brew install rust-analyzer"],
 	},
+	{
+		language: "dart",
+		serverName: "dart",
+		packages: ["dart-sdk"],
+		commands: ["Install Dart SDK from https://dart.dev/get-dart", "brew install dart-sdk"],
+	},
 ];
 
 // -- Re-export for convenience ------------------------------------------------

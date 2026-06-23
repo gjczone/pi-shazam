@@ -101,7 +101,7 @@ export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
 	// -- Dart (Flutter) --------------------------------------------------------------
 	{
 		language: "dart",
-		serverName: "dart-language-server",
+		serverName: "dart",
 		commandNames: ["dart"] as const,
 		args: ["language-server"] as const,
 		fileSuffixes: [".dart"] as const,

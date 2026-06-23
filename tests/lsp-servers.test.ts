@@ -62,7 +62,7 @@ describe("lsp/servers", () => {
 		it("should have dart spec", () => {
 			const dart = LSP_SERVER_SPECS.find((s) => s.language === "dart");
 			expect(dart).toBeDefined();
-			expect(dart!.serverName).toBe("dart-language-server");
+			expect(dart!.serverName).toBe("dart");
 			expect(dart!.commandNames).toContain("dart");
 			expect(dart!.args).toContain("language-server");
 			expect(dart!.fileSuffixes).toContain(".dart");

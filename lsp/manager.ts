@@ -6,7 +6,7 @@
  * Supports multiple detection sources: project-local, PATH, and user home.
  */
 
-import { readdirSync, statSync, existsSync } from "node:fs";
+import { readdirSync, statSync, existsSync, realpathSync } from "node:fs";
 import { join, resolve, delimiter } from "node:path";
 import { homedir } from "node:os";
 import { LspClient } from "./client.js";
@@ -66,22 +66,34 @@ export function shouldSkipPath(filePath: string): boolean {
 
 /**
  * Walk project root and detect languages from file extensions.
+ * Checks root markers first for fast detection, then falls back to directory walk.
  */
-export function detectProjectLanguages(projectRoot: string, maxFiles: number = 2000): string[] {
+export function detectProjectLanguages(projectRoot: string, maxFiles: number = 5000): string[] {
 	const langs = new Set<string>();
 	let seen = 0;
 	const MAX_DEPTH = 50;
 	const visited = new Map<string, true>();
+	const root = resolve(projectRoot);
+
+	// Fast path: check root markers before doing a full directory walk.
+	// This avoids missing languages in large projects where the file limit
+	// might truncate the scan before encountering language-specific files.
+	for (const spec of LSP_SERVER_SPECS) {
+		for (const marker of spec.rootMarkers) {
+			if (existsSync(join(root, marker))) {
+				langs.add(spec.language);
+				break;
+			}
+		}
+	}
 
 	function walk(dir: string, depth: number = 0): void {
 		if (seen >= maxFiles || depth > MAX_DEPTH) return;
-		// Cycle detection via realpath
 		let real: string;
 		try {
-			// Use resolve to normalize; rely on visited map for cycle detection
-			real = resolve(dir);
+			real = realpathSync(dir);
 		} catch (err) {
-			_logWarn("detectProjectLanguages", `resolve failed for ${dir}`, err);
+			_logWarn("detectProjectLanguages", `realpath failed for ${dir}`, err);
 			return;
 		}
 		if (visited.has(real)) return;
@@ -91,10 +103,9 @@ export function detectProjectLanguages(projectRoot: string, maxFiles: number = 2
 		try {
 			entries = readdirSync(dir);
 		} catch (e) {
-			// Log non-permission errors (permission errors are common in node_modules, .git, etc.)
 			const err = e as NodeJS.ErrnoException;
 			if (err.code !== "EACCES" && err.code !== "EPERM") {
-				console.warn(`[pi-shazam] detectProjectLanguages: readdirSync failed for ${dir}: ${err.message}`);
+				_logWarn("detectProjectLanguages", `readdirSync failed for ${dir}`, err.message);
 			}
 			return;
 		}
@@ -108,7 +119,7 @@ export function detectProjectLanguages(projectRoot: string, maxFiles: number = 2
 			} catch (e) {
 				const err = e as NodeJS.ErrnoException;
 				if (err.code !== "EACCES" && err.code !== "EPERM" && err.code !== "ENOENT") {
-					console.warn(`[pi-shazam] detectProjectLanguages: statSync failed for ${fullPath}: ${err.message}`);
+					_logWarn("detectProjectLanguages", `statSync failed for ${fullPath}`, err.message);
 				}
 				continue;
 			}
@@ -123,7 +134,7 @@ export function detectProjectLanguages(projectRoot: string, maxFiles: number = 2
 		}
 	}
 
-	walk(resolve(projectRoot));
+	walk(root);
 	return [...langs].sort();
 }
 

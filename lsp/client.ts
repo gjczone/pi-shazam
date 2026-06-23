@@ -109,8 +109,13 @@ export interface LspLocation {
 
 export function pathToUri(filePath: string): string {
 	const resolved = path.resolve(filePath);
-	// file:// URI with absolute path, percent-encoding special characters
-	const normalized = resolved.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/");
+	const parts = resolved.replace(/\\/g, "/").split("/");
+	let normalized: string;
+	if (/^[A-Za-z]:$/.test(parts[0] ?? "")) {
+		normalized = "/" + parts[0] + "/" + parts.slice(1).map(encodeURIComponent).join("/");
+	} else {
+		normalized = parts.map(encodeURIComponent).join("/");
+	}
 	if (normalized[0] !== "/") {
 		return `file:///${normalized}`;
 	}
@@ -143,13 +148,9 @@ function severityName(value: number | undefined | null): LspDiagnostic["severity
 }
 
 function lspLanguageId(language: string, filePath: string): string {
-	const suffix = path.extname(filePath).toLowerCase();
-	if (language === "typescript") {
-		if (suffix === ".tsx") return "typescriptreact";
-		if (suffix === ".jsx") return "javascriptreact";
-		if ([".js", ".mjs", ".cjs"].includes(suffix)) return "javascript";
-		return "typescript";
-	}
+	const ext = path.extname(filePath).toLowerCase();
+	if (language === "typescript" && ext === ".tsx") return "typescriptreact";
+	if (language === "javascript" && ext === ".jsx") return "javascriptreact";
 	return language;
 }
 
@@ -362,13 +363,24 @@ export class LspClient {
 		const conn = this.connection;
 		if (!conn) throw new Error("LSP client not started");
 
-		const result = await this._sendRequest<InitializeResult>("initialize", initParams, 10000);
-
-		this._serverCapabilities = ((result as InitializeResult).capabilities as Record<string, unknown>) ?? {};
-
-		await conn.sendNotification("initialized", {});
-		this._initialized = true;
-		this._log(`LSP initialized: ${this.command[0]}`);
+		const initCts = new rpc.CancellationTokenSource();
+		let abortListener: (() => void) | undefined;
+		if (signal) {
+			abortListener = () => initCts.cancel();
+			signal.addEventListener("abort", abortListener, { once: true });
+		}
+		try {
+			const result = await this._sendRequest<InitializeResult>("initialize", initParams, 10000, initCts.token);
+			this._serverCapabilities = ((result as InitializeResult).capabilities as Record<string, unknown>) ?? {};
+			await conn.sendNotification("initialized", {});
+			this._initialized = true;
+			this._log(`LSP initialized: ${this.command[0]}`);
+		} finally {
+			initCts.dispose();
+			if (signal && abortListener) {
+				signal.removeEventListener("abort", abortListener);
+			}
+		}
 	}
 
 	async didOpen(filePath: string, text: string): Promise<void> {
@@ -893,13 +905,11 @@ export class LspClient {
 			const timer = setTimeout(() => {
 				this._inFlightRequests.delete(promise);
 				void promise.catch(() => {});
-				// Cancel the underlying LSP request to free server resources
 				if (onCancel) {
 					try {
 						onCancel();
-					} catch {
-						console.warn("[pi-shazam] withTimeout: onCancel callback failed");
-						// ignore cancel errors
+					} catch (e) {
+						this._log(`withTimeout: onCancel callback failed: ${e}`);
 					}
 				}
 				reject(new Error(`LSP request timed out after ${ms}ms`));
@@ -934,16 +944,19 @@ export class LspClient {
 			return Promise.reject(new Error("LSP connection not available"));
 		}
 		const cts = new rpc.CancellationTokenSource();
-		// Link external token to internal CTS so enrich-layer cancellation
-		// propagates to the actual LSP request (issue #396)
+		let tokenListener: { dispose: () => void } | undefined;
 		if (externalToken) {
-			externalToken.onCancellationRequested(() => cts.cancel());
+			tokenListener = externalToken.onCancellationRequested(() => cts.cancel());
 		}
 		try {
 			const promise = this.connection.sendRequest<R>(method, params, cts.token);
-			return this.withTimeout(promise, timeoutMs, () => cts.cancel()).finally(() => cts.dispose());
+			return this.withTimeout(promise, timeoutMs, () => cts.cancel()).finally(() => {
+				cts.dispose();
+				tokenListener?.dispose();
+			});
 		} catch (e) {
 			cts.dispose();
+			tokenListener?.dispose();
 			throw e;
 		}
 	}
@@ -972,21 +985,15 @@ export class LspClient {
 	 * concurrent or repeated calls.
 	 */
 	collectDiagnostics(filePaths: string[], consume = true): PublishDiagnosticsParams[] {
-		const expectedUris = new Set(
-			filePaths.filter((f) => this.isFileOpened(f)).map((f) => pathToUri(this.resolveRel(f))),
-		);
-
-		if (expectedUris.size === 0) return [];
-
 		const results: PublishDiagnosticsParams[] = [];
-		for (const [uri, notif] of this._notifications) {
-			if (expectedUris.has(uri)) {
+		for (const f of filePaths) {
+			if (!this.isFileOpened(f)) continue;
+			const uri = pathToUri(this.resolveRel(f));
+			const notif = this._notifications.get(uri);
+			if (notif) {
 				results.push(notif);
-				expectedUris.delete(uri);
+				if (consume) this._notifications.delete(uri);
 			}
-		}
-		if (consume) {
-			for (const r of results) this._notifications.delete(r.uri);
 		}
 
 		return results;
@@ -1019,9 +1026,8 @@ export class LspClient {
 		if (this.connection) {
 			try {
 				this.connection.dispose();
-			} catch {
-				console.warn("[pi-shazam] _cleanupAfterCrash: connection.dispose failed on crash");
-				// ignore dispose errors on crash
+			} catch (e) {
+				this._log(`_cleanupAfterCrash: connection.dispose failed: ${e}`);
 			}
 		}
 
@@ -1029,6 +1035,7 @@ export class LspClient {
 		this.connection = null;
 		this.process = null;
 		this._openedFiles.clear();
+		this._openingFiles.clear();
 		this._notifications.clear();
 		this._docVersions.clear();
 		this._serverCapabilities = {};
