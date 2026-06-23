@@ -248,6 +248,24 @@ function isFrameworkHandler(name: string, file?: string, kind?: string): boolean
 }
 
 /**
+ * Infrastructure symbols that are live code at module top level but invisible
+ * to the dependency graph because their usage is in top-level expressions
+ * (tree-sitter does not create symbol-level edges for top-level calls).
+ *
+ * These are NEVER dead code — they are module infrastructure. Skipping them
+ * prevents false-positive orphan reports in verify output.
+ */
+function isInfrastructureWrapper(name: string, kind: string, _file?: string): boolean {
+	// Node.js ESM/CJS interop: const _require = createRequire(import.meta.url)
+	if (kind === "function" && name === "_require") return true;
+
+	// ESM __filename / __dirname equivalents: fileURLToPath(import.meta.url)
+	if ((kind === "variable" || kind === "const") && (name === "__filename" || name === "__dirname")) return true;
+
+	return false;
+}
+
+/**
  * Shared orphan symbol detection.
  *
  * Single implementation used by baseline diff and verify tools.
@@ -353,6 +371,7 @@ export function findOrphans(graph: RepoGraph): {
 			if (isEntryPointSymbol(sym.name, sym.kind)) continue;
 			// Skip framework handler patterns
 			if (isFrameworkHandler(sym.name, sym.file, sym.kind)) continue;
+			if (isInfrastructureWrapper(sym.name, sym.kind, sym.file)) continue;
 
 			const orphan = { name: sym.name, kind: sym.kind, file: sym.file, line: sym.line };
 			all.push({ ...orphan, isExported: false });

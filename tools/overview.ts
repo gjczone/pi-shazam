@@ -7,7 +7,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { isNonSourceFile } from "../core/filter.js";
-import { getNextForTool, formatNextSection } from "../core/output.js";
+import { getNextForTool, formatNextSection, _logWarn } from "../core/output.js";
 import { createTool } from "./_factory.js";
 import { buildEnvelope } from "./_factory.js";
 import { EXT_TO_LANG, getProjectParserWarnings } from "../core/treesitter.js";
@@ -449,7 +449,7 @@ export function buildKeyDependenciesSection(projectRoot: string): string | null 
 
 		return lines.join("\n");
 	} catch (err) {
-		console.warn(`[pi-shazam] buildKeyDependenciesSection: failed to read package.json for ${projectRoot}`, err);
+		_logWarn("buildKeyDependenciesSection", `failed to read package.json for ${projectRoot}`, err);
 		return null;
 	}
 }
@@ -481,7 +481,7 @@ function buildPythonDepsSection(projectRoot: string): string | null {
 				return lines.join("\n");
 			}
 		} catch (err) {
-			console.warn(`[pi-shazam] buildPythonDepsSection: failed to read pyproject.toml for ${projectRoot}`, err);
+			_logWarn("buildPythonDepsSection", `failed to read pyproject.toml for ${projectRoot}`, err);
 			/* ignore */
 		}
 	}
@@ -499,7 +499,7 @@ function buildPythonDepsSection(projectRoot: string): string | null {
 			}
 			return lines.join("\n");
 		} catch (err) {
-			console.warn(`[pi-shazam] buildPythonDepsSection: failed to read requirements.txt for ${projectRoot}`, err);
+			_logWarn("buildPythonDepsSection", `failed to read requirements.txt for ${projectRoot}`, err);
 			/* ignore */
 		}
 	}
@@ -527,7 +527,7 @@ function buildRustDepsSection(projectRoot: string): string | null {
 		}
 		return lines.join("\n");
 	} catch (err) {
-		console.warn(`[pi-shazam] buildRustDepsSection: failed to read Cargo.toml for ${projectRoot}`, err);
+		_logWarn("buildRustDepsSection", `failed to read Cargo.toml for ${projectRoot}`, err);
 		return null;
 	}
 }
@@ -550,7 +550,7 @@ function buildGoDepsSection(projectRoot: string): string | null {
 		}
 		return lines.join("\n");
 	} catch (err) {
-		console.warn(`[pi-shazam] buildGoDepsSection: failed to read go.mod for ${projectRoot}`, err);
+		_logWarn("buildGoDepsSection", `failed to read go.mod for ${projectRoot}`, err);
 		return null;
 	}
 }

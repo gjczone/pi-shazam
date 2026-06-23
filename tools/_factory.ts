@@ -21,7 +21,7 @@ import type {
 import { Type, type TProperties, type TObject } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
-import { truncateOutput } from "../core/output.js";
+import { truncateOutput, _logWarn } from "../core/output.js";
 import { resolve } from "node:path";
 import { realpathSync } from "node:fs";
 
@@ -43,7 +43,7 @@ export function validatePathInProject(rawPath: string, projectRoot: string = pro
 		const realRoot = realpathSync(rootResolved);
 		return realResolved.startsWith(realRoot + "/") || realResolved === realRoot;
 	} catch (err) {
-		console.warn(`[pi-shazam] validatePathInProject: realpathSync failed for ${resolved}`, err);
+		_logWarn("validatePathInProject", `realpathSync failed for ${resolved}`, err);
 		return false;
 	}
 }
@@ -136,8 +136,9 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 		async execute(_toolCallId: string, params: Record<string, unknown>): Promise<AgentToolResult> {
 			const json = (params.json as boolean) ?? false;
 			const maxTokens = params.maxTokens as number | undefined;
-			// C3: Use scanner's effective project root (respects setProjectRoot override)
-			// instead of process.cwd() so scanner and LSP use the same root.
+			// Resolve "." to absolute path for JSON envelope metadata.
+			// Note: customExecute tools must import getEffectiveRoot() from scanner
+			// for path validation, as the factory does not inject the override.
 			const project = resolve(".");
 			// L7: Avoid mutating caller's params object -- use spread to create a new one
 			const effectiveParams = { ...params, project };
@@ -163,7 +164,7 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 					const parsed = JSON.parse(text);
 					text = JSON.stringify(parsed, null, 2);
 				} catch (err) {
-					console.warn(`[pi-shazam] createTool: JSON.parse failed for ${spec.name} output`, err);
+					_logWarn("createTool", `JSON.parse failed for ${spec.name} output`, err);
 					text = JSON.stringify(
 						{
 							schema_version: "1.0",

@@ -1,8 +1,8 @@
 /**
  * Tests for core/output — token budget truncation.
  */
-import { describe, it, expect } from "vitest";
-import { estimateTokens, truncateOutput } from "../core/output.js";
+import { describe, it, expect, vi } from "vitest";
+import { estimateTokens, truncateOutput, _logWarn } from "../core/output.js";
 
 describe("estimateTokens", () => {
 	it("should return 0 for empty string", () => {
@@ -94,5 +94,35 @@ describe("truncateOutput", () => {
 		const result = truncateOutput(lines, 40);
 		expect(result).toContain("module_0");
 		expect(result).toContain("module_1");
+	});
+});
+
+describe("_logWarn", () => {
+	it("should suppress ENOENT errors", () => {
+		const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const err = Object.assign(new Error("ENOENT: no such file"), { code: "ENOENT" });
+		_logWarn("isExecutable", "statSync failed", err);
+		expect(spy).not.toHaveBeenCalled();
+		spy.mockRestore();
+	});
+
+	it("should print concise message for other errors", () => {
+		const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const err = new Error("Permission denied");
+		_logWarn("isExecutable", "statSync failed", err);
+		expect(spy).toHaveBeenCalledTimes(1);
+		const msg = spy.mock.calls[0][0] as string;
+		expect(msg).toContain("Permission denied");
+		expect(msg).not.toContain("at statSync"); // no stack trace
+		spy.mockRestore();
+	});
+
+	it("should handle non-Error objects", () => {
+		const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		_logWarn("test", "something happened", "just a string");
+		expect(spy).toHaveBeenCalledTimes(1);
+		const msg = spy.mock.calls[0][0] as string;
+		expect(msg).toContain("just a string");
+		spy.mockRestore();
 	});
 });

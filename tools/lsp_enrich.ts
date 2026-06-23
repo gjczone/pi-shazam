@@ -14,6 +14,7 @@
 import type { LspClient } from "../lsp/client.js";
 import { uriToPath } from "../lsp/client.js";
 import { readFileAdaptiveAsync } from "../core/encoding.js";
+import { _logWarn } from "../core/output.js";
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -258,7 +259,7 @@ export async function ensureFileOpened(
 			}
 		}
 	} catch (err) {
-		console.warn(`[pi-shazam] ensureFileOpened: failed for ${filePath}`, err);
+		_logWarn("ensureFileOpened", `failed for ${filePath}`, err);
 		return null;
 	}
 	return { client: info.client, workspaceRoot: info.workspaceRoot, justOpened: false };
@@ -295,7 +296,7 @@ export async function lspWorkspaceSearch(
 			if (!raw) return [];
 			return raw.map((s) => toEnrichedHit(s)).filter(Boolean) as EnrichedSymbolHit[];
 		} catch (err) {
-			console.warn(`[pi-shazam] lspWorkspaceSearch: workspace/symbol failed for ${srv.language}`, err);
+			_logWarn("lspWorkspaceSearch", `workspace/symbol failed for ${srv.language}`, err);
 			return [];
 		}
 	});

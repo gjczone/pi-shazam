@@ -43,6 +43,14 @@ export function setProjectRoot(root: string): void {
 	_projectRootOverride = resolve(root);
 }
 
+/**
+ * Get the effective project root, respecting any override set via setProjectRoot().
+ * Returns the override if set, otherwise process.cwd().
+ */
+export function getEffectiveRoot(): string {
+	return _projectRootOverride ?? process.cwd();
+}
+
 // -- Concurrency guard (issue #92) -------------------------------------------
 // While Node.js is single-threaded and scanProject() is fully synchronous,
 // this mutex prevents re-entrant calls (e.g., scanProject called from within

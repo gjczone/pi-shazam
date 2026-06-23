@@ -21,6 +21,7 @@ import { assessRisk } from "../core/risk.js";
 import { isNonSourceFile, findOrphans } from "../core/filter.js";
 import { execFile } from "node:child_process";
 import { getGitChangedFiles } from "../core/git-utils.js";
+import { getEffectiveRoot } from "../core/scanner.js";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -28,7 +29,7 @@ import { existsSync } from "node:fs";
 import { redact } from "../core/redact.js";
 import { readFileAdaptiveAsync } from "../core/encoding.js";
 import { resolve } from "node:path";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput, _logWarn } from "../core/output.js";
 import { getLspManager } from "./_context.js";
 import { lspCodeActions } from "./lsp_enrich.js";
 import { createTool } from "./_factory.js";
@@ -57,7 +58,7 @@ export function registerVerify(pi: ExtensionAPI): void {
 		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
 			const maxTokens = params.maxTokens;
-			const projectRoot = (params.project as string) || process.cwd();
+			const projectRoot = getEffectiveRoot();
 			const options: VerifyOptions = {
 				quick: (params.quick as boolean) ?? false,
 				lspOnly: (params.lspOnly as boolean) ?? false,
@@ -501,7 +502,7 @@ async function runLspDiagnostics(
 							.filter(Boolean) as string[];
 					}
 				} catch (err) {
-					console.warn(`[pi-shazam] codeAction fetch failed for ${diag.file}:${diag.line}:${diag.col}`, err);
+					_logWarn("codeAction", `fetch failed for ${diag.file}:${diag.line}:${diag.col}`, err);
 				}
 			}),
 		);

@@ -101,3 +101,51 @@ describe("lsp/manager", () => {
 		});
 	});
 });
+
+describe("version manager bin discovery (#426)", () => {
+	it("should resolve NVM_BIN directory when env var is set", async () => {
+		const { _getVersionManagerBinDirs } = await import("../lsp/manager.js");
+		const origNvmBin = process.env.NVM_BIN;
+		try {
+			if (origNvmBin) {
+				const dirs = _getVersionManagerBinDirs();
+				expect(dirs).toContain(origNvmBin);
+			}
+		} finally {
+			process.env.NVM_BIN = origNvmBin;
+		}
+	});
+
+	it("should return empty array when no version manager env vars are set", async () => {
+		const { _getVersionManagerBinDirs } = await import("../lsp/manager.js");
+		const origNvmBin = process.env.NVM_BIN;
+		const origFnmPath = process.env.FNM_MULTISHELL_PATH;
+		const origFnmDir = process.env.FNM_DIR;
+		const origVoltaHome = process.env.VOLTA_HOME;
+		try {
+			delete process.env.NVM_BIN;
+			delete process.env.FNM_MULTISHELL_PATH;
+			delete process.env.FNM_DIR;
+			delete process.env.VOLTA_HOME;
+			const dirs = _getVersionManagerBinDirs();
+			expect(dirs).toEqual([]);
+		} finally {
+			if (origNvmBin) process.env.NVM_BIN = origNvmBin;
+			if (origFnmPath) process.env.FNM_MULTISHELL_PATH = origFnmPath;
+			if (origFnmDir) process.env.FNM_DIR = origFnmDir;
+			if (origVoltaHome) process.env.VOLTA_HOME = origVoltaHome;
+		}
+	});
+
+	it("should skip non-existent directories", async () => {
+		const { _getVersionManagerBinDirs } = await import("../lsp/manager.js");
+		const origNvmBin = process.env.NVM_BIN;
+		try {
+			process.env.NVM_BIN = "/nonexistent/path/that/does/not/exist";
+			const dirs = _getVersionManagerBinDirs();
+			expect(dirs).toEqual([]);
+		} finally {
+			process.env.NVM_BIN = origNvmBin;
+		}
+	});
+});

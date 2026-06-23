@@ -223,4 +223,31 @@ describe("core/filter findOrphans", () => {
 		expect(result.internal).toHaveLength(1);
 		expect(result.internal[0].name).toBe("unused_helper");
 	});
+
+	// ── Infrastructure wrapper filtering (#424) ───────────────────────────
+
+	it("should NOT report _require (ESM/CJS interop) as orphan", () => {
+		const graph = buildGraph([sym("test.ts::_require::1", "test.ts", "_require", "function", "internal")]);
+		const result = findOrphans(graph);
+		expect(result.internal).toHaveLength(0);
+	});
+
+	it("should NOT report __filename (ESM dirname) as orphan", () => {
+		const graph = buildGraph([sym("test.ts::__filename::1", "test.ts", "__filename", "const", "internal")]);
+		const result = findOrphans(graph);
+		expect(result.internal).toHaveLength(0);
+	});
+
+	it("should NOT report __dirname (ESM dirname) as orphan", () => {
+		const graph = buildGraph([sym("test.ts::__dirname::1", "test.ts", "__dirname", "variable", "internal")]);
+		const result = findOrphans(graph);
+		expect(result.internal).toHaveLength(0);
+	});
+
+	it("should still report genuinely dead functions named _somethingElse as orphans", () => {
+		const graph = buildGraph([sym("test.ts::_unusedHelper::5", "test.ts", "_unusedHelper", "function", "internal")]);
+		const result = findOrphans(graph);
+		expect(result.internal).toHaveLength(1);
+		expect(result.internal[0].name).toBe("_unusedHelper");
+	});
 });

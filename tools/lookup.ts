@@ -15,7 +15,8 @@ import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { getEffectiveRoot } from "../core/scanner.js";
+import { getNextForTool, formatNextSection, truncateOutput, _logWarn } from "../core/output.js";
 import { getLspManager } from "./_context.js";
 import { lspDocumentSymbols, lspCodeLens, lspImplementation, ensureFileOpened } from "./lsp_enrich.js";
 import type { DocumentSymbol } from "vscode-languageserver-protocol";
@@ -94,7 +95,7 @@ export function registerLookup(pi: ExtensionAPI): void {
 			const graph = scanProject(".");
 
 			// Path traversal guard: reject file paths outside project root
-			const projectRoot = process.cwd();
+			const projectRoot = getEffectiveRoot();
 			if (_isFilePath(name) && !validatePathInProject(name, projectRoot)) {
 				const text = buildEnvelope("shazam_lookup", projectRoot, "error", {
 					error: `Path '${name}' is outside the project root and cannot be read.`,
@@ -118,7 +119,7 @@ export function registerLookup(pi: ExtensionAPI): void {
 			} else if (mode === "state") {
 				text = _executeStateMap(graph, name);
 				if (json) {
-					text = buildEnvelope("shazam_lookup", process.cwd(), "ok", { symbol: name, mode: "state", text });
+					text = buildEnvelope("shazam_lookup", projectRoot, "ok", { symbol: name, mode: "state", text });
 				}
 			} else {
 				text = json
@@ -303,7 +304,7 @@ export function _executeSymbolJson(graph: RepoGraph, name: string, file?: string
 	const matches = _findSymbols(graph, name, file);
 	return buildEnvelope(
 		"shazam_lookup",
-		process.cwd(),
+		getEffectiveRoot(),
 		"ok",
 		matches.map((s) => ({
 			id: s.id,
@@ -368,13 +369,13 @@ async function _getHoverInfo(symbol: Symbol): Promise<HoverInfo> {
 				}
 			}
 		} catch (err) {
-			console.warn("[pi-shazam] _getHoverInfo: LSP hover failed", err);
+			_logWarn("_getHoverInfo", "LSP hover failed", err);
 			// LSP hover failed -- fall back to tree-sitter docstring
 		}
 	}
 
 	if (!result.lspHover) {
-		const filePath = resolve(process.cwd(), symbol.file);
+		const filePath = resolve(getEffectiveRoot(), symbol.file);
 		result.docstring = _extractDocstring(filePath, symbol.line);
 	}
 
@@ -414,7 +415,7 @@ function _extractDocstring(filePath: string, symbolLine: number): string | undef
 
 		return _extractDocstringTextFallback(content, symbolLine);
 	} catch (err) {
-		console.warn("[pi-shazam] _extractDocstring: docstring extraction failed", err);
+		_logWarn("_extractDocstring", "docstring extraction failed", err);
 		return undefined;
 	}
 }
@@ -540,7 +541,7 @@ async function _getTypeHierarchy(
 					await client.didOpen(symbol.file, fileContent);
 				}
 			} catch (err) {
-				console.warn("[pi-shazam] _getTypeHierarchy: file open failed", err);
+				_logWarn("_getTypeHierarchy", "file open failed", err);
 				// File open failed -- skip LSP hierarchy
 			}
 
@@ -552,7 +553,7 @@ async function _getTypeHierarchy(
 					position,
 				});
 			} catch (err) {
-				console.warn("[pi-shazam] _getTypeHierarchy: prepareTypeHierarchy not supported", err);
+				_logWarn("_getTypeHierarchy", "prepareTypeHierarchy not supported", err);
 				// prepareTypeHierarchy not supported by server
 			}
 
@@ -566,13 +567,13 @@ async function _getTypeHierarchy(
 				const [superResult, subResult] = await Promise.all([
 					needSuper
 						? client.request("typeHierarchy/supertypes", { item }).catch((err) => {
-								console.warn("[pi-shazam] _getTypeHierarchy: supertypes request failed", err);
+								_logWarn("_getTypeHierarchy", "supertypes request failed", err);
 								return null;
 							})
 						: Promise.resolve(null),
 					needSub
 						? client.request("typeHierarchy/subtypes", { item }).catch((err) => {
-								console.warn("[pi-shazam] _getTypeHierarchy: subtypes request failed", err);
+								_logWarn("_getTypeHierarchy", "subtypes request failed", err);
 								return null;
 							})
 						: Promise.resolve(null),
@@ -619,7 +620,7 @@ async function _getTypeHierarchy(
 						}
 					}
 				} catch (err) {
-					console.warn("[pi-shazam] _getTypeHierarchy: implementation lookup failed", err);
+					_logWarn("_getTypeHierarchy", "implementation lookup failed", err);
 					// implementation lookup failed -- silent
 				}
 			}
@@ -690,7 +691,7 @@ async function _executeFileDetailAsync(
 	_maxTokens: number | undefined,
 ): Promise<string> {
 	// Defense-in-depth: reject paths outside project root (issue #395)
-	if (!validatePathInProject(file, process.cwd())) {
+	if (!validatePathInProject(file, getEffectiveRoot())) {
 		return `Error: Path '${file}' is outside the project root and cannot be read.`;
 	}
 	const cacheKey = `${file}:text`;
@@ -709,7 +710,7 @@ async function _executeFileDetailAsync(
 			}
 			_removeFromDetailCache(cacheKey);
 		} catch (err) {
-			console.warn("[pi-shazam] _executeFileDetailAsync: stat failed for cache entry", err);
+			_logWarn("_executeFileDetailAsync", "stat failed for cache entry", err);
 			return cached.text;
 		}
 	}
@@ -756,7 +757,7 @@ async function _executeFileDetailAsync(
 	try {
 		mtimeMs = statSync(file).mtimeMs;
 	} catch (err) {
-		console.warn(`[pi-shazam] _executeFileDetailAsync: stat failed for ${file}`, err);
+		_logWarn("_executeFileDetailAsync", `stat failed for ${file}`, err);
 		// File may not exist
 	}
 	if (fileDetailCache.size >= MAX_DETAIL_CACHE_SIZE) {
@@ -934,7 +935,7 @@ function _executeFileDetailJson(graph: RepoGraph, file: string): string {
 	const symIds = graph.fileSymbols.get(file) || [];
 	const symbols = symIds.map((id) => graph.symbols.get(id)).filter((s): s is NonNullable<typeof s> => s !== undefined);
 
-	return buildEnvelope("shazam_lookup", process.cwd(), "ok", {
+	return buildEnvelope("shazam_lookup", getEffectiveRoot(), "ok", {
 		file,
 		symbolCount: symbols.length,
 		symbols: symbols.map((s) => ({
@@ -1039,7 +1040,7 @@ export async function executeLookupAsync(
 	showCallbacks: boolean,
 ): Promise<string> {
 	// Defense-in-depth: reject file paths outside project root (issue #395)
-	if (file && !validatePathInProject(file, process.cwd())) {
+	if (file && !validatePathInProject(file, getEffectiveRoot())) {
 		return `Error: File path '${file}' is outside the project root.`;
 	}
 	return _executeLookupAsync(graph, name, file, direction, showCallbacks);

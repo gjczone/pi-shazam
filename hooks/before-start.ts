@@ -23,7 +23,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { executeOverview } from "../tools/overview.js";
-import { hasTestFiles, hasHierarchyKinds } from "../core/output.js";
+import { hasTestFiles, hasHierarchyKinds, _logWarn } from "../core/output.js";
 import { createBaseline, getBaseline, formatBaselineSummary } from "../core/baseline.js";
 import { safeGitExec, isProjectDir } from "../core/git-utils.js";
 import { getProjectParserWarnings } from "../core/treesitter.js";
@@ -131,7 +131,7 @@ function buildProactiveRecommendations(projectRoot: string, graph: RepoGraph): s
 		lines.push("- After every edit: \`shazam_verify\` to check for errors");
 	} catch (err) {
 		// If scan fails, provide minimal recommendations
-		console.warn("[pi-shazam] buildProactiveRecommendations: scan failed", err);
+		_logWarn("buildProactiveRecommendations", "scan failed", err);
 		lines.push("### Recommendations");
 		lines.push("");
 		lines.push("- \`shazam_overview\` to understand project structure");
@@ -162,7 +162,7 @@ function buildSessionBaselineSection(_projectRoot: string, graph: RepoGraph): st
 		const baseline = getBaseline();
 		return baseline ? formatBaselineSummary(baseline) : "";
 	} catch (err) {
-		console.warn("[pi-shazam] buildSessionBaselineSection: createBaseline failed", err);
+		_logWarn("buildSessionBaselineSection", "createBaseline failed", err);
 		return "";
 	}
 }

@@ -13,6 +13,7 @@
  */
 
 import { stat, rename, unlink } from "node:fs/promises";
+import { _logWarn } from "./output.js";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -51,7 +52,7 @@ export async function rotateAuditLog(logPath: string): Promise<void> {
 					await rename(src, dst);
 				} catch (err) {
 					// file may not exist yet
-					console.warn(`[pi-shazam] rotateAuditLog: rename ${src} -> ${dst} failed`, err);
+					_logWarn("rotateAuditLog", `rename ${src} -> ${dst} failed`, err);
 				}
 			}
 			// Move current log to .1
@@ -62,6 +63,6 @@ export async function rotateAuditLog(logPath: string): Promise<void> {
 		}
 	} catch (err) {
 		// File may not exist yet -- first write creates it
-		console.warn(`[pi-shazam] rotateAuditLog: stat/unlink failed for ${logPath}`, err);
+		_logWarn("rotateAuditLog", `stat/unlink failed for ${logPath}`, err);
 	}
 }

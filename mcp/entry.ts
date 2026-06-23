@@ -13,6 +13,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanProject } from "../core/scanner.js";
+import { _logWarn } from "../core/output.js";
 import type { RepoGraph } from "../core/graph.js";
 import { LspManager, detectProjectLanguages } from "../lsp/manager.js";
 import { setLspManager } from "../tools/_context.js";
@@ -63,7 +64,7 @@ async function main(): Promise<void> {
 		try {
 			await lspManager.initializeAll();
 		} catch (err) {
-			console.error("[pi-shazam mcp] lsp init failed:", err);
+			_logWarn("lspInit", "lsp init failed", err);
 		}
 	}
 
@@ -109,6 +110,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-	console.error("pi-shazam MCP server failed to start:", err);
+	_logWarn("main", "MCP server failed to start", err);
 	process.exit(1);
 });

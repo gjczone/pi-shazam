@@ -12,6 +12,7 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { hasRecentPassingVerify } from "./verify-state.js";
 import { tokenizeCommand, extractCommandFromEvent } from "./_bash-utils.js";
+import { _logWarn } from "../core/output.js";
 
 /**
  * High-risk patterns that should always trigger confirmation.
@@ -159,7 +160,7 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 				ctx.ui.notify(`Proceeding with ${destructive.level}-risk command...`, "warning");
 			} catch (err) {
 				// If confirm dialog fails (e.g., non-interactive mode), block high-risk
-				console.warn("[pi-shazam] registerSafetyHooks: confirm dialog failed", err);
+				_logWarn("registerSafetyHooks", "confirm dialog failed", err);
 				if (destructive.level === "HIGH") {
 					return {
 						block: true,
