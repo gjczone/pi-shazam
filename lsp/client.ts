@@ -1,5 +1,5 @@
 /**
- * pi-shazam lsp/client — LSP protocol communication (JSON-RPC over stdio).
+ * pi-shazam lsp/client -- LSP protocol communication (JSON-RPC over stdio).
  *
  * Uses vscode-jsonrpc/node for wire protocol handling
  * (StreamMessageReader / StreamMessageWriter + createMessageConnection).
@@ -243,7 +243,7 @@ export class LspClient {
 
 		// Listen for notifications (diagnostics etc.)
 		this.connection.onNotification("textDocument/publishDiagnostics", (params: PublishDiagnosticsParams) => {
-			// Upsert by URI — O(1) via Map (was O(N) findIndex + splice)
+			// Upsert by URI -- O(1) via Map (was O(N) findIndex + splice)
 			this._notifications.set(params.uri, params);
 			// Cap to prevent unbounded growth in long-running sessions
 			if (this._notifications.size > LspClient.MAX_NOTIFICATIONS) {
@@ -912,7 +912,7 @@ export class LspClient {
 	/**
 	 * Send an LSP request with automatic cancellation on timeout.
 	 * Creates a CancellationTokenSource, passes the token to sendRequest,
-	 * and cancels it if the timeout fires — so the server can stop work.
+	 * and cancels it if the timeout fires -- so the server can stop work.
 	 * If an externalToken is provided, cancelling it also cancels the internal CTS.
 	 */
 	private _sendRequest<R>(
@@ -959,7 +959,7 @@ export class LspClient {
 	 *
 	 * When `consume` is true (default), matched notifications are removed from
 	 * the internal buffer, so a second call for the same files returns empty.
-	 * When `consume` is false, the internal buffer is left intact — safe for
+	 * When `consume` is false, the internal buffer is left intact -- safe for
 	 * concurrent or repeated calls.
 	 */
 	collectDiagnostics(filePaths: string[], consume = true): PublishDiagnosticsParams[] {
@@ -1087,7 +1087,7 @@ export class LspClient {
 				try {
 					proc.kill();
 				} catch (err) {
-					// Process may have already exited — ignore
+					// Process may have already exited -- ignore
 					console.warn("[pi-shazam] _doClose: proc.kill() failed", err);
 				}
 			}
@@ -1142,7 +1142,7 @@ export class LspClient {
 		//   3. Updating the Language Support section in mcp/README.md
 		//
 		// Remaining languages in EXT_TO_LANG (C/C++, Java, C#, Ruby, HTML, CSS)
-		// use tree-sitter parsing only. This is by design — see issue #94.
+		// use tree-sitter parsing only. This is by design -- see issue #94.
 		const ext = path.extname(filePath).toLowerCase();
 		const map: Record<string, string> = {
 			".py": "python",

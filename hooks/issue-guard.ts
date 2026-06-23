@@ -1,5 +1,5 @@
 /**
- * pi-shazam hooks/issue-guard — GitHub issue creation detector.
+ * pi-shazam hooks/issue-guard -- GitHub issue creation detector.
  *
  * Intercepts bash tool_call events to detect `gh issue create` commands.
  * When a serious issue (bug/crash/error) is created, sets a pending impact

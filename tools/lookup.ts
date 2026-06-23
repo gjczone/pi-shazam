@@ -1,5 +1,5 @@
 /**
- * pi-shazam tools/lookup — Unified symbol/file lookup tool.
+ * pi-shazam tools/lookup -- Unified symbol/file lookup tool.
  *
  * Merges four tools into one interface (issue #362):
  *   - symbol:      graph-based symbol lookup with LSP document symbol enrichment
@@ -68,7 +68,7 @@ export function registerLookup(pi: ExtensionAPI): void {
 		name: "shazam_lookup",
 		label: "Lookup Symbol or File",
 		description: `\
-		Look up anything in the codebase — a symbol by name or a file by path.
+		Look up anything in the codebase - a symbol by name or a file by path.
 		Auto-detects whether the input is a file path or symbol name and returns
 		the most relevant information: definition, kind, signature, type hierarchy,
 		file structure, PageRank, callers/callees. Use mode=state for enum/state
@@ -238,13 +238,13 @@ async function _executeLookupAsync(
 	);
 	lines.push("");
 
-	// Hover info — fetch in parallel for all matches
+	// Hover info -- fetch in parallel for all matches
 	const hoverResults = await Promise.all(namedMatches.map((e) => _getHoverInfo(e.sym)));
 
 	for (let i = 0; i < namedMatches.length; i++) {
 		const e = namedMatches[i]!;
 		const s = e.sym;
-		lines.push(`${s.kind} \`${_sanitizeMarkdown(s.name)}\` — ${s.file}:${s.line}-${e.endLine} [${s.visibility}]`);
+		lines.push(`${s.kind} \`${_sanitizeMarkdown(s.name)}\` - ${s.file}:${s.line}-${e.endLine} [${s.visibility}]`);
 		if (e.container) lines.push(`  container: ${e.container}`);
 		lines.push(`  PageRank: ${s.pagerank.toFixed(4)}`);
 		lines.push(`  signature: ${s.signature}`);
@@ -276,12 +276,12 @@ async function _executeLookupAsync(
 			if (hierarchy.supertypes.length > 0) {
 				lines.push(`Supertypes (${hierarchy.supertypes.length}):`);
 				for (const st of hierarchy.supertypes)
-					lines.push(`  - ${st.kind} \`${_sanitizeMarkdown(st.name)}\` — ${st.file}:${st.line}`);
+					lines.push(`  - ${st.kind} \`${_sanitizeMarkdown(st.name)}\` - ${st.file}:${st.line}`);
 			}
 			if (hierarchy.subtypes.length > 0) {
 				lines.push(`Subtypes (${hierarchy.subtypes.length}):`);
 				for (const st of hierarchy.subtypes)
-					lines.push(`  - ${st.kind} \`${_sanitizeMarkdown(st.name)}\` — ${st.file}:${st.line}`);
+					lines.push(`  - ${st.kind} \`${_sanitizeMarkdown(st.name)}\` - ${st.file}:${st.line}`);
 			}
 			if (hierarchy.implementations.length > 0) {
 				lines.push(`Implementations (${hierarchy.implementations.length}):`);
@@ -369,7 +369,7 @@ async function _getHoverInfo(symbol: Symbol): Promise<HoverInfo> {
 			}
 		} catch {
 			console.warn("[pi-shazam] _getHoverInfo: LSP hover failed");
-			// LSP hover failed — fall back to tree-sitter docstring
+			// LSP hover failed -- fall back to tree-sitter docstring
 		}
 	}
 
@@ -402,7 +402,7 @@ function _extractDocstring(filePath: string, symbolLine: number): string | undef
 				const tree = tsAdapter.parse(content, lang);
 				if (tree) {
 					try {
-						const rootNode = tree.rootNode as unknown as AstNode;
+						const rootNode = tree.rootNode as AstNode;
 						const docComment = _extractDocstringFromAst(rootNode, symbolLine);
 						if (docComment) return docComment;
 					} finally {
@@ -541,7 +541,7 @@ async function _getTypeHierarchy(
 				}
 			} catch {
 				console.warn("[pi-shazam] _getTypeHierarchy: file open failed");
-				// File open failed — skip LSP hierarchy
+				// File open failed -- skip LSP hierarchy
 			}
 
 			// Step 1: prepareTypeHierarchy (separate error handling)
@@ -578,7 +578,7 @@ async function _getTypeHierarchy(
 						}
 					} catch {
 						console.warn("[pi-shazam] _getTypeHierarchy: supertypes request failed");
-						// supertypes request failed — fall through
+						// supertypes request failed -- fall through
 					}
 				}
 
@@ -601,7 +601,7 @@ async function _getTypeHierarchy(
 						}
 					} catch {
 						console.warn("[pi-shazam] _getTypeHierarchy: subtypes request failed");
-						// subtypes request failed — fall through
+						// subtypes request failed -- fall through
 					}
 				}
 			}
@@ -623,7 +623,7 @@ async function _getTypeHierarchy(
 					}
 				} catch {
 					console.warn("[pi-shazam] _getTypeHierarchy: implementation lookup failed");
-					// implementation lookup failed — silent
+					// implementation lookup failed -- silent
 				}
 			}
 		}
@@ -968,7 +968,7 @@ export function _executeStateMap(graph: RepoGraph, symbolName: string): string {
 	const lines: string[] = [];
 	for (const target of targets) {
 		if (!STATE_MAP_KINDS.has(target.kind)) {
-			lines.push(`## ${target.kind} \`${_sanitizeMarkdown(target.name)}\` — cannot generate state map`);
+			lines.push(`## ${target.kind} \`${_sanitizeMarkdown(target.name)}\` - cannot generate state map`);
 			lines.push("");
 			lines.push(
 				`Symbol \`${_sanitizeMarkdown(target.name)}\` is a ${target.kind}, not an enum, const group, or state machine.`,
@@ -1006,7 +1006,7 @@ export function _executeStateMap(graph: RepoGraph, symbolName: string): string {
 			lines.push(`### Dependencies (${outgoing.length} symbols this depends on)`);
 			for (const edge of outgoing) {
 				const sym = graph.symbols.get(edge.target);
-				if (sym) lines.push(`- ${sym.kind} \`${_sanitizeMarkdown(sym.name)}\` — ${sym.file}:${sym.line}`);
+				if (sym) lines.push(`- ${sym.kind} \`${_sanitizeMarkdown(sym.name)}\` - ${sym.file}:${sym.line}`);
 			}
 		}
 

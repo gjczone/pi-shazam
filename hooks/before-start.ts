@@ -1,5 +1,5 @@
 /**
- * pi-shazam hooks/before-start — Inject project overview into system prompt.
+ * pi-shazam hooks/before-start -- Inject project overview into system prompt.
  *
  * Registered on the `before_agent_start` event. Scans the project with
  * tree-sitter, generates an overview, and injects it into the system prompt
@@ -204,7 +204,7 @@ let _hasShownOverview = false;
 export function generateOverviewForPrompt(projectRoot: string, isContinuation = false): string {
 	// For continuation sessions, skip the full overview (fixes #117, #118)
 	if (isContinuation && _hasShownOverview) {
-		return "[pi-shazam] Session continuation — use shazam_overview for project structure.";
+		return "[pi-shazam] Session continuation - use shazam_overview for project structure.";
 	}
 
 	// Fast short-circuit for non-project directories (issue #350):
@@ -271,7 +271,7 @@ export function registerBeforeStartHook(pi: ExtensionAPI): void {
 			const projectRoot = ctx.cwd || ".";
 			const overviewText = generateOverviewForPrompt(projectRoot, _hasShownOverview);
 			// Append overview to the existing system prompt (AGENTS.md, skills, etc.)
-			// NOT replace — returning systemPrompt alone would wipe global rules and skill descriptions
+			// NOT replace -- returning systemPrompt alone would wipe global rules and skill descriptions
 			// event.systemPrompt is string[] in types but string at runtime (Pi API contract)
 			const raw = event.systemPrompt;
 			const existing: string[] = Array.isArray(raw) ? raw : raw ? [raw] : [];

@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/filter — Shared file filtering utilities.
+ * pi-shazam core/filter -- Shared file filtering utilities.
  *
  * Centralises the "is this a source file?" logic used by hotspots, orphan,
  * verify, overview, and check tools. Keeps filtering consistent across the
@@ -45,7 +45,7 @@ function moduleMatchesFile(resolvedModule: string, targetFile: string): boolean 
 }
 
 /**
- * Config files, generated files, and lockfiles — excluded from source-file
+ * Config files, generated files, and lockfiles -- excluded from source-file
  * analysis (hotspots, orphan detection, overview, check).
  *
  * The list is deliberately narrow: it covers *non-source* files that
@@ -173,7 +173,7 @@ function isEntryPointSymbol(name: string, kind: string): boolean {
 	if (name === "main" && kind === "function") return true;
 	if (name === "Default" && kind === "trait") return true;
 	if (name === "Drop" && kind === "trait") return true;
-	// Rust standard trait implementations — these are dispatched by the
+	// Rust standard trait implementations -- these are dispatched by the
 	// compiler or standard library, never called by name in user code.
 	// Without this, every `impl Clone for Foo` etc. is a false orphan.
 	if (kind === "impl" || kind === "trait") {
@@ -214,7 +214,7 @@ function isEntryPointSymbol(name: string, kind: string): boolean {
 	// Go entry points
 	if (name === "main" && kind === "function") return true;
 	if (name === "init" && kind === "function") return true;
-	// Rust module declarations are structural — they namespace items but
+	// Rust module declarations are structural -- they namespace items but
 	// are never referenced by name at runtime.
 	if (kind === "module") return true;
 	// Common framework entry points
@@ -257,13 +257,13 @@ function isFrameworkHandler(name: string, file?: string, kind?: string): boolean
  * Returns symbols with zero incoming references, excluding:
  *  - Non-source files (config, lockfiles, node_modules, dist)
  *  - ALL exported symbols (consumers are external to the scanned graph)
- *  - .d.ts ambient declaration files (issue #244 — ambient types are consumed
+ *  - .d.ts ambient declaration files (issue #244 -- ambient types are consumed
  *    via global scope or type-only imports invisible to symbol-level refs)
  *  - Files imported purely for side effects (no named/namespace binding from
- *    any importer — issue #243). Files with bindings retain full detection
+ *    any importer -- issue #243). Files with bindings retain full detection
  *    so unused internals in namespace-imported modules still surface (#246).
  *  - PascalCase functions/classes in .tsx/.jsx files (React components
- *    consumed via JSX, which does not create a symbol-level ref — #249)
+ *    consumed via JSX, which does not create a symbol-level ref -- #249)
  *  - Anonymous functions (no name to reference)
  *  - Test files
  *  - Registration functions (register*, createTool) called by MCP/extension frameworks
@@ -288,7 +288,7 @@ export function findOrphans(graph: RepoGraph): {
 	// create file-level edges but no symbol-level bindings, so their
 	// symbols would otherwise be reported as orphans.
 	//
-	// Files imported via named/namespace imports are NOT in this set —
+	// Files imported via named/namespace imports are NOT in this set --
 	// they have bindings and their unused internal symbols should still be
 	// reported (issue #246).
 	const sideEffectOnlyFiles = new Set<string>();
@@ -305,16 +305,16 @@ export function findOrphans(graph: RepoGraph): {
 
 	for (const sym of graph.symbols.values()) {
 		if (isNonSourceFile(sym.file)) continue;
-		// Skip .d.ts ambient declaration files — by design, their symbols
+		// Skip .d.ts ambient declaration files -- by design, their symbols
 		// are consumed via global scope or type-only imports, neither of
 		// which produces a symbol-level reference in the graph (issue #244).
 		if (sym.file.endsWith(".d.ts")) continue;
-		// Skip ALL exported symbols — external consumers are invisible to
+		// Skip ALL exported symbols -- external consumers are invisible to
 		// tree-sitter scan, so zero internal refs does not mean dead code.
 		if (sym.visibility === "exported") continue;
 		// Skip symbols in side-effect-only imported modules (issue #243).
 		if (sideEffectOnlyFiles.has(sym.file)) continue;
-		// Skip PascalCase functions/classes in .tsx/.jsx files — they are
+		// Skip PascalCase functions/classes in .tsx/.jsx files -- they are
 		// almost certainly React components consumed via `<Component />`
 		// JSX syntax, which does not create a symbol-level reference
 		// in the graph (issue #249).
@@ -336,7 +336,7 @@ export function findOrphans(graph: RepoGraph): {
 		if (!incoming || incoming.length === 0) {
 			// Skip anonymous functions
 			if (sym.kind === "anonymous_function") continue;
-			// Skip impl blocks — they are structural declarations (impl Foo { ... })
+			// Skip impl blocks -- they are structural declarations (impl Foo { ... })
 			// and are never referenced by name in the call graph (fixes #252).
 			if (sym.kind === "impl") continue;
 			// Skip test files

@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/baseline — In-memory session baseline for diff-aware verify.
+ * pi-shazam core/baseline -- In-memory session baseline for diff-aware verify.
  *
  * Captures project health at session start (LSP errors/warnings, orphan
  * symbols, graph edges) so post-edit verify output can show what changed

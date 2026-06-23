@@ -1,5 +1,5 @@
 /**
- * pi-shazam hooks/pre-edit — Pre-edit impact analysis guard.
+ * pi-shazam hooks/pre-edit -- Pre-edit impact analysis guard.
  *
  * Intercepts tool_call events for write/edit and detects when:
  *   1. Multiple files are about to be edited in a single turn
@@ -132,7 +132,7 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 			};
 		}
 
-		const input = "input" in event ? (event as unknown as Record<string, unknown>).input : {};
+		const input = event.input;
 
 		const rawFiles = extractFilesFromInput(input);
 		if (rawFiles.length === 0) return;
@@ -145,7 +145,7 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 
 		// Track tentatively for this tool call (for removal on failure).
 		// Also schedule TTL-based eviction in case tool_result never arrives.
-		const toolId = (event as unknown as Record<string, unknown>).toolCallId as string | undefined;
+		const toolId = event.toolCallId;
 		if (toolId) {
 			if (!_tentativeFiles.has(toolId)) _tentativeFiles.set(toolId, new Set());
 			for (const f of files) {
@@ -196,7 +196,7 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 
 	// On tool_result: remove tentatively tracked files if the tool call failed
 	pi.on("tool_result", (event) => {
-		const toolId = (event as unknown as Record<string, unknown>).toolCallId as string | undefined;
+		const toolId = event.toolCallId;
 
 		// Clear any TTL timeout for this tool call
 		if (toolId && _timeoutHandles.has(toolId)) {

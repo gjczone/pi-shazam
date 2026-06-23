@@ -1,5 +1,5 @@
 /**
- * pi-shazam lsp/manager — Language server process lifecycle management.
+ * pi-shazam lsp/manager -- Language server process lifecycle management.
  *
  * Detects project languages, spawns LSP servers on demand,
  * handles health checks, restarts, and graceful shutdown.
@@ -460,7 +460,7 @@ export class LspManager {
 					await client.close().catch((err) => this.log(`close on abort for ${language} failed: ${err}`));
 					return null;
 				}
-				// Successful init — reset restart budget
+				// Successful init -- reset restart budget
 				this._restartBudget.delete(language);
 			} catch (err) {
 				this.log(`Failed to start/initialize LSP for ${language}: ${err}`);
@@ -511,7 +511,7 @@ export class LspManager {
 	 */
 	async initializeAll(signal?: AbortSignal): Promise<void> {
 		// Reset the shutdown latch so LSP recovers after a prior shutdown()
-		// (_shuttingDown is a one-way latch set by shutdown() — without this
+		// (_shuttingDown is a one-way latch set by shutdown() -- without this
 		// reset, getServerForLanguage returns null forever).
 		this._shuttingDown = false;
 

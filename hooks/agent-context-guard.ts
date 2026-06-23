@@ -1,5 +1,5 @@
 /**
- * pi-shazam hooks/agent-context-guard — Agent prompt structural context checker.
+ * pi-shazam hooks/agent-context-guard -- Agent prompt structural context checker.
  *
  * Intercepts agent-like tool calls (agent, agent_swarm, subagent) and checks
  * whether the prompt contains sufficient structural context for the task type.
@@ -50,7 +50,7 @@ const CODING_CONTEXT_THRESHOLD = 1;
  *   - File:line references: combined file-path + line number (e.g., src/foo.ts:42)
  *   - shazam_ tool references
  *
- * Standalone line numbers (e.g., "line 42" or ":42") no longer count —
+ * Standalone line numbers (e.g., "line 42" or ":42") no longer count --
  * they are trivially gamed and do not provide structural context.
  */
 function computeContextScore(prompt: string): number {
@@ -82,7 +82,7 @@ export function registerAgentContextGuard(pi: ExtensionAPI): void {
 		const toolName = event.toolName.toLowerCase();
 		if (!AGENT_TOOL_NAMES.has(toolName)) return;
 
-		const input = "input" in event ? (event as unknown as Record<string, unknown>).input : {};
+		const input = event.input;
 		const prompt = (input as Record<string, unknown>).prompt as string;
 		if (!prompt) return;
 

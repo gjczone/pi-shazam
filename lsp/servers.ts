@@ -1,5 +1,5 @@
 /**
- * pi-shazam lsp/servers — Language server configuration table.
+ * pi-shazam lsp/servers -- Language server configuration table.
  *
  * Ported from repomap/src/lsp.py (LSP_SPECS, language_for_file).
  * 7 languages (Python, TypeScript, Go, JSON, YAML, Rust, Dart).

@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/pagerank — PageRank importance scoring on RepoGraph.
+ * pi-shazam core/pagerank -- PageRank importance scoring on RepoGraph.
  *
  * Ported from repomap/src/ranking.py (GraphAnalyzer.calculate_pagerank).
  *

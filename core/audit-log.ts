@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/audit-log — Unified audit log rotation.
+ * pi-shazam core/audit-log -- Unified audit log rotation.
  *
  * Single source of truth for audit log retention policy.
  * Both mcp/tools.ts and hooks/tool-logger.ts delegate to rotateAuditLog().
@@ -57,11 +57,11 @@ export async function rotateAuditLog(logPath: string): Promise<void> {
 			// Move current log to .1
 			await rename(logPath, `${logPath}.1`);
 		} else if (tooOld) {
-			// Delete the entire log — it will be recreated on next write
+			// Delete the entire log -- it will be recreated on next write
 			await unlink(logPath);
 		}
 	} catch (err) {
-		// File may not exist yet — first write creates it
+		// File may not exist yet -- first write creates it
 		console.warn(`[pi-shazam] rotateAuditLog: stat/unlink failed for ${logPath}`, err);
 	}
 }

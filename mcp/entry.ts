@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * pi-shazam MCP server — exposes codebase analysis tools via Model Context Protocol.
+ * pi-shazam MCP server -- exposes codebase analysis tools via Model Context Protocol.
  *
  * Usage: npx pi-shazam-mcp
  *
@@ -41,10 +41,10 @@ try {
 	VERSION = pkg.version || VERSION;
 } catch {
 	console.warn("[pi-shazam mcp] failed to read package.json version");
-	// Fallback — version will be inaccurate but MCP will still work
+	// Fallback -- version will be inaccurate but MCP will still work
 }
 
-// Graph cache — uses scanProject's built-in incremental mtime detection.
+// Graph cache -- uses scanProject's built-in incremental mtime detection.
 // No TTL needed; scanProject already handles per-file change detection.
 let cachedGraph: RepoGraph | null = null;
 

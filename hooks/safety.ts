@@ -1,9 +1,9 @@
 /**
- * pi-shazam hooks/safety — Safety gate for bash commands.
+ * pi-shazam hooks/safety -- Safety gate for bash commands.
  *
  * Provides two safety features:
- * 1. Destructive command detection — shows confirmation dialog for dangerous commands
- * 2. Pre-commit gate — blocks git commit if shazam_verify was not run recently
+ * 1. Destructive command detection -- shows confirmation dialog for dangerous commands
+ * 2. Pre-commit gate -- blocks git commit if shazam_verify was not run recently
  *
  * Uses Pi's ctx.ui.confirm() for interactive confirmation.
  * Uses shared verify-state module for reliable verify detection.
@@ -25,7 +25,7 @@ const HIGH_RISK_PATTERNS: Array<{ regex: RegExp; label: string }> = [
 	{ regex: /\bfdisk\b/, label: "fdisk" },
 	{ regex: /\bparted\b/, label: "parted" },
 	{ regex: /\bsfdisk\b/, label: "sfdisk" },
-	{ regex: /:\(\)\s*\{.*:\s*\|\s*:.*&\s*\}.*;/, label: ":(){ :|:& };:" }, // fork bomb (flexible — catches spacing / padding variants)
+	{ regex: /:\(\)\s*\{.*:\s*\|\s*:.*&\s*\}.*;/, label: ":(){ :|:& };:" }, // fork bomb (flexible - catches spacing / padding variants)
 	{ regex: /\beval\b/, label: "eval" },
 	{ regex: /\bsource\s+\S/, label: "source" },
 	{ regex: /^\.\s+\S/, label: "source (.)" },

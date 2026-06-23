@@ -1,16 +1,16 @@
 /**
- * pi-shazam core/treesitter — Tree-sitter AST parsing + symbol extraction.
+ * pi-shazam core/treesitter -- Tree-sitter AST parsing + symbol extraction.
  *
  * Ported from repomap/src/parser.py (TreeSitterAdapter).
  *
  * Node.js tree-sitter (v0.22.4) API:
  * - Parser = require("tree-sitter") (default export is the Parser)
  * - Query = require("tree-sitter").Query (named export)
- * - parser.setLanguage(grammarModule) — pass grammar module directly
+ * - parser.setLanguage(grammarModule) -- pass grammar module directly
  * - query.captures(node) -> {name: string, node: SyntaxNode}[]
  *
  * Grammar modules (tree-sitter-python etc.) export objects with
- * {name, language, nodeTypeInfo} — they are passed directly to
+ * {name, language, nodeTypeInfo} -- they are passed directly to
  * setLanguage() and Query constructor.
  */
 
@@ -167,7 +167,7 @@ export class TreeSitterAdapter {
 			this._loadGrammar(lang, _pkg);
 		}
 
-		// TypeScript + TSX — special handling
+		// TypeScript + TSX -- special handling
 		this._loadTypeScript();
 
 		// Precompile queries
@@ -187,7 +187,7 @@ export class TreeSitterAdapter {
 			_parserStatus.set(lang, {
 				status: "unavailable",
 				reason,
-				suggestion: `LSP support still works (hover, verify, fix). Tree-sitter parsing unavailable — upgrade tree-sitter to enable.`,
+				suggestion: `LSP support still works (hover, verify, fix). Tree-sitter parsing unavailable - upgrade tree-sitter to enable.`,
 			});
 			this.log(`Parser unavailable [${lang}]: ${e}`);
 		}
@@ -247,7 +247,7 @@ export class TreeSitterAdapter {
 				for (const [qtype, src] of Object.entries(patterns)) {
 					if (!src || src.trim().length === 0) continue;
 					try {
-						// Query(language, source) — language from parser
+						// Query(language, source) -- language from parser
 						const language = parser.getLanguage();
 						const q = new Query(language, src);
 						langQueries.set(qtype, q);
@@ -276,7 +276,7 @@ export class TreeSitterAdapter {
 		const parser = this.parsers.get(lang);
 		if (!parser) return null;
 
-		const MAX_PARSE_SIZE = 5 * 1024 * 1024; // 5MB — catches minified bundles/data files (fixes #101)
+		const MAX_PARSE_SIZE = 5 * 1024 * 1024; // 5MB - catches minified bundles/data files (fixes #101)
 		const sourceBytes = Buffer.byteLength(source, "utf-8");
 		if (sourceBytes > MAX_PARSE_SIZE) {
 			this.log(`File too large for parsing (${sourceBytes} bytes > ${MAX_PARSE_SIZE}), skipping`);
@@ -497,13 +497,13 @@ export class TreeSitterAdapter {
 	// -- Reference extraction --------------------------------------------------
 
 	/**
-		 * Extract identifier references from function call argument positions and return statements.
-		 *
-		 * Used to discover same-file callback/event handler references
-		 * (e.g., `arr.map(edgeIdentity)` or `process.on("SIGTERM", onSignal)`),
-		 * which do not appear in call extraction results (because the callee is not being called),
-		 * but are valid symbol usages that should not be classified as orphans.
-		 */
+	 * Extract identifier references from function call argument positions and return statements.
+	 *
+	 * Used to discover same-file callback/event handler references
+	 * (e.g., `arr.map(edgeIdentity)` or `process.on("SIGTERM", onSignal)`),
+	 * which do not appear in call extraction results (because the callee is not being called),
+	 * but are valid symbol usages that should not be classified as orphans.
+	 */
 	extractRefs(tree: Tree, lang: string): [string, number][] {
 		const langQueries = this.queries.get(lang);
 		const query = langQueries?.get("ref");

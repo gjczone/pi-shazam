@@ -1,5 +1,5 @@
 /**
- * pi-shazam tools/_factory — Tool registration factory.
+ * pi-shazam tools/_factory -- Tool registration factory.
  *
  * Eliminates per-tool boilerplate by centralizing:
  * - json/maxTokens parameter defaults (merged with tool-specific params)
@@ -149,7 +149,7 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 					text = buildEnvelope(spec.name, project, "error", { message: errMsg });
 				} else {
 					return {
-						content: [{ type: "text", text: `Error: ${spec.name} failed — ${errMsg}` }],
+						content: [{ type: "text", text: `Error: ${spec.name} failed - ${errMsg}` }],
 						isError: true,
 					};
 				}

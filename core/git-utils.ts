@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/git-utils — Shared git utility functions.
+ * pi-shazam core/git-utils -- Shared git utility functions.
  *
  * Fixes issue #350: in non-git-repo directories, the extension would output
  * git's stderr errors ("fatal: not a git repository"), polluting the user's terminal/UI.

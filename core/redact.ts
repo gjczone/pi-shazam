@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/redact — Shared secret redaction for audit logs.
+ * pi-shazam core/redact -- Shared secret redaction for audit logs.
  *
  * Single source of truth for SECRET_PATTERNS and redact().
  * Consumed by both mcp/tools.ts and hooks/tool-logger.ts.
@@ -7,7 +7,7 @@
 
 /** Patterns matching common secret formats for log redaction. */
 export const SECRET_PATTERNS: RegExp[] = [
-	// Multiline — PEM private key blocks (also handled by accumulatePemBlocks for line-by-line safety)
+	// Multiline -- PEM private key blocks (also handled by accumulatePemBlocks for line-by-line safety)
 	/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
 	// Connection strings with embedded credentials
 	/(?:mongodb|postgres(?:ql)?|mysql|redis):\/\/[^:]*:[^@]*@/gi,
@@ -57,7 +57,7 @@ function accumulatePemBlocks(s: string): string {
 
 /**
  * Redact potential secrets from a string.
- * Pure function — no I/O, no logging.
+ * Pure function -- no I/O, no logging.
  */
 export function redact(s: string): string {
 	// Step 1: Handle multiline PEM private key blocks

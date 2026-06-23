@@ -1,5 +1,5 @@
 /**
- * pi-shazam tools/format — Auto-format code.
+ * pi-shazam tools/format -- Auto-format code.
  *
  * Scans source files for common format issues and offers fixes.
  * In dry-run mode, previews what would change without modifying files.
@@ -24,7 +24,7 @@ export function registerFormat(pi: ExtensionAPI): void {
 		description: `\
 		When shazam_verify reports format or lint errors, use this to
 		auto-fix them. Runs nearest-wins formatters (prettier, biome, eslint
-		--fix, ruff, cargo fmt, gofmt). Format only — never touches logic.
+		--fix, ruff, cargo fmt, gofmt). Format only - never touches logic.
 		Always run with --dry-run first to preview changes before applying.`,
 		params: Type.Object({
 			dryRun: Type.Optional(Type.Boolean()),
@@ -113,7 +113,7 @@ export function executeFormat(graph: RepoGraph, projectRoot: string, options: Fo
 		lines.push(`Found ${issues.length} potential issue(s):`);
 		lines.push("");
 		for (const issue of issues.slice(0, 30)) {
-			lines.push(`- \`${issue.file}:${issue.line}\` — ${issue.kind}: ${issue.description}`);
+			lines.push(`- \`${issue.file}:${issue.line}\` - ${issue.kind}: ${issue.description}`);
 		}
 		if (issues.length > 30) {
 			lines.push(`  ... and ${issues.length - 30} more`);
@@ -377,7 +377,7 @@ function scanFormatIssues(projectRoot: string, files: string[], _graph: RepoGrap
 					});
 				}
 
-				// Tab indentation — only report if project uses spaces (fixes #111)
+				// Tab indentation -- only report if project uses spaces (fixes #111)
 				if (!useTabs && (file.endsWith(".ts") || file.endsWith(".js") || file.endsWith(".json"))) {
 					if (line.startsWith("\t")) {
 						issues.push({
@@ -557,7 +557,7 @@ function runFormatterCommand(args: string[], cwd: string): void {
 	try {
 		execFileSync(cmd, cmdArgs, { cwd, stdio: "pipe", timeout: 30000 });
 	} catch {
-		console.warn("[pi-shazam] runFormatterCommand: formatter may fail on individual files — non-fatal");
-		// Formatter may fail on individual files — non-fatal
+		console.warn("[pi-shazam] runFormatterCommand: formatter may fail on individual files - non-fatal");
+		// Formatter may fail on individual files -- non-fatal
 	}
 }

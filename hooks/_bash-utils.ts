@@ -1,5 +1,5 @@
 /**
- * pi-shazam hooks/_bash-utils — Shared bash command utilities.
+ * pi-shazam hooks/_bash-utils -- Shared bash command utilities.
  *
  * Extracted from hooks/safety.ts and hooks/issue-guard.ts to eliminate
  * duplication. Provides command tokenization (with bash quote/escape
@@ -110,7 +110,7 @@ function _tokenizeOne(cmd: string): string[] {
 		} else {
 			let token = "";
 			while (i < cmd.length && !/\s/.test(cmd[i]!)) {
-				// $(…) — treat the whole substitution as one token
+				// $(…) -- treat the whole substitution as one token
 				if (cmd[i] === "$" && i + 1 < cmd.length && cmd[i + 1] === "(") {
 					if (token.length > 0) {
 						tokens.push(token);

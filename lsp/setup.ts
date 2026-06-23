@@ -1,5 +1,5 @@
 /**
- * pi-shazam lsp/setup — /shazam-setup command: detect + install guidance.
+ * pi-shazam lsp/setup -- /shazam-setup command: detect + install guidance.
  *
  * Scans the project for supported languages, detects installed LSP servers,
  * and outputs install instructions for missing ones.
@@ -122,7 +122,7 @@ export function generateSetupReport(projectRoot: string, languages?: string[]): 
 		for (const d of missing) {
 			const instruction = INSTALL_INSTRUCTIONS.find((i) => i.language === d.language && i.serverName === d.serverName);
 
-			lines.push(`#### ${d.language} — ${d.serverName}`);
+			lines.push(`#### ${d.language} - ${d.serverName}`);
 			if (d.reason) {
 				lines.push(`  Reason: ${d.reason}`);
 			}

@@ -1,10 +1,10 @@
 /**
- * pi-shazam tools/verify — Unified post-edit verification gate.
+ * pi-shazam tools/verify -- Unified post-edit verification gate.
  *
  * Merges verify, check, and ready into one tool:
- *   1. LSP diagnostics (CORE) — type errors, warnings from language servers
- *   2. Graph analysis (SUPPLEMENTARY) — git diff, risk, orphans, graph diff
- *   3. Summary verdict — PASS / WARN / FAIL
+ *   1. LSP diagnostics (CORE) -- type errors, warnings from language servers
+ *   2. Graph analysis (SUPPLEMENTARY) -- git diff, risk, orphans, graph diff
+ *   3. Summary verdict -- PASS / WARN / FAIL
  *
  * Supports modes:
  *   - default: full LSP + graph analysis
@@ -128,7 +128,7 @@ export async function executeVerifyJsonAsync(projectRoot: string, options: Verif
 			fileCount: graph.fileSymbols.size,
 			edgeCount: getGraphEdgeCount(graph),
 			riskLevel: "low",
-			riskReason: "lspOnly mode — graph analysis skipped",
+			riskReason: "lspOnly mode - graph analysis skipped",
 			orphanCount: 0,
 			orphans: [],
 			internalOrphanCount: 0,
@@ -198,14 +198,14 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 	lines.push(`**Symbols:** ${symbolCount} | **Files:** ${fileCount} | **Edges:** ${edgeCount}`);
 	lines.push("");
 
-	// LSP diagnostics (CORE) — show all errors
+	// LSP diagnostics (CORE) -- show all errors
 	let lspResult: LspDiagResult = { diagnostics: [], available: false };
 	if (!quick) {
 		lspResult = await runLspDiagnostics(graph, projectRoot, options);
 		lines.push("### LSP Diagnostics");
 		lines.push("");
 		if (!lspResult.available) {
-			lines.push("[WARN] LSP diagnostics unavailable — type/lint errors not checked.");
+			lines.push("[WARN] LSP diagnostics unavailable - type/lint errors not checked.");
 			if (lspResult.errorMessage) {
 				lines.push(`  Reason: ${lspResult.errorMessage}`);
 			}
@@ -223,7 +223,7 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 			for (const d of errors) {
 				const sevLabel = d.severity.toUpperCase();
 				const code = d.code ? ` (${d.code})` : "";
-				lines.push(`- [${sevLabel}] ${d.file}:${d.line}:${d.col}${code} — ${d.message}`);
+				lines.push(`- [${sevLabel}] ${d.file}:${d.line}:${d.col}${code} - ${d.message}`);
 				if (d.suggestedFixes && d.suggestedFixes.length > 0) {
 					for (const fix of d.suggestedFixes.slice(0, 3)) {
 						lines.push(`    ${fix}`);
@@ -234,7 +234,7 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 			for (const d of warnings.slice(0, 10)) {
 				const sevLabel = d.severity.toUpperCase();
 				const code = d.code ? ` (${d.code})` : "";
-				lines.push(`- [${sevLabel}] ${d.file}:${d.line}:${d.col}${code} — ${d.message}`);
+				lines.push(`- [${sevLabel}] ${d.file}:${d.line}:${d.col}${code} - ${d.message}`);
 				if (d.suggestedFixes && d.suggestedFixes.length > 0) {
 					for (const fix of d.suggestedFixes.slice(0, 3)) {
 						lines.push(`    ${fix}`);
@@ -252,7 +252,7 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 		const lspVerdict = lspResult.diagnostics.some((d) => d.severity === "error") ? "FAIL" : "PASS";
 		lines.push("### Verdict: " + lspVerdict);
 		lines.push("");
-		lines.push("[lspOnly mode — graph analysis skipped]");
+		lines.push("[lspOnly mode - graph analysis skipped]");
 		lines.push("");
 		return lines.join("\n");
 	}
@@ -277,7 +277,7 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 	const exportedOrphans = orphanResult.exported;
 	const delta = options.delta ?? false;
 
-	// Filter orphans (delta mode disabled — diffBaseline removed, issue #319)
+	// Filter orphans (delta mode disabled -- diffBaseline removed, issue #319)
 	let displayOrphans = orphans;
 
 	if (displayOrphans.length > 0) {
@@ -289,18 +289,18 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 
 		// Separate internal and exported orphans
 		if (internalOrphans.length > 0) {
-			lines.push(`#### Internal (likely dead code) — ${internalOrphans.length} symbols`);
+			lines.push(`#### Internal (likely dead code) - ${internalOrphans.length} symbols`);
 			for (const orphan of internalOrphans.slice(0, 10)) {
-				lines.push(`- ${orphan.kind} \`${orphan.name}\` — ${orphan.file}:${orphan.line}`);
+				lines.push(`- ${orphan.kind} \`${orphan.name}\` - ${orphan.file}:${orphan.line}`);
 			}
 			if (internalOrphans.length > 10) lines.push(`  ... and ${internalOrphans.length - 10} more`);
 			lines.push("");
 		}
 
 		if (exportedOrphans.length > 0) {
-			lines.push(`#### Exported (may be used externally) — ${exportedOrphans.length} symbols`);
+			lines.push(`#### Exported (may be used externally) - ${exportedOrphans.length} symbols`);
 			for (const orphan of exportedOrphans.slice(0, 10)) {
-				lines.push(`- ${orphan.kind} \`${orphan.name}\` — ${orphan.file}:${orphan.line} [exported]`);
+				lines.push(`- ${orphan.kind} \`${orphan.name}\` - ${orphan.file}:${orphan.line} [exported]`);
 			}
 			if (exportedOrphans.length > 10) lines.push(`  ... and ${exportedOrphans.length - 10} more`);
 			lines.push("");
@@ -313,13 +313,13 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 	const lspWarnings = lspResult.diagnostics.filter((d) => d.severity === "warning").length;
 	const risk = _assessVerifyRisk(graph, internalOrphans, gitChangedFiles, preCommit, lspErrors, lspWarnings);
 	lines.push("### Risk Level");
-	lines.push(`**${risk.level}** — ${risk.reason}`);
+	lines.push(`**${risk.level}** - ${risk.reason}`);
 	lines.push("");
 
-	if (quick) lines.push("[Quick mode — skipped deep analysis]\n");
+	if (quick) lines.push("[Quick mode - skipped deep analysis]\n");
 
 	if (preCommit) {
-		// Reuse the LSP result from above — do NOT call runLspDiagnostics again
+		// Reuse the LSP result from above -- do NOT call runLspDiagnostics again
 		// (collectDiagnostics is destructive, second call returns empty results)
 		const hasLspErrors = lspResult.diagnostics.some((d) => d.severity === "error");
 		const isReady = !hasLspErrors && risk.level === "low" && internalOrphans.length === 0;
@@ -329,10 +329,10 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 		if (!isReady) {
 			lines.push("### Issues to Fix Before Commit");
 			lines.push("");
-			if (hasLspErrors) lines.push("- LSP errors found — fix type errors before commit");
-			if (risk.level !== "low") lines.push(`- Risk level is **${risk.level}** — review affected files`);
+			if (hasLspErrors) lines.push("- LSP errors found - fix type errors before commit");
+			if (risk.level !== "low") lines.push(`- Risk level is **${risk.level}** - review affected files`);
 			if (internalOrphans.length > 0)
-				lines.push(`- ${internalOrphans.length} internal orphan symbol(s) — review for dead code`);
+				lines.push(`- ${internalOrphans.length} internal orphan symbol(s) - review for dead code`);
 			lines.push("");
 		}
 	}
@@ -431,7 +431,7 @@ async function runLspDiagnostics(
 				);
 			}
 		} else {
-			// Promise rejected — this shouldn't happen with internal error handling,
+			// Promise rejected -- this shouldn't happen with internal error handling,
 			// but log it for observability
 			console.warn(`[pi-shazam] LSP didOpen unexpected rejection: ${result.reason}`);
 		}
@@ -662,7 +662,7 @@ export function executeVerify(graph: RepoGraph, projectRoot: string, options: Ve
 	if (!quick && !lspOnly) {
 		lines.push("### LSP Diagnostics");
 		lines.push("");
-		lines.push("LSP diagnostics require async execution — use the tool directly for full LSP checks.");
+		lines.push("LSP diagnostics require async execution - use the tool directly for full LSP checks.");
 		lines.push("");
 	}
 
@@ -692,18 +692,18 @@ export function executeVerify(graph: RepoGraph, projectRoot: string, options: Ve
 
 		// Separate internal and exported orphans
 		if (internalOrphans.length > 0) {
-			lines.push(`#### Internal (likely dead code) — ${internalOrphans.length} symbols`);
+			lines.push(`#### Internal (likely dead code) - ${internalOrphans.length} symbols`);
 			for (const orphan of internalOrphans.slice(0, 10)) {
-				lines.push(`- ${orphan.kind} \`${orphan.name}\` — ${orphan.file}:${orphan.line}`);
+				lines.push(`- ${orphan.kind} \`${orphan.name}\` - ${orphan.file}:${orphan.line}`);
 			}
 			if (internalOrphans.length > 10) lines.push(`  ... and ${internalOrphans.length - 10} more`);
 			lines.push("");
 		}
 
 		if (exportedOrphans.length > 0) {
-			lines.push(`#### Exported (may be used externally) — ${exportedOrphans.length} symbols`);
+			lines.push(`#### Exported (may be used externally) - ${exportedOrphans.length} symbols`);
 			for (const orphan of exportedOrphans.slice(0, 10)) {
-				lines.push(`- ${orphan.kind} \`${orphan.name}\` — ${orphan.file}:${orphan.line} [exported]`);
+				lines.push(`- ${orphan.kind} \`${orphan.name}\` - ${orphan.file}:${orphan.line} [exported]`);
 			}
 			if (exportedOrphans.length > 10) lines.push(`  ... and ${exportedOrphans.length - 10} more`);
 			lines.push("");
@@ -714,10 +714,10 @@ export function executeVerify(graph: RepoGraph, projectRoot: string, options: Ve
 
 	const risk = _assessVerifyRisk(graph, internalOrphans, gitChangedFiles, options.preCommit);
 	lines.push("### Risk Level");
-	lines.push(`**${risk.level}** — ${risk.reason}`);
+	lines.push(`**${risk.level}** - ${risk.reason}`);
 	lines.push("");
 
-	if (quick) lines.push("[Quick mode — skipped deep analysis]\n");
+	if (quick) lines.push("[Quick mode - skipped deep analysis]\n");
 	const nextItems = getNextForTool("verify", { riskLevel: risk.level, orphanCount: orphans.length });
 	if (nextItems.length > 0) {
 		lines.push("");

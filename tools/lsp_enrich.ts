@@ -1,5 +1,5 @@
 /**
- * pi-shazam tools/lsp_enrich — Tool-layer wrappers for LSP enrichment.
+ * pi-shazam tools/lsp_enrich -- Tool-layer wrappers for LSP enrichment.
  *
  * Provides helpers that tools/ call to enrich tree-sitter graph data
  * with LSP results (workspace/symbol, documentSymbol, semanticTokens,
@@ -191,6 +191,17 @@ export function mapSymbolKindNumber(kind: number): string {
 	}
 }
 
+// -- LocationLink type guard --------------------------------------------------
+
+/**
+ * Narrow an array of Location | LocationLink to LocationLink[].
+ * LSP implementation/references responses may return either type;
+ * LocationLink has `targetUri` while Location has `uri`.
+ */
+function isLocationLinkArray(arr: unknown[]): arr is LocationLink[] {
+	return arr.length > 0 && typeof arr[0] === "object" && arr[0] !== null && "targetUri" in arr[0];
+}
+
 // -- File opening helper ------------------------------------------------------
 
 // Upper bound: prevents _openedFileMtimes from growing unbounded in long sessions (issue #368).
@@ -235,7 +246,7 @@ export async function ensureFileOpened(
 			_evictOldestMtime();
 			return { client: info.client, workspaceRoot: info.workspaceRoot, justOpened: true };
 		} else {
-			// File already opened — check if mtime changed
+			// File already opened -- check if mtime changed
 			const fileStat = await stat(absPath);
 			const currentMtime = fileStat.mtimeMs;
 			const prevMtime = _openedFileMtimes.get(filePath);
@@ -443,8 +454,8 @@ export async function lspImplementation(
 			if (r.status !== "ok" || !r.data) return null;
 			const arr = Array.isArray(r.data) ? r.data : [r.data];
 			// Detect LocationLink[] by checking for "targetUri" property
-			if (arr.length > 0 && "targetUri" in arr[0]!) {
-				return (arr as unknown as LocationLink[]).map(
+			if (isLocationLinkArray(arr)) {
+				return arr.map(
 					(ll) =>
 						({
 							uri: ll.targetUri,

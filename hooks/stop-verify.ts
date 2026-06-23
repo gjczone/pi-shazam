@@ -1,5 +1,5 @@
 /**
- * pi-shazam hooks/stop-verify — Remind to verify before ending turn.
+ * pi-shazam hooks/stop-verify -- Remind to verify before ending turn.
  *
  * When the LLM tries to end its turn after making edits, this hook checks
  * if shazam_verify was run. If not, it sends a reminder message.

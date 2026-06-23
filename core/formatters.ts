@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/formatters — Shared formatter detection.
+ * pi-shazam core/formatters -- Shared formatter detection.
  *
  * Single source of truth for detecting which formatters/linters are
  * configured in a project. Consumed by tools/fix.ts and hooks/shazam-guide.ts.
@@ -52,7 +52,7 @@ export function detectFormatters(projectRoot: string): string[] {
 		if (pkg.eslintConfig) formatters.push("eslint");
 	} catch {
 		console.warn("[pi-shazam] detectFormatters: package.json not found or invalid");
-		// package.json not found or invalid — continue
+		// package.json not found or invalid -- continue
 	}
 
 	// .editorconfig

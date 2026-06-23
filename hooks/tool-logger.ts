@@ -102,7 +102,7 @@ export function registerToolLogger(pi: ExtensionAPI): void {
 		const t0 = Date.now();
 		_starts.set(event.toolCallId, t0);
 
-		const input = "input" in event ? (event as unknown as Record<string, unknown>).input : {};
+		const input = event.input;
 
 		write({
 			ts: ts(),

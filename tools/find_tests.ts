@@ -1,5 +1,5 @@
 /**
- * pi-shazam tools/find_tests — Test file finder.
+ * pi-shazam tools/find_tests -- Test file finder.
  *
  * Locates test files for a given source file or module using common
  * naming conventions (*.test.ts, *.spec.ts, __tests__/ directories).
@@ -22,7 +22,7 @@ export function registerFindTests(pi: ExtensionAPI): void {
 		name: "shazam_find_tests",
 		label: "Find Test Files",
 		description: `\
-		When adding tests or modifying source code — use this to discover
+		When adding tests or modifying source code - use this to discover
 		which test files already cover a module, what test functions exist,
 		and where new tests belong. Understands conventions for JS/TS
 		(*.test.ts, *.spec.ts), Python (test_*.py / *_test.py), Go

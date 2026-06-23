@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/git-hooks — Git pre-commit hook integration.
+ * pi-shazam core/git-hooks -- Git pre-commit hook integration.
  *
  * Installs a pre-commit hook that runs shazam_verify --preCommit
  * before allowing a commit. Blocks commit on FAIL verdict.
@@ -24,7 +24,7 @@ import { execFileSync } from "node:child_process";
  * Use 'git commit --no-verify' to bypass.
  */
 const PRE_COMMIT_HOOK_CONTENT = `#!/bin/bash
-# shazam pre-commit hook — auto-installed by pi-shazam
+# shazam pre-commit hook - auto-installed by pi-shazam
 # Detects project language and runs appropriate checks.
 # Use 'git commit --no-verify' to bypass.
 
@@ -369,7 +369,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 				const errnoErr = err as NodeJS.ErrnoException;
 				const stderr = (errnoErr as { stderr?: string })?.stderr ?? "";
 				if (errnoErr.code === "ENOENT" || (errnoErr as NodeJS.ErrnoException & { status?: number }).status === 127) {
-					// pyright not installed — try mypy
+					// pyright not installed -- try mypy
 				} else {
 					// pyright found type errors
 					errors.push(`pyright found type errors: ${String(stderr).slice(0, 500)}`);

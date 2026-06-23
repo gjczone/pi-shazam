@@ -1,5 +1,5 @@
 /**
- * pi-shazam tools/_context — Tool-level shared context for LspManager.
+ * pi-shazam tools/_context -- Tool-level shared context for LspManager.
  *
  * Holds the LspManager reference at the tools/ layer (not core/),
  * preserving the dependency direction: tools/ -> lsp/ (correct),

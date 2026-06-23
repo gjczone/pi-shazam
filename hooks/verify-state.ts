@@ -1,5 +1,5 @@
 /**
- * pi-shazam hooks/verify-state — Shared verify tracking state.
+ * pi-shazam hooks/verify-state -- Shared verify tracking state.
  *
  * Single source of truth for "was shazam_verify called recently?"
  * Used by both safety.ts (pre-commit gate) and stop-verify.ts (turn-end reminder).
@@ -65,7 +65,7 @@ export function markVerifyCalled(content?: string): void {
 			/Errors:\s*([1-9]\d*)/.test(content);
 		_lastVerifyPassed = !isFail;
 	} else {
-		// No content to parse — fail-closed: assume not passed
+		// No content to parse -- fail-closed: assume not passed
 		_lastVerifyPassed = false;
 	}
 }

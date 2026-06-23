@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/risk — Unified risk assessment function.
+ * pi-shazam core/risk -- Unified risk assessment function.
  *
  * Provides a single `assessRisk` function shared by verify, changes, and impact tools,
  * avoiding duplicated risk threshold logic across multiple locations (issue #371).
@@ -51,18 +51,18 @@ export function assessRisk(params: AssessRiskParams): RiskResult {
 		if (gitFileCount > 10 || newOrphanCount > 30) {
 			return {
 				level: "high",
-				reason: `${gitFileCount} files, ${newOrphanCount} symbols affected — extensive blast radius.`,
+				reason: `${gitFileCount} files, ${newOrphanCount} symbols affected - extensive blast radius.`,
 			};
 		}
 		if (gitFileCount > 3 || newOrphanCount > 10) {
 			return {
 				level: "medium",
-				reason: `${gitFileCount} files, ${newOrphanCount} symbols affected — moderate blast radius.`,
+				reason: `${gitFileCount} files, ${newOrphanCount} symbols affected - moderate blast radius.`,
 			};
 		}
 		return {
 			level: "low",
-			reason: `${gitFileCount} files, ${newOrphanCount} symbols affected — contained blast radius.`,
+			reason: `${gitFileCount} files, ${newOrphanCount} symbols affected - contained blast radius.`,
 		};
 	}
 
@@ -80,11 +80,11 @@ export function assessRisk(params: AssessRiskParams): RiskResult {
 	if (newOrphanCount > 0 || totalImpact > mediumThreshold) {
 		return {
 			level: "medium",
-			reason: `${newOrphanCount} new orphans, ${gitFileCount} modified files — review recommended.`,
+			reason: `${newOrphanCount} new orphans, ${gitFileCount} modified files - review recommended.`,
 		};
 	}
 	return {
 		level: "low",
-		reason: `${newOrphanCount} new orphans, ${gitFileCount} modified files — acceptable.`,
+		reason: `${newOrphanCount} new orphans, ${gitFileCount} modified files - acceptable.`,
 	};
 }

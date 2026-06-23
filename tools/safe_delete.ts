@@ -1,5 +1,5 @@
 /**
- * pi-shazam tools/safe_delete — READ-ONLY safety check before deleting.
+ * pi-shazam tools/safe_delete -- READ-ONLY safety check before deleting.
  *
  * Use this BEFORE manual deletion to verify zero incoming references.
  * This tool does NOT delete; it returns instructions for the agent.
@@ -20,7 +20,7 @@ export function registerSafeDelete(pi: ExtensionAPI): void {
 		delete; it returns instructions for the agent. Safety workflow:
 		checks incoming references (must be 0), reports outgoing
 		references, provides deletion guidance. Do not delete based on
-		intuition — a symbol that looks unused may be called dynamically.`,
+		intuition - a symbol that looks unused may be called dynamically.`,
 		params: Type.Object({
 			symbol: Type.String(),
 			dryRun: Type.Optional(Type.Boolean()),

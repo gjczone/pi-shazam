@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/scanner — Project scanning + graph building.
+ * pi-shazam core/scanner -- Project scanning + graph building.
  *
  * Walks project directories, parses source files with tree-sitter,
  * extracts symbols/imports/calls, and builds the full RepoGraph.
@@ -36,7 +36,7 @@ let cachedProjectPath: string = "";
 // a tool that itself was triggered by another scanProject invocation).
 let _scanning = false;
 function enterScan(): void {
-	if (_scanning) throw new Error("Re-entrant scanProject detected — this is a bug");
+	if (_scanning) throw new Error("Re-entrant scanProject detected - this is a bug");
 	_scanning = true;
 }
 function exitScan(): void {
@@ -72,7 +72,7 @@ function getFileMtimes(root: string, files: string[]): Map<string, number> {
 		try {
 			mtimes.set(relPath, statSync(join(root, relPath)).mtimeMs);
 		} catch (err) {
-			// Log but continue — file may have been deleted between collection and stat
+			// Log but continue -- file may have been deleted between collection and stat
 			if (err instanceof Error && err.message.includes("ENOENT")) continue;
 			console.warn(`[pi-shazam] getFileMtimes: failed to stat ${relPath}: ${err}`);
 		}
@@ -258,7 +258,7 @@ function extractPythonAllNames(tree: unknown): Set<string> {
 		if (top.type === "expression_statement") {
 			assignment = (top.children[0] ?? null) as { children: unknown[] } | null;
 		} else if (top.type === "assignment") {
-			assignment = top as unknown as { children: unknown[] };
+			assignment = top;
 		}
 		if (!assignment) continue;
 
@@ -334,7 +334,7 @@ function parseFile(adapter: TreeSitterAdapter, root: string, relPath: string, mt
 	} catch (err) {
 		// Log parse failures to aid debugging (fixes #133)
 		if (err instanceof FileTooLargeError) {
-			// Expected for large files — skip silently
+			// Expected for large files -- skip silently
 			return null;
 		}
 		console.warn(`[pi-shazam] parseFile: failed to parse ${relPath}: ${err}`);
@@ -487,7 +487,7 @@ function _scanProject(projectPath: string, log?: (msg: string) => void): RepoGra
 		const hasChanges = changedFiles.length > 0 || newFiles.length > 0 || deletedFiles.length > 0;
 
 		if (!hasChanges) {
-			// All mtimes match — use cached graph directly
+			// All mtimes match -- use cached graph directly
 			logger(`Cache hit: ${diskCache.graph.symbols.size} symbols loaded from disk`);
 			cachedGraph = diskCache.graph;
 			cachedProjectPath = root;
@@ -495,7 +495,7 @@ function _scanProject(projectPath: string, log?: (msg: string) => void): RepoGra
 			return cachedGraph;
 		}
 
-		// Some files changed — load cache into memory, then incremental
+		// Some files changed -- load cache into memory, then incremental
 		logger(`Cache partial hit: ${changedFiles.length} changed, ${newFiles.length} new, ${deletedFiles.length} deleted`);
 		cachedGraph = diskCache.graph;
 		cachedProjectPath = root;
@@ -514,7 +514,7 @@ function _scanProject(projectPath: string, log?: (msg: string) => void): RepoGra
 		return updatedGraph;
 	}
 
-	// No cache — full scan
+	// No cache -- full scan
 	const graph = scanFull(root, files, adapter, logger);
 
 	// Save to persistent cache
@@ -681,17 +681,17 @@ function scanIncremental(
 		}
 	}
 
-	// Re-parse changed files — delay removeFileData until after parse succeeds
+	// Re-parse changed files -- delay removeFileData until after parse succeeds
 	// to avoid the rollback path that restores symbols but not edges (#156).
 	for (const relPath of changedFiles) {
 		const mtime = fileMtimes.get(relPath) ?? 0;
 		const entry = parseFile(adapter, root, relPath, mtime);
 		if (!entry) {
-			// Re-parse failed — keep old data untouched (no rollback needed)
+			// Re-parse failed -- keep old data untouched (no rollback needed)
 			continue;
 		}
 
-		// Parse succeeded — remove old data and replace with new
+		// Parse succeeded -- remove old data and replace with new
 		removeFileData(graph, relPath);
 		cachedFiles.delete(relPath);
 		cachedFiles.set(relPath, entry);
@@ -739,7 +739,7 @@ function scanIncremental(
 	// Trace cross-file call edges using the snapshot (Bug #2 fix):
 	// files whose symbols had incoming edges from the changed file's old
 	// symbols need their edges rebuilt.
-	// Use nameIndex for caller lookup — more robust than graph.symbols.get()
+	// Use nameIndex for caller lookup -- more robust than graph.symbols.get()
 	// when symbols may have been removed during incremental rebuild (#319).
 	for (const [, oldIds] of oldSymIdsByFile) {
 		for (const oldId of oldIds) {

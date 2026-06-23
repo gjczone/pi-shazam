@@ -1,5 +1,5 @@
 /**
- * pi-shazam hooks/impact-state — Shared impact tracking state.
+ * pi-shazam hooks/impact-state -- Shared impact tracking state.
  *
  * Single source of truth for "was a GitHub issue created but shazam_impact
  * not yet run?" Used by issue-guard.ts (sets/clears) and pre-edit.ts (checks).

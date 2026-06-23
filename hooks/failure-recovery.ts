@@ -1,5 +1,5 @@
 /**
- * pi-shazam hooks/failure-recovery — Detect consecutive failures and suggest alternatives.
+ * pi-shazam hooks/failure-recovery -- Detect consecutive failures and suggest alternatives.
  *
  * When the LLM repeatedly fails at the same task, this hook:
  * 1. Tracks failure patterns per tool
@@ -254,7 +254,7 @@ export function registerFailureRecovery(pi: ExtensionAPI): void {
 				});
 			}
 		} else {
-			// Success — reset failure count
+			// Success -- reset failure count
 			resetFailure(toolName);
 		}
 	});

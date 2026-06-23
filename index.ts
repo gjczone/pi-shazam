@@ -1,5 +1,5 @@
 /**
- * pi-shazam — Pi coding agent native codebase awareness extension.
+ * pi-shazam -- Pi coding agent native codebase awareness extension.
  *
  * Entry point. Registered as a default export.
  *
@@ -154,7 +154,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 		description: "Health check: tree-sitter grammars, LSP servers, cache integrity",
 		async handler(_args: string, ctx: ExtensionCommandContext) {
 			const lspReport = generateSetupReport(projectRoot);
-			const msg = ["## Shazam Doctor — Health Check", "", lspReport].join("\n");
+			const msg = ["## Shazam Doctor - Health Check", "", lspReport].join("\n");
 			ctx.ui?.setStatus?.("shazam-doctor", "Health check complete");
 			pi.sendMessage({
 				customType: "shazam-doctor",

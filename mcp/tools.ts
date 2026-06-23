@@ -1,5 +1,5 @@
 /**
- * pi-shazam MCP tools — register all analysis tools as MCP tools.
+ * pi-shazam MCP tools -- register all analysis tools as MCP tools.
  * Each handler is wrapped with withLogging() for usage analytics.
  *
  * Updated for tool consolidation 14->9 (issue #362).

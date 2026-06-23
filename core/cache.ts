@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/cache — Graph baseline save/diff for incremental analysis.
+ * pi-shazam core/cache -- Graph baseline save/diff for incremental analysis.
  *
  * Provides persistent graph caching with mtime-based invalidation.
  * Stores cache under ~/.cache/repomap/<project-slug> for process-isolated
@@ -33,7 +33,7 @@ export function getProjectCacheDir(projectPath: string): string {
 // -- Persistent graph cache (V2) ----------------------------------------------
 
 /** Max age for a cached graph file before it is considered stale. */
-const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 1 day — prevents stale cache in active projects (fixes #100)
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 1 day - prevents stale cache in active projects (fixes #100)
 
 /**
  * Atomically rename a temp file to a target path, handling Windows EPERM/EBUSY

@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/output — Standardized tool output formatting.
+ * pi-shazam core/output -- Standardized tool output formatting.
  *
  * All tool outputs follow a three-section skeleton:
  *   1. ## Result Summary (key-value table / quick summary)
@@ -7,7 +7,7 @@
  *   3. ### Next (actionable tool recommendations)
  *
  * This module provides builders for each section. The Next recommendation
- * system is driven by a declarative rule array (NEXT_RULES) — adding a
+ * system is driven by a declarative rule array (NEXT_RULES) -- adding a
  * new tool = adding rules, not editing a switch. Rules can evaluate against
  * the RepoGraph to suppress irrelevant recommendations (e.g., no find_tests
  * when project has zero test files).
@@ -30,7 +30,7 @@ export interface NextRecommendation {
 
 /**
  * Runtime context passed by each tool when asking for Next recommendations.
- * Fields are optional — rules check only what they need.
+ * Fields are optional -- rules check only what they need.
  */
 export interface NextContext {
 	topFile?: string;
@@ -331,13 +331,13 @@ export function formatResultSummary(title: string, pairs: [string, string | numb
  */
 export function formatFileItem(file: string, line: number, label: string, extra?: string): string {
 	const loc = line > 0 ? `:${line}` : "";
-	const suffix = extra ? ` — ${extra}` : "";
+	const suffix = extra ? ` - ${extra}` : "";
 	return `- ${label} \`${file}${loc}\`${suffix}`;
 }
 
 /**
  * Build the full three-section output for any tool.
- * Each section is optional — pass empty/null to skip.
+ * Each section is optional -- pass empty/null to skip.
  */
 export function buildToolOutput(
 	resultSection: string,
@@ -385,7 +385,7 @@ const CHARS_PER_TOKEN = 4;
 
 /**
  * Estimate token count for a text string using ~4 chars/token heuristic.
- * No external dependency — fast enough for inline use during formatting.
+ * No external dependency -- fast enough for inline use during formatting.
  */
 export function estimateTokens(text: string): number {
 	return Math.ceil(text.length / CHARS_PER_TOKEN);

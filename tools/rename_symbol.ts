@@ -1,5 +1,5 @@
 /**
- * pi-shazam tools/rename_symbol — LSP cross-file symbol rename.
+ * pi-shazam tools/rename_symbol -- LSP cross-file symbol rename.
  *
  * Uses LSP textDocument/rename to perform a cross-file rename.
  * Requires prior call_chain verification for safety.
@@ -39,7 +39,7 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 		shazam_impact --symbol to review all references. Step 2: use this to
 		perform the project-wide rename via LSP textDocument/rename. Step 3:
 		call shazam_verify to confirm no broken references. This is a WRITE
-		operation — do not manually find-and-replace; missed references
+		operation - do not manually find-and-replace; missed references
 		become bugs.`,
 		params: Type.Object({
 			symbol: Type.String(),
@@ -65,7 +65,7 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 							{
 								type: "text",
 								text: [
-									"[BLOCKED] Rename aborted — shazam_impact --symbol has not been run for this symbol.",
+									"[BLOCKED] Rename aborted - shazam_impact --symbol has not been run for this symbol.",
 									"",
 									`Before renaming \`${symbolName}\`, you MUST run:`,
 									`  shazam_impact --symbol "${symbolName}" --direction both`,
@@ -76,9 +76,9 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 						],
 					};
 				}
-				// call_chain was checked — proceed with actual rename below
+				// call_chain was checked -- proceed with actual rename below
 			}
-			// Scan project to get graph (fixes #209 — customExecute must not rely on module-level variable)
+			// Scan project to get graph (fixes #209 -- customExecute must not rely on module-level variable)
 			const projectRoot = (params.project as string) || process.cwd();
 			const graph = scanProject(projectRoot);
 			if (!graph?.symbols) {
@@ -100,7 +100,7 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 	});
 }
 
-// registerRenameSymbolWithGraph removed — customExecute now scans project directly (fixes #209)
+// registerRenameSymbolWithGraph removed -- customExecute now scans project directly (fixes #209)
 
 interface RenameResult {
 	status: "ok" | "not_found" | "error" | "lsp_unavailable";
@@ -334,7 +334,7 @@ async function applyWorkspaceEdit(
 		}
 	}
 
-	// Backup originals before writing — enables atomic rollback on failure
+	// Backup originals before writing -- enables atomic rollback on failure
 	const backups: { filePath: string; content: string }[] = [];
 	const written: string[] = [];
 
@@ -433,7 +433,7 @@ async function applyWorkspaceEdit(
 
 export function formatRenameResult(result: RenameResult, symbolName: string, newName: string, dryRun: boolean): string {
 	const lines: string[] = [
-		`## Rename${dryRun ? " (Dry Run)" : ""}: \`${symbolName}\` → \`${newName}\``,
+		`## Rename${dryRun ? " (Dry Run)" : ""}: \`${symbolName}\` -> \`${newName}\``,
 		"",
 		`**Status:** ${result.status}`,
 		`**Message:** ${result.message}`,
@@ -452,7 +452,7 @@ export function formatRenameResult(result: RenameResult, symbolName: string, new
 	if (result.edits && result.edits.length > 0) {
 		lines.push("", "### Edit Preview");
 		for (const edit of result.edits.slice(0, 20)) {
-			lines.push(`- \`${edit.file}:${edit.line}\` — ${edit.text.slice(0, 80)}`);
+			lines.push(`- \`${edit.file}:${edit.line}\` - ${edit.text.slice(0, 80)}`);
 		}
 		if (result.edits.length > 20) {
 			lines.push(`  ... and ${result.edits.length - 20} more`);

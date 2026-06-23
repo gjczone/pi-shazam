@@ -1,5 +1,5 @@
 /**
- * pi-shazam tools/definitions — Shared tool definitions.
+ * pi-shazam tools/definitions -- Shared tool definitions.
  *
  * Single source of truth for tool names, descriptions, and parameter schemas.
  * Both Pi (TypeBox) and MCP (Zod) import from here to avoid duplication.
@@ -28,7 +28,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_overview",
 		label: "Project Overview",
 		description:
-			"When you first enter a project or return after changes — use this to understand the codebase before reading a single file. Returns module dependency map, top-10 PageRank files, key dependencies, recent git changes, entry points, reading order, HTTP routes, and complexity hotspots ranked by blast radius.",
+			"When you first enter a project or return after changes - use this to understand the codebase before reading a single file. Returns module dependency map, top-10 PageRank files, key dependencies, recent git changes, entry points, reading order, HTTP routes, and complexity hotspots ranked by blast radius.",
 		typeboxParams: Type.Object({
 			filter: Type.Optional(Type.String()),
 		}),
@@ -43,7 +43,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_lookup",
 		label: "Lookup Symbol or File",
 		description:
-			"Look up anything in the codebase — a symbol by name or a file by path. Auto-detects whether the input is a file path or symbol name and returns the most relevant information: definition, kind, signature, type hierarchy, file structure, PageRank, callers/callees. Use mode=state for enum/state analysis. Pass showCallbacks=true to expand anonymous functions.",
+			"Look up anything in the codebase - a symbol by name or a file by path. Auto-detects whether the input is a file path or symbol name and returns the most relevant information: definition, kind, signature, type hierarchy, file structure, PageRank, callers/callees. Use mode=state for enum/state analysis. Pass showCallbacks=true to expand anonymous functions.",
 		typeboxParams: Type.Object({
 			name: Type.String(),
 			file: Type.Optional(Type.String()),
@@ -148,7 +148,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_format",
 		label: "Auto-Format Code",
 		description:
-			"When shazam_verify reports format or lint errors, use this to auto-fix them. Runs nearest-wins formatters (prettier, biome, eslint --fix, ruff, cargo fmt, gofmt). Format only — never touches logic. Use --dry-run to preview when unsure.",
+			"When shazam_verify reports format or lint errors, use this to auto-fix them. Runs nearest-wins formatters (prettier, biome, eslint --fix, ruff, cargo fmt, gofmt). Format only - never touches logic. Use --dry-run to preview when unsure.",
 		typeboxParams: Type.Object({
 			dryRun: Type.Optional(Type.Boolean({ default: true })),
 			file: Type.Optional(Type.String()),
@@ -165,7 +165,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_find_tests",
 		label: "Find Test Files",
 		description:
-			"When adding tests or modifying source code — use this to discover which test files already cover a module, what test functions exist, and where new tests belong. Understands conventions for JS/TS (*.test.ts, *.spec.ts), Python (test_*.py / *_test.py), Go (*_test.go), Rust (test_*.rs / *_test.rs), Java (Test*.java / *Test.java), and C# (Test*.cs / *Test.cs). Pass sourceFile or module to scope the search.",
+			"When adding tests or modifying source code - use this to discover which test files already cover a module, what test functions exist, and where new tests belong. Understands conventions for JS/TS (*.test.ts, *.spec.ts), Python (test_*.py / *_test.py), Go (*_test.go), Rust (test_*.rs / *_test.rs), Java (Test*.java / *Test.java), and C# (Test*.cs / *Test.cs). Pass sourceFile or module to scope the search.",
 		typeboxParams: Type.Object({
 			sourceFile: Type.Optional(Type.String()),
 			module: Type.Optional(Type.String()),
@@ -182,7 +182,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_rename_symbol",
 		label: "Rename Symbol",
 		description:
-			"Required safety gate before renaming any symbol. Step 1: call shazam_impact --symbol to review all references. Step 2: use this to perform the project-wide rename via LSP textDocument/rename. Step 3: call shazam_verify to confirm no broken references. This is a WRITE operation — do not manually find-and-replace; missed references become bugs.",
+			"Required safety gate before renaming any symbol. Step 1: call shazam_impact --symbol to review all references. Step 2: use this to perform the project-wide rename via LSP textDocument/rename. Step 3: call shazam_verify to confirm no broken references. This is a WRITE operation - do not manually find-and-replace; missed references become bugs.",
 		typeboxParams: Type.Object({
 			symbol: Type.String(),
 			newName: Type.String(),
@@ -201,7 +201,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_safe_delete",
 		label: "Safe Delete",
 		description:
-			"Required safety gate before removing any symbol. Automatically verifies zero incoming references before providing deletion instructions. READ-ONLY safety check; returns deletion guidance, does not delete. Do not delete based on intuition — a symbol that looks unused may be called dynamically.",
+			"Required safety gate before removing any symbol. Automatically verifies zero incoming references before providing deletion instructions. READ-ONLY safety check; returns deletion guidance, does not delete. Do not delete based on intuition - a symbol that looks unused may be called dynamically.",
 		typeboxParams: Type.Object({
 			symbol: Type.String(),
 			dryRun: Type.Optional(Type.Boolean({ default: true })),

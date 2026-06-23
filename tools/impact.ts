@@ -1,5 +1,5 @@
 /**
- * pi-shazam tools/impact — Change blast radius analysis + call chain.
+ * pi-shazam tools/impact -- Change blast radius analysis + call chain.
  *
  * Merged with call_chain (issue #362): now supports --symbol for per-symbol
  * caller/callee tracing in addition to file-level impact analysis.
@@ -197,7 +197,7 @@ export function executeImpact(
 	// Risk assessment
 	const risk = assessImpactRisk(bfs.affectedFiles.size, affectedSymbols.length);
 	lines.push(`### Risk Assessment`);
-	lines.push(`**${risk.level}** — ${risk.reason}`);
+	lines.push(`**${risk.level}** - ${risk.reason}`);
 	lines.push("");
 
 	if (bfs.affectedFiles.size > 0) {
@@ -221,7 +221,7 @@ export function executeImpact(
 				const direction = upstreamCount > downstreamCount ? "upstream caller" : "downstream callee";
 				lines.push(`#### \`${f}\` (${direction})`);
 				for (const affected of syms.slice(0, 5)) {
-					lines.push(`- ${affected.symbol.kind} \`${affected.symbol.name}\` — line ${affected.symbol.line}`);
+					lines.push(`- ${affected.symbol.kind} \`${affected.symbol.name}\` - line ${affected.symbol.line}`);
 				}
 				if (syms.length > 5) {
 					lines.push(`  ... and ${syms.length - 5} more`);
@@ -338,7 +338,7 @@ function _executeCallChain(
 				lines.push(`### Incoming Calls (${chain.length} callers in ${depth} levels)`);
 				for (const [level, sym, edge] of shown) {
 					const indent = "  ".repeat(level);
-					lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (${edge.kind})`);
+					lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` - ${sym.file}:${sym.line} (${edge.kind})`);
 				}
 				if (chain.length > MAX_DISPLAY_REFS) lines.push(`  ... and ${chain.length - MAX_DISPLAY_REFS} more`);
 			}
@@ -352,7 +352,7 @@ function _executeCallChain(
 				lines.push(`### Outgoing Calls (${chain.length} callees in ${depth} levels)`);
 				for (const [level, sym, edge] of shown) {
 					const indent = "  ".repeat(level);
-					lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (${edge.kind})`);
+					lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` - ${sym.file}:${sym.line} (${edge.kind})`);
 				}
 				if (chain.length > MAX_DISPLAY_REFS) lines.push(`  ... and ${chain.length - MAX_DISPLAY_REFS} more`);
 			}
@@ -508,7 +508,7 @@ function _formatFlatReferences(refs: FlatReference[], symbolName: string): strin
 	if (incoming.length > 0) {
 		lines.push(`### Incoming (${incoming.length})`);
 		for (const r of incoming.slice(0, MAX_DISPLAY_REFS))
-			lines.push(`- ${r.kind} \`${r.symbol}\` — ${r.file}:${r.line}`);
+			lines.push(`- ${r.kind} \`${r.symbol}\` - ${r.file}:${r.line}`);
 		if (incoming.length > MAX_DISPLAY_REFS) lines.push(`  ... and ${incoming.length - MAX_DISPLAY_REFS} more`);
 		lines.push("");
 	}
@@ -516,7 +516,7 @@ function _formatFlatReferences(refs: FlatReference[], symbolName: string): strin
 	if (outgoing.length > 0) {
 		lines.push(`### Outgoing (${outgoing.length})`);
 		for (const r of outgoing.slice(0, MAX_DISPLAY_REFS))
-			lines.push(`- ${r.kind} \`${r.symbol}\` — ${r.file}:${r.line}`);
+			lines.push(`- ${r.kind} \`${r.symbol}\` - ${r.file}:${r.line}`);
 		if (outgoing.length > MAX_DISPLAY_REFS) lines.push(`  ... and ${outgoing.length - MAX_DISPLAY_REFS} more`);
 		lines.push("");
 	}

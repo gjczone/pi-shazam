@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/graph — Symbol dependency graph data model.
+ * pi-shazam core/graph -- Symbol dependency graph data model.
  *
  * Ported from repomap/src/__init__.py (Symbol, Edge, RepoGraph dataclasses).
  * All other core/ modules depend on these types.

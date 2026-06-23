@@ -1,5 +1,5 @@
 /**
- * pi-shazam tools/overview — Project structure summary.
+ * pi-shazam tools/overview -- Project structure summary.
  *
  * Includes HTTP route inventory (absorbed from tools/routes.ts).
  */
@@ -56,7 +56,7 @@ export function registerOverview(pi: ExtensionAPI): void {
 		name: "shazam_overview",
 		label: "Project Overview",
 		description: `\
-		When you first enter a project or return after changes — use this to
+		When you first enter a project or return after changes - use this to
 		understand the codebase before reading a single file. Returns: module
 		dependency map, top-10 highest-PageRank files (the "spine"), key
 		dependencies, recent git changes, entry points, reading order, HTTP
@@ -216,7 +216,7 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 	for (let i = 0; i < topFiles.length; i++) {
 		const [file, stats] = topFiles[i]!;
 		lines.push(
-			`${i + 1}. \`${file}\` — ${stats.count} symbols, PageRank ${stats.pagerank.toFixed(4)}, top symbol: ${stats.topSym}`,
+			`${i + 1}. \`${file}\` - ${stats.count} symbols, PageRank ${stats.pagerank.toFixed(4)}, top symbol: ${stats.topSym}`,
 		);
 	}
 
@@ -231,7 +231,7 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 		lines.push("### Entry Points");
 		lines.push("");
 		for (const sym of entryPoints) {
-			lines.push(`- ${sym.kind} \`${sym.name}\` — ${sym.file}:${sym.line} (PR ${sym.pagerank.toFixed(4)})`);
+			lines.push(`- ${sym.kind} \`${sym.name}\` - ${sym.file}:${sym.line} (PR ${sym.pagerank.toFixed(4)})`);
 		}
 	}
 
@@ -253,7 +253,7 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 	const sortedDirs = [...dirs.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 	for (const [dir, count] of sortedDirs) {
 		const label = dir === "(root)" ? "(root)/" : `${dir}/`;
-		lines.push(`- \`${label}\` — ${count} files`);
+		lines.push(`- \`${label}\` - ${count} files`);
 	}
 
 	// HTTP Routes section (absorbed from tools/routes.ts)
@@ -277,7 +277,7 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 			lines.push("");
 			for (let i = 0; i < hotspots.length; i++) {
 				const h = hotspots[i]!;
-				lines.push(`${i + 1}. \`${h.file}\` — score: ${h.hotspotScore.toFixed(2)}`);
+				lines.push(`${i + 1}. \`${h.file}\` - score: ${h.hotspotScore.toFixed(2)}`);
 				lines.push(
 					`   ${h.symbolCount} symbols | PageRank: ${h.totalPagerank.toFixed(2)} | in:${h.incomingRefs} out:${h.outgoingRefs}`,
 				);
@@ -365,7 +365,7 @@ function buildRoutesSection(graph: RepoGraph): string | null {
 
 	for (const [_file, syms] of [...byFile.entries()].sort()) {
 		for (const sym of syms) {
-			lines.push(`- ${sym.kind} \`${sym.name}\` L${sym.line} — ${sym.signature.slice(0, 80)}`);
+			lines.push(`- ${sym.kind} \`${sym.name}\` L${sym.line} - ${sym.signature.slice(0, 80)}`);
 		}
 	}
 

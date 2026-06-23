@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/encoding — Adaptive file encoding reader.
+ * pi-shazam core/encoding -- Adaptive file encoding reader.
  *
  * Reads files with UTF-8 -> GBK -> GB2312 fallback.
  * Includes OOM protection via file size limits (2MB max) and
@@ -10,7 +10,7 @@ import { readFileSync, statSync } from "node:fs";
 import { readFile as readFileAsync, stat as statAsync } from "node:fs/promises";
 import iconv from "iconv-lite";
 
-// Tree-sitter's MAX_PARSE_SIZE — skip files larger than 2MB
+// Tree-sitter's MAX_PARSE_SIZE -- skip files larger than 2MB
 // Lowered from 10MB to reduce OOM risk on resource-constrained environments
 // (fixes #131, #148)
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
@@ -34,7 +34,7 @@ export class FileTooLargeError extends Error {
 	}
 }
 
-// Chunk size for encoding validation — only validate first 64KB
+// Chunk size for encoding validation -- only validate first 64KB
 // to avoid allocating huge strings for large files
 const VALIDATION_CHUNK_SIZE = 64 * 1024;
 
@@ -65,7 +65,7 @@ export function readFileAdaptive(filePath: string): string {
 			throw err; // re-throw our size error
 		}
 		console.warn(`[pi-shazam] readFileAdaptive: stat failed for ${filePath}: ${err}`);
-		// stat failed (permission, missing) — fall through to readFileSync which will error with a clearer message
+		// stat failed (permission, missing) -- fall through to readFileSync which will error with a clearer message
 	}
 	const buffer = readFileSync(filePath);
 
@@ -76,7 +76,7 @@ export function readFileAdaptive(filePath: string): string {
 	// Try UTF-8 first
 	const utf8Result = tryDecode(validationBuffer, "utf-8");
 	if (utf8Result !== null) {
-		// UTF-8 validation passed on chunk — decode full buffer
+		// UTF-8 validation passed on chunk -- decode full buffer
 		return buffer.length > VALIDATION_CHUNK_SIZE ? buffer.toString("utf-8") : utf8Result;
 	}
 
@@ -113,7 +113,7 @@ export async function readFileAdaptiveAsync(filePath: string): Promise<string> {
 			throw err;
 		}
 		console.warn(`[pi-shazam] readFileAdaptiveAsync: stat failed for ${filePath}: ${err}`);
-		// stat failed — fall through to readFile which will error with a clearer message
+		// stat failed -- fall through to readFile which will error with a clearer message
 	}
 	const buffer = await readFileAsync(filePath);
 
@@ -232,7 +232,7 @@ function tryDecode(buffer: Buffer, encoding: string): string | null {
 		if (str.length === 0 && buffer.length > 0) return null;
 		// Replacement-character ratio check (#368): iconv-lite emits U+FFFD for
 		// unmappable bytes.  If >5% of decoded characters are replacements,
-		// the encoding is wrong — reject to try the next fallback.
+		// the encoding is wrong -- reject to try the next fallback.
 		let replacementCount = 0;
 		for (const ch of str) {
 			if (ch === "�") replacementCount++;

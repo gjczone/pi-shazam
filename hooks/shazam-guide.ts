@@ -48,7 +48,7 @@ function hasManyCallers(content: unknown[] | undefined): string | null {
 					}
 				}
 			} catch (err) {
-				// Not JSON — fall back to text-based
+				// Not JSON -- fall back to text-based
 				console.warn("[pi-shazam] hasManyCallers: JSON.parse failed", err);
 			}
 
@@ -171,7 +171,7 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 			return true;
 		}
 	} catch (err) {
-		// Formatter failed — warn but don't block
+		// Formatter failed -- warn but don't block
 		ctx.ui.notify(
 			`[auto-format] Formatter failed for ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
 			"warning",
@@ -194,7 +194,7 @@ function extractFilePath(input: unknown): string | null {
 }
 
 export function registerShazamGuide(pi: ExtensionAPI): void {
-	// Tool list injection removed — the before-start hook's overview already
+	// Tool list injection removed -- the before-start hook's overview already
 	// covers all tool guidance. Keeping only contextual lifecycle notifications.
 
 	pi.on("tool_result", async (event, ctx) => {
@@ -203,7 +203,7 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 			if (event.isError) return;
 
 			// Auto-format the edited file
-			const input = "input" in event ? (event as unknown as Record<string, unknown>).input : {};
+			const input = event.input;
 			const filePath = extractFilePath(input);
 			const formatted = filePath ? await autoFormatFile(filePath, ctx) : false;
 
@@ -212,10 +212,10 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 				ctx.ui.notify("run shazam_format to auto-format (prettier/ruff/gofmt/rustfmt)", "info");
 			}
 
-			// Check if multi-file edit was done — suggest impact analysis
+			// Check if multi-file edit was done -- suggest impact analysis
 			if (hasMultiFileEdit(event.content)) {
 				ctx.ui.notify(
-					"suggestion: you edited multiple files — shazam_impact assesses blast radius before continuing",
+					"suggestion: you edited multiple files - shazam_impact assesses blast radius before continuing",
 					"info",
 				);
 			}
@@ -244,9 +244,9 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 			}
 			const combined = texts.join("\n");
 			if (combined.includes("[FAIL]")) {
-				ctx.ui.notify("shazam_verify reported FAIL — fix errors before proceeding", "warning");
+				ctx.ui.notify("shazam_verify reported FAIL - fix errors before proceeding", "warning");
 			} else if (combined.includes("[WARN]")) {
-				ctx.ui.notify("shazam_verify reported WARN — review warnings, then run shazam_format if needed", "info");
+				ctx.ui.notify("shazam_verify reported WARN - review warnings, then run shazam_format if needed", "info");
 			}
 			return;
 		}

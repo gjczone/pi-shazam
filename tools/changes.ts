@@ -1,5 +1,5 @@
 /**
- * pi-shazam tools/changes — Git change summary with symbol-level detail.
+ * pi-shazam tools/changes -- Git change summary with symbol-level detail.
  *
  * Lightweight view of what changed in the working tree: changed files,
  * affected symbols, risk level, and which callers may be impacted.
@@ -70,7 +70,7 @@ export function executeChanges(graph: RepoGraph, projectRoot: string): string {
 		lines.push(`${newOrphanCount} new since baseline.`);
 		lines.push("");
 		for (const orphan of internalOrphans.slice(0, 10)) {
-			lines.push(`- ${orphan.kind} \`${orphan.name}\` — ${orphan.file}:${orphan.line}`);
+			lines.push(`- ${orphan.kind} \`${orphan.name}\` - ${orphan.file}:${orphan.line}`);
 		}
 		if (internalOrphans.length > 10) lines.push(`  ... and ${internalOrphans.length - 10} more`);
 		lines.push("");
@@ -79,7 +79,7 @@ export function executeChanges(graph: RepoGraph, projectRoot: string): string {
 	// Risk assessment
 	const risk = _assessChangeRisk(graph, internalOrphans, changedFiles);
 	lines.push("### Risk Level");
-	lines.push(`**${risk.level}** — ${risk.reason}`);
+	lines.push(`**${risk.level}** - ${risk.reason}`);
 	lines.push("");
 
 	const nextItems = getNextForTool("changes", { riskLevel: risk.level });

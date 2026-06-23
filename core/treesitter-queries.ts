@@ -1,5 +1,5 @@
 /**
- * pi-shazam core/treesitter-queries — Tree-sitter query patterns for 18 languages.
+ * pi-shazam core/treesitter-queries -- Tree-sitter query patterns for 18 languages.
  *
  * Ported from repomap/src/queries.py.
  * Each language has patterns for: function, class, import, call, http_route.
@@ -220,7 +220,7 @@ export const QUERIES: QueryDict = {
 	html: {},
 	css: {},
 	json: {},
-	// Dart queries — based on tree-sitter-dart grammar node types.
+	// Dart queries -- based on tree-sitter-dart grammar node types.
 	// NOTE: tree-sitter-dart grammar currently requires tree-sitter >=0.24.
 	// With tree-sitter 0.22.4, parser loading fails gracefully (try-catch in
 	// _loadGrammar). These queries become active when tree-sitter is upgraded.
