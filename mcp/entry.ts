@@ -71,7 +71,7 @@ async function main(): Promise<void> {
 	});
 
 	// Share LspManager with tools layer so LSP enrichment works in MCP mode
-	setLspManager(lspManager);
+	await setLspManager(lspManager);
 
 	// Register all analysis tools with LSP support
 	registerAllTools(server, getGraph, PROJECT_ROOT, lspManager);

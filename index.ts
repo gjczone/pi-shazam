@@ -38,7 +38,7 @@ import { registerFindTests } from "./tools/find_tests.js";
 import { registerRenameSymbol } from "./tools/rename_symbol.js";
 import { registerSafeDelete } from "./tools/safe_delete.js";
 
-export default function (pi: ExtensionAPI): void {
+export default async function (pi: ExtensionAPI): Promise<void> {
 	let projectRoot = process.cwd();
 	const log = (msg: string) => {
 		pi.logger?.info?.(`[pi-shazam] ${msg}`);
@@ -49,7 +49,7 @@ export default function (pi: ExtensionAPI): void {
 	const lspManager = new LspManager(projectRoot, log);
 
 	// Share LspManager with tools via global reference
-	setLspManager(lspManager);
+	await setLspManager(lspManager);
 
 	// Auto-initialize LSP on agent start (with overall 15s timeout guard).
 	// IMPORTANT: This handler MUST be registered before registerBeforeStartHook.
