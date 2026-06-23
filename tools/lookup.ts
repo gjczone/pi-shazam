@@ -381,6 +381,15 @@ async function _getHoverInfo(symbol: Symbol): Promise<HoverInfo> {
 	return result;
 }
 
+// Module-scoped lazy singleton: avoids loading all grammars on every _extractDocstring call
+let _docstringAdapter: TreeSitterAdapter | null = null;
+function getDocstringAdapter(): TreeSitterAdapter {
+	if (!_docstringAdapter) {
+		_docstringAdapter = new TreeSitterAdapter(() => {});
+	}
+	return _docstringAdapter;
+}
+
 function _extractDocstring(filePath: string, symbolLine: number): string | undefined {
 	try {
 		const content = readFileAdaptive(filePath);
@@ -388,7 +397,7 @@ function _extractDocstring(filePath: string, symbolLine: number): string | undef
 		const lang = TreeSitterAdapter.langForExtension(ext);
 
 		if (lang) {
-			const tsAdapter = new TreeSitterAdapter(() => {});
+			const tsAdapter = getDocstringAdapter();
 			if (tsAdapter.hasLanguage(lang)) {
 				const tree = tsAdapter.parse(content, lang);
 				if (tree) {
