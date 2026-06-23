@@ -6,7 +6,8 @@
  * Supports multiple detection sources: project-local, PATH, and user home.
  */
 
-import { readdirSync, statSync, existsSync, readFileSync } from "node:fs";
+import { readdirSync, statSync, existsSync } from "node:fs";
+import { readFile as readFileAsync } from "node:fs/promises";
 import { join, resolve, delimiter } from "node:path";
 import { homedir } from "node:os";
 import { LspClient } from "./client.js";
@@ -487,17 +488,32 @@ export class LspManager {
 			// Re-open previously opened files after server crash/reconnection
 			const prevOpened = this._openedFilePaths.get(language);
 			if (prevOpened && prevOpened.size > 0) {
-				for (const filePath of prevOpened) {
-					try {
+				// Read all files in parallel, then send didOpen in parallel
+				const entries = [...prevOpened];
+				const readResults = await Promise.allSettled(
+					entries.map(async (filePath) => {
 						const absPath = resolve(detection.workspaceRoot, filePath);
-						const content = readFileSync(absPath, "utf-8");
-						await client.didOpen(filePath, content);
-					} catch (err) {
-						// File may have been deleted; remove from tracking
-						console.warn(`[pi-shazam] _initServerForLanguage: re-open failed for ${filePath}`, err);
-						prevOpened.delete(filePath);
-					}
-				}
+						const content = await readFileAsync(absPath, "utf-8");
+						return { filePath, content };
+					}),
+				);
+				await Promise.allSettled(
+					readResults.map(async (result) => {
+						if (result.status === "fulfilled") {
+							try {
+								await client.didOpen(result.value.filePath, result.value.content);
+							} catch (err) {
+								console.warn(`[pi-shazam] _initServerForLanguage: re-open failed for ${result.value.filePath}`, err);
+								prevOpened.delete(result.value.filePath);
+							}
+						} else {
+							// File read failed -- likely deleted; remove from tracking
+							const filePath = entries[readResults.indexOf(result)]!;
+							console.warn(`[pi-shazam] _initServerForLanguage: read failed for ${filePath}`, result.reason);
+							prevOpened.delete(filePath);
+						}
+					}),
+				);
 			}
 
 			return info;

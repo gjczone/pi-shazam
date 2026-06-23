@@ -106,7 +106,7 @@ export interface LspLocation {
 
 // -- Helpers ------------------------------------------------------------------
 
-function pathToUri(filePath: string): string {
+export function pathToUri(filePath: string): string {
 	const resolved = path.resolve(filePath);
 	// file:// URI with absolute path, percent-encoding special characters
 	const normalized = resolved.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/");

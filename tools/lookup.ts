@@ -24,7 +24,7 @@ import { statSync } from "node:fs";
 import { readFileAdaptive } from "../core/encoding.js";
 import { resolve } from "node:path";
 import { TreeSitterAdapter } from "../core/treesitter.js";
-import { uriToPath } from "../lsp/client.js";
+import { uriToPath, pathToUri } from "../lsp/client.js";
 
 // -- Markdown sanitization ------------------------------------------------
 
@@ -530,7 +530,7 @@ async function _getTypeHierarchy(
 		if (serverInfo) {
 			const client = serverInfo.client;
 			const filePath = resolve(serverInfo.workspaceRoot, symbol.file);
-			const uri = `file://${filePath}`;
+			const uri = pathToUri(filePath);
 			const position = { line: symbol.line - 1, character: symbol.col || 0 };
 
 			// Open file if needed (shared across all hierarchy requests)
@@ -559,49 +559,46 @@ async function _getTypeHierarchy(
 			if (prepareResult && Array.isArray(prepareResult) && prepareResult.length > 0) {
 				const item = prepareResult[0] as Record<string, unknown>;
 
-				// Step 2: supertypes (separate error handling)
-				if (direction === "both" || direction === "supertypes") {
-					try {
-						const supertypes = (await client.request("typeHierarchy/supertypes", { item })) as Array<
-							Record<string, unknown>
-						>;
-						if (Array.isArray(supertypes)) {
-							for (const st of supertypes) {
-								result.supertypes.push({
-									name: (st.name as string) || "",
-									kind: (st.kind as string) || "unknown",
-									file: uriToPath((st.uri as string) || "") || "",
-									line: ((st.range as Record<string, unknown>)?.start as Record<string, number>)?.line + 1 || 0,
-									signature: (st.detail as string) || "",
-								});
-							}
-						}
-					} catch {
-						console.warn("[pi-shazam] _getTypeHierarchy: supertypes request failed");
-						// supertypes request failed -- fall through
+				// Step 2: fetch supertypes and subtypes in parallel (independent LSP requests)
+				const needSuper = direction === "both" || direction === "supertypes";
+				const needSub = direction === "both" || direction === "subtypes";
+
+				const [superResult, subResult] = await Promise.all([
+					needSuper
+						? client.request("typeHierarchy/supertypes", { item }).catch((err) => {
+								console.warn("[pi-shazam] _getTypeHierarchy: supertypes request failed", err);
+								return null;
+							})
+						: Promise.resolve(null),
+					needSub
+						? client.request("typeHierarchy/subtypes", { item }).catch((err) => {
+								console.warn("[pi-shazam] _getTypeHierarchy: subtypes request failed", err);
+								return null;
+							})
+						: Promise.resolve(null),
+				]);
+
+				if (needSuper && Array.isArray(superResult)) {
+					for (const st of superResult as Array<Record<string, unknown>>) {
+						result.supertypes.push({
+							name: (st.name as string) || "",
+							kind: (st.kind as string) || "unknown",
+							file: uriToPath((st.uri as string) || "") || "",
+							line: ((st.range as Record<string, unknown>)?.start as Record<string, number>)?.line + 1 || 0,
+							signature: (st.detail as string) || "",
+						});
 					}
 				}
 
-				// Step 3: subtypes (separate error handling)
-				if (direction === "both" || direction === "subtypes") {
-					try {
-						const subtypes = (await client.request("typeHierarchy/subtypes", { item })) as Array<
-							Record<string, unknown>
-						>;
-						if (Array.isArray(subtypes)) {
-							for (const st of subtypes) {
-								result.subtypes.push({
-									name: (st.name as string) || "",
-									kind: (st.kind as string) || "unknown",
-									file: uriToPath((st.uri as string) || "") || "",
-									line: ((st.range as Record<string, unknown>)?.start as Record<string, number>)?.line + 1 || 0,
-									signature: (st.detail as string) || "",
-								});
-							}
-						}
-					} catch {
-						console.warn("[pi-shazam] _getTypeHierarchy: subtypes request failed");
-						// subtypes request failed -- fall through
+				if (needSub && Array.isArray(subResult)) {
+					for (const st of subResult as Array<Record<string, unknown>>) {
+						result.subtypes.push({
+							name: (st.name as string) || "",
+							kind: (st.kind as string) || "unknown",
+							file: uriToPath((st.uri as string) || "") || "",
+							line: ((st.range as Record<string, unknown>)?.start as Record<string, number>)?.line + 1 || 0,
+							signature: (st.detail as string) || "",
+						});
 					}
 				}
 			}

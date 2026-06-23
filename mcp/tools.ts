@@ -14,6 +14,7 @@ import { executeFormat } from "../tools/format.js";
 import { executeVerifyTextAsync, executeVerifyJsonAsync } from "../tools/verify.js";
 import { executeChanges, executeChangesJson } from "../tools/changes.js";
 import { executeRenameSymbol, formatRenameResult } from "../tools/rename_symbol.js";
+import { hasCallChainChecked } from "../hooks/rename-state.js";
 import { executeSafeDelete, formatSafeDeleteResult } from "../tools/safe_delete.js";
 import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -278,8 +279,8 @@ export function registerAllTools(
 			inputSchema: formatDef.zodParams,
 		},
 		withLogging("shazam_format", async ({ dryRun, file, maxTokens }) => {
-			let text = executeFormat(getGraph(), projectRoot, {
-				dryRun: dryRun as boolean,
+			let text = await executeFormat(getGraph(), projectRoot, {
+				dryRun: (dryRun as boolean) ?? true,
 				file: file as string | undefined,
 			});
 			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
@@ -315,8 +316,27 @@ export function registerAllTools(
 			inputSchema: renameSymbolDef.zodParams,
 		},
 		withLogging("shazam_rename_symbol", async ({ symbol, newName, dryRun, maxTokens }) => {
-			const result = await executeRenameSymbol(getGraph(), symbol as string, newName as string, dryRun as boolean);
-			let text = formatRenameResult(result, symbol as string, newName as string, dryRun as boolean);
+			const effectiveDryRun = (dryRun as boolean) ?? true;
+			// Enforce impact-check safety gate: block non-dry-run unless shazam_impact --symbol was run
+			if (!effectiveDryRun && !hasCallChainChecked(symbol as string)) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: [
+								"[BLOCKED] Rename aborted - shazam_impact --symbol has not been run for this symbol.",
+								"",
+								`Before renaming \`${symbol as string}\`, you MUST run:`,
+								`  shazam_impact --symbol "${symbol as string}" --direction both`,
+								"",
+								"Review all callers and callees, then re-invoke shazam_rename_symbol with dryRun=false.",
+							].join("\n"),
+						},
+					],
+				};
+			}
+			const result = await executeRenameSymbol(getGraph(), symbol as string, newName as string, effectiveDryRun);
+			let text = formatRenameResult(result, symbol as string, newName as string, effectiveDryRun);
 			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return { content: [{ type: "text", text }] };
 		}),

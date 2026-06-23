@@ -23,7 +23,9 @@ const PROJECT_ROOT = resolve(process.argv[2] || ".");
 try {
 	const realRoot = realpathSync(PROJECT_ROOT);
 	const homeDir = process.env.HOME || "/home";
-	if (!realRoot.startsWith(homeDir) && realRoot !== "/") {
+	// Use path-separator boundary check to prevent prefix confusion (e.g. /home/userx matching /home/user)
+	const isUnderHome = realRoot === homeDir || realRoot.startsWith(homeDir + "/");
+	if (!isUnderHome) {
 		console.error("[pi-shazam mcp] PROJECT_ROOT must be within user home directory");
 		process.exit(1);
 	}

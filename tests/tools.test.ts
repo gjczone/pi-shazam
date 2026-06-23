@@ -361,7 +361,7 @@ describe("Tool: verify — N+1 sequential lspCodeActions (issue #370)", () => {
 describe("Tool: fix", () => {
 	it("should return fix results in dry-run mode", async () => {
 		const { executeFormat } = await import("../tools/format.js");
-		const result = executeFormat(getGraph(), ".", { dryRun: true });
+		const result = await executeFormat(getGraph(), ".", { dryRun: true });
 		expect(result).toBeDefined();
 		expect(typeof result).toBe("string");
 		expect(result.length).toBeGreaterThan(0);
@@ -369,7 +369,7 @@ describe("Tool: fix", () => {
 
 	it("should support json output with dryRun", async () => {
 		const { executeFormatJson } = await import("../tools/format.js");
-		const result = executeFormatJson(getGraph(), ".", { dryRun: true });
+		const result = await executeFormatJson(getGraph(), ".", { dryRun: true });
 		expect(result).toBeDefined();
 		const parsed = JSON.parse(result);
 		expect(parsed.status).toBe("ok");

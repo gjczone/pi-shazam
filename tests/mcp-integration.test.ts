@@ -225,7 +225,7 @@ describe("MCP integration: find_tests pipeline", () => {
 describe("MCP integration: fix pipeline", () => {
 	it("should produce valid text from fix in dry-run mode", async () => {
 		const { executeFormat } = await import("../tools/format.js");
-		const text = executeFormat(graph, ".", { dryRun: true });
+		const text = await executeFormat(graph, ".", { dryRun: true });
 		expect(typeof text).toBe("string");
 		expect(text.length).toBeGreaterThan(0);
 		const envelope = wrapMcp(text);

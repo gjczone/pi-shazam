@@ -111,6 +111,9 @@ function computeImpactBfs(graph: RepoGraph, files: string[], depth: number): Imp
 	const affectedFiles = new Set<string>();
 	const affectedSymbols: AffectedSymbol[] = [];
 
+	// Convert target files to Set for O(1) lookup on BFS hot path
+	const targetFileSet = new Set<string>(files);
+
 	// Collect initial symbol IDs from target files
 	const initialSymIds: string[] = [];
 	for (const file of files) {
@@ -133,7 +136,7 @@ function computeImpactBfs(graph: RepoGraph, files: string[], depth: number): Imp
 				if (visitedUp.has(edge.source)) continue;
 				visitedUp.add(edge.source);
 				const callerSym = graph.symbols.get(edge.source);
-				if (callerSym && !files.includes(callerSym.file) && !isNonSourceFile(callerSym.file)) {
+				if (callerSym && !targetFileSet.has(callerSym.file) && !isNonSourceFile(callerSym.file)) {
 					affectedFiles.add(callerSym.file);
 					affectedSymbols.push({ symbol: callerSym, direction: "upstream" });
 					queueUp.push({ id: edge.source, level: level + 1 });
@@ -157,7 +160,7 @@ function computeImpactBfs(graph: RepoGraph, files: string[], depth: number): Imp
 				if (visitedDown.has(edge.target)) continue;
 				visitedDown.add(edge.target);
 				const calleeSym = graph.symbols.get(edge.target);
-				if (calleeSym && !files.includes(calleeSym.file) && !isNonSourceFile(calleeSym.file)) {
+				if (calleeSym && !targetFileSet.has(calleeSym.file) && !isNonSourceFile(calleeSym.file)) {
 					affectedFiles.add(calleeSym.file);
 					affectedSymbols.push({ symbol: calleeSym, direction: "downstream" });
 					queueDown.push({ id: edge.target, level: level + 1 });

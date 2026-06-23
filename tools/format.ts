@@ -5,12 +5,14 @@
  * In dry-run mode, previews what would change without modifying files.
  * Supports nearest-wins formatter detection (prettier, biome, eslint, ruff, rustfmt, gofmt).
  */
-import type { ExtensionAPI } from "../types/pi-extension.js";
+import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { createTool, validatePathInProject } from "./_factory.js";
-import { readFileAdaptive } from "../core/encoding.js";
+import { readFileAdaptiveAsync } from "../core/encoding.js";
+import { scanProject } from "../core/scanner.js";
 import { existsSync, readFileSync } from "node:fs";
+import { readFile as readFileAsync } from "node:fs/promises";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { getNextForTool, formatNextSection } from "../core/output.js";
@@ -30,11 +32,15 @@ export function registerFormat(pi: ExtensionAPI): void {
 			dryRun: Type.Optional(Type.Boolean()),
 			file: Type.Optional(Type.String()),
 		}),
-		execute(graph, params) {
+		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
 			const dryRun = (params.dryRun as boolean) ?? true;
 			const file = params.file as string | undefined;
-			return json ? executeFormatJson(graph, ".", { dryRun, file }) : executeFormat(graph, ".", { dryRun, file });
+			const graph = scanProject(".");
+			const text = json
+				? await executeFormatJson(graph, ".", { dryRun, file })
+				: await executeFormat(graph, ".", { dryRun, file });
+			return { content: [{ type: "text", text }] };
 		},
 	});
 }
@@ -54,7 +60,11 @@ export interface FormatOptions {
  * Run format analysis. In dry-run mode (default), only reports issues.
  * In apply mode, runs detected formatters with auto-fix flags.
  */
-export function executeFormat(graph: RepoGraph, projectRoot: string, options: FormatOptions = {}): string {
+export async function executeFormat(
+	graph: RepoGraph,
+	projectRoot: string,
+	options: FormatOptions = {},
+): Promise<string> {
 	const dryRun = options.dryRun ?? true;
 	const lines: string[] = [];
 
@@ -102,7 +112,7 @@ export function executeFormat(graph: RepoGraph, projectRoot: string, options: Fo
 	const rawFiles = options.file ? [options.file] : [...graph.fileSymbols.keys()];
 	const targetFiles = rawFiles.filter((f) => !isNonSourceFile(f));
 
-	const issues = scanFormatIssues(projectRoot, targetFiles, graph);
+	const issues = await scanFormatIssues(projectRoot, targetFiles, graph);
 
 	lines.push("### Format Issues Found");
 	lines.push("");
@@ -122,7 +132,7 @@ export function executeFormat(graph: RepoGraph, projectRoot: string, options: Fo
 	lines.push("");
 
 	// -- Recommendations ------------------------------------------------
-	if (issues.length > 0) {
+	if (issues.some((i) => i.kind !== "truncation")) {
 		lines.push("### Recommended Fix Commands");
 		lines.push("");
 		if (formatters.includes("prettier")) {
@@ -167,7 +177,11 @@ export function executeFormat(graph: RepoGraph, projectRoot: string, options: Fo
 /**
  * Run format analysis and return structured JSON.
  */
-export function executeFormatJson(graph: RepoGraph, projectRoot: string, options: FormatOptions = {}): string {
+export async function executeFormatJson(
+	graph: RepoGraph,
+	projectRoot: string,
+	options: FormatOptions = {},
+): Promise<string> {
 	const dryRun = options.dryRun ?? true;
 	const formatters = detectFormatters(projectRoot);
 
@@ -184,7 +198,7 @@ export function executeFormatJson(graph: RepoGraph, projectRoot: string, options
 	const rawFiles = options.file ? [options.file] : [...graph.fileSymbols.keys()];
 	const targetFiles = rawFiles.filter((f) => !isNonSourceFile(f));
 
-	const issues = scanFormatIssues(projectRoot, targetFiles, graph);
+	const issues = await scanFormatIssues(projectRoot, targetFiles, graph);
 
 	return JSON.stringify({
 		schema_version: "1.0",
@@ -272,39 +286,42 @@ function parseEditorconfig(projectRoot: string): { style?: string; size?: number
  * Returns 'tabs' if most files use tabs, 'spaces' otherwise.
  * This prevents false positives when the project consistently uses tabs (fixes #111).
  */
-function detectIndentationStyle(files: string[], projectRoot: string): "tabs" | "spaces" {
+async function detectIndentationStyle(files: string[], projectRoot: string): Promise<"tabs" | "spaces"> {
 	// First, try to read from .editorconfig (fixes #153)
 	const editorconfig = parseEditorconfig(projectRoot);
 	if (editorconfig?.style === "tab") return "tabs";
 	if (editorconfig?.style === "space") return "spaces";
 
-	// Fall back to file-based detection
+	// Fall back to file-based detection (concurrent reads)
 	let tabFiles = 0;
 	let spaceFiles = 0;
 	const sampleSize = Math.min(files.length, 20); // Sample up to 20 files
 
-	for (let i = 0; i < sampleSize; i++) {
-		const fullPath = join(projectRoot, files[i]!);
-		if (!existsSync(fullPath)) continue;
+	const sampleFiles = files.slice(0, sampleSize);
+	const readResults = await Promise.allSettled(
+		sampleFiles.map(async (file) => {
+			const fullPath = join(projectRoot, file);
+			if (!existsSync(fullPath)) return null;
+			const content = await readFileAsync(fullPath, "utf-8");
+			return content;
+		}),
+	);
 
-		try {
-			const content = readFileSync(fullPath, "utf-8");
-			const lines = content.split("\n").slice(0, 50); // Check first 50 lines
+	for (const result of readResults) {
+		if (result.status !== "fulfilled" || result.value === null) continue;
+		const content = result.value;
+		const lines = content.split("\n").slice(0, 50); // Check first 50 lines
 
-			let tabCount = 0;
-			let spaceCount = 0;
+		let tabCount = 0;
+		let spaceCount = 0;
 
-			for (const line of lines) {
-				if (line.startsWith("\t")) tabCount++;
-				else if (line.startsWith("    ")) spaceCount++;
-			}
-
-			if (tabCount > spaceCount) tabFiles++;
-			else if (spaceCount > tabCount) spaceFiles++;
-		} catch {
-			console.warn("[pi-shazam] detectIndentationStyle: failed to read file");
-			// Skip unreadable files
+		for (const line of lines) {
+			if (line.startsWith("\t")) tabCount++;
+			else if (line.startsWith("    ")) spaceCount++;
 		}
+
+		if (tabCount > spaceCount) tabFiles++;
+		else if (spaceCount > tabCount) spaceFiles++;
 	}
 
 	return tabFiles > spaceFiles ? "tabs" : "spaces";
@@ -349,88 +366,102 @@ function hasUseTabsInConfig(projectRoot: string): boolean {
 /**
  * Scan files for common formatting issues.
  */
-function scanFormatIssues(projectRoot: string, files: string[], _graph: RepoGraph): FormatIssue[] {
+async function scanFormatIssues(projectRoot: string, files: string[], _graph: RepoGraph): Promise<FormatIssue[]> {
 	const issues: FormatIssue[] = [];
 
 	// Detect indentation style to avoid false positives (fixes #111)
-	const useTabs = hasUseTabsInConfig(projectRoot) || detectIndentationStyle(files, projectRoot) === "tabs";
+	const useTabs = hasUseTabsInConfig(projectRoot) || (await detectIndentationStyle(files, projectRoot)) === "tabs";
 
-	for (const file of files.slice(0, 100)) {
-		const fullPath = join(projectRoot, file);
-		if (!existsSync(fullPath)) continue;
+	const capped = files.slice(0, 100);
+	if (files.length > 100) {
+		issues.push({
+			file: `(${files.length - 100} more files)`,
+			line: 0,
+			kind: "truncation",
+			description: `... and ${files.length - 100} more files not scanned (100-file cap)`,
+		});
+	}
 
-		try {
-			const content = readFileAdaptive(fullPath);
-			const lines = content.split("\n");
+	// Read all files concurrently
+	const readResults = await Promise.allSettled(
+		capped.map(async (file) => {
+			const fullPath = join(projectRoot, file);
+			if (!existsSync(fullPath)) return { file, content: null };
+			const content = await readFileAdaptiveAsync(fullPath);
+			return { file, content };
+		}),
+	);
 
-			for (let i = 0; i < lines.length; i++) {
-				const line = lines[i];
-				const lineNum = i + 1;
+	for (const result of readResults) {
+		if (result.status !== "fulfilled" || result.value.content === null) continue;
+		const { file, content } = result.value;
 
-				// Trailing whitespace
-				if (line && line !== line.trimEnd()) {
-					issues.push({
-						file,
-						line: lineNum,
-						kind: "trailing-whitespace",
-						description: "Line has trailing whitespace",
-					});
-				}
+		const lines = content.split("\n");
 
-				// Tab indentation -- only report if project uses spaces (fixes #111)
-				if (!useTabs && (file.endsWith(".ts") || file.endsWith(".js") || file.endsWith(".json"))) {
-					if (line.startsWith("\t")) {
-						issues.push({
-							file,
-							line: lineNum,
-							kind: "tab-indent",
-							description: "Tab character used for indentation (use spaces)",
-						});
-					}
-				}
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			const lineNum = i + 1;
 
-				// Mixed tabs and spaces
-				if (line.includes("\t") && line.includes("    ")) {
-					issues.push({
-						file,
-						line: lineNum,
-						kind: "mixed-indent",
-						description: "Mixed tabs and spaces on same line",
-					});
-				}
-			}
-
-			// Missing newline at end of file
-			if (content.length > 0 && !content.endsWith("\n")) {
+			// Trailing whitespace
+			if (line && line !== line.trimEnd()) {
 				issues.push({
 					file,
-					line: lines.length,
-					kind: "missing-newline",
-					description: "File does not end with a newline",
+					line: lineNum,
+					kind: "trailing-whitespace",
+					description: "Line has trailing whitespace",
 				});
 			}
 
-			// Too many consecutive blank lines
-			let blankCount = 0;
-			for (let i = 0; i < lines.length; i++) {
-				if (lines[i]?.trim() === "") {
-					blankCount++;
-					if (blankCount > 2) {
-						issues.push({
-							file,
-							line: i + 1,
-							kind: "consecutive-blank-lines",
-							description: "More than 2 consecutive blank lines",
-						});
-						blankCount = 0; // Reset to avoid duplicate reports
-					}
-				} else {
-					blankCount = 0;
+			// Tab indentation -- only report if project uses spaces (fixes #111)
+			if (!useTabs && (file.endsWith(".ts") || file.endsWith(".js") || file.endsWith(".json"))) {
+				if (line.startsWith("\t")) {
+					issues.push({
+						file,
+						line: lineNum,
+						kind: "tab-indent",
+						description: "Tab character used for indentation (use spaces)",
+					});
 				}
 			}
-		} catch {
-			console.warn("[pi-shazam] scanFormatIssues: failed to read file");
-			// Skip files that can't be read
+
+			// Mixed tabs and spaces
+			if (line.includes("\t") && line.includes("    ")) {
+				issues.push({
+					file,
+					line: lineNum,
+					kind: "mixed-indent",
+					description: "Mixed tabs and spaces on same line",
+				});
+			}
+		}
+
+		// Missing newline at end of file
+		if (content.length > 0 && !content.endsWith("\n")) {
+			issues.push({
+				file,
+				line: lines.length,
+				kind: "missing-newline",
+				description: "File does not end with a newline",
+			});
+		}
+
+		// Too many consecutive blank lines
+		let blankCount = 0;
+		for (let i = 0; i < lines.length; i++) {
+			if (lines[i]?.trim() === "") {
+				blankCount++;
+				if (blankCount > 2) {
+					issues.push({
+						file,
+						line: i + 1,
+						kind: "consecutive-blank-lines",
+						description: "More than 2 consecutive blank lines",
+					});
+					blankCount = 0; // Reset to avoid duplicate reports
+				}
+			} else {
+				blankCount = 0;
+			}
 		}
 	}
 
