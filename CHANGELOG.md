@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.1] - 2026-06-23
+
+### Bug Fixes
+
+- **fix(#416): hooks noise reduction** — shazam-guide.ts no longer suggests `shazam_format` when no formatter is configured in the project; skips the "run shazam_verify first" tip when a recent PASS verify already exists; pre-edit.ts deduplicates warned file groups to avoid repeated impact notifications
+- **fix(#417): hooks auto-verify and global config awareness** — stop-verify.ts injects a steer message with `triggerTurn: true` at turn_end for unverified edits, forcing the agent to run `shazam_verify` before continuing; pre-edit.ts triggers impact warnings for single-file edits of global config files (package.json, tsconfig.json, Cargo.toml, etc.)
+- **fix(#418): pi-shazam native hooks parity improvements** — TypeScript hooks now match kimi-code hook behavior for noise reduction, auto-verify, and global config detection
+- **chore(#419): cleanup** — renamed misleading "emoji" variable to "levelTag" in safety.ts
+
+### Documentation
+
+- Updated README.md with GLM-5.2 and GLM-5.1 models in vibe coding table
+- Synced kimi-code hooks documentation: updated version mapping, hooks config table, parity table, and maintenance checklist; added smoke test (15 cases, 9 tool dimensions)
+
 ## [0.18.0] - 2026-06-23
 
 ### Security
@@ -22,19 +36,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **fix(#413-H1): ref edges lost after disk cache load + incremental scan** — added `fileRefs` to `SerializedGraphV2`; refs are now serialized and restored from disk cache, fixing the silent loss of same-file ref edges after the first incremental scan following a cache load
 - **fix(#413-H2): LSP crash recovery re-reads files with UTF-8 only (encoding bypass)** — replaced `readFileAsync(absPath, "utf-8")` with `readFileAdaptiveAsync` for the crash recovery re-open path
 - **fix(#413-H3): encoding blindness — 15+ call sites bypass readFileAdaptive** — replaced all project-file reads with `readFileAdaptive` / `readFileAdaptiveAsync` across `tools/overview.ts`, `tools/find_tests.ts`, `tools/format.ts`, `core/formatters.ts`, `core/git-hooks.ts`, and `hooks/shazam-guide.ts`
-- **fix(#413-H4): Python __all__ triple-quoted strings not stripped correctly** — updated regex to handle 1-3 quotes (`['"]{1,3}`) on both ends; triple-quoted strings like `'''foo'''` now correctly match real symbols
-- **fix(#413-H5): TreeSitter _within() uses strict inequality — boundary symbols missed** — changed strict `>`/`<` to `>=`/`<=` for start/end position comparison; symbols starting at exactly the same row+column as the definition node are now correctly considered "within"
+- **fix(#413-H4): Python **all** triple-quoted strings not stripped correctly** — updated regex to handle 1-3 quotes (`['"]{1,3}`) on both ends; triple-quoted strings like `'''foo'''` now correctly match real symbols
+- **fix(#413-H5): TreeSitter \_within() uses strict inequality — boundary symbols missed** — changed strict `>`/`<` to `>=`/`<=` for start/end position comparison; symbols starting at exactly the same row+column as the definition node are now correctly considered "within"
 - **fix(#413-H6): deserialized graph may have dangling edges** — `deserializeGraphV2` now skips edges where source or target symbol IDs don't exist in `graph.symbols`, logging a warning for each skipped edge to prevent crashes in downstream code
 - **fix(#413-M2): saveGraphCache has no size limit — OOM risk for huge projects** — added 20MB size limit check on save (matching the load-side limit); `JSON.stringify` result is checked before writing, and cache is skipped with a warning if too large
-- **fix(#413-M3): _cleanupAfterCrash called twice (error + exit events)** — added `_cleanedUp` flag that `_cleanupAfterCrash` checks and sets on first entry, separate from `_closing` which is for intentional shutdown only
+- **fix(#413-M3): \_cleanupAfterCrash called twice (error + exit events)** — added `_cleanedUp` flag that `_cleanupAfterCrash` checks and sets on first entry, separate from `_closing` which is for intentional shutdown only
 - **fix(#413-M4): import line numbers lost after cache deserialization** — `fileImports` now serialized as `[string, number][]` tuples to preserve line numbers instead of flattening to `string[]`
 - **fix(#413-M5): compareGraphSnapshots edge diff ignores weight and confidence changes** — edge identity now includes weight and confidence (`${source}::${target}::${kind}::${weight}::${confidence}`), so modified edges are detected not just added/removed ones
 - **fix(#413-M6): error object discarded in multiple catch blocks** — all catch blocks in `tools/lookup.ts` and `tools/verify.ts` now capture and log the actual error object instead of just a fixed-string warning
 - **fix(#413-M7): fire-and-forget audit log promise with empty catch** — replaced `_writePromise.catch(() => {})` with proper error logging so unexpected errors from `redact()` or `JSON.stringify()` are surfaced
-- **fix(#413-M11): _scanSeenEdges not reset to null on scan exception** — `_scanSeenEdges` is now reset to null in the `finally` block of `scanProject` alongside `exitScan()`, preventing state leakage across scans
+- **fix(#413-M11): \_scanSeenEdges not reset to null on scan exception** — `_scanSeenEdges` is now reset to null in the `finally` block of `scanProject` alongside `exitScan()`, preventing state leakage across scans
 - **fix(#413-L1): redundant removeEdgesForFile calls in incremental scan** — removed duplicate `removeEdgesForFile` call for changed files (was called once in changedFiles loop and again in dependentFiles loop)
 - **fix(#413-L2): same Parser instance shared between javascript and typescript keys** — TypeScript grammar fallback now creates a separate Parser instance instead of storing the same object under both keys
-- **fix(#413-L3): hardcoded magic numbers in _extractStandardSymbols** — extracted `MAX_NAME_NODES` and `MAX_MATCHING_DEFS` named constants (5000 each) from the method body
+- **fix(#413-L3): hardcoded magic numbers in \_extractStandardSymbols** — extracted `MAX_NAME_NODES` and `MAX_MATCHING_DEFS` named constants (5000 each) from the method body
 - **fix(#413-L7): params.project = project mutates caller's params object** — factory now uses spread operator to create a new params object (`effectiveParams`) instead of mutating the caller's object
 - **fix(#413-L8): LspClient cmd! non-null assertion on command array** — added explicit validation that the command array has at least one element; logs error and triggers cleanup if empty
 
@@ -63,8 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance
 
-- **fix(#398): scanner.ts O(N*M) imports.includes on incremental scan hot path** — built `fileImportedBy: Map<string, Set<string>>` reverse import index for O(1) dependent lookup; incremental scan no longer scans every file's import list
-- **fix(#399): lookup.ts constructs new TreeSitterAdapter per _extractDocstring call** — replaced per-call `new TreeSitterAdapter()` with module-scoped lazy singleton; hover batch of 20 symbols no longer triggers 20 full grammar loads
+- **fix(#398): scanner.ts O(N\*M) imports.includes on incremental scan hot path** — built `fileImportedBy: Map<string, Set<string>>` reverse import index for O(1) dependent lookup; incremental scan no longer scans every file's import list
+- **fix(#399): lookup.ts constructs new TreeSitterAdapter per \_extractDocstring call** — replaced per-call `new TreeSitterAdapter()` with module-scoped lazy singleton; hover batch of 20 symbols no longer triggers 20 full grammar loads
 - **fix(#402-P3-1): sequential await of independent supertypes/subtypes** — changed to `Promise.all` for parallel type hierarchy requests
 - **fix(#402-P3-2): sequential await + readFileSync in crash re-open loop** — changed to async file reads with `Promise.allSettled` for didOpen calls
 - **fix(#402-P3-3): Array.includes on BFS hot path** — converted `files` to `Set<string>` for O(1) lookup in impact analysis
