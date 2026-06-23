@@ -1116,6 +1116,8 @@ export interface InputEvent {
 interface ToolCallEventBase {
 	type: "tool_call";
 	toolCallId: string;
+	/** Tool input parameters (union of per-tool input types; unknown for untyped tools) */
+	input?: unknown;
 }
 
 export interface BashToolCallEvent extends ToolCallEventBase {

@@ -452,7 +452,7 @@ export async function lspImplementation(
 	const result = await withEnrichTimeout(
 		opened.client.implementation(filePath, line, character, cts.token).then((r) => {
 			if (r.status !== "ok" || !r.data) return null;
-			const arr = Array.isArray(r.data) ? r.data : [r.data];
+			const arr: unknown[] = Array.isArray(r.data) ? r.data : [r.data];
 			// Detect LocationLink[] by checking for "targetUri" property
 			if (isLocationLinkArray(arr)) {
 				return arr.map(
@@ -494,10 +494,10 @@ export async function lspReferences(
 	const result = await withEnrichTimeout(
 		opened.client.references(filePath, line, character, cts.token).then((r) => {
 			if (r.status !== "ok" || !r.data) return null;
-			const arr = Array.isArray(r.data) ? r.data : [r.data];
+			const arr: unknown[] = Array.isArray(r.data) ? r.data : [r.data];
 			// Detect LocationLink[] by checking for "targetUri" property
-			if (arr.length > 0 && "targetUri" in arr[0]!) {
-				return (arr as unknown as LocationLink[]).map(
+			if (isLocationLinkArray(arr)) {
+				return arr.map(
 					(ll) =>
 						({
 							uri: ll.targetUri,
