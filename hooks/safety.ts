@@ -134,9 +134,9 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 		// -- Check 1: Destructive command detection --
 		const destructive = detectDestructiveCommand(cmd);
 		if (destructive) {
-			const emoji = destructive.level === "HIGH" ? "[HIGH]" : "[MED]";
+			const levelTag = destructive.level === "HIGH" ? "HIGH" : "MED";
 			const message = [
-				`[${emoji}] Destructive command detected [${emoji}]`,
+				`[${levelTag}] Destructive command detected [${levelTag}]`,
 				"",
 				`Risk level: ${destructive.level}`,
 				`Pattern: ${destructive.pattern}`,

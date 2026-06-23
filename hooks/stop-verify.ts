@@ -1,8 +1,10 @@
 /**
- * pi-shazam hooks/stop-verify -- Remind to verify before ending turn.
+ * pi-shazam hooks/stop-verify -- Auto-verify guard at turn end.
  *
  * When the LLM tries to end its turn after making edits, this hook checks
- * if shazam_verify was run. If not, it sends a reminder message.
+ * if shazam_verify was run. If not, it injects a steer message that triggers
+ * a new turn with a verification instruction, forcing the agent to run
+ * shazam_verify before proceeding.
  *
  * This prevents the common pattern where LLM edits files and forgets
  * to check for errors before declaring "done".
@@ -21,6 +23,10 @@ import {
 	markReminderSent,
 	wasReminderSent,
 } from "./verify-state.js";
+
+/** Minimum interval between auto-verify steer messages (60 seconds). */
+const REMINDER_DEBOUNCE_MS = 60 * 1000;
+let _lastReminderTimestamp = 0;
 
 /**
  * Register the stop-verify hook.
@@ -58,9 +64,11 @@ export function registerStopVerify(pi: ExtensionAPI): void {
 	// Reset on session start
 	pi.on("session_start", () => {
 		resetVerifyState();
+		_lastReminderTimestamp = 0;
 	});
 
-	// Check on turn end
+	// Check on turn end: if unverified edits exist, inject a steer message
+	// that triggers a new turn instructing the agent to run shazam_verify.
 	pi.on("turn_end", (_event, _ctx) => {
 		// Check if there were file edits this session
 		const editedFiles = getEditedFiles();
@@ -72,20 +80,38 @@ export function registerStopVerify(pi: ExtensionAPI): void {
 		// Skip if a reminder was already sent for this batch of unverified edits
 		if (wasReminderSent()) return;
 
-		// Send reminder via sendMessage (injected into next turn context)
-		const fileList =
-			editedFiles.length <= 3 ? editedFiles.map((f) => `\`${f}\``).join(", ") : `${editedFiles.length} files`;
+		// Debounce: skip if last reminder was within REMINDER_DEBOUNCE_MS
+		const now = Date.now();
+		if (now - _lastReminderTimestamp < REMINDER_DEBOUNCE_MS) return;
+		_lastReminderTimestamp = now;
 
-		pi.sendMessage({
-			customType: "shazam-reminder",
-			content: [
-				"[shazam] Verification reminder",
-				"",
-				`You edited ${fileList} this session but haven't run \`shazam_verify\`.`,
-				"Run it now to check for type errors, lint issues, and broken references.",
-			].join("\n"),
-			display: false,
-		});
+		// Build a file list for the message
+		const fileList =
+			editedFiles.length <= 3
+				? editedFiles.map((f) => `\`${f}\``).join(", ")
+				: `${editedFiles.length} files`;
+
+		// Send a steer message that triggers a new turn, forcing the agent
+		// to run shazam_verify before continuing. deliverAs: "steer" makes
+		// the message more prominent; triggerTurn: true schedules an
+		// immediate internal continuation.
+		pi.sendMessage(
+			{
+				customType: "shazam-reminder",
+				content: [
+					"[shazam] Verification required",
+					"",
+					`You edited ${fileList} this session but haven't run \`shazam_verify\`.`,
+					"Run \`shazam_verify\` now to check for type errors, lint issues, and broken references.",
+					"After verify passes, continue with your task.",
+				].join("\n"),
+				display: false,
+			},
+			{
+				triggerTurn: true,
+				deliverAs: "steer",
+			},
+		);
 
 		markReminderSent();
 	});
