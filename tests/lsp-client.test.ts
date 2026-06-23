@@ -665,7 +665,7 @@ describe("LspClient didClose and collectDiagnostics", () => {
 		// Consume fileA — remaining should be [B, C] in original order
 		client.collectDiagnostics(["/test/fileA.ts"]);
 
-		const remaining = (client as any)._notifications as Map<string, (typeof notifA)>;
+		const remaining = (client as any)._notifications as Map<string, typeof notifA>;
 		// Map preserves insertion order; after consuming A, B and C remain
 		expect(remaining.size).toBe(2);
 		const remainingEntries = [...remaining.values()];

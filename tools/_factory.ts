@@ -20,7 +20,7 @@ import type {
 } from "../types/pi-extension.js";
 import { Type, type TProperties, type TObject } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
-import { scanProject, setProjectRoot as scannerSetProjectRoot } from "../core/scanner.js";
+import { scanProject } from "../core/scanner.js";
 import { truncateOutput } from "../core/output.js";
 import { resolve } from "node:path";
 import { realpathSync } from "node:fs";
@@ -145,7 +145,7 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 
 			let text: string;
 			try {
-				text = await domainFn(graph, params);
+				text = await domainFn(graph, effectiveParams);
 			} catch (err) {
 				const errMsg = err instanceof Error ? err.message : String(err);
 				if (json) {

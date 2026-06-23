@@ -7,7 +7,7 @@
  * This is the main entry point that all tools compose from.
  */
 
-import { readdirSync, statSync, lstatSync, existsSync, realpathSync } from "node:fs";
+import { readdirSync, statSync, existsSync, realpathSync } from "node:fs";
 import { join, relative, resolve, dirname } from "node:path";
 import { TreeSitterAdapter, EXT_TO_LANG } from "./treesitter.js";
 import { createRepoGraph, createEdge } from "./graph.js";
@@ -41,13 +41,6 @@ let _projectRootOverride: string | null = null;
  */
 export function setProjectRoot(root: string): void {
 	_projectRootOverride = resolve(root);
-}
-
-/**
- * Get the effective project root, respecting any override set by setProjectRoot().
- */
-function getEffectiveProjectRoot(): string {
-	return _projectRootOverride ?? process.cwd();
 }
 
 // -- Concurrency guard (issue #92) -------------------------------------------
@@ -459,7 +452,11 @@ function getGraphCachePath(projectRoot: string): string {
 export function scanProject(projectPath: string, log?: (msg: string) => void): RepoGraph {
 	enterScan();
 	try {
-		return _scanProject(projectPath, log);
+		// C3: When caller passes "." (default project path), use the configured
+		// project root override if one was set by index.ts from Pi's ctx.cwd.
+		// This ensures scanner and LSP use the same project root.
+		const effectivePath = projectPath === "." && _projectRootOverride ? _projectRootOverride : projectPath;
+		return _scanProject(effectivePath, log);
 	} finally {
 		exitScan();
 		// M11: Reset _scanSeenEdges in finally block so it doesn't leak across scans
@@ -876,7 +873,9 @@ function _walkDirectory(
 				const realPath = realpathSync(join(dir, entry.name));
 				const resolvedRoot = resolve(root);
 				if (!realPath.startsWith(resolvedRoot + "/") && realPath !== resolvedRoot) {
-					console.warn(`[pi-shazam] _walkDirectory: symlink target outside project root, skipping: ${relPath} -> ${realPath}`);
+					console.warn(
+						`[pi-shazam] _walkDirectory: symlink target outside project root, skipping: ${relPath} -> ${realPath}`,
+					);
 					continue;
 				}
 				const ext = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();

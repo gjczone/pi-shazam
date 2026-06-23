@@ -336,11 +336,11 @@ export class TreeSitterAdapter {
 			}
 
 			// L3: Named constant for max name/def nodes to process per file
-		const MAX_NAME_NODES = 5000;
-		const MAX_MATCHING_DEFS = 5000;
+			const MAX_NAME_NODES = 5000;
+			const MAX_MATCHING_DEFS = 5000;
 
-		let namesProcessed = 0;
-		for (const nameNode of nameNodes) {
+			let namesProcessed = 0;
+			for (const nameNode of nameNodes) {
 				if (namesProcessed >= MAX_NAME_NODES) break;
 				namesProcessed++;
 

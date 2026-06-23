@@ -16,6 +16,9 @@ import type { RepoGraph, GraphCacheData as GraphCacheDataExport } from "./graph.
 // -- Cache directory management -----------------------------------------------
 
 const CACHE_ROOT = join(homedir(), ".cache", "repomap");
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 1 day - prevents stale cache in active projects (fixes #100)
+// M2: Shared size limit for cache files - both load and save respect this (prevents OOM on huge projects)
+const MAX_CACHE_SIZE = 20 * 1024 * 1024; // 20MB
 
 /**
  * Get the cache directory for a specific project.
@@ -31,9 +34,6 @@ export function getProjectCacheDir(projectPath: string): string {
 }
 
 // -- Persistent graph cache (V2) ----------------------------------------------
-
-/** Max age for a cached graph file before it is considered stale. */
-const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 1 day - prevents stale cache in active projects (fixes #100)
 
 /**
  * Atomically rename a temp file to a target path, handling Windows EPERM/EBUSY
@@ -66,7 +66,13 @@ export function saveGraphCache(graph: RepoGraph, fileMtimes: Map<string, number>
 	mkdirSync(dirname(cachePath), { recursive: true });
 	const tmpPath = cachePath + ".tmp";
 	try {
-		writeFileSync(tmpPath, JSON.stringify(serialized), "utf-8");
+		const json = JSON.stringify(serialized);
+		// M2: Enforce size limit on save too, not just load — prevents OOM on huge projects
+		if (json.length > MAX_CACHE_SIZE) {
+			console.warn(`[pi-shazam] saveGraphCache: serialized graph too large (${json.length} bytes), skipping cache`);
+			return;
+		}
+		writeFileSync(tmpPath, json, "utf-8");
 		atomicRename(tmpPath, cachePath);
 	} catch (err) {
 		// Clean up tmp file on failure
@@ -88,7 +94,6 @@ export type GraphCacheData = GraphCacheDataExport;
 export function loadGraphCache(cachePath: string): GraphCacheData | null {
 	if (!existsSync(cachePath)) return null;
 	try {
-		const MAX_CACHE_SIZE = 20 * 1024 * 1024; // 20MB
 		const cacheStat = statSync(cachePath);
 		if (cacheStat.size > MAX_CACHE_SIZE) {
 			console.warn(`[pi-shazam] Cache file too large (${cacheStat.size} bytes), skipping`);

@@ -215,7 +215,14 @@ export class LspClient {
 		this._log(`Starting LSP: ${this.command[0]} (workspace: ${this.workspaceRoot})`);
 
 		const [cmd, ...args] = this.command;
-		this.process = spawn(cmd!, args, {
+		// L8: Validate command array has at least one element instead of using
+		// non-null assertion. An empty command array would be a configuration bug.
+		if (!cmd) {
+			this._log("LSP start failed: empty command array");
+			this._cleanupAfterCrash();
+			return;
+		}
+		this.process = spawn(cmd, args, {
 			cwd: this.workspaceRoot,
 			stdio: ["pipe", "pipe", "pipe"],
 		});

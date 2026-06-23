@@ -7,7 +7,6 @@
  */
 
 import { readdirSync, statSync, existsSync } from "node:fs";
-import { readFile as readFileAsync } from "node:fs/promises";
 import { join, resolve, delimiter } from "node:path";
 import { homedir } from "node:os";
 import { LspClient } from "./client.js";

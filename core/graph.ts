@@ -300,9 +300,10 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 	}
 	for (const [k, v] of Object.entries(data.fileImports)) {
 		// M4: fileImports serialized as [string, number][] to preserve line numbers
-		const imports = Array.isArray(v) && v.length > 0 && Array.isArray(v[0])
-			? (v as [string, number][]).map(([m]) => m)
-			: (v as unknown as string[]);
+		const imports =
+			Array.isArray(v) && v.length > 0 && Array.isArray(v[0])
+				? (v as [string, number][]).map(([m]) => m)
+				: (v as unknown as string[]);
 		graph.fileImports.set(k, imports);
 	}
 	for (const [k, v] of Object.entries(data.fileCalls)) {
