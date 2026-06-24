@@ -31,16 +31,36 @@ import type {
 import type { Command } from "vscode-languageserver-protocol";
 
 const _require = createRequire(import.meta.url);
-const _ctsCtor = (
-	_require("vscode-jsonrpc/node") as {
-		CancellationTokenSource: new () => {
-			token: import("vscode-jsonrpc").CancellationToken;
-			cancel(): void;
-			dispose(): void;
-		};
-	}
-).CancellationTokenSource;
-type CtsInstance = InstanceType<typeof _ctsCtor>;
+
+// CancellationTokenSource constructor, loaded lazily from vscode-jsonrpc/node.
+// Wrapped in try-catch so the extension loads even when the module is
+// not installed, falling back to tree-sitter only (issue #441).
+interface CtsInstance {
+	token: import("vscode-jsonrpc").CancellationToken;
+	cancel(): void;
+	dispose(): void;
+}
+
+let _ctsCtor: (new () => CtsInstance) | null = null;
+try {
+	const mod = _require("vscode-jsonrpc/node") as {
+		CancellationTokenSource: new () => CtsInstance;
+	};
+	_ctsCtor = mod.CancellationTokenSource;
+} catch {
+	// vscode-jsonrpc/node not available -- LSP enrich disabled.
+	// All enrich helpers will return null gracefully.
+	_ctsCtor = null;
+}
+
+/**
+ * Create a CancellationTokenSource if vscode-jsonrpc/node is available.
+ * Returns null when the module is missing, so LSP enrich degrades gracefully.
+ */
+function _createCts(): CtsInstance | null {
+	if (!_ctsCtor) return null;
+	return new _ctsCtor();
+}
 
 // -- Constants ----------------------------------------------------------------
 
@@ -104,7 +124,7 @@ export interface EnrichedSymbolHit {
 function withEnrichTimeout<T>(
 	promise: Promise<T | null | undefined>,
 	ms: number = DEFAULT_LSP_ENRICH_TIMEOUT_MS,
-	cts?: CtsInstance | undefined,
+	cts?: CtsInstance | null,
 ): Promise<T | null> {
 	return new Promise<T | null>((resolve) => {
 		const timer = setTimeout(() => {
@@ -287,12 +307,12 @@ export async function lspWorkspaceSearch(
 			return [];
 		}
 		try {
-			const cts = new _ctsCtor();
+			const cts = _createCts();
 			const raw = await withEnrichTimeout(
-				srv.client.workspaceSymbol(query, cts.token).then((r) => (r.status === "ok" ? r.data : null)),
+				srv.client.workspaceSymbol(query, cts?.token).then((r) => (r.status === "ok" ? r.data : null)),
 				timeoutMs,
 				cts,
-			).finally(() => cts.dispose());
+			).finally(() => cts?.dispose());
 			if (!raw) return [];
 			return raw.map((s) => toEnrichedHit(s)).filter(Boolean) as EnrichedSymbolHit[];
 		} catch (err) {
@@ -350,12 +370,12 @@ export async function lspDocumentSymbols(
 	if (!cap || !(cap as Record<string, unknown>).documentSymbolProvider) {
 		return null;
 	}
-	const cts = new _ctsCtor();
+	const cts = _createCts();
 	const result = await withEnrichTimeout(
-		opened.client.documentSymbols(filePath, cts.token).then((r) => (r.status === "ok" ? r.data : null)),
+		opened.client.documentSymbols(filePath, cts?.token).then((r) => (r.status === "ok" ? r.data : null)),
 		effectiveTimeout(opened.justOpened, timeoutMs),
 		cts,
-	).finally(() => cts.dispose());
+	).finally(() => cts?.dispose());
 	return result;
 }
 
@@ -388,14 +408,14 @@ export async function lspCodeActions(
 	if (!cap || !(cap as Record<string, unknown>).codeActionProvider) {
 		return null;
 	}
-	const cts = new _ctsCtor();
+	const cts = _createCts();
 	const result = await withEnrichTimeout(
 		opened.client
-			.codeAction(filePath, startLine, startChar, endLine, endChar, cts.token)
+			.codeAction(filePath, startLine, startChar, endLine, endChar, cts?.token)
 			.then((r) => (r.status === "ok" ? r.data : null)),
 		effectiveTimeout(opened.justOpened, timeoutMs),
 		cts,
-	).finally(() => cts.dispose());
+	).finally(() => cts?.dispose());
 	return result;
 }
 
@@ -419,12 +439,12 @@ export async function lspSignatureHelp(
 	if (!cap || !(cap as Record<string, unknown>).signatureHelpProvider) {
 		return null;
 	}
-	const cts = new _ctsCtor();
+	const cts = _createCts();
 	const result = await withEnrichTimeout(
-		opened.client.signatureHelp(filePath, line, character, cts.token).then((r) => (r.status === "ok" ? r.data : null)),
+		opened.client.signatureHelp(filePath, line, character, cts?.token).then((r) => (r.status === "ok" ? r.data : null)),
 		effectiveTimeout(opened.justOpened, timeoutMs),
 		cts,
-	).finally(() => cts.dispose());
+	).finally(() => cts?.dispose());
 	return result;
 }
 
@@ -449,9 +469,9 @@ export async function lspImplementation(
 	if (!cap || !(cap as Record<string, unknown>).implementationProvider) {
 		return null;
 	}
-	const cts = new _ctsCtor();
+	const cts = _createCts();
 	const result = await withEnrichTimeout(
-		opened.client.implementation(filePath, line, character, cts.token).then((r) => {
+		opened.client.implementation(filePath, line, character, cts?.token).then((r) => {
 			if (r.status !== "ok" || !r.data) return null;
 			const arr: unknown[] = Array.isArray(r.data) ? r.data : [r.data];
 			// Detect LocationLink[] by checking for "targetUri" property
@@ -468,7 +488,7 @@ export async function lspImplementation(
 		}),
 		effectiveTimeout(opened.justOpened, timeoutMs),
 		cts,
-	).finally(() => cts.dispose());
+	).finally(() => cts?.dispose());
 	return result;
 }
 
@@ -491,9 +511,9 @@ export async function lspReferences(
 	if (!cap || !(cap as Record<string, unknown>).referencesProvider) {
 		return null;
 	}
-	const cts = new _ctsCtor();
+	const cts = _createCts();
 	const result = await withEnrichTimeout(
-		opened.client.references(filePath, line, character, cts.token).then((r) => {
+		opened.client.references(filePath, line, character, cts?.token).then((r) => {
 			if (r.status !== "ok" || !r.data) return null;
 			const arr: unknown[] = Array.isArray(r.data) ? r.data : [r.data];
 			// Detect LocationLink[] by checking for "targetUri" property
@@ -510,7 +530,7 @@ export async function lspReferences(
 		}),
 		effectiveTimeout(opened.justOpened, timeoutMs),
 		cts,
-	).finally(() => cts.dispose());
+	).finally(() => cts?.dispose());
 	return result;
 }
 
@@ -532,11 +552,11 @@ export async function lspCodeLens(
 	if (!cap || !(cap as Record<string, unknown>).codeLensProvider) {
 		return null;
 	}
-	const cts = new _ctsCtor();
+	const cts = _createCts();
 	const result = await withEnrichTimeout(
-		opened.client.codeLens(filePath, cts.token).then((r) => (r.status === "ok" ? r.data : null)),
+		opened.client.codeLens(filePath, cts?.token).then((r) => (r.status === "ok" ? r.data : null)),
 		effectiveTimeout(opened.justOpened, timeoutMs),
 		cts,
-	).finally(() => cts.dispose());
+	).finally(() => cts?.dispose());
 	return result;
 }

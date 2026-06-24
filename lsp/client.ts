@@ -14,8 +14,10 @@ import { createRequire } from "node:module";
 
 const _require = createRequire(import.meta.url);
 
-// vscode-jsonrpc/node exports for LSP client over stdio
-const rpc: {
+// vscode-jsonrpc/node exports for LSP client over stdio.
+// Wrapped in try-catch so the extension loads even when the module is
+// not installed, falling back to tree-sitter only (issue #441).
+interface RpcModule {
 	StreamMessageReader: new (stream: NodeJS.ReadableStream) => import("vscode-jsonrpc").MessageReader;
 	StreamMessageWriter: new (stream: NodeJS.WritableStream) => import("vscode-jsonrpc").MessageWriter;
 	createMessageConnection: (
@@ -28,7 +30,16 @@ const rpc: {
 		cancel(): void;
 		dispose(): void;
 	};
-} = _require("vscode-jsonrpc/node");
+}
+
+let _rpcModule: RpcModule | null = null;
+try {
+	_rpcModule = _require("vscode-jsonrpc/node") as RpcModule;
+} catch {
+	// vscode-jsonrpc/node not available -- LSP functionality disabled.
+	// Tree-sitter analysis remains fully operational.
+	_rpcModule = null;
+}
 
 import type {
 	InitializeParams,
@@ -214,6 +225,13 @@ export class LspClient {
 	start(): void {
 		if (this._running) return;
 
+		// Guard: vscode-jsonrpc/node not available (issue #441).
+		// The extension loads but LSP functionality is disabled.
+		if (!_rpcModule) {
+			this._log("LSP disabled: vscode-jsonrpc/node module not found (tree-sitter only)");
+			return;
+		}
+
 		this._log(`Starting LSP: ${this.command[0]} (workspace: ${this.workspaceRoot})`);
 
 		const [cmd, ...args] = this.command;
@@ -247,9 +265,9 @@ export class LspClient {
 		}
 
 		// Create JSON-RPC connection over stdio
-		const reader = new rpc.StreamMessageReader(this.process.stdout!);
-		const writer = new rpc.StreamMessageWriter(this.process.stdin!);
-		this.connection = rpc.createMessageConnection(reader, writer);
+		const reader = new _rpcModule.StreamMessageReader(this.process.stdout!);
+		const writer = new _rpcModule.StreamMessageWriter(this.process.stdin!);
+		this.connection = _rpcModule.createMessageConnection(reader, writer);
 
 		// Listen for notifications (diagnostics etc.)
 		this.connection.onNotification("textDocument/publishDiagnostics", (params: PublishDiagnosticsParams) => {
@@ -363,7 +381,10 @@ export class LspClient {
 		const conn = this.connection;
 		if (!conn) throw new Error("LSP client not started");
 
-		const initCts = new rpc.CancellationTokenSource();
+		// Guard: vscode-jsonrpc/node not available (issue #441)
+		if (!_rpcModule) throw new Error("LSP client cannot initialize: vscode-jsonrpc/node not available");
+
+		const initCts = new _rpcModule.CancellationTokenSource();
 		let abortListener: (() => void) | undefined;
 		if (signal) {
 			abortListener = () => initCts.cancel();
@@ -943,7 +964,10 @@ export class LspClient {
 		if (!this.connection) {
 			return Promise.reject(new Error("LSP connection not available"));
 		}
-		const cts = new rpc.CancellationTokenSource();
+		if (!_rpcModule) {
+			return Promise.reject(new Error("LSP client cannot send request: vscode-jsonrpc/node not available"));
+		}
+		const cts = new _rpcModule.CancellationTokenSource();
 		let tokenListener: { dispose: () => void } | undefined;
 		if (externalToken) {
 			tokenListener = externalToken.onCancellationRequested(() => cts.cancel());
