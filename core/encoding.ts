@@ -76,8 +76,24 @@ export function readFileAdaptive(filePath: string): string {
 	// Try UTF-8 first
 	const utf8Result = tryDecode(validationBuffer, "utf-8");
 	if (utf8Result !== null) {
-		// UTF-8 validation passed on chunk -- decode full buffer
-		return buffer.length > VALIDATION_CHUNK_SIZE ? buffer.toString("utf-8") : utf8Result;
+		// UTF-8 validation passed on chunk.
+		// For large files, the first 64KB may be valid UTF-8 while later bytes
+		// are GBK/GB2312 (#438). Decode full buffer as UTF-8, then check
+		// replacement character ratio on the full decoded string. If >5%,
+		// fall back to GBK -> GB2312 on the full buffer.
+		if (buffer.length > VALIDATION_CHUNK_SIZE) {
+			const fullUtf8 = buffer.toString("utf-8");
+			if (_replacementRatio(fullUtf8) <= 0.05) return fullUtf8;
+
+			const fullGbk = iconv.decode(buffer, "gbk");
+			if (_replacementRatio(fullGbk) <= 0.05) return fullGbk;
+
+			const fullGb = iconv.decode(buffer, "gb2312");
+			if (_replacementRatio(fullGb) <= 0.05) return fullGb;
+
+			return fullUtf8;
+		}
+		return utf8Result;
 	}
 
 	// Try GBK
@@ -124,7 +140,24 @@ export async function readFileAdaptiveAsync(filePath: string): Promise<string> {
 	// Try UTF-8 first
 	const utf8Result = tryDecode(validationBuffer, "utf-8");
 	if (utf8Result !== null) {
-		return buffer.length > VALIDATION_CHUNK_SIZE ? buffer.toString("utf-8") : utf8Result;
+		// UTF-8 validation passed on chunk.
+		// For large files, the first 64KB may be valid UTF-8 while later bytes
+		// are GBK/GB2312 (#438). Decode full buffer as UTF-8, then check
+		// replacement character ratio on the full decoded string. If >5%,
+		// fall back to GBK -> GB2312 on the full buffer.
+		if (buffer.length > VALIDATION_CHUNK_SIZE) {
+			const fullUtf8 = buffer.toString("utf-8");
+			if (_replacementRatio(fullUtf8) <= 0.05) return fullUtf8;
+
+			const fullGbk = iconv.decode(buffer, "gbk");
+			if (_replacementRatio(fullGbk) <= 0.05) return fullGbk;
+
+			const fullGb = iconv.decode(buffer, "gb2312");
+			if (_replacementRatio(fullGb) <= 0.05) return fullGb;
+
+			return fullUtf8;
+		}
+		return utf8Result;
 	}
 
 	// Try GBK
@@ -214,6 +247,19 @@ function isValidUtf8(buffer: Buffer): boolean {
 }
 
 /**
+ * Compute the ratio of Unicode replacement characters (U+FFFD) in a string.
+ * Returns 0-1.  Used to detect encoding misdetection for large files (#438).
+ */
+function _replacementRatio(str: string): number {
+	if (str.length === 0) return 0;
+	let count = 0;
+	for (const ch of str) {
+		if (ch === "\uFFFD") count++;
+	}
+	return count / str.length;
+}
+
+/**
  * Try to decode a buffer with a given encoding.
  * Returns the decoded string if successful, or null if invalid.
  */
@@ -233,11 +279,7 @@ function tryDecode(buffer: Buffer, encoding: string): string | null {
 		// Replacement-character ratio check (#368): iconv-lite emits U+FFFD for
 		// unmappable bytes.  If >5% of decoded characters are replacements,
 		// the encoding is wrong -- reject to try the next fallback.
-		let replacementCount = 0;
-		for (const ch of str) {
-			if (ch === "�") replacementCount++;
-		}
-		if (replacementCount / str.length > 0.05) return null;
+		if (_replacementRatio(str) > 0.05) return null;
 		return str;
 	} catch {
 		console.warn("[pi-shazam] tryDecode: encoding decode failed");

@@ -29,7 +29,14 @@ export function getProjectCacheDir(projectPath: string): string {
 	const hash = createHash("sha256").update(canonical).digest("hex").slice(0, 8);
 	const projectName = canonical.split("/").pop() || "unknown";
 	const cacheDir = join(CACHE_ROOT, `${projectName}_${hash}`);
-	mkdirSync(cacheDir, { recursive: true });
+	try {
+		mkdirSync(cacheDir, { recursive: true });
+	} catch (err) {
+		// Cache directory is a best-effort optimization. If we cannot create it
+		// (EACCES, EROFS, ENOSPC, ENAMETOOLONG), degrade gracefully: log a
+		// warning and continue without caching. The scan itself still works.
+		console.warn(`[pi-shazam] getProjectCacheDir: cannot create cache directory ${cacheDir}: ${err}`);
+	}
 	return cacheDir;
 }
 

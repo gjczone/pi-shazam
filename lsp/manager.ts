@@ -549,6 +549,18 @@ export class LspManager {
 
 			this.servers.set(language, info);
 
+			// C3: Double-check after server registration -- shutdown() could have
+			// raced between the first _shuttingDown check (C2) and servers.set().
+			// If shutdown() ran in that window, it took a snapshot of servers before
+			// we added this one, so this server would leak. Clean up immediately.
+			if (this._shuttingDown) {
+				this.servers.delete(language);
+				await client
+					.close()
+					.catch((err) => this.log(`close on shutdown race (post-set) for ${language} failed: ${err}`));
+				return null;
+			}
+
 			// Re-open previously opened files after server crash/reconnection
 			const prevOpened = this._openedFilePaths.get(language);
 			if (prevOpened && prevOpened.size > 0) {

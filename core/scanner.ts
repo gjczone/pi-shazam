@@ -181,6 +181,7 @@ function removeEdgesForFile(graph: RepoGraph, relPath: string): void {
 	graph.fileImports.delete(relPath);
 	graph.fileCalls.delete(relPath);
 	graph.fileImportBindings.delete(relPath);
+	graph.fileRefs.delete(relPath);
 
 	// Use reverse edge index to clean cross-file references: O(K) not O(E)
 	for (const targetId of symIds) {
@@ -248,6 +249,7 @@ function removeFileData(graph: RepoGraph, relPath: string): void {
 	graph.fileImports.delete(relPath);
 	graph.fileCalls.delete(relPath);
 	graph.fileImportBindings.delete(relPath);
+	graph.fileRefs.delete(relPath);
 
 	// Use reverse edge index to clean cross-file references: O(K) not O(E)
 	for (const targetId of symIdSet) {
@@ -409,10 +411,11 @@ function buildEdgesForFile(graph: RepoGraph, root: string, relPath: string, entr
 		// incrementalScanProject can match them against relPath for dependent detection
 		graph.fileImports.set(
 			relPath,
-			entry.imports.map(([m]) => resolveImport(m, relPath, root, graph)),
+			entry.imports.map(([m]) => resolveImport(m, relPath, root, graph)).filter((f): f is string => f !== null),
 		);
 		for (const [importedModule] of entry.imports) {
 			const resolvedImport = resolveImport(importedModule, relPath, root, graph);
+			if (!resolvedImport) continue;
 			const targetFileSyms = graph.fileSymbols.get(resolvedImport) || [];
 			for (const srcId of thisFileSymIds) {
 				for (const tgtId of targetFileSyms) {
@@ -461,6 +464,7 @@ function buildEdgesForFile(graph: RepoGraph, root: string, relPath: string, entr
 			const localSym = findSymbolByNameInFile(binding.localName, relPath, graph);
 			if (!localSym) continue;
 			const resolvedModule = resolveImport(binding.module, relPath, root, graph);
+			if (!resolvedModule) continue;
 			const sourceSym = findSymbolByNameInFile(binding.importedName, resolvedModule, graph);
 			if (sourceSym) {
 				addEdge(graph, createEdge(localSym.id, sourceSym.id, 0.8, "import-binding", 1.0));
@@ -981,7 +985,7 @@ function tryCandidate(graph: RepoGraph | undefined, root: string, relCandidate: 
  * Handles JS/TS extensionless imports, Python dotted modules, Rust mod declarations,
  * Go relative imports, and Dart package/relative imports.
  */
-function resolveImport(importPath: string, fromFile: string, root: string, graph?: RepoGraph): string {
+function resolveImport(importPath: string, fromFile: string, root: string, graph?: RepoGraph): string | null {
 	const fromDir = dirname(fromFile);
 	const fromExt = fromFile.slice(fromFile.lastIndexOf(".")).toLowerCase();
 	const absRoot = resolve(root);
@@ -1025,7 +1029,7 @@ function resolveImport(importPath: string, fromFile: string, root: string, graph
 				const found = tryCandidate(graph, root, c);
 				if (found) return found;
 			}
-			return jsCandidates[0]!;
+			return null;
 		}
 
 		// Python relative import: from .foo import bar or from .. import baz
@@ -1035,7 +1039,7 @@ function resolveImport(importPath: string, fromFile: string, root: string, graph
 				const found = tryCandidate(graph, root, c);
 				if (found) return found;
 			}
-			return pyCandidates[0]!;
+			return null;
 		}
 
 		// Rust relative mod/use: typically resolved through module system,
@@ -1046,7 +1050,7 @@ function resolveImport(importPath: string, fromFile: string, root: string, graph
 				const found = tryCandidate(graph, root, c);
 				if (found) return found;
 			}
-			return rsCandidates[0]!;
+			return null;
 		}
 
 		// Go relative imports
@@ -1058,7 +1062,7 @@ function resolveImport(importPath: string, fromFile: string, root: string, graph
 			if (existsCached(join(absRoot, resolved))) {
 				return resolved;
 			}
-			return goFile;
+			return null;
 		}
 
 		// Dart relative imports
@@ -1068,10 +1072,10 @@ function resolveImport(importPath: string, fromFile: string, root: string, graph
 				const found = tryCandidate(graph, root, c);
 				if (found) return found;
 			}
-			return dartCandidates[0]!;
+			return null;
 		}
 
-		return resolved;
+		return null;
 	}
 
 	// Python dotted import: foo.bar.baz -> foo/bar/baz.py or foo/bar/baz/__init__.py
@@ -1088,7 +1092,7 @@ function resolveImport(importPath: string, fromFile: string, root: string, graph
 			const found = tryCandidate(graph, root, c);
 			if (found) return found;
 		}
-		return pyCandidates[0]!;
+		return null;
 	}
 
 	// Rust mod X; -> X.rs or X/mod.rs (sibling to current file's directory)
