@@ -138,18 +138,33 @@ gh release create "v$NEW_VERSION" \
 
 log "GitHub Release created with CHANGELOG content. npm publish will be triggered automatically."
 
-# Step 8.5: Clean up merged remote branches
+# Step 8.5: Clean up merged remote branches (both merge-commit and squash-merged)
 log "Step 8.5: Cleaning up merged remote branches..."
+
+# Phase A: git branch --merged (catches regular merge commits)
 MERGED_BRANCHES=$(git branch -r --merged origin/main | grep -v "origin/main\|origin/HEAD" | sed 's/  origin\///')
 if [[ -n "$MERGED_BRANCHES" ]]; then
     for BRANCH in $MERGED_BRANCHES; do
-        log "  Deleting merged remote branch: $BRANCH"
+        log "  Deleting merged remote branch (--merged): $BRANCH"
         git push origin --delete "$BRANCH" 2>/dev/null || warn "Failed to delete $BRANCH"
     done
-    log "  Remote branches cleaned up."
-else
-    log "  No merged remote branches to clean up."
 fi
+
+# Phase B: gh pr list (catches squash-merged branches that --merged misses)
+# Squash merge creates a new commit on main, so git branch --merged cannot detect them.
+# Instead, check closed PRs whose head branch still exists on the remote.
+SQUASH_MERGED=$(gh pr list --state merged --json headRefName --limit 50 --jq '.[].headRefName' 2>/dev/null)
+if [[ -n "$SQUASH_MERGED" ]]; then
+    for BRANCH in $SQUASH_MERGED; do
+        # Only delete if the remote branch still exists
+        if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+            log "  Deleting squash-merged remote branch: $BRANCH"
+            git push origin --delete "$BRANCH" 2>/dev/null || warn "Failed to delete $BRANCH"
+        fi
+    done
+fi
+
+log "  Remote branch cleanup complete."
 
 # Step 9: Wait for npm publish
 log "Step 9: Waiting for npm publish (watching GitHub Actions)..."
