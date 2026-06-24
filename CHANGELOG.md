@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.1] - 2026-06-24
+
+### Bug Fixes
+
+- **fix(#435): stale ref edges after incremental scan** -- `removeEdgesForFile` and `removeFileData` now clear `fileRefs` alongside `fileImports`/`fileCalls`/`fileImportBindings`, preventing phantom ref edges from surviving incremental scan and disk cache reload
+- **fix(#436): phantom extensionless import paths break incremental detection** -- `resolveImport` now returns `null` instead of the first extensionless candidate when no matching file is found on disk; callers filter nulls in `fileImports` and skip edge creation for unresolved imports, fixing the case where creating a new file that resolves a previously-broken import was not detected by incremental scan
+- **fix(#437): LSP server process leak from TOCTOU race** -- added a second `_shuttingDown` check after `servers.set()` in `_initServerForLanguage`; if `shutdown()` raced between the first check and server registration, the server is now immediately closed instead of leaking as an orphaned OS process
+- **fix(#438): GBK files with >64KB ASCII prefix misdetected as UTF-8** -- for files larger than 64KB where the first chunk passes UTF-8 validation, the full decoded buffer is now checked for replacement character ratio; if >5%, the full buffer is decoded with GBK then GB2312 as fallback, fixing mojibake for Chinese source files with long English preambles
+- **fix(#439): cache directory creation failure crashes entire scan** -- `getProjectCacheDir` `mkdirSync` is now wrapped in try/catch; when the cache directory is inaccessible (EACCES, EROFS, ENOSPC), a warning is logged and the scan continues without caching instead of failing all shazam tools
+- **fix: LSP _openingFiles not cleared on _doClose** -- `_doClose` now clears `_openingFiles` set alongside other state cleanup, preventing stale open-file tracking after LSP server shutdown
+
+### Documentation
+
+- **LLM-REVIEW-GUIDE.md**: created project-specific code review rules, risk tiers (P0/P1/P2/P3), and sanity checks for pi-shazam code reviews
+
 ## [0.19.0] - 2026-06-24
 
 ### Features & Enhancements
