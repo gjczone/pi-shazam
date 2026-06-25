@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { detectFormatters } from "../core/formatters.js";
 import { writeFileSync, mkdirSync, rmSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -63,6 +63,26 @@ describe("core/formatters", () => {
 			const result = detectFormatters(dir);
 			expect(result).toEqual([]);
 		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("should not emit ENOENT console.warn when package.json does not exist (#459)", () => {
+		const dir = setupTempDir();
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			// Create a Rust-like project dir (has Cargo.toml, no package.json)
+			writeFileSync(join(dir, "Cargo.toml"), "[package]\nname = \"test\"");
+			detectFormatters(dir);
+			// Filter for ENOENT-related warnings from readFileAdaptive
+			const enoentWarnings = warnSpy.mock.calls.filter(
+				(args) =>
+					args.some((a) => typeof a === "string" && a.includes("ENOENT")) ||
+					args.some((a) => typeof a === "string" && a.includes("stat failed")),
+			);
+			expect(enoentWarnings).toEqual([]);
+		} finally {
+			warnSpy.mockRestore();
 			rmSync(dir, { recursive: true, force: true });
 		}
 	});

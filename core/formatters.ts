@@ -46,14 +46,16 @@ export function detectFormatters(projectRoot: string): string[] {
 	}
 
 	// Check package.json for embedded config
-	try {
-		const pkgRaw = readFileAdaptive(join(projectRoot, "package.json"));
-		const pkg = JSON.parse(pkgRaw);
-		if (pkg.prettier) formatters.push("prettier");
-		if (pkg.eslintConfig) formatters.push("eslint");
-	} catch {
-		console.warn("[pi-shazam] detectFormatters: package.json not found or invalid");
-		// package.json not found or invalid -- continue
+	if (existsSync(join(projectRoot, "package.json"))) {
+		try {
+			const pkgRaw = readFileAdaptive(join(projectRoot, "package.json"));
+			const pkg = JSON.parse(pkgRaw);
+			if (pkg.prettier) formatters.push("prettier");
+			if (pkg.eslintConfig) formatters.push("eslint");
+		} catch {
+			console.warn("[pi-shazam] detectFormatters: package.json parse failed");
+			// package.json invalid -- continue
+		}
 	}
 
 	// .editorconfig

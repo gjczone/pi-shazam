@@ -114,10 +114,14 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 	try {
 		// Python: ruff format
 		if (ext === ".py") {
-			const hasRuff =
-				existsSync(join(projectRoot, "ruff.toml")) ||
-				(existsSync(join(projectRoot, "pyproject.toml")) &&
-					readFileAdaptive(join(projectRoot, "pyproject.toml")).includes("[tool.ruff"));
+			let hasRuff = existsSync(join(projectRoot, "ruff.toml"));
+			if (!hasRuff && existsSync(join(projectRoot, "pyproject.toml"))) {
+				try {
+					hasRuff = readFileAdaptive(join(projectRoot, "pyproject.toml")).includes("[tool.ruff");
+				} catch {
+					hasRuff = false;
+				}
+			}
 			if (hasRuff) {
 				await execFileAsync("ruff", ["format", absPath], { cwd: projectRoot, timeout: 10000 });
 				ctx.ui.notify(`[auto-format] Formatted ${filePath} with ruff`, "info");

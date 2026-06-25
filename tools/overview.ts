@@ -421,6 +421,7 @@ function findRouteSymbols(graph: RepoGraph): Symbol[] {
 export function buildKeyDependenciesSection(projectRoot: string): string | null {
 	try {
 		const pkgPath = join(projectRoot, "package.json");
+		if (!existsSync(pkgPath)) return null;
 		const raw = readFileAdaptive(pkgPath);
 		const pkg = JSON.parse(raw);
 		const lines: string[] = [];

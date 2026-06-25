@@ -64,7 +64,12 @@ export function readFileAdaptive(filePath: string): string {
 		if (err instanceof FileTooLargeError) {
 			throw err; // re-throw our size error
 		}
-		console.warn(`[pi-shazam] readFileAdaptive: stat failed for ${filePath}: ${err}`);
+		// Only warn for non-ENOENT errors (permission, I/O, etc.).
+		// ENOENT is expected when callers read optional config files (e.g. package.json)
+		// and handle the missing-file case via try/catch (#459).
+		if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+			console.warn(`[pi-shazam] readFileAdaptive: stat failed for ${filePath}: ${err}`);
+		}
 		// stat failed (permission, missing) -- fall through to readFileSync which will error with a clearer message
 	}
 	const buffer = readFileSync(filePath);
@@ -128,7 +133,11 @@ export async function readFileAdaptiveAsync(filePath: string): Promise<string> {
 		if (err instanceof FileTooLargeError) {
 			throw err;
 		}
-		console.warn(`[pi-shazam] readFileAdaptiveAsync: stat failed for ${filePath}: ${err}`);
+		// Only warn for non-ENOENT errors (permission, I/O, etc.).
+		// ENOENT is expected when callers read optional config files (#459).
+		if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+			console.warn(`[pi-shazam] readFileAdaptiveAsync: stat failed for ${filePath}: ${err}`);
+		}
 		// stat failed -- fall through to readFile which will error with a clearer message
 	}
 	const buffer = await readFileAsync(filePath);
