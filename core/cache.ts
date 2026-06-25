@@ -74,9 +74,10 @@ export function saveGraphCache(graph: RepoGraph, fileMtimes: Map<string, number>
 	const tmpPath = cachePath + ".tmp";
 	try {
 		const json = JSON.stringify(serialized);
-		// M2: Enforce size limit on save too, not just load — prevents OOM on huge projects
-		if (json.length > MAX_CACHE_SIZE) {
-			console.warn(`[pi-shazam] saveGraphCache: serialized graph too large (${json.length} bytes), skipping cache`);
+		// M2: Enforce size limit on save too, not just load — prevents OOM on huge projects.
+		// Use Buffer.byteLength to match the byte-count gate at load time (stat.size is in bytes).
+		if (Buffer.byteLength(json, "utf-8") > MAX_CACHE_SIZE) {
+			console.warn(`[pi-shazam] saveGraphCache: serialized graph too large (${Buffer.byteLength(json, "utf-8")} bytes), skipping cache`);
 			return;
 		}
 		writeFileSync(tmpPath, json, "utf-8");

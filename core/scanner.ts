@@ -150,8 +150,13 @@ export function getProjectGraph(projectRoot: string = ".", log?: (msg: string) =
  * Remove only the edges for a single file (not symbols).
  * Used during incremental edge rebuild to clear old edges before
  * rebuilding only what changed.
+ *
+ * @param preserveIncoming - When true, skip deleting this file's own incoming
+ *   entries and cross-file source->B edges. Used for dependent (unchanged)
+ *   files whose incoming edges are still valid -- only outgoing edges need
+ *   rebuilding (issue #448).
  */
-function removeEdgesForFile(graph: RepoGraph, relPath: string): void {
+function removeEdgesForFile(graph: RepoGraph, relPath: string, preserveIncoming = false): void {
 	const symIds = new Set(graph.fileSymbols.get(relPath) ?? []);
 
 	// Clean incoming entries on targets of this file's outgoing edges
@@ -173,9 +178,13 @@ function removeEdgesForFile(graph: RepoGraph, relPath: string): void {
 		}
 		graph.outgoing.delete(id);
 	}
-	// Remove incoming edges to this file's symbols from other files
-	for (const id of symIds) {
-		graph.incoming.delete(id);
+	// Remove incoming edges to this file's symbols from other files.
+	// Skip when preserveIncoming is true -- dependent files are unchanged,
+	// so their incoming edges remain valid (issue #448).
+	if (!preserveIncoming) {
+		for (const id of symIds) {
+			graph.incoming.delete(id);
+		}
 	}
 	// Remove file-level import/call data for this file
 	graph.fileImports.delete(relPath);
@@ -183,33 +192,37 @@ function removeEdgesForFile(graph: RepoGraph, relPath: string): void {
 	graph.fileImportBindings.delete(relPath);
 	graph.fileRefs.delete(relPath);
 
-	// Use reverse edge index to clean cross-file references: O(K) not O(E)
-	for (const targetId of symIds) {
-		const sourceIds = graph.targetToSources.get(targetId);
-		if (!sourceIds) continue;
-		for (const sourceId of sourceIds) {
-			// Remove edges pointing to targetId from source's outgoing
-			const edges = graph.outgoing.get(sourceId);
-			if (edges) {
-				const filtered = edges.filter((e) => e.target !== targetId);
-				if (filtered.length > 0) {
-					graph.outgoing.set(sourceId, filtered);
-				} else {
-					graph.outgoing.delete(sourceId);
+	// Use reverse edge index to clean cross-file references: O(K) not O(E).
+	// Skip when preserveIncoming is true -- the cross-file source->B edges
+	// pointing into this file are still valid for unchanged dependents (issue #448).
+	if (!preserveIncoming) {
+		for (const targetId of symIds) {
+			const sourceIds = graph.targetToSources.get(targetId);
+			if (!sourceIds) continue;
+			for (const sourceId of sourceIds) {
+				// Remove edges pointing to targetId from source's outgoing
+				const edges = graph.outgoing.get(sourceId);
+				if (edges) {
+					const filtered = edges.filter((e) => e.target !== targetId);
+					if (filtered.length > 0) {
+						graph.outgoing.set(sourceId, filtered);
+					} else {
+						graph.outgoing.delete(sourceId);
+					}
+				}
+				// incoming[targetId] already deleted above; clean incoming[sourceId] for edges with source=targetId
+				const incomingEdges = graph.incoming.get(sourceId);
+				if (incomingEdges) {
+					const filtered = incomingEdges.filter((e) => e.source !== targetId);
+					if (filtered.length > 0) {
+						graph.incoming.set(sourceId, filtered);
+					} else {
+						graph.incoming.delete(sourceId);
+					}
 				}
 			}
-			// incoming[targetId] already deleted above; clean incoming[sourceId] for edges with source=targetId
-			const incomingEdges = graph.incoming.get(sourceId);
-			if (incomingEdges) {
-				const filtered = incomingEdges.filter((e) => e.source !== targetId);
-				if (filtered.length > 0) {
-					graph.incoming.set(sourceId, filtered);
-				} else {
-					graph.incoming.delete(sourceId);
-				}
-			}
+			graph.targetToSources.delete(targetId);
 		}
-		graph.targetToSources.delete(targetId);
 	}
 }
 
@@ -511,6 +524,9 @@ export function scanProject(projectPath: string, log?: (msg: string) => void): R
 function _scanProject(projectPath: string, log?: (msg: string) => void): RepoGraph {
 	const root = resolve(projectPath);
 	const logger = log ?? (() => {});
+
+	// Clear existsCache so each scan observes current filesystem state
+	clearExistsCache();
 
 	const adapter = getScannerAdapter();
 	const files = collectSourceFiles(root, MAX_FILES);
@@ -833,10 +849,12 @@ function scanIncremental(
 	// Rebuild edges only for changed + dependent files.
 	// Clear edges for dependent files first (Bug #3 fix) to prevent
 	// duplicate edge accumulation across incremental scans.
+	// Use preserveIncoming=true for dependent files: they are unchanged,
+	// so their incoming edges are still valid and must not be deleted (issue #448).
 	for (const relPath of dependentFiles) {
 		const entry = cachedFiles.get(relPath);
 		if (entry) {
-			removeEdgesForFile(graph, relPath);
+			removeEdgesForFile(graph, relPath, true);
 			buildEdgesForFile(graph, root, relPath, entry);
 		}
 	}
@@ -909,6 +927,13 @@ function _walkDirectory(
 						continue;
 					}
 					visitedSymlinks.add(realPath);
+					// Directory symlink containment check: same as file symlinks,
+					// prevent traversal outside project root (C4: path traversal)
+					const resolvedRoot = resolve(root);
+					if (!realPath.startsWith(resolvedRoot + "/") && realPath !== resolvedRoot) {
+						console.warn(`[pi-shazam] _walkDirectory: symlink target outside project root, skipping: ${relPath} -> ${realPath}`);
+						continue;
+					}
 					_walkDirectory(realPath, depth + 1, options);
 					continue;
 				}

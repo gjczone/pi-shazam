@@ -116,10 +116,12 @@ export async function executeVerifyJsonAsync(projectRoot: string, options: Verif
 
 	let lspDiagnostics: LspDiagEntry[] = [];
 	let lspAvailable = false;
+	let lspFailedOpens: string[] = [];
 	if (lspOnly || !quick) {
 		const lspResult = await runLspDiagnostics(graph, projectRoot, options);
 		lspDiagnostics = lspResult.diagnostics;
 		lspAvailable = lspResult.available;
+		lspFailedOpens = lspResult.failedOpens ?? [];
 	}
 
 	// JSON mode: early return for lspOnly (skip graph analysis, same as text mode)
@@ -138,7 +140,8 @@ export async function executeVerifyJsonAsync(projectRoot: string, options: Verif
 			baselineDiff: null,
 			lspDiagnostics,
 			lspAvailable,
-			verdict: lspDiagnostics.some((d) => d.severity === "error") ? "FAIL" : "PASS",
+			failedOpens: lspFailedOpens,
+			verdict: lspDiagnostics.some((d) => d.severity === "error") ? "FAIL" : lspFailedOpens.length > 0 ? "WARN" : "PASS",
 			quickMode: quick,
 			lspOnlyMode: lspOnly,
 			preCommitMode: preCommit,
@@ -156,6 +159,9 @@ export async function executeVerifyJsonAsync(projectRoot: string, options: Verif
 		verdict = "WARN";
 	} else if (preCommit && risk.level !== "low") {
 		verdict = "FAIL";
+	} else if (lspFailedOpens.length > 0) {
+		// Upgrade to WARN when files failed to open -- diagnostics may be incomplete (fix #453)
+		verdict = "WARN";
 	}
 
 	return {
@@ -174,6 +180,7 @@ export async function executeVerifyJsonAsync(projectRoot: string, options: Verif
 		baselineDiff: null,
 		lspDiagnostics,
 		lspAvailable,
+		failedOpens: lspFailedOpens,
 		verdict,
 		quickMode: quick,
 		lspOnlyMode: lspOnly,
@@ -245,6 +252,20 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 			if (warnings.length > 10) {
 				lines.push(`... and ${warnings.length - 10} more warnings`);
 			}
+		}
+		lines.push("");
+	}
+
+	// Surface failedOpens as a warning section (fix #453)
+	if (lspResult.failedOpens && lspResult.failedOpens.length > 0) {
+		lines.push("### LSP File Open Failures");
+		lines.push("");
+		lines.push(`${lspResult.failedOpens.length} file(s) could not be opened in LSP - diagnostics may be incomplete:`);
+		for (const f of lspResult.failedOpens.slice(0, 10)) {
+			lines.push(`- ${f}`);
+		}
+		if (lspResult.failedOpens.length > 10) {
+			lines.push(`  ... and ${lspResult.failedOpens.length - 10} more`);
 		}
 		lines.push("");
 	}
@@ -346,6 +367,9 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 		verdict = "WARN";
 	} else if (risk.level === "high") {
 		verdict = "WARN";
+	} else if (lspResult.failedOpens && lspResult.failedOpens.length > 0) {
+		// Upgrade to WARN when files failed to open -- diagnostics may be incomplete (fix #453)
+		verdict = "WARN";
 	}
 	if (!preCommit) {
 		lines.push("### Verdict: " + verdict);
@@ -379,6 +403,7 @@ interface LspDiagResult {
 	diagnostics: LspDiagEntry[];
 	available: boolean;
 	errorMessage?: string;
+	failedOpens?: string[];
 }
 
 async function runLspDiagnostics(
@@ -519,6 +544,7 @@ async function runLspDiagnostics(
 		diagnostics,
 		available: serversUsed.size > 0,
 		errorMessage: serversUsed.size === 0 ? "No LSP servers available for detected file types" : undefined,
+		failedOpens: failedOpens.length > 0 ? failedOpens : undefined,
 	};
 }
 
@@ -585,13 +611,22 @@ async function runSubprocessDiagnostics(projectRoot: string): Promise<LspDiagRes
 		if (output) {
 			for (const line of output.split("\n").slice(0, 100)) {
 				if (line.trim()) {
+					// Classify severity based on content patterns so verdict
+					// computation catches real errors (fix #453)
+					const lower = line.toLowerCase();
+					let severity: string = "info";
+					if (lower.includes("error")) {
+						severity = "error";
+					} else if (lower.includes("warning")) {
+						severity = "warning";
+					}
 					diagnostics.push({
 						file: "",
 						line: 0,
 						col: 0,
 						endLine: 0,
 						endCol: 0,
-						severity: "info",
+						severity,
 						code: "",
 						message: line.trim().slice(0, 200),
 					});

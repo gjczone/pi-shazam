@@ -10,7 +10,7 @@ import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { createTool, validatePathInProject } from "./_factory.js";
 import { readFileAdaptive, readFileAdaptiveAsync } from "../core/encoding.js";
-import { scanProject } from "../core/scanner.js";
+import { scanProject, getEffectiveRoot } from "../core/scanner.js";
 import { existsSync } from "node:fs";
 import { readFile as readFileAsync } from "node:fs/promises";
 import { join } from "node:path";
@@ -36,7 +36,7 @@ export function registerFormat(pi: ExtensionAPI): void {
 			const json = params.json ?? false;
 			const dryRun = (params.dryRun as boolean) ?? true;
 			const file = params.file as string | undefined;
-			const graph = scanProject(".");
+			const graph = scanProject(getEffectiveRoot());
 			const text = json
 				? await executeFormatJson(graph, ".", { dryRun, file })
 				: await executeFormat(graph, ".", { dryRun, file });
@@ -75,7 +75,7 @@ export async function executeFormat(
 	);
 
 	// Path traversal validation: must run before runFormatters to prevent formatters from operating on files outside the project
-	if (options.file && !validatePathInProject(options.file, projectRoot)) {
+	if (options.file && !validatePathInProject(options.file, getEffectiveRoot())) {
 		return "Error: file path escapes project root";
 	}
 
@@ -185,7 +185,7 @@ export async function executeFormatJson(
 	const dryRun = options.dryRun ?? true;
 	const formatters = detectFormatters(projectRoot);
 
-	if (options.file && !validatePathInProject(options.file, projectRoot)) {
+	if (options.file && !validatePathInProject(options.file, getEffectiveRoot())) {
 		return JSON.stringify({
 			schema_version: "1.0",
 			command: "format",
@@ -585,10 +585,5 @@ function runFormatters(projectRoot: string, formatters: string[], targetFile?: s
 
 function runFormatterCommand(args: string[], cwd: string): void {
 	const [cmd, ...cmdArgs] = args;
-	try {
-		execFileSync(cmd, cmdArgs, { cwd, stdio: "pipe", timeout: 30000 });
-	} catch {
-		console.warn("[pi-shazam] runFormatterCommand: formatter may fail on individual files - non-fatal");
-		// Formatter may fail on individual files -- non-fatal
-	}
+	execFileSync(cmd, cmdArgs, { cwd, stdio: "pipe", timeout: 30000 });
 }

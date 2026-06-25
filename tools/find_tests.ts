@@ -17,6 +17,7 @@ import { buildEnvelope } from "./_factory.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { readFileAdaptive } from "../core/encoding.js";
+import { getEffectiveRoot } from "../core/scanner.js";
 
 export function registerFindTests(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -39,7 +40,7 @@ export function registerFindTests(pi: ExtensionAPI): void {
 			const sourceFile = params.sourceFile as string | undefined;
 			const module = params.module as string | undefined;
 			// M8: Validate user-supplied file paths against project root
-			if (sourceFile && !validatePathInProject(sourceFile)) {
+			if (sourceFile && !validatePathInProject(sourceFile, getEffectiveRoot())) {
 				return `Error: Source file path '${sourceFile}' is outside the project root and cannot be accessed.`;
 			}
 			const result = executeFindTests(graph, (params.project as string) || ".", { sourceFile, module });
