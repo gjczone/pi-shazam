@@ -7,7 +7,7 @@
  */
 
 import { readdirSync, statSync, existsSync, realpathSync } from "node:fs";
-import { join, resolve, delimiter } from "node:path";
+import { join, resolve, delimiter, relative, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import { LspClient } from "./client.js";
 import type { LspDiagnostic, LspLocation } from "./client.js";
@@ -15,6 +15,18 @@ import { LSP_SERVER_SPECS, languageForSuffix, lspTimeoutFor } from "./servers.js
 import { SKIP_DIRS } from "../core/filter.js";
 import { readFileAdaptiveAsync } from "../core/encoding.js";
 import { _logWarn } from "../core/output.js";
+
+// -- Helpers ------------------------------------------------------------------
+
+/**
+ * #450: Cross-platform path-containment check.
+ * Uses relative() instead of startsWith(root + "/") so it works
+ * correctly on Windows where path.resolve returns backslash-separated paths.
+ */
+function isPathInRoot(filePath: string, root: string): boolean {
+	const rel = relative(root, filePath);
+	return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
 
 // -- Types --------------------------------------------------------------------
 
@@ -150,7 +162,8 @@ function detectWorkspaceRoot(projectRoot: string, filePath: string | null, langu
 	// Ensure filePath is within project root; prevent escaping to parent directories
 	if (filePath) {
 		const resolvedFile = resolve(filePath);
-		if (!resolvedFile.startsWith(root + "/") && resolvedFile !== root) {
+		// #450: Use isPathInRoot instead of startsWith for Windows compatibility
+		if (!isPathInRoot(resolvedFile, root)) {
 			return root;
 		}
 	}
@@ -486,7 +499,8 @@ export class LspManager {
 
 		// Reject paths outside project root
 		const absPath = resolve(this.projectRoot, filePath);
-		if (!absPath.startsWith(resolve(this.projectRoot) + "/") && absPath !== resolve(this.projectRoot)) {
+		// #450: Use isPathInRoot instead of startsWith for Windows compatibility
+		if (!isPathInRoot(absPath, resolve(this.projectRoot))) {
 			return null;
 		}
 

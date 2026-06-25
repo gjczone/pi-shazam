@@ -239,13 +239,16 @@ export class LspClient {
 		// non-null assertion. An empty command array would be a configuration bug.
 		if (!cmd) {
 			this._log("LSP start failed: empty command array");
-			this._cleanupAfterCrash();
 			return;
 		}
 		this.process = spawn(cmd, args, {
 			cwd: this.workspaceRoot,
 			stdio: ["pipe", "pipe", "pipe"],
 		});
+
+		// #451: Reset _cleanedUp latch after successful spawn so crash cleanup
+		// works if this client instance is reused after a prior crash
+		this._cleanedUp = false;
 
 		this.process.on("error", (err) => {
 			this._log(`LSP process error: ${err.message}`);
@@ -422,7 +425,8 @@ export class LspClient {
 		}
 		this._openingFiles.add(resolvedPath);
 
-		const uri = pathToUri(filePath);
+		// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+		const uri = pathToUri(this.resolveRel(filePath));
 
 		const params: DidOpenTextDocumentParams = {
 			textDocument: {
@@ -468,7 +472,8 @@ export class LspClient {
 			return;
 		}
 
-		const uri = pathToUri(filePath);
+		// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+		const uri = pathToUri(this.resolveRel(filePath));
 		const nextVersion = (this._docVersions.get(uri) ?? 0) + 1;
 		this._docVersions.set(uri, nextVersion);
 
@@ -488,7 +493,8 @@ export class LspClient {
 	}
 
 	async didClose(filePath: string): Promise<void> {
-		const uri = pathToUri(filePath);
+		// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+		const uri = pathToUri(this.resolveRel(filePath));
 		if (this.connection) {
 			await this.connection.sendNotification("textDocument/didClose", {
 				textDocument: { uri },
@@ -506,7 +512,8 @@ export class LspClient {
 
 		if (!this.isFileOpened(filePath)) return;
 
-		const uri = pathToUri(filePath);
+		// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+		const uri = pathToUri(this.resolveRel(filePath));
 
 		const params: DidSaveTextDocumentParams = {
 			textDocument: {
@@ -540,7 +547,8 @@ export class LspClient {
 		}
 
 		const params: DefinitionParams = {
-			textDocument: { uri: pathToUri(filePath) },
+			// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+			textDocument: { uri: pathToUri(this.resolveRel(filePath)) },
 			position: { line, character },
 		};
 
@@ -573,7 +581,8 @@ export class LspClient {
 		}
 
 		const params: ReferenceParams = {
-			textDocument: { uri: pathToUri(filePath) },
+			// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+			textDocument: { uri: pathToUri(this.resolveRel(filePath)) },
 			position: { line, character },
 			context: { includeDeclaration: true },
 		};
@@ -607,7 +616,8 @@ export class LspClient {
 		}
 
 		const params: HoverParams = {
-			textDocument: { uri: pathToUri(filePath) },
+			// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+			textDocument: { uri: pathToUri(this.resolveRel(filePath)) },
 			position: { line, character },
 		};
 
@@ -633,7 +643,8 @@ export class LspClient {
 		}
 
 		const params: DocumentSymbolParams = {
-			textDocument: { uri: pathToUri(filePath) },
+			// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+			textDocument: { uri: pathToUri(this.resolveRel(filePath)) },
 		};
 
 		try {
@@ -692,7 +703,8 @@ export class LspClient {
 		}
 
 		const params: SemanticTokensParams = {
-			textDocument: { uri: pathToUri(filePath) },
+			// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+			textDocument: { uri: pathToUri(this.resolveRel(filePath)) },
 		};
 
 		try {
@@ -722,7 +734,8 @@ export class LspClient {
 		}
 
 		const params: FoldingRangeParams = {
-			textDocument: { uri: pathToUri(filePath) },
+			// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+			textDocument: { uri: pathToUri(this.resolveRel(filePath)) },
 		};
 
 		try {
@@ -755,7 +768,8 @@ export class LspClient {
 		if (!this.isFileOpened(filePath)) return { status: "ok", data: null };
 
 		const params = {
-			textDocument: { uri: pathToUri(filePath) },
+			// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+			textDocument: { uri: pathToUri(this.resolveRel(filePath)) },
 			position: { line, character },
 			newName,
 		};
@@ -791,7 +805,8 @@ export class LspClient {
 		}
 
 		const params: CodeActionParams = {
-			textDocument: { uri: pathToUri(filePath) },
+			// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+			textDocument: { uri: pathToUri(this.resolveRel(filePath)) },
 			range: {
 				start: { line: startLine, character: startChar },
 				end: { line: endLine, character: endChar },
@@ -828,7 +843,8 @@ export class LspClient {
 		}
 
 		const params: SignatureHelpParams = {
-			textDocument: { uri: pathToUri(filePath) },
+			// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+			textDocument: { uri: pathToUri(this.resolveRel(filePath)) },
 			position: { line, character },
 		};
 
@@ -861,7 +877,8 @@ export class LspClient {
 		}
 
 		const params: ImplementationParams = {
-			textDocument: { uri: pathToUri(filePath) },
+			// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+			textDocument: { uri: pathToUri(this.resolveRel(filePath)) },
 			position: { line, character },
 		};
 
@@ -892,7 +909,8 @@ export class LspClient {
 		}
 
 		const params: CodeLensParams = {
-			textDocument: { uri: pathToUri(filePath) },
+			// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
+			textDocument: { uri: pathToUri(this.resolveRel(filePath)) },
 		};
 
 		try {
