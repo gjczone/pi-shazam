@@ -14,7 +14,7 @@ import { executeFormat } from "../tools/format.js";
 import { executeVerifyTextAsync, executeVerifyJsonAsync } from "../tools/verify.js";
 import { executeChanges, executeChangesJson } from "../tools/changes.js";
 import { executeRenameSymbol, formatRenameResult } from "../tools/rename_symbol.js";
-import { hasCallChainChecked } from "../hooks/rename-state.js";
+import { hasCallChainChecked, recordCallChain } from "../hooks/rename-state.js";
 import { executeSafeDelete, formatSafeDeleteResult } from "../tools/safe_delete.js";
 import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -177,6 +177,8 @@ export function registerAllTools(
 
 			// Symbol mode: call chain analysis
 			if (symbol) {
+				// #447: Record that impact --symbol was run so the rename gate is satisfied
+				recordCallChain(symbol as string);
 				if (flat) {
 					const refs = getFlatReferences(getGraph(), symbol as string, dir);
 					let text = formatFlatReferences(refs, symbol as string);
@@ -199,6 +201,14 @@ export function registerAllTools(
 						},
 					],
 				};
+			}
+			// #445: Validate user-supplied file paths against project root (path-traversal guard)
+			for (const f of filesArr) {
+				if (!validatePathInProject(f, projectRoot)) {
+					return {
+						content: [{ type: "text", text: `Error: File path '${f}' is outside the project root and cannot be accessed.` }],
+					};
+				}
 			}
 			let text = executeImpact(getGraph(), filesArr, {
 				withSymbols: (withSymbols as boolean) ?? false,
@@ -297,6 +307,12 @@ export function registerAllTools(
 			inputSchema: findTestsDef.zodParams,
 		},
 		withLogging("shazam_find_tests", async ({ sourceFile, module: mod, maxTokens }) => {
+			// #446: Validate user-supplied sourceFile path against project root (path-traversal guard)
+			if (sourceFile && !validatePathInProject(sourceFile as string, projectRoot)) {
+				return {
+					content: [{ type: "text", text: `Error: Source file path '${sourceFile}' is outside the project root and cannot be accessed.` }],
+				};
+			}
 			const result = executeFindTests(getGraph(), projectRoot, {
 				sourceFile: sourceFile as string | undefined,
 				module: mod as string | undefined,
@@ -335,7 +351,7 @@ export function registerAllTools(
 					],
 				};
 			}
-			const result = await executeRenameSymbol(getGraph(), symbol as string, newName as string, effectiveDryRun);
+			const result = await executeRenameSymbol(getGraph(), symbol as string, newName as string, effectiveDryRun, projectRoot);
 			let text = formatRenameResult(result, symbol as string, newName as string, effectiveDryRun);
 			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return { content: [{ type: "text", text }] };

@@ -1,7 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { z } from "zod";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
+import { validatePathInProject } from "../tools/_factory.js";
+import { clearRenameState, hasCallChainChecked, recordCallChain } from "../hooks/rename-state.js";
 
 let _graph: RepoGraph | null = null;
 function getGraph(): RepoGraph {
@@ -120,5 +122,74 @@ describe("MCP: tool output format", () => {
 		const content = { content: [{ type: "text" as const, text }] };
 		expect(content.content[0].type).toBe("text");
 		expect(typeof content.content[0].text).toBe("string");
+	});
+});
+
+// -- MCP path-traversal guards (issues #445, #446) --
+
+describe("MCP: path-traversal guards", () => {
+	it("shazam_impact files array rejects path-traversal via validatePathInProject (#445)", () => {
+		// Simulate what the MCP handler does: validate each file in filesArr
+		const filesArr = ["../../etc/passwd", "core/scanner.ts"];
+		const projectRoot = ".";
+		for (const f of filesArr) {
+			if (!validatePathInProject(f, projectRoot)) {
+				// Path-traversal detected -- handler should return error
+				expect(f).toBe("../../etc/passwd");
+				return;
+			}
+		}
+		// Should not reach here -- the traversal path should be caught
+		expect.unreachable("path-traversal was not caught");
+	});
+
+	it("shazam_impact files array accepts valid in-root paths (#445)", () => {
+		const filesArr = ["core/scanner.ts", "tools/impact.ts"];
+		const projectRoot = ".";
+		for (const f of filesArr) {
+			expect(validatePathInProject(f, projectRoot)).toBe(true);
+		}
+	});
+
+	it("shazam_find_tests sourceFile rejects path-traversal via validatePathInProject (#446)", () => {
+		const sourceFile = "../../etc/passwd";
+		const projectRoot = ".";
+		expect(validatePathInProject(sourceFile, projectRoot)).toBe(false);
+	});
+
+	it("shazam_find_tests sourceFile accepts valid in-root paths (#446)", () => {
+		const sourceFile = "core/scanner.ts";
+		const projectRoot = ".";
+		expect(validatePathInProject(sourceFile, projectRoot)).toBe(true);
+	});
+});
+
+// -- MCP recordCallChain for rename workflow (issue #447) --
+
+describe("MCP: recordCallChain enables rename workflow (#447)", () => {
+	beforeEach(() => {
+		clearRenameState();
+	});
+
+	it("recordCallChain marks symbol as reviewed for rename gate", () => {
+		const symbol = "scanProject";
+		expect(hasCallChainChecked(symbol)).toBe(false);
+		recordCallChain(symbol);
+		expect(hasCallChainChecked(symbol)).toBe(true);
+	});
+
+	it("rename gate blocks without prior recordCallChain", () => {
+		const symbol = "someSymbol";
+		expect(hasCallChainChecked(symbol)).toBe(false);
+		// Simulate the MCP handler gate: would return [BLOCKED]
+		const blocked = !hasCallChainChecked(symbol);
+		expect(blocked).toBe(true);
+	});
+
+	it("rename gate passes after recordCallChain", () => {
+		const symbol = "someSymbol";
+		recordCallChain(symbol);
+		const allowed = hasCallChainChecked(symbol);
+		expect(allowed).toBe(true);
 	});
 });
