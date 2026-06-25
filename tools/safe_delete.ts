@@ -51,16 +51,16 @@ interface SafeDeleteResult {
 }
 
 export function executeSafeDelete(graph: RepoGraph, symbolName: string, dryRun: boolean = true): SafeDeleteResult {
-	// Find the symbol
-	let symbol: Symbol | undefined;
+	// Find ALL matching symbols (fix #453: first-match break missed references
+	// from other symbols with the same name)
+	const matchingSymbols: Symbol[] = [];
 	for (const sym of graph.symbols.values()) {
 		if (sym.name === symbolName) {
-			symbol = sym;
-			break;
+			matchingSymbols.push(sym);
 		}
 	}
 
-	if (!symbol) {
+	if (matchingSymbols.length === 0) {
 		return {
 			status: "not_found",
 			symbol: symbolName,
@@ -74,36 +74,44 @@ export function executeSafeDelete(graph: RepoGraph, symbolName: string, dryRun: 
 		};
 	}
 
-	const incoming = graph.incoming.get(symbol.id) || [];
-	const outgoing = graph.outgoing.get(symbol.id) || [];
+	// Aggregate incoming/outgoing across all matching symbols
+	let totalIncoming = 0;
+	let totalOutgoing = 0;
+	let primarySymbol = matchingSymbols[0]!;
+	for (const sym of matchingSymbols) {
+		const incoming = graph.incoming.get(sym.id) || [];
+		const outgoing = graph.outgoing.get(sym.id) || [];
+		totalIncoming += incoming.length;
+		totalOutgoing += outgoing.length;
+	}
 
-	if (incoming.length > 0) {
+	if (totalIncoming > 0) {
 		return {
 			status: "has_references",
 			symbol: symbolName,
-			incomingCount: incoming.length,
-			outgoingCount: outgoing.length,
-			file: symbol.file,
-			line: symbol.line,
-			kind: symbol.kind,
+			incomingCount: totalIncoming,
+			outgoingCount: totalOutgoing,
+			file: primarySymbol.file,
+			line: primarySymbol.line,
+			kind: primarySymbol.kind,
 			dryRun,
-			message: `Symbol "${symbolName}" still has ${incoming.length} incoming reference(s). Cannot safely delete. Use shazam_impact --symbol ${symbolName} to review.`,
+			message: `Symbol "${symbolName}" still has ${totalIncoming} incoming reference(s). Cannot safely delete. Use shazam_impact --symbol ${symbolName} to review.`,
 		};
 	}
 
-	const filePath = symbol.file;
-	const lineNum = symbol.line;
+	const filePath = primarySymbol.file;
+	const lineNum = primarySymbol.line;
 
 	return {
 		status: "safe",
 		symbol: symbolName,
 		incomingCount: 0,
-		outgoingCount: outgoing.length,
+		outgoingCount: totalOutgoing,
 		file: filePath,
 		line: lineNum,
-		kind: symbol.kind,
+		kind: primarySymbol.kind,
 		dryRun,
-		message: `Symbol "${symbolName}" (${symbol.kind}) at ${filePath}:${lineNum} has zero incoming references. ${
+		message: `Symbol "${symbolName}" (${primarySymbol.kind}) at ${filePath}:${lineNum} has zero incoming references. ${
 			dryRun
 				? "DRY RUN: Pass dryRun=false to confirm deletion."
 				: `DELETE: Run \`git rm\` or manually remove the symbol definition in ${filePath}.`

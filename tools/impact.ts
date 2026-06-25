@@ -13,6 +13,7 @@ import { executeFindTests } from "./find_tests.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { assessRisk } from "../core/risk.js";
 import { recordCallChain } from "../hooks/rename-state.js";
+import { getEffectiveRoot } from "../core/scanner.js";
 
 export function registerImpact(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -68,7 +69,7 @@ export function registerImpact(pi: ExtensionAPI): void {
 			const files = params.files as string[];
 			// M8: Validate user-supplied file paths against project root
 			for (const f of files) {
-				if (!validatePathInProject(f)) {
+				if (!validatePathInProject(f, getEffectiveRoot())) {
 					return `Error: File path '${f}' is outside the project root and cannot be accessed.`;
 				}
 			}
