@@ -47,7 +47,9 @@ const INSTALL_INSTRUCTIONS: InstallInstruction[] = [
 	},
 	{
 		language: "json",
-		serverName: "vscode-json-languageserver",
+		// #457: keep serverName in sync with lsp/servers.ts so the install
+		// hint is routed to the correct entry in INSTALL_INSTRUCTIONS.
+		serverName: "vscode-json-language-server",
 		packages: ["vscode-langservers-extracted"],
 		commands: ["npm install -g vscode-langservers-extracted"],
 	},
@@ -70,6 +72,12 @@ const INSTALL_INSTRUCTIONS: InstallInstruction[] = [
 		commands: ["Install Dart SDK from https://dart.dev/get-dart", "brew install dart-sdk"],
 	},
 ];
+
+/**
+ * Exported for tests only. Do not import from production code.
+ * Production code should go through `generateSetupReport` or `getInstallInstructions`.
+ */
+export const INSTALL_INSTRUCTIONS_INTERNAL: readonly InstallInstruction[] = INSTALL_INSTRUCTIONS;
 
 // -- Re-export for convenience ------------------------------------------------
 

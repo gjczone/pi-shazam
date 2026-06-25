@@ -69,6 +69,23 @@ describe("lsp/servers", () => {
 			expect(dart!.rootMarkers).toContain("pubspec.yaml");
 		});
 
+		// Regression test for issue #457:
+		// The install instruction recommends `vscode-langservers-extracted`, which
+		// ships the executable `vscode-json-language-server` (hyphenated).
+		// The old name `vscode-json-languageserver` (no hyphen) was the wrong
+		// binary -- it belongs to a different npm package. Both names must be
+		// kept in commandNames for backward compatibility.
+		it("should have json spec with correct executable names (issue #457)", () => {
+			const json = LSP_SERVER_SPECS.find((s) => s.language === "json");
+			expect(json).toBeDefined();
+			expect(json!.fileSuffixes).toContain(".json");
+			expect(json!.fileSuffixes).toContain(".jsonc");
+			// Primary name: matches the binary shipped by vscode-langservers-extracted
+			expect(json!.commandNames).toContain("vscode-json-language-server");
+			// Legacy alias: matches the binary shipped by the vscode-json-languageserver npm package
+			expect(json!.commandNames).toContain("vscode-json-languageserver");
+		});
+
 		it("should NOT have specs for removed languages", () => {
 			const removedLanguages = [
 				"javascript",

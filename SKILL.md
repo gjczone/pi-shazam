@@ -236,7 +236,7 @@ pi-shazam auto-detects language servers for supported languages:
 | Python                | pyright                    | yes         |
 | Rust                  | rust-analyzer              | yes         |
 | Go                    | gopls                      | yes         |
-| JSON                  | vscode-json-languageserver | yes         |
+| JSON                  | vscode-json-language-server | yes         |
 | YAML                  | yaml-language-server       | yes         |
 | Dart                  | dart                       | yes         |
 

@@ -81,8 +81,13 @@ export const LSP_SERVER_SPECS: readonly LspServerSpec[] = [
 	// -- JSON ------------------------------------------------------------------
 	{
 		language: "json",
-		serverName: "vscode-json-languageserver",
-		commandNames: ["vscode-json-languageserver"] as const,
+		// #457: The install instruction recommends `vscode-langservers-extracted`,
+		// which ships the binary `vscode-json-language-server` (hyphenated).
+		// The legacy name `vscode-json-languageserver` (no hyphen) is kept as a
+		// fallback for users who installed the alternative npm package of the
+		// same name.
+		serverName: "vscode-json-language-server",
+		commandNames: ["vscode-json-language-server", "vscode-json-languageserver"] as const,
 		args: ["--stdio"] as const,
 		fileSuffixes: [".json", ".jsonc", ".json5"] as const,
 		rootMarkers: [".git", "package.json"] as const,

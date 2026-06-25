@@ -228,7 +228,7 @@ npm run build        # tsc → dist/
 | Rust                  | rust-analyzer              | Supported |
 | Dart (Flutter)        | dart language-server       | Supported |
 | YAML                  | yaml-language-server       | Supported |
-| JSON                  | vscode-json-languageserver | Supported |
+| JSON                  | vscode-json-language-server | Supported |
 
 When LSP servers are unavailable, tools automatically fall back to tree-sitter mode.
 
