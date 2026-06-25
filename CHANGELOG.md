@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.5] - 2026-06-25
+
+### Bug Fixes
+
+- **fix(#457): JSON LSP executable name mismatch** -- `lsp/servers.ts` now searches for the binary name `vscode-json-language-server` (hyphenated), which is what the recommended package `vscode-langservers-extracted` actually installs. The legacy alias `vscode-json-languageserver` (no hyphen) is kept as a fallback for users with the alternative npm package. The previous lookup name matched a binary that ships from a different npm package, causing `LSP server executable not found` after following the install instructions.
+
+### Tests
+
+- **test(#457): regression test for install-instruction vs commandName parity** -- added `tests/lsp-commandnames-parity.test.ts` which fails if any install hint in `lsp/setup.ts` recommends a package whose shipped binary is not listed in the corresponding LSP spec's `commandNames`. Covers JSON, TypeScript, Python, Go, YAML, Rust, Dart.
+- **test(#457): JSON spec must include both executable names** -- added a targeted case to `tests/lsp-servers.test.ts` asserting the JSON spec lists both `vscode-json-language-server` and `vscode-json-languageserver`.
+
 ## [0.19.4] - 2026-06-25
 
 ### Bug Fixes
