@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { z } from "zod";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeFileSync, rmSync } from "node:fs";
+import { writeFileSync, rmSync, existsSync } from "node:fs";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { validatePathInProject } from "../tools/_factory.js";
@@ -247,6 +247,13 @@ describe("MCP: recordCallChain enables rename workflow (#447)", () => {
 // -- MCP server startup via symlink (issue #485) --
 
 describe("MCP: server starts correctly via symlink (#485)", () => {
+	// E2E tests require built dist/ — skip when running in CI before build step
+	const entryExists = existsSync(join(process.cwd(), "dist", "mcp", "entry.js"));
+	if (!entryExists) {
+		it.skip("skipped: dist/mcp/entry.js not found (run npm run build first)", () => {});
+		return;
+	}
+
 	it("MCP server responds to initialize when entry.js is accessed via a symlink", async () => {
 		const { symlinkSync, unlinkSync, mkdirSync, rmSync } = await import("node:fs");
 		const { resolve, join } = await import("node:path");
