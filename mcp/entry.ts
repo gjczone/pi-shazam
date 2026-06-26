@@ -69,16 +69,24 @@ if (!rootValidation.ok) {
 
 setProjectRoot(PROJECT_ROOT);
 
-// Read version from package.json to keep it in sync automatically
+// Read version from package.json to keep it in sync automatically.
+// #485: entry.js lives at dist/mcp/ (compiled) or mcp/ (vitest source).
+// Search upward to handle both layouts.
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const pkgPath = resolve(__dirname, "..", "package.json");
 let VERSION = "0.0.0";
-try {
-	const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-	VERSION = pkg.version || VERSION;
-} catch {
+for (const candidate of [resolve(__dirname, "..", "..", "package.json"), resolve(__dirname, "..", "package.json")]) {
+	try {
+		const pkg = JSON.parse(readFileSync(candidate, "utf-8"));
+		if (pkg.version) {
+			VERSION = pkg.version;
+			break;
+		}
+	} catch {
+		// not found at this level, try next candidate
+	}
+}
+if (VERSION === "0.0.0") {
 	_logWarn("entry", "failed to read package.json version");
-	// Fallback -- version will be inaccurate but MCP will still work
 }
 
 // Graph cache -- uses scanProject's built-in incremental mtime detection.
@@ -146,8 +154,17 @@ async function main(): Promise<void> {
 // Guard: only run main() when this module is the entry point (not when
 // imported by tests). This allows tests to import validateProjectRoot
 // without triggering the MCP server startup sequence.
-const isMainModule =
-	process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+// #485: npm/npx always create symlinks in .bin/ directories, so
+// process.argv[1] (symlink path) never equals import.meta.url (resolved
+// file URL). Resolve symlinks via realpathSync before comparing.
+const isMainModule = (() => {
+	if (!process.argv[1]) return false;
+	try {
+		return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+	} catch {
+		return import.meta.url === pathToFileURL(process.argv[1]).href;
+	}
+})();
 if (isMainModule) {
 	main().catch((err) => {
 		_logWarn("main", "MCP server failed to start", err);
