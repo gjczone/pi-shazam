@@ -9,9 +9,9 @@
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { scanProject, setProjectRoot } from "../core/scanner.js";
 import { _logWarn } from "../core/output.js";
 import type { RepoGraph } from "../core/graph.js";
@@ -19,19 +19,46 @@ import { LspManager, detectProjectLanguages } from "../lsp/manager.js";
 import { setLspManager } from "../tools/_context.js";
 import { registerAllTools } from "./tools.js";
 
-const PROJECT_ROOT = resolve(process.argv[2] || ".");
-// Validate PROJECT_ROOT is within allowed directories
-try {
-	const realRoot = realpathSync(PROJECT_ROOT);
-	const homeDir = process.env.HOME || "/home";
-	// Use path-separator boundary check to prevent prefix confusion (e.g. /home/userx matching /home/user)
-	const isUnderHome = realRoot === homeDir || realRoot.startsWith(homeDir + "/");
-	if (!isUnderHome) {
-		console.error("[pi-shazam mcp] PROJECT_ROOT must be within user home directory");
-		process.exit(1);
+/**
+ * Validate that PROJECT_ROOT is a real directory.
+ *
+ * #465: previously the MCP server rejected any PROJECT_ROOT not under $HOME,
+ * breaking container/CI deployment where projects live under /workspace,
+ * /srv, /opt, /code, etc. The home-prefix restriction has been replaced
+ * with an existence + directory check that accepts any valid directory.
+ *
+ * If an opt-in home-only mode is desired, set PI_SHAZAM_HOME_ONLY=1.
+ * Returns { ok: true } on success, or { ok: false, error } on failure.
+ */
+export function validateProjectRoot(root: string): { ok: boolean; error?: string } {
+	try {
+		const realRoot = realpathSync(root);
+		const stats = statSync(realRoot);
+		if (!stats.isDirectory()) {
+			return { ok: false, error: "PROJECT_ROOT must be a directory" };
+		}
+		// #465: optional home-only hardening for environments that want it.
+		// Defaults to off so container/CI topologies (/workspace, /srv, /opt)
+		// work out of the box.
+		if (process.env.PI_SHAZAM_HOME_ONLY === "1") {
+			const homeDir = process.env.HOME || "/home";
+			const isUnderHome = realRoot === homeDir || realRoot.startsWith(homeDir + "/");
+			if (!isUnderHome) {
+				return { ok: false, error: "PROJECT_ROOT must be within user home directory (PI_SHAZAM_HOME_ONLY=1)" };
+			}
+		}
+		return { ok: true };
+	} catch {
+		return { ok: false, error: "Invalid PROJECT_ROOT path" };
 	}
-} catch {
-	console.error("[pi-shazam mcp] Invalid PROJECT_ROOT path");
+}
+
+const PROJECT_ROOT = resolve(process.argv[2] || ".");
+// #464/#465: validate PROJECT_ROOT exists and is a directory, then propagate
+// it to the scanner override so getEffectiveRoot() returns PROJECT_ROOT.
+const rootValidation = validateProjectRoot(PROJECT_ROOT);
+if (!rootValidation.ok) {
+	console.error(`[pi-shazam mcp] ${rootValidation.error}`);
 	process.exit(1);
 }
 // #464: propagate the explicit project-root argument to the scanner override
@@ -39,6 +66,7 @@ try {
 // this, factory-injected params.project and buildEnvelope project fields
 // would fall back to process.cwd(), diverging from PROJECT_ROOT used by
 // scanProject and the LSP manager.
+
 setProjectRoot(PROJECT_ROOT);
 
 // Read version from package.json to keep it in sync automatically
@@ -115,7 +143,14 @@ async function main(): Promise<void> {
 	await server.connect(transport);
 }
 
-main().catch((err) => {
-	_logWarn("main", "MCP server failed to start", err);
-	process.exit(1);
-});
+// Guard: only run main() when this module is the entry point (not when
+// imported by tests). This allows tests to import validateProjectRoot
+// without triggering the MCP server startup sequence.
+const isMainModule =
+	process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMainModule) {
+	main().catch((err) => {
+		_logWarn("main", "MCP server failed to start", err);
+		process.exit(1);
+	});
+}

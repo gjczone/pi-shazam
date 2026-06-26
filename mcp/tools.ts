@@ -291,6 +291,21 @@ export function registerAllTools(
 			inputSchema: formatDef.zodParams,
 		},
 		withLogging("shazam_format", async ({ dryRun, file, maxTokens }) => {
+			// #465: validate user-supplied file path against project root.
+			// shazam_format was the only file-accepting MCP handler that
+			// skipped validatePathInProject, allowing formatters (--write)
+			// to modify files outside the configured project root.
+			if (file && !validatePathInProject(file as string, projectRoot)) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error: file path '${file}' is outside the project root and cannot be accessed.`,
+						},
+					],
+					isError: true,
+				};
+			}
 			let text = await executeFormat(getGraph(), projectRoot, {
 				dryRun: (dryRun as boolean) ?? true,
 				file: file as string | undefined,

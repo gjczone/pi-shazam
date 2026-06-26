@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { z } from "zod";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { writeFileSync, rmSync } from "node:fs";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { validatePathInProject } from "../tools/_factory.js";
@@ -161,6 +164,53 @@ describe("MCP: path-traversal guards", () => {
 		const sourceFile = "core/scanner.ts";
 		const projectRoot = ".";
 		expect(validatePathInProject(sourceFile, projectRoot)).toBe(true);
+	});
+
+	// #465 Finding A: shazam_format is the only file-accepting MCP handler
+	// that skipped validatePathInProject, allowing formatters to write files
+	// outside the configured project root.
+	it("shazam_format file rejects path-traversal via validatePathInProject (#465)", () => {
+		const file = "../../etc/passwd";
+		const projectRoot = ".";
+		expect(validatePathInProject(file, projectRoot)).toBe(false);
+	});
+
+	it("shazam_format file accepts valid in-root paths (#465)", () => {
+		const file = "core/scanner.ts";
+		const projectRoot = ".";
+		expect(validatePathInProject(file, projectRoot)).toBe(true);
+	});
+});
+
+// -- MCP project root startup validation (issue #465 Finding B) --
+
+describe("MCP: project root startup validation (#465)", () => {
+	it("accepts a non-home absolute directory that exists (#465)", async () => {
+		const { validateProjectRoot } = await import("../mcp/entry.js");
+		// /tmp is outside $HOME but is a valid directory -- must not be rejected.
+		const result = validateProjectRoot(tmpdir());
+		expect(result.ok).toBe(true);
+		expect(result.error).toBeUndefined();
+	});
+
+	it("rejects a non-existent path (#465)", async () => {
+		const { validateProjectRoot } = await import("../mcp/entry.js");
+		const result = validateProjectRoot(join(tmpdir(), "pi-shazam-nonexistent-9999"));
+		expect(result.ok).toBe(false);
+		expect(result.error).toBeDefined();
+	});
+
+	it("rejects a file (not a directory) (#465)", async () => {
+		const { validateProjectRoot } = await import("../mcp/entry.js");
+		const filePath = join(tmpdir(), "pi-shazam-465-file.txt");
+		writeFileSync(filePath, "test");
+		try {
+			const result = validateProjectRoot(filePath);
+			expect(result.ok).toBe(false);
+			expect(result.error).toBeDefined();
+		} finally {
+			rmSync(filePath, { force: true });
+		}
 	});
 });
 
