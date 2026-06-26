@@ -29,7 +29,7 @@ import { existsSync } from "node:fs";
 import { redact } from "../core/redact.js";
 import { readFileAdaptiveAsync } from "../core/encoding.js";
 import { resolve } from "node:path";
-import { getNextForTool, formatNextSection, truncateOutput, _logWarn } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput, estimateTokens, _logWarn } from "../core/output.js";
 import { getLspManager } from "./_context.js";
 import { lspCodeActions } from "./lsp_enrich.js";
 import { createTool } from "./_factory.js";
@@ -72,13 +72,26 @@ export function registerVerify(pi: ExtensionAPI): void {
 			let text: string;
 			if (json) {
 				const result = await executeVerifyJsonAsync(projectRoot, options);
-				text = JSON.stringify({ schema_version: "1.0", command: "verify", project: projectRoot, status: "ok", result });
+				const envelope = {
+					schema_version: "1.0",
+					command: "verify",
+					project: projectRoot,
+					status: "ok",
+					result,
+				};
+				text = JSON.stringify(envelope);
+				// Issue #470: verify JSON mode must honor maxTokens. customExecute
+				// bypasses factory auto-truncation, so cap lspDiagnostics here when
+				// the serialized JSON exceeds the token budget. Produces valid JSON
+				// (array slice, not string slice) with a lspDiagnosticsTruncated count.
+				if (capVerifyDiagnostics(result, text, maxTokens as number | undefined)) {
+					text = JSON.stringify(envelope);
+				}
 			} else {
 				text = await executeVerifyTextAsync(projectRoot, options);
-			}
-
-			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens as number);
+				if (maxTokens) {
+					text = truncateOutput(text.split("\n"), maxTokens as number);
+				}
 			}
 			return { content: [{ type: "text", text }] };
 		},
@@ -95,6 +108,57 @@ export interface VerifyOptions {
 	maxFiles?: number;
 	noCascade?: boolean;
 	noSecrets?: boolean;
+}
+
+// -- JSON maxTokens truncation (issue #470) ----------------------------------
+
+/**
+ * Maximum number of lspDiagnostics entries kept in JSON mode when the
+ * serialized output exceeds maxTokens. Diagnostics are the main source of
+ * JSON bloat in verify output; capping this array bounds the payload
+ * without invalidating the JSON structure.
+ */
+const MAX_JSON_DIAGNOSTICS = 100;
+
+/**
+ * Shape of the verify JSON result. Only the fields relevant to truncation
+ * are constrained; the rest flow through as-is from executeVerifyJsonAsync.
+ */
+export interface VerifyJsonResult {
+	lspDiagnostics: unknown[];
+	lspDiagnosticsTruncated?: number;
+	[key: string]: unknown;
+}
+
+/**
+ * Cap `lspDiagnostics` in a verify JSON result when the serialized output
+ * would exceed maxTokens. Issue #470: verify JSON mode bypassed truncation
+ * (`if (maxTokens && !json)`), so a project with hundreds of LSP
+ * diagnostics could flood the LLM context window.
+ *
+ * Mutates `result` in place: when truncation occurs, replaces
+ * `lspDiagnostics` with a capped slice and adds a `lspDiagnosticsTruncated`
+ * count so consumers know how many entries were dropped. Always produces
+ * valid JSON (array slice before serialization, never a string slice).
+ *
+ * Returns true when truncation was applied, false otherwise.
+ *
+ * @param result - The verify result object (mutated in place)
+ * @param serializedText - The JSON.stringify output of the full envelope
+ * @param maxTokens - Token budget; when undefined or not exceeded, no-op
+ */
+export function capVerifyDiagnostics(
+	result: VerifyJsonResult,
+	serializedText: string,
+	maxTokens?: number,
+): boolean {
+	if (!maxTokens) return false;
+	if (estimateTokens(serializedText) <= maxTokens) return false;
+	const diags = result.lspDiagnostics;
+	if (!Array.isArray(diags) || diags.length <= MAX_JSON_DIAGNOSTICS) return false;
+	result.lspDiagnostics = diags.slice(0, MAX_JSON_DIAGNOSTICS);
+	result.lspDiagnosticsTruncated = diags.length - MAX_JSON_DIAGNOSTICS;
+	return true;
 }
 
 // -- Async verify (LSP + graph, used by the tool) ----------------------------

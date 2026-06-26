@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
-import { getNextForTool, formatNextSection } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 import { readFileAdaptive } from "../core/encoding.js";
 import { getLspManager } from "./_context.js";
 import { ensureFileOpened } from "./lsp_enrich.js";
@@ -94,9 +94,16 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 				};
 			}
 			const result = await executeRenameSymbol(graph, symbolName, newName, dryRun, projectRoot);
-			const text = json
+			let text = json
 				? buildEnvelope("shazam_rename_symbol", projectRoot, "ok", result)
 				: formatRenameResult(result, symbolName, newName, dryRun);
+			// Issue #470: customExecute bypasses factory auto-truncation, so
+			// honor maxTokens explicitly here. JSON mode is left intact to
+			// preserve valid JSON (mirrors tools/lookup.ts:136-138).
+			const maxTokens = params.maxTokens as number | undefined;
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
+			}
 			return { content: [{ type: "text", text }] };
 		},
 	});

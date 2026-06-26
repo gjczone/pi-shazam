@@ -15,7 +15,7 @@ import { existsSync } from "node:fs";
 import { readFile as readFileAsync } from "node:fs/promises";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { _logWarn, getNextForTool, formatNextSection } from "../core/output.js";
+import { _logWarn, getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { detectFormatters } from "../core/formatters.js";
 
@@ -36,10 +36,17 @@ export function registerFormat(pi: ExtensionAPI): void {
 			const json = params.json ?? false;
 			const dryRun = (params.dryRun as boolean) ?? true;
 			const file = params.file as string | undefined;
+			// Issue #470: customExecute bypasses factory auto-truncation, so
+			// honor maxTokens explicitly here. JSON mode is left intact to
+			// preserve valid JSON (mirrors tools/lookup.ts:136-138).
+			const maxTokens = params.maxTokens as number | undefined;
 			const graph = scanProject(getEffectiveRoot());
-			const text = json
+			let text = json
 				? await executeFormatJson(graph, ".", { dryRun, file })
 				: await executeFormat(graph, ".", { dryRun, file });
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
+			}
 			return { content: [{ type: "text", text }] };
 		},
 	});
