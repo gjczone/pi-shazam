@@ -147,6 +147,47 @@ export function getProjectGraph(projectRoot: string = ".", log?: (msg: string) =
 // -- Scanner ------------------------------------------------------------------
 
 /**
+ * Find all files that depend on (import from) the given changed files.
+ * Issue #469: replaces the O(changedFiles × |fileImports| × imports) nested
+ * loop in scanIncremental with an O(total import edges) reverse-index build
+ * followed by O(changedFiles) lookups. `fileImports` remains the single
+ * source of truth; the reverse index is derived fresh per call and never
+ * persisted, so it cannot drift.
+ *
+ * Returns a Set containing the changed files themselves plus every direct
+ * importer of those files. Transitive importers are NOT included -- only
+ * files that directly import a changed file. Behavior is identical to the
+ * previous nested loop, only the algorithm changes.
+ */
+export function findDependentFiles(graph: RepoGraph, changedFiles: string[]): Set<string> {
+	const dependentFiles = new Set<string>();
+	// Build reverse index: imported target -> set of importer files.
+	// One O(total import edges) pass replaces the per-changed-file scan
+	// that previously iterated the entire fileImports map for each change.
+	const importedBy = new Map<string, Set<string>>();
+	for (const [importer, imports] of graph.fileImports) {
+		for (const target of imports) {
+			let importers = importedBy.get(target);
+			if (!importers) {
+				importers = new Set();
+				importedBy.set(target, importers);
+			}
+			importers.add(importer);
+		}
+	}
+	for (const relPath of changedFiles) {
+		dependentFiles.add(relPath);
+		const importers = importedBy.get(relPath);
+		if (importers) {
+			for (const importer of importers) {
+				dependentFiles.add(importer);
+			}
+		}
+	}
+	return dependentFiles;
+}
+
+/**
  * Remove only the edges for a single file (not symbols).
  * Used during incremental edge rebuild to clear old edges before
  * rebuilding only what changed.
@@ -226,15 +267,18 @@ function removeEdgesForFile(graph: RepoGraph, relPath: string, preserveIncoming 
 	}
 }
 
-function removeFileData(graph: RepoGraph, relPath: string): void {
+export function removeFileData(graph: RepoGraph, relPath: string): void {
 	const symIds = graph.fileSymbols.get(relPath) || [];
 	const symIdSet = new Set(symIds);
 
-	// Collect names before deleting symbols, for nameIndex cleanup
-	const symNames: string[] = [];
+	// Collect names before deleting symbols, for nameIndex cleanup.
+	// Use a Set to deduplicate -- when multiple symbols in the file share a
+	// name, we only filter that name's index once (issue #469: avoids
+	// O(N×M) where N = symbols in file, M = global symbols per name).
+	const symNames = new Set<string>();
 	for (const id of symIds) {
 		const sym = graph.symbols.get(id);
-		if (sym) symNames.push(sym.name);
+		if (sym) symNames.add(sym.name);
 	}
 
 	// Clean incoming entries on targets of this file's outgoing edges
@@ -291,7 +335,10 @@ function removeFileData(graph: RepoGraph, relPath: string): void {
 		graph.targetToSources.delete(targetId);
 	}
 
-	// Remove this file's symbols from nameIndex
+	// Remove this file's symbols from nameIndex.
+	// Iterating the deduplicated name Set avoids re-filtering the same
+	// nameIndex array multiple times when the file had same-named symbols
+	// (issue #469).
 	for (const name of symNames) {
 		const named = graph.nameIndex.get(name);
 		if (named) {
@@ -804,19 +851,13 @@ function scanIncremental(
 
 	_scanSeenEdges = new Set<string>();
 
-	// Find files that import from changed files (dependents)
-	const dependentFiles = new Set<string>();
-	for (const relPath of changedFiles) {
-		// L1: Skip redundant removeEdgesForFile here -- it's done in the
-		// dependentFiles loop below which includes changedFiles as a subset.
-		dependentFiles.add(relPath);
-		// Find all files that import from this changed file
-		for (const [importer, imports] of graph.fileImports) {
-			if (imports.includes(relPath)) {
-				dependentFiles.add(importer);
-			}
-		}
-	}
+	// Find files that import from changed files (dependents).
+	// Issue #469: use findDependentFiles (reverse-import lookup) instead of
+	// the O(changedFiles × |fileImports| × imports) nested loop. The helper
+	// builds a fresh reverse index per call -- fileImports stays the source
+	// of truth. L1: removeEdgesForFile is done in the dependentFiles loop
+	// below which includes changedFiles as a subset.
+	const dependentFiles = findDependentFiles(graph, changedFiles);
 
 	// Trace cross-file call edges using the snapshot (Bug #2 fix):
 	// files whose symbols had incoming edges from the changed file's old
