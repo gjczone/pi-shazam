@@ -83,6 +83,11 @@ export function registerAgentContextGuard(pi: ExtensionAPI): void {
 		if (!AGENT_TOOL_NAMES.has(toolName)) return;
 
 		const input = event.input;
+		// input is optional (input?: unknown). Guard before the cast so a
+		// tool_call event with a missing/null input payload is skipped instead
+		// of crashing the hook handler with a TypeError (#472). Mirrors the
+		// guard pattern used by sibling hooks (pre-edit.ts, _bash-utils.ts).
+		if (!input || typeof input !== "object") return;
 		const prompt = (input as Record<string, unknown>).prompt as string;
 		if (!prompt) return;
 

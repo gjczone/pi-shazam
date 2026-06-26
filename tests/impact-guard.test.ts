@@ -366,4 +366,35 @@ describe("hooks/agent-context-guard", () => {
 		);
 		expect(blockResult).toBeUndefined();
 	});
+
+	it("should not throw when input is undefined (#472)", () => {
+		const { pi, emit } = createMockPi();
+		registerAgentContextGuard(pi);
+
+		// A tool_call event for an agent tool may legally carry no input payload
+		// (input is optional per ToolCallEventBase). The handler must skip it
+		// instead of crashing on the unguarded cast.
+		expect(() =>
+			emit("tool_call", {
+				type: "tool_call",
+				toolCallId: "test-9",
+				toolName: "agent",
+				input: undefined,
+			}),
+		).not.toThrow();
+	});
+
+	it("should not throw when input is null (#472)", () => {
+		const { pi, emit } = createMockPi();
+		registerAgentContextGuard(pi);
+
+		expect(() =>
+			emit("tool_call", {
+				type: "tool_call",
+				toolCallId: "test-10",
+				toolName: "agent",
+				input: null,
+			}),
+		).not.toThrow();
+	});
 });
