@@ -676,7 +676,7 @@ function _assessVerifyRisk(
 	const baselineDiff = diffFromBaseline(graph, lspErrors, lspWarnings);
 	const orphanDelta = baselineDiff?.orphanSymbols ?? internalOrphans.length;
 	const newOrphanCount = baselineDiff?.newOrphans?.length ?? internalOrphans.length;
-	return assessRisk({ gitFileCount, newOrphanCount, orphanDelta, lspErrors, lspWarnings, preCommit });
+	return assessRisk({ mode: "verify", gitFileCount, newOrphanCount, orphanDelta, lspErrors, lspWarnings, preCommit });
 }
 
 // -- Synchronous execute functions (for test compatibility) ------------------

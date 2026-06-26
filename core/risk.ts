@@ -8,7 +8,15 @@
  * - preCommit mode: high >= 30, medium >= 10 (stricter pre-commit gate)
  * - Normal mode:    high >= 60, medium >= 20
  * - Impact mode:    high: >10 files or >30 symbols, medium: >3 files or >10 symbols
+ *
+ * Routing: callers must pass an explicit `mode` so the threshold family is
+ * selected by intent, not inferred from `orphanDelta === 0`. The previous
+ * inference misrouted verify/changes calls that legitimately had zero
+ * orphan delta to impact thresholds (#468).
  */
+
+/** Which tool is calling assessRisk. Selects the threshold family. */
+export type AssessRiskMode = "impact" | "verify" | "changes";
 
 export interface RiskResult {
 	level: "low" | "medium" | "high";
@@ -16,6 +24,12 @@ export interface RiskResult {
 }
 
 export interface AssessRiskParams {
+	/**
+	 * Which tool is requesting the assessment. Required so the threshold
+	 * family is chosen by intent rather than inferred from orphanDelta.
+	 * Impact uses file/symbol thresholds; verify/changes use totalImpact.
+	 */
+	mode: AssessRiskMode;
 	/** Number of changed files (git changed files for verify/changes, affected files for impact) */
 	gitFileCount: number;
 	/** Number of new orphan symbols (affected symbol count in impact mode) */
@@ -33,21 +47,23 @@ export interface AssessRiskParams {
 /**
  * Unified risk assessment.
  *
- * When `orphanDelta === 0` and `gitFileCount` is within impact's typical range,
- * uses impact-style thresholds (based on file count and symbol count separately).
- * Otherwise uses verify/changes-style thresholds (based on totalImpact = gitFileCount + orphanDelta).
+ * Routes by explicit `mode`: impact mode uses file-count and symbol-count
+ * thresholds; verify/changes modes use totalImpact = gitFileCount + orphanDelta
+ * with optional preCommit-stricter thresholds. The threshold numbers are
+ * unchanged; only the routing condition changed (#468).
  */
 export function assessRisk(params: AssessRiskParams): RiskResult {
-	const { gitFileCount, newOrphanCount, orphanDelta, preCommit } = params;
+	const { mode, gitFileCount, newOrphanCount, orphanDelta, preCommit } = params;
 
 	if (gitFileCount === 0 && newOrphanCount === 0 && orphanDelta === 0) {
 		return { level: "low", reason: "No changes detected." };
 	}
 
-	// Impact mode: orphanDelta is 0 and data volume is within impact's typical range
-	// (impact does not compute orphanDelta, always passes 0)
-	if (orphanDelta === 0) {
-		// Impact-style thresholds: based on file count and symbol count separately
+	// Impact mode: thresholds based on file count and symbol count separately.
+	// Impact does not compute orphanDelta, but the routing decision is now
+	// driven by `mode` rather than `orphanDelta === 0` so a verify/changes
+	// call with zero orphan delta is no longer misrouted here (#468).
+	if (mode === "impact") {
 		if (gitFileCount > 10 || newOrphanCount > 30) {
 			return {
 				level: "high",

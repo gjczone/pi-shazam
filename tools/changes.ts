@@ -118,5 +118,5 @@ function _assessChangeRisk(
 	const baselineDiff = diffFromBaseline(graph, 0, 0);
 	const orphanDelta = baselineDiff?.orphanSymbols ?? internalOrphans.length;
 	const newOrphanCount = baselineDiff?.newOrphans?.length ?? internalOrphans.length;
-	return assessRisk({ gitFileCount: gitChangedFiles.length, newOrphanCount, orphanDelta });
+	return assessRisk({ mode: "changes", gitFileCount: gitChangedFiles.length, newOrphanCount, orphanDelta });
 }

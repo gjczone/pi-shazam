@@ -284,7 +284,7 @@ export function executeImpact(
 }
 
 function assessImpactRisk(affectedFileCount: number, affectedSymbolCount: number): { level: string; reason: string } {
-	return assessRisk({ gitFileCount: affectedFileCount, newOrphanCount: affectedSymbolCount, orphanDelta: 0 });
+	return assessRisk({ mode: "impact", gitFileCount: affectedFileCount, newOrphanCount: affectedSymbolCount, orphanDelta: 0 });
 }
 
 export function executeImpactJson(graph: RepoGraph, files: string[], depth: number = 3): string {
