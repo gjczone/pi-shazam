@@ -183,12 +183,13 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 
 ## When to Read Companion Files
 
-| File                  | Directive                                                                                                                                                                                                    | Trigger                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| `docs/INSTRUCTION.md` | Single source of truth for Pi extension API contracts, architecture layer boundaries, tool registration patterns, content format contracts, release process, and verification gates. Read before any change. | Any code change, tool/hook creation, or release                                     |
-| `SKILL.md`            | Documents every shazam tool's parameters, behavior, return format, and usage patterns with concrete examples. Do not guess parameter names or output shapes.                                                 | Before calling a shazam tool for the first time, or when uncertain about parameters |
-| `README.md`           | User-facing setup, install, and feature descriptions.                                                                                                                                                        | User onboarding, release announcements                                              |
-| `CHANGELOG.md`        | Release history and version tracking. Update when releasing a new version.                                                                                                                                   | Before creating a release, before investigating regression                          |
+| File                      | Directive                                                                                                                                                                                                    | Trigger                                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `docs/INSTRUCTION.md`     | Single source of truth for Pi extension API contracts, architecture layer boundaries, tool registration patterns, content format contracts, release process, and verification gates. Read before any change. | Any code change, tool/hook creation, or release                                     |
+| `docs/kimi-code-hooks.md` | Kimi Code shell hooks version mapping, maintenance checklist, and update procedure. Read before releasing a new version.                                                                                     | Version release, tool name/behavior changes                                         |
+| `SKILL.md`                | Documents every shazam tool's parameters, behavior, return format, and usage patterns with concrete examples. Do not guess parameter names or output shapes.                                                 | Before calling a shazam tool for the first time, or when uncertain about parameters |
+| `README.md`               | User-facing setup, install, and feature descriptions.                                                                                                                                                        | User onboarding, release announcements                                              |
+| `CHANGELOG.md`            | Release history and version tracking. Update when releasing a new version.                                                                                                                                   | Before creating a release, before investigating regression                          |
 
 ## Project Snapshot
 
@@ -258,6 +259,7 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 - **Wiring a shared utility**: Add function to appropriate `core/*.ts` -> export -> import in consumers from `../core/<file>.js`. `core/` is the only valid home for cross-layer utilities.
 - **Changing LSP protocol**: Modify `lsp/client.ts` -> verify `lsp/manager.ts` lifecycle -> test with at least 2 different language servers.
 - **Changing tool output format**: Update the specific `tools/*.ts` formatter -> verify JSON envelope schema (all tools support `{ json: true }`).
+- **Changing tool names, adding/removing tools, or changing tool behaviors**: After the code change, read `docs/kimi-code-hooks.md` -> run through the checklist -> update version mapping table -> sync Kimi Code shell hooks if needed. Kimi Code uses MCP format (`mcp__pi-shazam__shazam_<name>`); old tool names in shell hooks will silently fail on Kimi Code.
 
 ## First Places to Inspect
 
@@ -295,6 +297,8 @@ Before committing or creating a PR, verify ALL of the following:
 - [ ] Read `docs/INSTRUCTION.md` if any contract, layer, or convention was changed
 - [ ] AGENTS.md updated if new module/tool/command/hook/data flow was added
 - [ ] MCP tools synced in `mcp/tools.ts` if Pi tools were changed
+- [ ] Kimi Code shell hooks checked via `docs/kimi-code-hooks.md` checklist if tool names/behaviors changed
+- [ ] `docs/kimi-code-hooks.md` version mapping table updated for this release
 - [ ] All code comments, JSDoc, commit messages in English (LANGUAGE RULE)
 - [ ] Address user as 老板 — user-system-rules.md
 - [ ] Completion report format — user-system-rules.md
