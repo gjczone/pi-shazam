@@ -1,12 +1,12 @@
 # CODING.md
 
-TypeScript coding rules for pi-shazam. All source code, comments, JSDoc, type definitions, commit messages, and PR descriptions must be in English.
+TypeScript coding rules for pi-shazam.
 
 ---
 
 ## 1. Layer Boundaries
 
-**Strict dependency direction:** `hooks/` -> `tools/` -> `core/` + `lsp/`
+Strict dependency direction: `hooks/` -> `tools/` -> `core/` + `lsp/`
 
 | Layer    | May Import From                           | May NOT Import From              |
 | -------- | ----------------------------------------- | -------------------------------- |
@@ -15,214 +15,143 @@ TypeScript coding rules for pi-shazam. All source code, comments, JSDoc, type de
 | `tools/` | `core/`, `lsp/`, npm packages             | `hooks/`                         |
 | `hooks/` | `tools/`, `core/`, `lsp/`, `types/`, `pi` | --                               |
 
-**Enforcement:** `tsc` does not catch cross-layer violations. Verify manually before every commit. If you add an import from `tools/` or `hooks/` into `core/`, or from `hooks/` into `tools/`, the layer boundary is broken.
-
-**Rationale:** `core/` is the pure analysis engine -- zero platform coupling. `lsp/` may import from `core/` for shared utilities (encoding, filter, output). `tools/` composes core + optional LSP enrichment. `hooks/` is the outermost layer with full access.
+Evidence: `index.ts` lines 6-9 (doc comment), `docs/INSTRUCTION.md` section 1.3. `tsc` does not enforce cross-layer rules -- verify manually.
 
 ---
 
-## 2. Function Scope
+## 2. Function Naming
 
-- A function does ONE thing. If its name needs "and" to describe its purpose, split it.
-- Max 80 lines per function. Extract helpers (`_build_*`, `_compute_*`, `_classify_*`) when exceeded.
-- Private/internal helpers prefixed with `_` (e.g., `_formatSymbolEntry`, `_buildGraphEdges`, `_logWarn`).
+Private/internal helpers prefixed with `_`:
+
+```typescript
+export function _logWarn(tag: string, message: string, err?: unknown): void { ... }
+export function _resetGitCache(): void { ... }
+```
+
+Evidence: `grep "export function _" core/*.ts` -> 2 matches: `_logWarn` (`core/output.ts:462`), `_resetGitCache` (`core/git-utils.ts:160`). Also used extensively for un-exported module helpers.
 
 ---
 
-## 3. File Boundaries
+## 3. File Organization
 
-- One file = one business concept. A file named `utils.ts` or `helpers.ts` over 200 lines must be split by domain.
-- Each file exports one primary function or set of related functions for one concern.
-- When a single file contains 2+ unrelated domains, extract each into its own file under a shared directory.
-- Re-export files that only forward symbols from another module should be inlined at call sites and deleted.
-- When migrating: grep all callers first, update them, then delete the old file. No pass-through compatibility layers.
+- **One file = one business concept.** No generic `utils.ts` / `helpers.ts` files spanning multiple domains.
+- **File naming:** `tools/` files use `snake_case.ts` (`find_tests.ts`, `rename_symbol.ts`, `safe_delete.ts`). All other layers use `kebab-case.ts` (`git-utils.ts`, `treesitter-queries.ts`, `agent-context-guard.ts`).
+- **No re-export barrel files.** Files that only forward symbols from another module should be inlined at call sites and deleted.
+- **When deleting:** grep all callers -> update them -> delete the old file. No compatibility wrappers or pass-through layers.
+
+Evidence: directory listing `tools/` vs `core/`/`hooks/`/`lsp/` file naming patterns.
 
 ---
 
 ## 4. Tool Registration Pattern
 
-Every tool file exports a `register*` function using the factory from `tools/_factory.ts`:
+Every tool exports a `register*` function using the factory:
 
 ```typescript
 // tools/overview.ts
 import { createTool } from "./_factory.js";
-import type { ExtensionAPI } from "../types/pi-extension.js";
-import { Type } from "typebox";
 
 export function registerOverview(pi: ExtensionAPI): void {
 	createTool(pi, {
 		name: "shazam_overview",
-		label: "Project Overview",
-		description: "Returns module dependency map, top-10 PageRank files, key dependencies...",
-		params: Type.Object({
-			filter: Type.Optional(Type.String()),
-		}),
+		description: "...",
+		params: Type.Object({ filter: Type.Optional(Type.String()) }),
 		execute(graph, params) {
-			// domain logic -- receives pre-scanned RepoGraph + merged params
-			// returns plain text output
+			/* domain logic */
 		},
 	});
 }
 ```
 
-**Factory handles:** `json`/`maxTokens` param merging, `scanProject(".")`, JSON/text output toggle with standard envelope (`schema_version`, `command`, `project`, `status`, `result`), `truncateOutput()` when `maxTokens` is set.
+**Factory** (`tools/_factory.ts:124` `createTool`) auto-handles: `json`/`maxTokens` param merging, `scanProject(".")`, JSON/text output toggle with standard envelope, `truncateOutput()`, and path traversal guard (`validatePathInProject`).
 
-**Two modes:**
+**Two execution modes:**
 
-- `execute(graph, params)` -- simple domain function; factory handles scan, envelope, truncation.
-- `customExecute(toolCallId, params, signal, onUpdate, ctx)` -- complex async tools (LSP, multi-branch); factory only merges params. Tool handles its own scan, envelope, truncation.
+- `execute(graph, params)` -- simple; factory handles scan/envelope/truncation.
+- `customExecute(toolCallId, params, signal, onUpdate, ctx)` -- complex async tools (LSP); factory only merges params.
 
-**Registration in `index.ts`:** Import and call all `register*` functions in the default export. Tool registration order does not matter; hook registration order does (see ARCHITECTURE.md).
+**Registration in `index.ts`:** import and call all `register*` in default export.
+
+Evidence: `grep "export function register" tools/*.ts` -> 9 matches. `grep "createTool" tools/*.ts` -> 10 matches. `index.ts` lines 237-245 call each register.
 
 ---
 
-## 5. Naming Conventions
+## 5. Naming Conventions (Project-Specific)
 
-| Kind             | Style               | Example                                                           |
-| ---------------- | ------------------- | ----------------------------------------------------------------- |
-| Variables        | `camelCase`         | `graphSummary`, `edgeCount`                                       |
-| Functions        | `camelCase`         | `buildGraph`, `extractSymbols`                                    |
-| Private helpers  | `_camelCase`        | `_formatEntry`, `_classifyKind`, `_logWarn`                       |
-| Classes          | `PascalCase`        | `LspManager`, `LspClient`, `TreeSitterAdapter`                    |
-| Types/Interfaces | `PascalCase`        | `ScanResult`, `SymbolInfo`, `RepoGraph`                           |
-| Enums            | `PascalCase`        | `NextLevel`                                                       |
-| Constants        | `UPPER_SNAKE_CASE`  | `EXT_TO_LANG`, `NEXT_RULES`, `SKIP_DIRS`                          |
-| Files (tools/)   | `snake_case.ts`     | `find_tests.ts`, `rename_symbol.ts`, `safe_delete.ts`             |
-| Files (other)    | `kebab-case.ts`     | `git-utils.ts`, `treesitter-queries.ts`, `agent-context-guard.ts` |
-| Tool names       | `shazam_snake_case` | `shazam_lookup`, `shazam_overview`                                |
-| Tool labels      | Title Case          | `"Symbol Lookup"`, `"Impact Analysis"`                            |
+| Kind            | Pattern             | Examples                                                |
+| --------------- | ------------------- | ------------------------------------------------------- |
+| Private helpers | `_camelCase`        | `_logWarn`, `_buildEdges`, `_formatEntry`               |
+| Tool names      | `shazam_snake_case` | `shazam_overview`, `shazam_lookup`, `shazam_find_tests` |
+| Tool labels     | Title Case          | `"Project Overview"`, `"Impact Analysis"`               |
+| Constants       | `UPPER_SNAKE_CASE`  | `EXT_TO_LANG`, `NEXT_RULES`, `SKIP_DIRS`                |
+| Hook files      | `kebab-case.ts`     | `before-start.ts`, `agent-context-guard.ts`             |
+| Tool files      | `snake_case.ts`     | `find_tests.ts`, `rename_symbol.ts`, `safe_delete.ts`   |
 
-**Symbol ID format:** `{file}::{name}::{line}` (e.g., `core/graph.ts::buildGraph::42`). Stable across tools -- other tools depend on it.
+**Symbol ID format:** `{file}::{name}::{line}` (e.g., `core/graph.ts::buildGraph::42`). Stable across all tools.
 
 ---
 
 ## 6. Error Handling
 
-The `_logWarn` pattern from `core/output.ts` is the standard warning mechanism:
+### `_logWarn` Pattern
+
+Defined in `core/output.ts:462`. Standard warning mechanism for `core/` and `tools/` layers:
 
 ```typescript
 import { _logWarn } from "../core/output.js";
 
 try {
-	const result = await parseFile(filePath);
+	await parseFile(filePath);
 } catch (err) {
 	_logWarn("scanner", `Failed to parse ${filePath}`, err);
-	return null; // graceful degradation
+	return null;
 }
 ```
 
-**`_logWarn` behavior:**
+Behavior: ENOENT errors suppressed (expected for optional binaries); other errors print `[pi-shazam] tag: message - reason`. Evidence: 39 usages across 9 `core/` files.
 
-- ENOENT (file not found) -- suppressed entirely (expected when optional binaries are missing).
-- Other errors -- prints concise one-line: `[pi-shazam] tag: message - reason`.
-- Never passes raw Error objects to `console` (would print full stack trace).
+Hooks layer uses `pi.logger.info/warn/error` for Pi-visible logging.
 
-**Rules:**
+### LSP Degradation
 
-- Every `catch` block must handle the error (with a log) or re-throw. Empty catch blocks are forbidden.
-- Log context: what operation failed, the input context, and the original error message.
-- Use `_logWarn(tag, message, err?)` in `core/` and `tools/` layers.
-- Use `pi.logger.info/warn/error` in `hooks/` layer for Pi-visible logging.
-- LSP degradation: when LSP server is unavailable, fall back to tree-sitter only. Annotate output with `(tree-sitter only, LSP unavailable)`. Never throw on missing LSP.
+When language server is unavailable, fall back to tree-sitter only. Annotate output with `(tree-sitter only, LSP unavailable)`. Never throw on missing LSP.
+
+Evidence: `tools/lookup.ts:236` `"(tree-sitter only)"`, `lsp/client.ts:20` "falling back to tree-sitter only (issue #441)".
 
 ---
 
 ## 7. Import Conventions
 
-- **Relative imports with `.js` extension** (required for ESM with NodeNext module resolution): `import { foo } from "../core/bar.js"`.
-- No path aliases (`@/`, `~/`, etc.) -- not configured in this project.
-- Group imports in order: node builtins (`node:path`, `node:fs`) -> npm packages (`typebox`, `vscode-jsonrpc`) -> internal (`../core/graph.js`, `../types/pi-extension.js`).
-- One import per source file per statement.
-- Use `import type` for type-only imports: `import type { RepoGraph } from "../core/graph.js"`.
+- **ESM `.js` extensions required** (NodeNext module resolution): `import { foo } from "../core/bar.js"`.
+- **No path aliases** (`@/`, `~/`) -- not configured in `tsconfig.json`.
+- **`import type` for type-only imports:** `import type { RepoGraph } from "../core/graph.js"`.
+- **Group order:** node builtins (`node:path`, `node:fs`) -> npm packages (`typebox`, `vscode-jsonrpc`) -> internal (`../core/graph.js`).
+
+Evidence: `tsconfig.json` `"module": "NodeNext"`. All source imports use `.js` extension per ESM requirement.
 
 ---
 
-## 8. Formatting Rules
+## 8. Encoding
 
-Prettier is the formatter. Configuration (`.prettierrc`):
+Use `core/encoding.ts` for ALL file reads. The adaptive reader handles UTF-8 -> GBK -> GB2312 fallback via `iconv-lite`. Never use `fs.readFile` directly for source files.
 
-```json
-{
-	"semi": true,
-	"singleQuote": false,
-	"tabWidth": 2,
-	"useTabs": true,
-	"trailingComma": "all",
-	"printWidth": 120,
-	"arrowParens": "always"
-}
-```
-
-**Summary:** Tabs for indentation, double quotes, trailing commas everywhere, 120-char print width, semicolons required, arrow functions always parenthesized.
-
-**Enforcement:** `npm run format:check` in CI. Auto-fix with `shazam_format` tool or `npx prettier --write .`.
+Evidence: `core/encoding.ts`, `iconv-lite` in `package.json`.
 
 ---
 
-## 9. No Emoji or Decorative Symbols
+## 9. Type Safety
 
-Emoji (any Unicode emoji codepoint), Unicode decorative characters, and ASCII art are forbidden in:
+- Import Pi types from `./types/pi-extension.js` (local stub): `ExtensionAPI`, `ExtensionContext`, `AgentToolResult`. Do not redefine.
+- Pi tool schemas: `TypeBox` (`tools/_factory.ts`). MCP tool schemas: `Zod` (`mcp/tools.ts`).
+- `npm run typecheck` must pass zero errors after every change.
 
-- Source files (`.ts`)
-- Tool output text returned to the LLM
-- Code comments and JSDoc
-- Type definitions
-- Commit messages and PR descriptions
-
-Allowed: standard ASCII punctuation and Markdown formatting (`#`, `*`, `-`, `` ` ``, `|`).
+Evidence: `types/pi-extension.d.ts`, `tools/_factory.ts` imports `{ Type } from "typebox"`, `mcp/tools.ts` imports `{ z } from "zod/v4"`.
 
 ---
 
-## 10. All English in Source Code
+## 10. Shared State & Lifecycle
 
-Every artifact that goes into the repository must be in English:
-
-- Source code and variable names
-- Code comments (must explain: business purpose, implementation logic, edge cases)
-- JSDoc annotations
-- Commit messages (conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`)
-- PR titles and descriptions
-- GitHub Issue content and Release notes
-- Tool `description` strings (what the LLM reads to decide when to call)
-
-No Chinese or any other non-English language. This is a hard requirement for this project.
-
----
-
-## 11. Additional Coding Rules
-
-### Encoding
-
-Use `core/encoding.ts` for ALL file reads. Never assume UTF-8 -- the adaptive reader handles UTF-8 -> GBK -> GB2312 fallback via iconv-lite. Never use `fs.readFile` directly for source files.
-
-### Type Safety
-
-- Import types from `./types/pi-extension.js` (local stub): `ExtensionAPI`, `ExtensionContext`, `AgentToolResult`.
-- Do not redefine these types -- use the project's stub.
-- Use TypeBox for tool parameter schemas (Pi tools) and Zod for MCP tool schemas.
-- `npm run typecheck` must pass with zero errors after every change.
-
-### Deletion Discipline
-
-When replacing a component, function, or module:
-
-1. Grep all callers first.
-2. Update all callers in the same change.
-3. Delete the old one.
-4. No compatibility wrappers or pass-through layers.
-
-### Shared State
-
-- Shared business rules, cache keys, and classification logic belong in `core/` -- single source of truth.
-- When adding state/cache/schema fields, update the full lifecycle: create -> read -> update -> invalidate/reset.
-- Module-level caches must have a reset path (typically `session_shutdown` hook).
-
-### AGENTS.md Sync
-
-Update `AGENTS.md` whenever you add or change:
-
-- A new module, tool, command, hook, or data flow.
-- A new dependency or build step.
-- A new layer boundary or architectural pattern.
-
-Keep the "Commands", "Architecture", "Change Map", and "First Places to Inspect" sections current.
+- Shared business rules, cache keys, classification logic belong in `core/` -- single source of truth.
+- Module-level caches must reset in `session_shutdown` (`index.ts` lines 108-119).
+- When adding state/cache: update create -> read -> update -> invalidate/reset lifecycle.
+- Update `AGENTS.md` when adding/changing: module, tool, command, hook, data flow, dependency, build step, layer boundary, or architectural pattern.
