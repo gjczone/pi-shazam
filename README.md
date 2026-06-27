@@ -12,11 +12,16 @@ pi install npm:pi-shazam
 
 ### MCP (CodeBuddy, Kimi Code, Qwen Code, Claude, Codex, Qoder, Trae, etc.)
 
-```bash
-npx pi-shazam-mcp
+```json
+{
+	"mcpServers": {
+		"pi-shazam": {
+			"command": "npx",
+			"args": ["-y", "-p", "pi-shazam@latest", "pi-shazam-mcp"]
+		}
+	}
+}
 ```
-
-Add `pi-shazam-mcp` as an MCP server in your client settings.
 
 ## Analysis Tools
 
