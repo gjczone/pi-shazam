@@ -45,13 +45,13 @@ For Kimi Code, CodeBuddy, Qwen Code, Claude, Codex, Qoder, Trae, and any MCP-com
 
 ## Slash Commands
 
-| Command                     | Purpose                                                             |
-| --------------------------- | ------------------------------------------------------------------- |
-| `/shazam-setup`             | Detect and report LSP server availability with install instructions |
-| `/shazam-doctor`            | Health check: tree-sitter grammars, LSP servers, cache integrity    |
-| `/shazam-install-git-hooks` | Install git pre-commit hook that runs `shazam_verify`               |
-| `/shazam-remove-git-hooks`  | Remove the shazam git pre-commit hook                               |
-| `/shazam-pre-commit-verify` | Run pre-commit verification (used by git hook)                      |
+| Command                     | When                 | Purpose                                                              |
+| --------------------------- | -------------------- | -------------------------------------------------------------------- |
+| `/shazam-setup`             | After install        | Detect and report LSP server availability with install instructions  |
+| `/shazam-install-git-hooks` | After install        | Install git pre-commit hook that runs `shazam_verify`                |
+| `/shazam-doctor`            | When troubleshooting | Health check: tree-sitter grammars, LSP servers, cache integrity     |
+| `/shazam-remove-git-hooks`  | When uninstalling    | Remove the shazam git pre-commit hook                                |
+| `/shazam-pre-commit-verify` | Automatic            | Run pre-commit verification (called by git hook; not for manual use) |
 
 ## Supported Languages
 
