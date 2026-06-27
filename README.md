@@ -4,13 +4,19 @@ Codebase awareness toolkit for the Pi coding agent — 9 structural analysis too
 
 ## Installation
 
-### Pi install (recommended)
+Two ways to use pi-shazam, depending on your agent:
+
+### Native Extension — Pi Coding Agent only
+
+For the [Pi coding agent](https://github.com/gjczone/pi-coding-agent). Installs as a first-class extension — tools appear alongside `read`/`write`/`bash` with no distinction.
 
 ```bash
 pi install npm:pi-shazam
 ```
 
-### MCP (CodeBuddy, Kimi Code, Qwen Code, Claude, Codex, Qoder, Trae, etc.)
+### MCP Server — all other AI agents
+
+For Kimi Code, CodeBuddy, Qwen Code, Claude, Codex, Qoder, Trae, and any MCP-compatible client.
 
 ```json
 {

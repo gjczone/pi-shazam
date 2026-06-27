@@ -5,9 +5,12 @@ description: "MUST invoke BEFORE reading, editing, searching, or understanding A
 
 # pi-shazam
 
-pi-shazam is a Pi coding agent native extension that unifies tree-sitter AST parsing, symbol dependency graph analysis, PageRank scoring, and LSP diagnostics into a single toolkit. All tools are first-class Pi tools — LLM sees them alongside `read`/`write`/`bash` with no distinction.
+pi-shazam is a codebase analysis toolkit with two access paths:
 
-Also available as an MCP server (`npx pi-shazam-mcp`) for non-Pi clients (Cursor, Claude Desktop, Windsurf, Qoder).
+- **Native Extension** — for the Pi coding agent. Tools register as first-class agent tools, appearing alongside `read`/`write`/`bash`.
+- **MCP Server** (`npx pi-shazam-mcp`) — for Kimi Code, CodeBuddy, Claude, Qoder, and all other MCP-compatible agents.
+
+Both paths share the same analysis engines (tree-sitter AST parsing, symbol dependency graph, PageRank scoring, LSP diagnostics). No duplication.
 
 ## Core Rules
 
