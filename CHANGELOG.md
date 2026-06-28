@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.3] - 2026-06-28
+
+### Bug Fixes
+
+- **fix: exclude test files from pre-commit LSP diagnostics gate** -- When `tsconfig.json` does not include the `tests/` directory, the TypeScript LSP creates an inferred project for test files with default settings (missing `"types": ["node"]`), producing false positive `node:fs`/`node:path` errors that block commits. Two-part fix: (1) create `tests/tsconfig.json` extending the root config so test files get proper compiler settings; (2) filter test files from pre-commit verdict computation in `verify.ts` using `isTestFile()` helper.
+- **fix: resolve 11 pre-existing type errors in test files** -- `filter.test.ts` ("internal" visibility → "private", non-standard Edge object), `hooks.test.ts` (missing RepoGraph fields), `lsp-degradation.test.ts` (unguarded `.data` on LspErr), `lsp-enrich.test.ts` (non-Promise mock), `mcp-integration.test.ts` / `mcp.test.ts` (missing `topN` param), `smoke.test.ts` (missing `direction/showCallbacks` params). All 607 tests pass, `tsc --noEmit` passes with zero errors.
+
 ## [0.20.2] - 2026-06-28
 
 ### Features
