@@ -10,7 +10,7 @@ describe("definitions parity (#332)", () => {
 	const tools = Object.keys(TOOL_DEFINITIONS);
 
 	it("should have definitions for all 9 tools", () => {
-		expect(tools.length).toBe(9);
+		expect(tools.length).toBe(7);
 	});
 
 	for (const toolName of tools) {
@@ -34,11 +34,6 @@ describe("definitions parity (#332)", () => {
 	it("shazam_impact: depth should have bounds in both schemas", () => {
 		const def = getToolDefinition("shazam_impact")!;
 		expect(def.zodParams.shape).toHaveProperty("depth");
-	});
-
-	it("shazam_safe_delete: dryRun should exist in both schemas", () => {
-		const def = getToolDefinition("shazam_safe_delete")!;
-		expect(def.zodParams.shape).toHaveProperty("dryRun");
 	});
 
 	it("shazam_overview: description should mention project structure", () => {

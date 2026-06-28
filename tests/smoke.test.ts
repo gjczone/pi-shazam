@@ -144,19 +144,6 @@ describe("smoke: find_tests", () => {
 	});
 });
 
-// ── 8. Safe delete ─────────────────────────────────────────────────────────
-
-describe("smoke: safe_delete", () => {
-	it("reports references for a core file (should warn about importers)", async () => {
-		const { executeSafeDelete } = await import("../tools/safe_delete.js");
-		const result = executeSafeDelete(graph, "scanProject");
-		expect(result).toBeTruthy();
-		expect(result.symbol).toBeDefined();
-		// scanProject is imported by many files, should have refs
-		expect(result.incomingCount).toBeGreaterThanOrEqual(0);
-	});
-});
-
 // ── 9. Verify ──────────────────────────────────────────────────────────────
 
 describe("smoke: verify", () => {

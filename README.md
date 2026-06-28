@@ -40,7 +40,6 @@ For Kimi Code, CodeBuddy, Qwen Code, Claude, Codex, Qoder, Trae, and any MCP-com
 | `shazam_changes`       | After edits to see what changed            | Git change summary with symbol-level detail, risk level, affected callers             |
 | `shazam_format`        | When `shazam_verify` reports format errors | Auto-fix formatting (prettier, biome, eslint, ruff, cargo fmt, gofmt)                 |
 | `shazam_rename_symbol` | Before renaming any symbol                 | LSP cross-file symbol rename with atomic writes                                       |
-| `shazam_safe_delete`   | Before removing any symbol                 | Read-only check for zero incoming references before deletion                          |
 
 ## Slash Commands
 

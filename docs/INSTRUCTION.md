@@ -276,7 +276,7 @@ index.ts                    <- Pi extension entry, default export(pi: ExtensionA
   │   ├── format.ts         <- Auto-fix lint/format
   │   ├── changes.ts       <- Git change summary with risk level
   │   ├── rename_symbol.ts  <- Symbol rename
-  │   └── safe_delete.ts    <- Safe symbol deletion
+  │   └── rename_symbol.ts  <- Symbol rename
   ├── hooks/                <- Automatic (not LLM-visible)
   │   ├── before-start.ts   <- Inject overview into system prompt
   │   ├── pre-edit.ts       <- Detect multi-file edits, warn about blast radius

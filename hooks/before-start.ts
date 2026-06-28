@@ -23,7 +23,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { executeOverview } from "../tools/overview.js";
-import { hasTestFiles, hasHierarchyKinds, _logWarn } from "../core/output.js";
+import { hasHierarchyKinds, _logWarn } from "../core/output.js";
 import { createBaseline, getBaseline, formatBaselineSummary } from "../core/baseline.js";
 import { safeGitExec, isProjectDir } from "../core/git-utils.js";
 import { getProjectParserWarnings } from "../core/treesitter.js";
@@ -99,7 +99,6 @@ function buildProactiveRecommendations(projectRoot: string, graph: RepoGraph): s
 	const lines: string[] = [];
 
 	try {
-		const hasTests = hasTestFiles(graph);
 		const hasHierarchy = hasHierarchyKinds(graph);
 		const uncommitted = getUncommittedChangeCount(projectRoot);
 
@@ -116,11 +115,6 @@ function buildProactiveRecommendations(projectRoot: string, graph: RepoGraph): s
 		// Always include the most critical workflow guidance
 		lines.push("- Before editing a file for the first time: \`shazam_lookup --file <path>\`");
 		lines.push("- Before changing a shared/exported symbol: \`shazam_impact --symbol <name>\`");
-
-		// Conditional: only mention if project has tests
-		if (hasTests) {
-			lines.push("- Find related tests: \`shazam_find_tests --sourceFile <file>\`");
-		}
 
 		// Conditional: only mention if project has OOP types
 		if (hasHierarchy) {

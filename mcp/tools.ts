@@ -14,7 +14,7 @@ import { executeVerifyTextAsync, executeVerifyJsonAsync } from "../tools/verify.
 import { executeChanges, executeChangesJson } from "../tools/changes.js";
 import { executeRenameSymbol, formatRenameResult } from "../tools/rename_symbol.js";
 import { hasCallChainChecked, recordCallChain } from "../hooks/rename-state.js";
-import { executeSafeDelete, formatSafeDeleteResult } from "../tools/safe_delete.js";
+
 import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { LspManager } from "../lsp/manager.js";
@@ -350,22 +350,6 @@ export function registerAllTools(
 				projectRoot,
 			);
 			let text = formatRenameResult(result, symbol as string, newName as string, effectiveDryRun);
-			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
-			return { content: [{ type: "text", text }] };
-		}),
-	);
-
-	// shazam_safe_delete
-	const safeDeleteDef = getToolDefinition("shazam_safe_delete")!;
-	server.registerTool(
-		"shazam_safe_delete",
-		{
-			description: safeDeleteDef.description,
-			inputSchema: safeDeleteDef.zodParams,
-		},
-		withLogging("shazam_safe_delete", async ({ symbol, dryRun, maxTokens }) => {
-			const result = executeSafeDelete(getGraph(), symbol as string, dryRun as boolean);
-			let text = formatSafeDeleteResult(result, symbol as string);
 			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return { content: [{ type: "text", text }] };
 		}),

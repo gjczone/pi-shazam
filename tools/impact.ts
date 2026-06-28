@@ -9,7 +9,6 @@ import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool, buildEnvelope, validatePathInProject } from "./_factory.js";
-import { executeFindTests } from "./find_tests.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { assessRisk } from "../core/risk.js";
 import { recordCallChain } from "../hooks/rename-state.js";
@@ -256,26 +255,6 @@ export function executeImpact(
 		}
 	}
 
-	// Discover tests for target files
-	const discoveredTests: string[] = [];
-	const discoveredTestsSet = new Set<string>();
-	for (const file of files) {
-		const testResult = executeFindTests(graph, ".", { sourceFile: file });
-		for (const match of testResult.matches) {
-			if (!discoveredTestsSet.has(match.testFile)) {
-				discoveredTestsSet.add(match.testFile);
-				discoveredTests.push(match.testFile);
-			}
-		}
-	}
-	if (discoveredTests.length > 0) {
-		lines.push("");
-		lines.push("### Discovered Tests for Target Files");
-		for (const f of discoveredTests) {
-			lines.push(`- \`${f}\``);
-		}
-	}
-
 	// Add Next recommendations
 	const nextItems = getNextForTool("impact", { topSymbol: files[0] });
 	if (nextItems.length > 0) {
@@ -298,19 +277,6 @@ function assessImpactRisk(affectedFileCount: number, affectedSymbolCount: number
 export function executeImpactJson(graph: RepoGraph, files: string[], depth: number = 3): string {
 	const bfs = computeImpactBfs(graph, files, depth);
 
-	// Discover tests for target files
-	const discoveredTests: string[] = [];
-	const discoveredTestsSet = new Set<string>();
-	for (const file of files) {
-		const testResult = executeFindTests(graph, ".", { sourceFile: file });
-		for (const match of testResult.matches) {
-			if (!discoveredTestsSet.has(match.testFile)) {
-				discoveredTestsSet.add(match.testFile);
-				discoveredTests.push(match.testFile);
-			}
-		}
-	}
-
 	const risk = assessImpactRisk(bfs.affectedFiles.size, bfs.affectedSymbols.length);
 
 	return buildEnvelope("shazam_impact", getEffectiveRoot(), "ok", {
@@ -326,7 +292,6 @@ export function executeImpactJson(graph: RepoGraph, files: string[], depth: numb
 			direction: a.direction,
 		})),
 		risk: risk,
-		discoveredTests: discoveredTests,
 	});
 }
 

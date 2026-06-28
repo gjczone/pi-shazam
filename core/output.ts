@@ -119,15 +119,6 @@ export const NEXT_RULES: NextRule[] = [
 	},
 	{
 		forTools: ["overview"],
-		condition: (_ctx, graph) => graph === undefined || hasTestFiles(graph),
-		recommendation: () => ({
-			tool: "find_tests",
-			label: "Discover test layout",
-			level: "also",
-		}),
-	},
-	{
-		forTools: ["overview"],
 		condition: (_ctx, graph) => graph === undefined || hasHierarchyKinds(graph),
 		recommendation: () => ({
 			tool: "lookup",
@@ -148,16 +139,6 @@ export const NEXT_RULES: NextRule[] = [
 			level: "recommended",
 		}),
 	},
-	{
-		forTools: ["lookup"],
-		condition: (_ctx, graph) => graph === undefined || hasTestFiles(graph),
-		recommendation: () => ({
-			tool: "find_tests",
-			label: "Find related tests",
-			level: "also",
-		}),
-	},
-
 	// impact (replaces call_chain)
 	{
 		forTools: ["impact"],
@@ -222,18 +203,6 @@ export const NEXT_RULES: NextRule[] = [
 		}),
 	},
 
-	// find_tests
-	{
-		forTools: ["find_tests"],
-		condition: (ctx) => Boolean(ctx.testFunc),
-		recommendation: (ctx) => ({
-			tool: "impact",
-			params: { symbol: ctx.testFunc! },
-			label: "Trace test function",
-			level: "recommended",
-		}),
-	},
-
 	// rename_symbol
 	{
 		forTools: ["rename_symbol"],
@@ -242,18 +211,6 @@ export const NEXT_RULES: NextRule[] = [
 			tool: "impact",
 			params: { symbol: ctx.topSymbol! },
 			label: "Verify blast radius before rename",
-			level: "required",
-		}),
-	},
-
-	// safe_delete
-	{
-		forTools: ["safe_delete"],
-		condition: (ctx) => Boolean(ctx.topSymbol),
-		recommendation: (ctx) => ({
-			tool: "impact",
-			params: { symbol: ctx.topSymbol! },
-			label: "Verify zero references before delete",
 			level: "required",
 		}),
 	},

@@ -193,8 +193,6 @@ shazam_safe_delete({ symbol: "unusedHelper" })
 
 ## Git Tools
 
-### shazam_changes
-
 Git change summary with risk level. Shows what changed in the working tree and assesses the risk of each change.
 
 **Parameters**: `{ json?, maxTokens? }`

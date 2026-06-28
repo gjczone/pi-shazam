@@ -35,7 +35,7 @@ Evidence: `grep "export function _" core/*.ts` -> 2 matches: `_logWarn` (`core/o
 ## 3. File Organization
 
 - **One file = one business concept.** No generic `utils.ts` / `helpers.ts` files spanning multiple domains.
-- **File naming:** `tools/` files use `snake_case.ts` (`find_tests.ts`, `rename_symbol.ts`, `safe_delete.ts`). All other layers use `kebab-case.ts` (`git-utils.ts`, `treesitter-queries.ts`, `agent-context-guard.ts`).
+- **File naming:** `tools/` files use `snake_case.ts` (`rename_symbol.ts`). All other layers use `kebab-case.ts` (`git-utils.ts`, `treesitter-queries.ts`, `agent-context-guard.ts`).
 - **No re-export barrel files.** Files that only forward symbols from another module should be inlined at call sites and deleted.
 - **When deleting:** grep all callers -> update them -> delete the old file. No compatibility wrappers or pass-through layers.
 
@@ -78,14 +78,14 @@ Evidence: `grep "export function register" tools/*.ts` -> 9 matches. `grep "crea
 
 ## 5. Naming Conventions (Project-Specific)
 
-| Kind            | Pattern             | Examples                                                |
-| --------------- | ------------------- | ------------------------------------------------------- |
-| Private helpers | `_camelCase`        | `_logWarn`, `_buildEdges`, `_formatEntry`               |
-| Tool names      | `shazam_snake_case` | `shazam_overview`, `shazam_lookup`, `shazam_find_tests` |
-| Tool labels     | Title Case          | `"Project Overview"`, `"Impact Analysis"`               |
-| Constants       | `UPPER_SNAKE_CASE`  | `EXT_TO_LANG`, `NEXT_RULES`, `SKIP_DIRS`                |
-| Hook files      | `kebab-case.ts`     | `before-start.ts`, `agent-context-guard.ts`             |
-| Tool files      | `snake_case.ts`     | `find_tests.ts`, `rename_symbol.ts`, `safe_delete.ts`   |
+| Kind            | Pattern             | Examples                                              |
+| --------------- | ------------------- | ----------------------------------------------------- |
+| Private helpers | `_camelCase`        | `_logWarn`, `_buildEdges`, `_formatEntry`             |
+| Tool names      | `shazam_snake_case` | `shazam_overview`, `shazam_lookup`                    |
+| Tool labels     | Title Case          | `"Project Overview"`, `"Impact Analysis"`             |
+| Constants       | `UPPER_SNAKE_CASE`  | `EXT_TO_LANG`, `NEXT_RULES`, `SKIP_DIRS`              |
+| Hook files      | `kebab-case.ts`     | `before-start.ts`, `agent-context-guard.ts`           |
+| Tool files      | `snake_case.ts`     | `find_tests.ts`, `rename_symbol.ts`, `safe_delete.ts` |
 
 **Symbol ID format:** `{file}::{name}::{line}` (e.g., `core/graph.ts::buildGraph::42`). Stable across all tools.
 

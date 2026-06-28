@@ -68,37 +68,8 @@ describe("getNextForTool — backward compatibility", () => {
 		expect(findTool(items, "impact")!.level).toBe("required");
 	});
 
-	it("safe_delete requires impact when topSymbol set", () => {
-		const items = getNextForTool("safe_delete", { topSymbol: "x" });
-		expect(findTool(items, "impact")!.level).toBe("required");
-	});
-
 	it("unknown tool returns empty array", () => {
 		expect(getNextForTool("no_such_tool").length).toBe(0);
-	});
-});
-
-// ── Graph-aware filter tests ─────────────────────────────────────────────────
-
-describe("getNextForTool — graph-aware filters", () => {
-	it("suppresses find_tests recommendation when graph has no test files", () => {
-		const items = getNextForTool("lookup", { topSymbol: "fn" }, emptyGraph());
-		expect(findTool(items, "find_tests")).toBeUndefined();
-	});
-
-	it("emits find_tests recommendation when graph has test files", () => {
-		const items = getNextForTool("lookup", { topSymbol: "fn" }, graphWithTestFiles());
-		expect(findTool(items, "find_tests")).toBeDefined();
-	});
-
-	it("falls back to legacy (no graph) behavior when graph is undefined", () => {
-		const items = getNextForTool("lookup", { topSymbol: "fn" });
-		expect(findTool(items, "find_tests")).toBeDefined();
-	});
-
-	it("graph with no test files suppresses find_tests from overview too", () => {
-		const items = getNextForTool("overview", { topFile: "x" }, emptyGraph());
-		expect(findTool(items, "find_tests")).toBeUndefined();
 	});
 });
 

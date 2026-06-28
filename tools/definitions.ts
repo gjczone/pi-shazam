@@ -5,8 +5,7 @@
  * Both Pi (TypeBox) and MCP (Zod) import from here to avoid duplication.
  *
  * Updated for tool consolidation 14->9 (issue #362):
- *   overview, lookup, impact, verify, changes, format, find_tests,
- *   rename_symbol, safe_delete
+ *   overview, lookup, impact, verify, changes, format, rename_symbol
  */
 import { Type } from "typebox";
 import { z } from "zod";
@@ -161,23 +160,6 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		}),
 	},
 
-	shazam_find_tests: {
-		name: "shazam_find_tests",
-		label: "Find Test Files",
-		description:
-			"When adding tests or modifying source code - use this to discover which test files already cover a module, what test functions exist, and where new tests belong. Understands conventions for JS/TS (*.test.ts, *.spec.ts), Python (test_*.py / *_test.py), Go (*_test.go), Rust (test_*.rs / *_test.rs), Java (Test*.java / *Test.java), and C# (Test*.cs / *Test.cs). Pass sourceFile or module to scope the search.",
-		typeboxParams: Type.Object({
-			sourceFile: Type.Optional(Type.String()),
-			module: Type.Optional(Type.String()),
-		}),
-		zodParams: z.object({
-			sourceFile: z.string().optional().describe("Path to source file to find tests for"),
-			module: z.string().optional().describe("Module name to scope search"),
-			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
-			json: z.boolean().optional().describe("Return structured JSON output"),
-		}),
-	},
-
 	shazam_rename_symbol: {
 		name: "shazam_rename_symbol",
 		label: "Rename Symbol",
@@ -191,23 +173,6 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		zodParams: z.object({
 			symbol: z.string().describe("Current symbol name to rename"),
 			newName: z.string().describe("New symbol name"),
-			dryRun: z.boolean().optional().default(true).describe("Preview only, do not modify files"),
-			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
-			json: z.boolean().optional().describe("Return structured JSON output"),
-		}),
-	},
-
-	shazam_safe_delete: {
-		name: "shazam_safe_delete",
-		label: "Safe Delete",
-		description:
-			"Required safety gate before removing any symbol. Automatically verifies zero incoming references before providing deletion instructions. READ-ONLY safety check; returns deletion guidance, does not delete. Do not delete based on intuition - a symbol that looks unused may be called dynamically.",
-		typeboxParams: Type.Object({
-			symbol: Type.String(),
-			dryRun: Type.Optional(Type.Boolean({ default: true })),
-		}),
-		zodParams: z.object({
-			symbol: z.string().describe("Symbol name to delete"),
 			dryRun: z.boolean().optional().default(true).describe("Preview only, do not modify files"),
 			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
 			json: z.boolean().optional().describe("Return structured JSON output"),

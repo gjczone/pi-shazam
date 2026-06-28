@@ -43,7 +43,6 @@ import { registerChanges } from "./tools/changes.js";
 import { registerFormat } from "./tools/format.js";
 
 import { registerRenameSymbol } from "./tools/rename_symbol.js";
-import { registerSafeDelete } from "./tools/safe_delete.js";
 
 export default async function (pi: ExtensionAPI): Promise<void> {
 	let projectRoot = process.cwd();
@@ -281,7 +280,6 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 	registerFormat(pi);
 
 	registerRenameSymbol(pi);
-	registerSafeDelete(pi);
 
 	log("pi-shazam loaded");
 }

@@ -4,7 +4,7 @@ You are reviewing **pi-shazam**, a Pi coding agent native codebase awareness too
 
 ## Project Context
 
-- **What it is**: TypeScript/Node.js Pi extension providing 9 structural analysis tools (overview, lookup, impact, verify, changes, format, find_tests, rename_symbol, safe_delete) plus 11 lifecycle hooks and 2 MCP tools.
+- **What it is**: TypeScript/Node.js Pi extension providing 7 structural analysis tools (overview, lookup, impact, verify, changes, format, rename_symbol) plus 11 lifecycle hooks and 2 MCP tools.
 - **Size**: 48 TypeScript source files across 5 directories (core/, tools/, hooks/, lsp/, mcp/) + 50+ vitest test files. Approaching the "Mature" stage.
 - **Runtime**: Node.js >= 18, ESM modules, runs as a Pi extension loaded into the Pi coding agent process.
 - **Dependencies**: tree-sitter (multi-language parsing), vscode-jsonrpc + vscode-languageserver-protocol (LSP JSON-RPC), iconv-lite (UTF-8/GBK encoding fallback), @modelcontextprotocol/sdk (MCP server), typebox (tool parameter schemas), zod (MCP validation).
