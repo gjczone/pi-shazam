@@ -35,7 +35,7 @@ When you first enter a project or return after changes — use this to understan
 - `json`: set `true` for structured output
 - `maxTokens`: limit output size
 
-**Returns**: module dependency map, top-10 PageRank files (hotspots), key dependencies (from package.json), recent git commits, entry points, reading order, HTTP routes (web projects). Key Dependencies and Recent Changes sections are suppressed in filter mode.
+**Returns**: module dependency map, top-10 PageRank files (hotspots), key dependencies (from package.json), recent git commits, entry points (auto-detected CLI/HTTP/event handlers), key data structures (classes/interfaces/structs sorted by PageRank), reading order, HTTP routes (web projects). Key Dependencies and Recent Changes sections are suppressed in filter mode.
 
 **When to use**: first turn in a new repo, after git clone, after switching to an unfamiliar project, deciding where to focus code review (hotspots show highest blast-radius files).
 
@@ -54,13 +54,13 @@ Unified symbol and file lookup. Combines symbol definition, type signature, docu
 
 - `name`: symbol name to look up, or a file path to analyze file structure
 - `file`: optional file path to scope the symbol search
-- `mode`: `"state"` for enum/class/interface state map analysis
+- `mode`: `"state"` for enum/class/interface state map analysis; `"search"` for fuzzy concept search (e.g., "how does authentication work"); if omitted and the symbol is not found, automatically falls back to search when the query looks like natural language
 - `showCallbacks`: expand anonymous functions in call graph
 - `direction`: type hierarchy traversal — `"both"` (default), `"supertypes"`, or `"subtypes"`
 
 **Returns**: When `name` is a symbol: definition, kind, signature, file location, PageRank score, callers, callees, type signatures, documentation comments, and type hierarchy. When `name` is a file path: all symbols in the file with signatures, visibility, line ranges, incoming call count, PageRank score, and document symbol hierarchy.
 
-**When to use**: before importing a module, before calling a function, checking symbol visibility, before changing enum variants (`mode=state`), understanding a symbol's type signature, getting API documentation, before editing a file for the first time (pass file path), understanding class inheritance (`direction` param), finding all interface implementations.
+**When to use**: before importing a module, before calling a function, checking symbol visibility, before changing enum variants (`mode=state`), understanding a symbol's type signature, getting API documentation, before editing a file for the first time (pass file path), understanding class inheritance (`direction` param), finding all interface implementations, searching for a concept across the codebase (`mode=search` or natural language query like "how is X implemented").
 
 **Examples**:
 
@@ -70,6 +70,8 @@ shazam_lookup({ name: "createTool", file: "tools/_factory.ts" })  // scoped to f
 shazam_lookup({ name: "ToolKind", mode: "state" })           // enum state analysis
 shazam_lookup({ name: "src/core/graph.ts" })                 // file structure
 shazam_lookup({ name: "ExtensionAPI", direction: "subtypes" }) // type hierarchy
+shazam_lookup({ name: "authentication", mode: "search" })       // concept search
+shazam_lookup({ name: "how does caching work" })                 // natural language auto-search
 ```
 
 ### shazam_impact

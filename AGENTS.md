@@ -163,16 +163,16 @@ You have access to pi-shazam — 9 code analysis tools. You WILL use every one o
 
 Here are the other 8 tools. You MUST call them. Memorize them. Use them or fail.
 
-| Tool                   | What it does                                                        | You MUST call it when                                                             |
-| ---------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `shazam_lookup`        | Symbol/file details — hover info, type hierarchy, callers, callees  | You need to understand any symbol or file                                         |
-| `shazam_impact`        | Blast radius — every file, symbol, and test affected by your change | BEFORE editing shared or exported modules. Do NOT guess what you'll break.        |
-| `shazam_verify`        | Post-edit gate — LSP diagnostics, graph analysis, PASS/WARN/FAIL    | AFTER every write. Run it. Read the verdict. If it says FAIL or WARN, fix it NOW. |
-| `shazam_changes`       | Git change summary with symbol-level detail and risk level          | You edited things and need to know what actually changed                          |
-| `shazam_format`        | Auto-fix formatting — supports multiple formatters                  | `shazam_verify` reports format errors                                             |
-| `shazam_find_tests`    | Discover test files, test functions, where new tests belong         | Adding tests or modifying code that has tests                                     |
-| `shazam_rename_symbol` | Cross-file symbol rename with atomic writes and safety gate         | Renaming ANY symbol. Do NOT manually find-and-replace.                            |
-| `shazam_safe_delete`   | Check for zero incoming references before deletion                  | Removing any exported symbol. Do NOT delete blind.                                |
+| Tool                   | What it does                                                                       | You MUST call it when                                                             |
+| ---------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `shazam_lookup`        | Symbol/file details — hover info, type hierarchy, callers, callees, concept search | You need to understand any symbol, file, or "how is X implemented"                |
+| `shazam_impact`        | Blast radius — every file, symbol, and test affected by your change                | BEFORE editing shared or exported modules. Do NOT guess what you'll break.        |
+| `shazam_verify`        | Post-edit gate — LSP diagnostics, graph analysis, PASS/WARN/FAIL                   | AFTER every write. Run it. Read the verdict. If it says FAIL or WARN, fix it NOW. |
+| `shazam_changes`       | Git change summary with symbol-level detail and risk level                         | You edited things and need to know what actually changed                          |
+| `shazam_format`        | Auto-fix formatting — supports multiple formatters                                 | `shazam_verify` reports format errors                                             |
+| `shazam_find_tests`    | Discover test files, test functions, where new tests belong                        | Adding tests or modifying code that has tests                                     |
+| `shazam_rename_symbol` | Cross-file symbol rename with atomic writes and safety gate                        | Renaming ANY symbol. Do NOT manually find-and-replace.                            |
+| `shazam_safe_delete`   | Check for zero incoming references before deletion                                 | Removing any exported symbol. Do NOT delete blind.                                |
 
 If a tool errors or is unavailable, try once more, then work around it. But you MUST try it first. These tools are the difference between a working change and a broken build.
 
