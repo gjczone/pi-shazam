@@ -31,6 +31,20 @@ const TEST_FILE_PATTERNS: readonly RegExp[] = [
 
 const TEST_DIRS = new Set(["__tests__", "test", "tests", "__test__", "spec"]);
 
+// Infrastructure error patterns — when >50% of diagnostics match these,
+// LSP is likely in a broken state (e.g., node_modules not accessible).
+// In that case, fall back to subprocess diagnostics (tsc --noEmit).
+export const INFRASTRUCTURE_ERROR_PATTERNS: readonly RegExp[] = [
+	/cannot find (module|name)/i,
+	/property .* does not exist on type '{}'/i,
+	/cannot find name 'node:/i,
+	/implicitly has an 'any' type/i,
+];
+
+// Max errors to display in text output; when exceeded, full diagnostics
+// are saved to .shazam/last-verify.json for agent inspection.
+export const MAX_DISPLAY_ERRORS = 10;
+
 function isTestFile(filePath: string): boolean {
 	if (TEST_FILE_PATTERNS.some((p) => p.test(filePath))) return true;
 	const parts = filePath.replace(/\\/g, "/").split("/");
@@ -42,10 +56,10 @@ import { getEffectiveRoot } from "../core/scanner.js";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { redact } from "../core/redact.js";
 import { readFileAdaptiveAsync } from "../core/encoding.js";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
 import { getNextForTool, formatNextSection, truncateOutput, estimateTokens, _logWarn } from "../core/output.js";
 import { getLspManager } from "./_context.js";
 import { lspCodeActions } from "./lsp_enrich.js";
@@ -292,7 +306,7 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 	lines.push(`**Symbols:** ${symbolCount} | **Files:** ${fileCount} | **Edges:** ${edgeCount}`);
 	lines.push("");
 
-	// LSP diagnostics (CORE) -- show all errors
+	// LSP diagnostics (CORE)
 	let lspResult: LspDiagResult = { diagnostics: [], available: false };
 	if (!quick) {
 		lspResult = await runLspDiagnostics(graph, projectRoot, options);
@@ -308,13 +322,23 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 			);
 		} else if (lspResult.diagnostics.length === 0) {
 			lines.push("[PASS] No diagnostics found.");
+			if (lspResult.lspReliable === false && lspResult.lspReliableMessage) {
+				lines.push(lspResult.lspReliableMessage);
+			}
 		} else {
+			// Surface LSP reliability info when fallback occurred (issue #497)
+			if (lspResult.lspReliable === false && lspResult.lspReliableMessage) {
+				lines.push(lspResult.lspReliableMessage);
+				lines.push("");
+			}
+
 			const errors = lspResult.diagnostics.filter((d) => d.severity === "error");
 			const warnings = lspResult.diagnostics.filter((d) => d.severity === "warning");
 			lines.push(`Errors: ${errors.length} | Warnings: ${warnings.length} | Total: ${lspResult.diagnostics.length}`);
 			lines.push("");
-			// Show ALL errors (errors are critical, not noise)
-			for (const d of errors) {
+			// Show first N errors (issue #497: cap display, save full for inspection)
+			const displayErrors = errors.slice(0, MAX_DISPLAY_ERRORS);
+			for (const d of displayErrors) {
 				const sevLabel = d.severity.toUpperCase();
 				const code = d.code ? ` (${d.code})` : "";
 				lines.push(`- [${sevLabel}] ${d.file}:${d.line}:${d.col}${code} - ${d.message}`);
@@ -322,6 +346,16 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 					for (const fix of d.suggestedFixes.slice(0, 3)) {
 						lines.push(`    ${fix}`);
 					}
+				}
+			}
+			if (errors.length > MAX_DISPLAY_ERRORS) {
+				lines.push(`... and ${errors.length - MAX_DISPLAY_ERRORS} more errors`);
+				// Save full diagnostics for agent inspection
+				try {
+					const exportPath = saveDiagnosticsExport(lspResult.diagnostics, projectRoot);
+					lines.push(`Full diagnostics saved to ${exportPath}. Run \`read ${exportPath}\` to inspect all.`);
+				} catch (e) {
+					_logWarn("executeVerifyTextAsync", "Failed to export full diagnostics", e);
 				}
 			}
 			// Show first 10 warnings (warnings are less critical)
@@ -495,6 +529,68 @@ interface LspDiagResult {
 	available: boolean;
 	errorMessage?: string;
 	failedOpens?: string[];
+	lspReliable?: boolean;
+	lspReliableMessage?: string;
+}
+
+// -- Diagnostic reliability and export helpers (issue #497) ------------------
+
+/**
+ * Check whether LSP diagnostics are reliable by counting how many match
+ * known infrastructure-only error patterns. When >50% of diagnostics on
+ * >20 total diagnostics match infra patterns, the LSP server is likely
+ * in a broken state (e.g., node_modules not accessible).
+ */
+export function checkDiagnosticReliability(diagnostics: { message: string }[]): {
+	reliable: boolean;
+	infraErrorCount: number;
+	totalCount: number;
+	message?: string;
+} {
+	const totalCount = diagnostics.length;
+	if (totalCount === 0) return { reliable: true, infraErrorCount: 0, totalCount: 0 };
+
+	let infraErrorCount = 0;
+	for (const d of diagnostics) {
+		const msg = d.message;
+		if (msg && INFRASTRUCTURE_ERROR_PATTERNS.some((p) => p.test(msg))) {
+			infraErrorCount++;
+		}
+	}
+
+	const reliable = totalCount <= 20 || infraErrorCount <= totalCount * 0.5;
+	const message = reliable
+		? undefined
+		: `[INFO] LSP diagnostics deemed unreliable (${infraErrorCount}/${totalCount} errors match infrastructure patterns). Falling back to tsc --noEmit subprocess diagnostics.`;
+
+	return { reliable, infraErrorCount, totalCount, message };
+}
+
+/**
+ * Save full diagnostics to .shazam/last-verify.json for agent inspection.
+ * Creates the .shazam directory if it does not exist.
+ * Overwrites any previous export.
+ *
+ * @returns The path to the saved file.
+ */
+export function saveDiagnosticsExport(diagnostics: LspDiagEntry[], projectRoot: string): string {
+	const shazamDir = resolve(projectRoot, ".shazam");
+	mkdirSync(shazamDir, { recursive: true });
+
+	const errorCount = diagnostics.filter((d) => d.severity === "error").length;
+	const warningCount = diagnostics.filter((d) => d.severity === "warning").length;
+
+	const exportData = {
+		timestamp: new Date().toISOString(),
+		totalCount: diagnostics.length,
+		errorCount,
+		warningCount,
+		diagnostics,
+	};
+
+	const exportPath = join(shazamDir, "last-verify.json");
+	writeFileSync(exportPath, JSON.stringify(exportData, null, 2), "utf-8");
+	return exportPath;
 }
 
 async function runLspDiagnostics(
@@ -630,11 +726,31 @@ async function runLspDiagnostics(
 		);
 	}
 
+	// Issue #497: Check diagnostic reliability — if >50% of diagnostics on >20 total
+	// match infrastructure error patterns (e.g., node_modules inaccessible), fall back
+	// to subprocess diagnostics (tsc --noEmit) which produces real, actionable errors.
+	if (diagnostics.length > 0) {
+		const reliability = checkDiagnosticReliability(diagnostics);
+		if (!reliability.reliable) {
+			_logWarn(
+				"runLspDiagnostics",
+				reliability.message ?? "LSP diagnostics deemed unreliable, falling back to subprocess",
+			);
+			const subResult = await runSubprocessDiagnostics(projectRoot);
+			return {
+				...subResult,
+				lspReliable: false,
+				lspReliableMessage: reliability.message,
+			};
+		}
+	}
+
 	return {
 		diagnostics,
 		available: serversUsed.size > 0,
 		errorMessage: serversUsed.size === 0 ? "No LSP servers available for detected file types" : undefined,
 		failedOpens: failedOpens.length > 0 ? failedOpens : undefined,
+		lspReliable: true,
 	};
 }
 
