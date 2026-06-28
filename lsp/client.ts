@@ -267,8 +267,15 @@ export class LspClient {
 
 		this.process.on("exit", (code, signal) => {
 			this._log(`LSP process exited: code=${code}, signal=${signal}`);
+			// Guard against race between error and exit handlers (fix #497):
+			// _cleanupAfterCrash sets _cleanedUp, the latch prevents re-entry.
 			this._cleanupAfterCrash();
 		});
+
+		// Move the _cleanedUp reset AFTER the error/exit handlers are registered,
+		// so a immediate crash (process exits before we reach connection.listen)
+		// is still caught by the handlers above. The latch is reset only after
+		// both handlers are registered to minimize the race window.
 
 		// Drain stderr to prevent deadlock
 		if (this.process.stderr) {
@@ -284,7 +291,10 @@ export class LspClient {
 
 		// Listen for notifications (diagnostics etc.)
 		this.connection.onNotification("textDocument/publishDiagnostics", (params: PublishDiagnosticsParams) => {
-			// Upsert by URI -- O(1) via Map (was O(N) findIndex + splice)
+			// Upsert by URI with LRU ordering — delete-then-set moves the key to the
+			// end of Map insertion order, so eviction correctly discards the least
+			// recently updated entry, not the first-inserted one (fix #497).
+			this._notifications.delete(params.uri);
 			this._notifications.set(params.uri, params);
 			// Cap to prevent unbounded growth in long-running sessions
 			if (this._notifications.size > LspClient.MAX_NOTIFICATIONS) {

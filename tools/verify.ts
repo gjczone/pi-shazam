@@ -208,11 +208,15 @@ export async function executeVerifyJsonAsync(projectRoot: string, options: Verif
 	let lspDiagnostics: LspDiagEntry[] = [];
 	let lspAvailable = false;
 	let lspFailedOpens: string[] = [];
+	let lspReliable: boolean | undefined;
+	let lspReliableMessage: string | undefined;
 	if (lspOnly || !quick) {
 		const lspResult = await runLspDiagnostics(graph, projectRoot, options);
 		lspDiagnostics = lspResult.diagnostics;
 		lspAvailable = lspResult.available;
 		lspFailedOpens = lspResult.failedOpens ?? [];
+		lspReliable = lspResult.lspReliable;
+		lspReliableMessage = lspResult.lspReliableMessage;
 	}
 
 	// JSON mode: early return for lspOnly (skip graph analysis, same as text mode)
@@ -231,6 +235,8 @@ export async function executeVerifyJsonAsync(projectRoot: string, options: Verif
 			baselineDiff: null,
 			lspDiagnostics,
 			lspAvailable,
+			lspReliable: lspReliable ?? true,
+			lspReliableMessage,
 			failedOpens: lspFailedOpens,
 			verdict: lspDiagnostics.some((d) => d.severity === "error")
 				? "FAIL"
@@ -809,34 +815,33 @@ async function runSubprocessDiagnostics(projectRoot: string): Promise<LspDiagRes
 			encoding: "utf-8",
 			timeout: 15000,
 			maxBuffer: 1024 * 1024,
-		}).catch((err: { stdout?: string; stderr?: string }) => {
-			// execFile rejects on non-zero exit code, but the output is still valid
+		}).catch((err: Error & { stdout?: string; stderr?: string; code?: string }) => {
+			// execFile rejects on non-zero exit code, but the output is still valid.
+			// Re-throw ENOENT so the outer catch produces a proper warning (fix #497).
+			if (err.code === "ENOENT") throw err;
 			return { stdout: err.stdout ?? "", stderr: err.stderr ?? "" };
 		});
 		const output = redact(((stdout ?? "") + (stderr ?? "")).trim());
 		if (output) {
-			for (const line of output.split("\n").slice(0, 100)) {
-				if (line.trim()) {
-					// Classify severity based on content patterns so verdict
-					// computation catches real errors (fix #453)
-					const lower = line.toLowerCase();
-					let severity: string = "info";
-					if (lower.includes("error")) {
-						severity = "error";
-					} else if (lower.includes("warning")) {
-						severity = "warning";
-					}
-					diagnostics.push({
-						file: "",
-						line: 0,
-						col: 0,
-						endLine: 0,
-						endCol: 0,
-						severity,
-						code: "",
-						message: line.trim().slice(0, 200),
-					});
-				}
+			// Match standard compiler error format: file:line:col - error|warning CODE: message
+			// This correctly handles tsc, cargo, and similar structured output.
+			// Lines not matching this pattern (continuation/summary lines) are skipped.
+			const diagLineRe = /^(.+?):(\d+):(\d+)\s+-\s+(error|warning)\s+(\S+):\s+(.*)$/im;
+			let matchCount = 0;
+			for (const line of output.split("\n")) {
+				const m = diagLineRe.exec(line);
+				if (!m) continue;
+				if (++matchCount > 100) break;
+				diagnostics.push({
+					file: m[1]!,
+					line: Number(m[2]!),
+					col: Number(m[3]!),
+					endLine: 0,
+					endCol: 0,
+					severity: m[4]!,
+					code: m[5]!,
+					message: m[6]!.slice(0, 200),
+				});
 			}
 		}
 	} catch (e) {

@@ -95,9 +95,11 @@ export function registerLookup(pi: ExtensionAPI): void {
 
 			const graph = scanProject(".");
 
-			// Path traversal guard: reject file paths outside project root
+			// Path traversal guard: reject file paths outside project root.
+			// Skip guard when the name matches a known symbol (fix #497) —
+			// symbols like "config.json" would fail realpathSync but are valid lookups.
 			const projectRoot = getEffectiveRoot();
-			if (_isFilePath(name) && !validatePathInProject(name, projectRoot)) {
+			if (_isFilePath(name) && !graph.nameIndex.has(name) && !validatePathInProject(name, projectRoot)) {
 				const text = buildEnvelope("shazam_lookup", projectRoot, "error", {
 					error: `Path '${name}' is outside the project root and cannot be read.`,
 				});
@@ -113,7 +115,10 @@ export function registerLookup(pi: ExtensionAPI): void {
 
 			let text: string;
 
-			if (_isFilePath(name)) {
+			// When input looks like a file path, check if a matching symbol exists
+			// first. Symbols named like files (e.g., "config.json" as a const) should
+			// be looked up as symbols, not file paths (fix #497).
+			if (_isFilePath(name) && !graph.nameIndex.has(name)) {
 				text = json
 					? _executeFileDetailJson(graph, name)
 					: await _executeFileDetailAsync(graph, name, Boolean(json), maxTokens as number | undefined);
