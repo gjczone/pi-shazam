@@ -123,7 +123,6 @@ All tools use the `shazam_` prefix for consistency with the Pi extension.
 | `shazam_verify`        | Post-edit verification (LSP diagnostics + codeAction fixes + graph)                  |
 | `shazam_changes`       | Git change summary with risk level                                                   |
 | `shazam_format`        | Auto-fix format/lint errors (prettier, eslint, biome, ruff, cargo fmt, gofmt)        |
-| `shazam_find_tests`    | Discover test files for a module                                                     |
 | `shazam_rename_symbol` | Safe project-wide symbol rename with reference verification                          |
 | `shazam_safe_delete`   | Safe symbol deletion with reference check                                            |
 

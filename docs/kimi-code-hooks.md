@@ -201,7 +201,7 @@ Tool-specific `tool_input` shapes:
 | `PostToolUse`        | `Bash\|WriteFile\|StrReplaceFile` | `watchdog.sh`              | **看门狗**：重复失败检测 + 多文件编辑追踪 + 审计日志                                    | pre-edit + tool-logger          |
 | `PostToolUseFailure` | `Bash`                            | `watchdog.sh`              | 失败计数和模式检测                                                                      | —                               |
 | `PostToolUse`        | `WriteFile\|StrReplaceFile`       | `auto-fix.sh`              | **自动格式化**：检测配置并运行 prettier/ruff/gofmt/rustfmt                              | shazam-guide (auto-format)      |
-| `PostToolUse`        | `Bash`                            | `issue-guard.sh`           | **Issue 检测**：gh issue create 后提示运行 impact/find_tests                            | issue-guard                     |
+| `PostToolUse`        | `Bash`                            | `issue-guard.sh`           | **Issue 检测**：gh issue create 后提示运行 impact                                       | issue-guard                     |
 | `PostToolUse`        | `mcp__pi-shazam__shazam_impact`   | `impact-satisfied.sh`      | **Impact 标记清除**：记录 shazam_impact 已完成，解除编辑阻断                            | impact-state                    |
 | `PostToolUse`        | `mcp__pi-shazam__shazam_verify`   | `verify-marker.sh`         | **Verify 标记**：记录 shazam_verify 已完成，跳过后续提醒                                | verify-state                    |
 | `PostToolUse`        | `^mcp__pi-shazam__`               | `mcp-audit.sh`             | **MCP 审计日志**：记录所有 shazam MCP 调用（JSONL）                                     | tool-logger (audit)             |

@@ -41,7 +41,7 @@ import { registerImpact } from "./tools/impact.js";
 import { registerVerify } from "./tools/verify.js";
 import { registerChanges } from "./tools/changes.js";
 import { registerFormat } from "./tools/format.js";
-import { registerFindTests } from "./tools/find_tests.js";
+
 import { registerRenameSymbol } from "./tools/rename_symbol.js";
 import { registerSafeDelete } from "./tools/safe_delete.js";
 
@@ -279,7 +279,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 	registerVerify(pi);
 	registerChanges(pi);
 	registerFormat(pi);
-	registerFindTests(pi);
+
 	registerRenameSymbol(pi);
 	registerSafeDelete(pi);
 

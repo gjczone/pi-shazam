@@ -9,7 +9,6 @@ import type { RepoGraph } from "../core/graph.js";
 import { executeOverview } from "../tools/overview.js";
 import { executeImpact, executeCallChain, getFlatReferences, formatFlatReferences } from "../tools/impact.js";
 import { executeLookupAsync, executeFileDetailAsync, executeStateMap } from "../tools/lookup.js";
-import { executeFindTests, formatFindTestsResult } from "../tools/find_tests.js";
 import { executeFormat } from "../tools/format.js";
 import { executeVerifyTextAsync, executeVerifyJsonAsync } from "../tools/verify.js";
 import { executeChanges, executeChangesJson } from "../tools/changes.js";
@@ -310,36 +309,6 @@ export function registerAllTools(
 				dryRun: (dryRun as boolean) ?? true,
 				file: file as string | undefined,
 			});
-			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
-			return { content: [{ type: "text", text }] };
-		}),
-	);
-
-	// shazam_find_tests
-	const findTestsDef = getToolDefinition("shazam_find_tests")!;
-	server.registerTool(
-		"shazam_find_tests",
-		{
-			description: findTestsDef.description,
-			inputSchema: findTestsDef.zodParams,
-		},
-		withLogging("shazam_find_tests", async ({ sourceFile, module: mod, maxTokens }) => {
-			// #446: Validate user-supplied sourceFile path against project root (path-traversal guard)
-			if (sourceFile && !validatePathInProject(sourceFile as string, projectRoot)) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error: Source file path '${sourceFile}' is outside the project root and cannot be accessed.`,
-						},
-					],
-				};
-			}
-			const result = executeFindTests(getGraph(), projectRoot, {
-				sourceFile: sourceFile as string | undefined,
-				module: mod as string | undefined,
-			});
-			let text = formatFindTestsResult(result, sourceFile as string | undefined, mod as string | undefined);
 			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return { content: [{ type: "text", text }] };
 		}),

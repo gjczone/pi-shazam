@@ -39,7 +39,6 @@ For Kimi Code, CodeBuddy, Qwen Code, Claude, Codex, Qoder, Trae, and any MCP-com
 | `shazam_verify`        | After every write or edit                  | Post-edit verification: LSP diagnostics, graph analysis, PASS/WARN/FAIL               |
 | `shazam_changes`       | After edits to see what changed            | Git change summary with symbol-level detail, risk level, affected callers             |
 | `shazam_format`        | When `shazam_verify` reports format errors | Auto-fix formatting (prettier, biome, eslint, ruff, cargo fmt, gofmt)                 |
-| `shazam_find_tests`    | Adding tests or modifying source           | Discover test files, test functions, and where new tests belong                       |
 | `shazam_rename_symbol` | Before renaming any symbol                 | LSP cross-file symbol rename with atomic writes                                       |
 | `shazam_safe_delete`   | Before removing any symbol                 | Read-only check for zero incoming references before deletion                          |
 

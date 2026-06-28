@@ -9,47 +9,12 @@
  */
 import { existsSync } from "node:fs";
 import { join, basename, dirname } from "node:path";
-import type { ExtensionAPI } from "../types/pi-extension.js";
-import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
-import { createTool, validatePathInProject } from "./_factory.js";
-import { buildEnvelope } from "./_factory.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { _logWarn, getNextForTool, formatNextSection } from "../core/output.js";
 import { readFileAdaptive } from "../core/encoding.js";
-import { getEffectiveRoot } from "../core/scanner.js";
 
-export function registerFindTests(pi: ExtensionAPI): void {
-	createTool(pi, {
-		name: "shazam_find_tests",
-		label: "Find Test Files",
-		description: `\
-		When adding tests or modifying source code - use this to discover
-		which test files already cover a module, what test functions exist,
-		and where new tests belong. Understands conventions for JS/TS
-		(*.test.ts, *.spec.ts), Python (test_*.py / *_test.py), Go
-		(*_test.go), Rust (test_*.rs / *_test.rs), Java (Test*.java /
-		*Test.java), and C# (Test*.cs / *Test.cs). Pass sourceFile or
-		module to scope the search.`,
-		params: Type.Object({
-			sourceFile: Type.Optional(Type.String()),
-			module: Type.Optional(Type.String()),
-		}),
-		execute(graph, params) {
-			const json = params.json ?? false;
-			const sourceFile = params.sourceFile as string | undefined;
-			const module = params.module as string | undefined;
-			// M8: Validate user-supplied file paths against project root
-			if (sourceFile && !validatePathInProject(sourceFile, getEffectiveRoot())) {
-				return `Error: Source file path '${sourceFile}' is outside the project root and cannot be accessed.`;
-			}
-			const result = executeFindTests(graph, (params.project as string) || ".", { sourceFile, module });
-			return json
-				? buildEnvelope("shazam_find_tests", getEffectiveRoot(), "ok", result)
-				: formatFindTestsResult(result, sourceFile, module);
-		},
-	});
-}
+// Tool registration removed — use `ls tests/*` or `grep -l` instead.
 
 interface TestFileMatch {
 	testFile: string;

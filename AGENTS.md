@@ -170,7 +170,6 @@ Here are the other 8 tools. You MUST call them. Memorize them. Use them or fail.
 | `shazam_verify`        | Post-edit gate — LSP diagnostics, graph analysis, PASS/WARN/FAIL                   | AFTER every write. Run it. Read the verdict. If it says FAIL or WARN, fix it NOW. |
 | `shazam_changes`       | Git change summary with symbol-level detail and risk level                         | You edited things and need to know what actually changed                          |
 | `shazam_format`        | Auto-fix formatting — supports multiple formatters                                 | `shazam_verify` reports format errors                                             |
-| `shazam_find_tests`    | Discover test files, test functions, where new tests belong                        | Adding tests or modifying code that has tests                                     |
 | `shazam_rename_symbol` | Cross-file symbol rename with atomic writes and safety gate                        | Renaming ANY symbol. Do NOT manually find-and-replace.                            |
 | `shazam_safe_delete`   | Check for zero incoming references before deletion                                 | Removing any exported symbol. Do NOT delete blind.                                |
 

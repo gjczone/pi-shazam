@@ -101,26 +101,6 @@ shazam_impact({ symbol: "scanProject", depth: 4, direction: "incoming" })  // wh
 shazam_impact({ files: ["core/graph.ts"], withSymbols: true })    // symbol-level detail
 ```
 
-### shazam_find_tests
-
-When adding tests or modifying source code — use this to discover which test files already cover a module.
-
-**Parameters**: `{ sourceFile?, module?, json?, maxTokens? }`
-
-- `sourceFile`: path to source file
-- `module`: module name to scope search
-
-**Returns**: test file paths, test function names, coverage hints. Understands `*.test.ts`, `*.spec.ts`, `__tests__/` conventions for JS/TS, `test_*.py` / `*_test.py` for Python, `*_test.go` for Go, `test_*.rs` / `*_test.rs` for Rust, `Test*.java` / `*Test.java` for Java, `Test*.cs` / `*Test.cs` for C#.
-
-**When to use**: before adding tests, before refactoring a module, after changing code to locate tests that need updating.
-
-**Example**:
-
-```
-shazam_find_tests({ sourceFile: "core/graph.ts" })
-shazam_find_tests({ module: "graph" })
-```
-
 ## Write & Verification Tools
 
 These tools modify files or verify changes.
