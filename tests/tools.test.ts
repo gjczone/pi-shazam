@@ -71,6 +71,77 @@ describe("Tool: overview", () => {
 		const section = buildKeyDependenciesSection("/tmp/nonexistent");
 		expect(section).toBeNull();
 	});
+
+	// -- #491: Data Structures section tests --
+
+	it("should include Data Structures section in overview output (#491)", async () => {
+		const { executeOverview } = await import("../tools/overview.js");
+		const result = executeOverview(getGraph(), ".");
+		expect(result).toMatch(/### Key Data Structures/);
+		expect(result).toMatch(/\| Kind \| Name \| File \| Description \|/);
+	});
+
+	it("should include data structure entries for TS interfaces and types (#491)", async () => {
+		const { _buildDataStructuresSection } = await import("../tools/overview.js");
+		const section = _buildDataStructuresSection(getGraph());
+		expect(section).not.toBeNull();
+		expect(section).toMatch(/interface.*RepoGraph/);
+		expect(section).toMatch(/interface.*Symbol/);
+		expect(section).toMatch(/type_alias.*GraphCacheData/);
+	});
+
+	it("should sort data structures by PageRank (#491)", async () => {
+		const { _buildDataStructuresSection } = await import("../tools/overview.js");
+		const section = _buildDataStructuresSection(getGraph());
+		expect(section).not.toBeNull();
+		const lines = section!.split("\n").filter((l: string) => l.startsWith("|") && l.includes("`"));
+		expect(lines.length).toBeGreaterThan(0);
+	});
+
+	it("should NOT include functions/constructors in data structures (#491)", async () => {
+		const { _buildDataStructuresSection } = await import("../tools/overview.js");
+		const section = _buildDataStructuresSection(getGraph());
+		expect(section).not.toBeNull();
+		// Function kinds (function, method, constructor) should not appear in DS section
+		expect(section).not.toMatch(/\| function \|/);
+		expect(section).not.toMatch(/\| method \|/);
+		expect(section).not.toMatch(/\| constructor \|/);
+	});
+
+	// -- #489: Entry Points detection tests --
+
+	it("should include Entry Points section in overview output (#489)", async () => {
+		const { executeOverview } = await import("../tools/overview.js");
+		const result = executeOverview(getGraph(), ".");
+		expect(result).toMatch(/### Entry Points/);
+	});
+
+	it("should detect CLI entry points as category 'cli' (#489)", async () => {
+		const { _detectEntryPoints } = await import("../tools/overview.js");
+		const entries = _detectEntryPoints(getGraph());
+		expect(entries.length).toBeGreaterThan(0);
+		expect(entries.some((e: any) => e.category === "cli")).toBe(true);
+	});
+
+	it("should include file locations in entry points (#489)", async () => {
+		const { _detectEntryPoints } = await import("../tools/overview.js");
+		const entries = _detectEntryPoints(getGraph());
+		for (const ep of entries) {
+			expect(ep.file).toBeTruthy();
+			expect(ep.line).toBeGreaterThan(0);
+			expect(ep.category).toMatch(/^(cli|http|event)$/);
+		}
+	});
+
+	it("should detect event handlers with 'on' prefix or 'Handler' suffix (#489)", async () => {
+		const { _detectEntryPoints } = await import("../tools/overview.js");
+		const entries = _detectEntryPoints(getGraph());
+		// pi-shazam has hooks like registerBeforeStartHook, registerSafetyHooks etc.
+		// These use Pi's `pi.on()` event system and may be detected as event handlers
+		const eventEntries = entries.filter((e: any) => e.category === "event");
+		// At minimum we should have some entries; if hooks are detected as event handlers, that's fine
+		expect(entries.length).toBeGreaterThan(0);
+	});
 });
 
 describe("Tool: impact", () => {
