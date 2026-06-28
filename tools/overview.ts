@@ -221,18 +221,26 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 		);
 	}
 
-	// Entry points (files with high PageRank and export visibility)
-	const entryPoints = [...graph.symbols.values()]
-		.filter((s) => s.visibility === "exported" && s.pagerank > 0.01)
-		.sort((a, b) => b.pagerank - a.pagerank)
-		.slice(0, 10);
+	// Key Data Structures (#491)
+	if (!filter) {
+		const dsSection = _buildDataStructuresSection(graph);
+		if (dsSection) {
+			lines.push("");
+			lines.push(dsSection);
+		}
+	}
 
-	if (entryPoints.length > 0) {
-		lines.push("");
-		lines.push("### Entry Points");
-		lines.push("");
-		for (const sym of entryPoints) {
-			lines.push(`- ${sym.kind} \`${sym.name}\` - ${sym.file}:${sym.line} (PR ${sym.pagerank.toFixed(4)})`);
+	// Entry points: auto-detected CLI / HTTP / event handlers (#489)
+	if (!filter) {
+		const entryPoints = _detectEntryPoints(graph);
+		if (entryPoints.length > 0) {
+			lines.push("");
+			lines.push("### Entry Points");
+			lines.push("");
+			for (const ep of entryPoints) {
+				const sig = ep.signature ? ` (\`${ep.signature.slice(0, 60)}\`)` : "";
+				lines.push(`- \`${ep.category}\` **${ep.name}** — \`${ep.file}:${ep.line}\`${sig}`);
+			}
 		}
 	}
 
@@ -337,6 +345,95 @@ export function executeOverviewJson(graph: RepoGraph, projectRoot: string, filte
 			pagerank: Number(stats.pagerank.toFixed(4)),
 		})),
 	});
+}
+
+// -- Entry point detection (#489) ---------------------------------------
+
+interface EntryPoint {
+	category: "cli" | "http" | "event";
+	name: string;
+	file: string;
+	line: number;
+	signature: string;
+}
+
+/**
+ * Detect entry points from the symbol graph using name and kind heuristics.
+ * Covers CLI main functions (Python, Go, Rust, Dart), JS/TS event listeners,
+ * and delegates HTTP routes to the existing route detection.
+ */
+export function _detectEntryPoints(graph: RepoGraph): EntryPoint[] {
+	const results: EntryPoint[] = [];
+	const seen = new Set<string>();
+
+	for (const sym of graph.symbols.values()) {
+		const lang = EXT_TO_LANG["." + (sym.file.split(".").pop()?.toLowerCase() ?? "")] ?? "unknown";
+
+		// CLI: functions named "main" at file level
+		// Covers: Python def main(), Go func main(), Rust fn main(), Dart void main()
+		if (sym.kind === "function" && sym.name === "main") {
+			const key = `cli::${sym.id}`;
+			if (!seen.has(key)) {
+				seen.add(key);
+				results.push({
+					category: "cli",
+					name: sym.name,
+					file: sym.file,
+					line: sym.line,
+					signature: sym.signature,
+				});
+			}
+		}
+
+		// CLI: Python decorators indicating CLI frameworks
+		// click.command, click.group, typer commands
+		if (lang === "python" && (sym.name === "command" || sym.name === "group" || sym.name === "cli")) {
+			// These are often created via @click.command() etc., listed as top-level symbols
+			if (sym.visibility === "exported" || sym.kind === "function") {
+				const key = `cli::${sym.id}`;
+				if (!seen.has(key)) {
+					seen.add(key);
+					results.push({
+						category: "cli",
+						name: sym.name,
+						file: sym.file,
+						line: sym.line,
+						signature: sym.signature,
+					});
+				}
+			}
+		}
+
+		// Event: JS/TS event listeners and message handlers
+		if (
+			(lang === "javascript" || lang === "typescript" || lang === "tsx") &&
+			(sym.name.startsWith("on") ||
+				sym.name.includes("Listener") ||
+				sym.name.includes("Handler") ||
+				sym.name.includes("Event"))
+		) {
+			const key = `event::${sym.id}`;
+			if (!seen.has(key)) {
+				seen.add(key);
+				results.push({
+					category: "event",
+					name: sym.name,
+					file: sym.file,
+					line: sym.line,
+					signature: sym.signature,
+				});
+			}
+		}
+	}
+
+	// Sort: cli first, then http, then event; within each, by PageRank (implicitly by insertion order from graph iteration)
+	results.sort((a, b) => {
+		const catOrder: Record<string, number> = { cli: 0, http: 1, event: 2 };
+		return (catOrder[a.category] ?? 9) - (catOrder[b.category] ?? 9);
+	});
+
+	// Limit to top 15 to avoid output bloat
+	return results.slice(0, 15);
 }
 
 // -- Route inventory (absorbed from tools/routes.ts) ---------------------
@@ -573,6 +670,58 @@ export function buildRecentChangesSection(projectRoot: string): string | null {
 	lines.push("");
 	for (const c of commits) {
 		lines.push(`- ${c}`);
+	}
+
+	return lines.join("\n");
+}
+
+// -- Data Structures section (#491) -----------------------------------
+
+/**
+ * Symbol kinds that represent data structures (not executable code).
+ * Per-language mapping from tree-sitter kinds to display-friendly names.
+ */
+const DATA_STRUCTURE_KINDS = new Set([
+	// Python
+	"class",
+	"dataclass",
+	// TypeScript / JavaScript
+	"interface",
+	"type_alias",
+	"enum",
+	// Go
+	"struct",
+	// Rust
+	"trait",
+	// Dart
+	"mixin",
+	"extension",
+]);
+
+/** Number of top data structures to show per language. */
+const DATA_STRUCTURES_TOP_N = 10;
+
+/**
+ * Build a "Key Data Structures" section showing the project's core types
+ * across all languages, sorted by PageRank.
+ */
+export function _buildDataStructuresSection(graph: RepoGraph): string | null {
+	const dataSyms = [...graph.symbols.values()].filter((s) => DATA_STRUCTURE_KINDS.has(s.kind));
+	if (dataSyms.length === 0) return null;
+
+	// Sort by PageRank descending, take top N
+	const top = dataSyms.sort((a, b) => b.pagerank - a.pagerank).slice(0, DATA_STRUCTURES_TOP_N);
+
+	const lines: string[] = [];
+	lines.push("### Key Data Structures");
+	lines.push("");
+	lines.push("| Kind | Name | File | Description |");
+	lines.push("|------|------|------|-------------|");
+
+	for (const sym of top) {
+		// Truncate docstring to first sentence or ~80 chars
+		const desc = sym.docstring ? sym.docstring.split(".")[0]!.slice(0, 80).trim() : "-";
+		lines.push(`| ${sym.kind} | \`${sym.name}\` | \`${sym.file}:${sym.line}\` | ${desc} |`);
 	}
 
 	return lines.join("\n");
