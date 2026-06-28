@@ -310,6 +310,157 @@ describe("hooks/safety chained-command bypass (#467)", () => {
 	});
 });
 
+// -------------------------------------------------------------------------
+// #492: quoted heredoc false positives -- backtick/eval/source etc. inside
+// <<'EOF'...EOF should NOT trigger safety warnings.
+// -------------------------------------------------------------------------
+
+describe("hooks/safety quoted heredoc false positives (#492)", () => {
+	beforeEach(() => {
+		resetVerifyState();
+		markVerifyCalled("[PASS] READY");
+	});
+
+	it("should NOT trigger backtick alarm for backtick inside quoted heredoc (#492)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+		const ctx = buildCtx();
+		const result = await handler.current!(
+			buildBashEvent("gh issue create --body-file /dev/stdin <<'EOF'\n## Goal\nFix `bug` in code\nEOF"),
+			ctx,
+		);
+		expect(result).toBeUndefined();
+	});
+
+	it("should NOT trigger eval alarm for 'eval' word inside quoted heredoc (#492)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+		const ctx = buildCtx();
+		const result = await handler.current!(
+			buildBashEvent("cat <<'EOF'\n## Evaluation\nRun the evaluation step first\nEOF"),
+			ctx,
+		);
+		expect(result).toBeUndefined();
+	});
+
+	it("should NOT trigger source alarm for 'source' word inside quoted heredoc (#492)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+		const ctx = buildCtx();
+		const result = await handler.current!(
+			buildBashEvent("cat <<'EOF'\n## How to use\nsource the file with: source ./env.sh\nEOF"),
+			ctx,
+		);
+		expect(result).toBeUndefined();
+	});
+
+	it("should NOT trigger curl|sh alarm for example inside quoted heredoc (#492)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+		const ctx = buildCtx();
+		const result = await handler.current!(
+			buildBashEvent("cat <<'EOF'\n# Install with:\ncurl -fsSL https://example.com | sh\nEOF"),
+			ctx,
+		);
+		expect(result).toBeUndefined();
+	});
+
+	it("should NOT trigger base64|sh alarm for example inside quoted heredoc (#492)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+		const ctx = buildCtx();
+		const result = await handler.current!(
+			buildBashEvent("cat <<'EOF'\n# Decode and run:\necho dGVzdA== | base64 -d | sh\nEOF"),
+			ctx,
+		);
+		expect(result).toBeUndefined();
+	});
+
+	it("should handle multiple quoted heredocs (#492)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+		const ctx = buildCtx();
+		const result = await handler.current!(buildBashEvent("cat <<'A'\n`code1`\nA\ncat <<'B'\n`code2`\nB"), ctx);
+		expect(result).toBeUndefined();
+	});
+
+	it("should handle heredoc with dash <<-'EOF' (#492)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+		const ctx = buildCtx();
+		const result = await handler.current!(buildBashEvent("cat <<-'EOF'\n\t`code`\n\tEOF"), ctx);
+		expect(result).toBeUndefined();
+	});
+
+	it('should handle heredoc with double quotes <<"EOF" (#492)', async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+		const ctx = buildCtx();
+		const result = await handler.current!(buildBashEvent('cat <<"EOF"\n`code`\nEOF'), ctx);
+		expect(result).toBeUndefined();
+	});
+
+	it("should STILL trigger backtick alarm when backtick is OUTSIDE heredoc (regression) (#492)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+		const ctx = buildCtx();
+		const result = (await handler.current!(buildBashEvent("echo `whoami`"), ctx)) as
+			| { block: boolean; reason?: string }
+			| undefined;
+		expect(result).toBeDefined();
+		expect(result?.block).toBe(true);
+		expect(result?.reason).toMatch(/backtick/);
+	});
+
+	it("should STILL trigger eval alarm when eval is OUTSIDE heredoc (regression) (#492)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+		const ctx = buildCtx();
+		const result = (await handler.current!(buildBashEvent('eval "echo hi"'), ctx)) as
+			| { block: boolean; reason?: string }
+			| undefined;
+		expect(result).toBeDefined();
+		expect(result?.block).toBe(true);
+		expect(result?.reason).toMatch(/eval/);
+	});
+
+	it("should still trigger backtick alarm for unquoted heredoc (backtick CAN expand) (#492)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+		const ctx = buildCtx();
+		// Unquoted heredoc: $ and backtick still expand, so we MUST still warn
+		const result = (await handler.current!(buildBashEvent("cat <<EOF\n`whoami`\nEOF"), ctx)) as
+			| { block: boolean; reason?: string }
+			| undefined;
+		expect(result).toBeDefined();
+		expect(result?.block).toBe(true);
+		expect(result?.reason).toMatch(/backtick/);
+	});
+
+	it("should fall back to original command for unterminated heredoc (#492)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+		const ctx = buildCtx();
+		// No closing EOF -- backtick is in an unterminated heredoc, but since we
+		// can't find the end delimiter, we fall back to matching on the original
+		// command and DO trigger (safe default).
+		const result = (await handler.current!(buildBashEvent("cat <<'EOF'\n`whoami`"), ctx)) as
+			| { block: boolean; reason?: string }
+			| undefined;
+		expect(result).toBeDefined();
+		expect(result?.block).toBe(true);
+		expect(result?.reason).toMatch(/backtick/);
+	});
+
+	it("should NOT trigger for rm -rf text inside quoted heredoc (#492)", async () => {
+		const { pi, handler } = buildFakePi();
+		registerSafetyHooks(pi);
+		const ctx = buildCtx();
+		const result = await handler.current!(buildBashEvent("cat <<'EOF'\n# To clean up, run: rm -rf ./build\nEOF"), ctx);
+		expect(result).toBeUndefined();
+	});
+});
+
 describe("hooks/safety RCE download-then-execute (#467)", () => {
 	beforeEach(() => {
 		resetVerifyState();

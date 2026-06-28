@@ -71,6 +71,69 @@ const MEDIUM_RISK_PATTERNS: Array<{ regex: RegExp; label: string }> = [
  * Git commit pattern for pre-commit gate.
  */
 /**
+ * Strip bodies of QUOTED bash heredocs from the command string.
+ *
+ * Quoted heredocs (<<'DELIM' or <<"DELIM", with optional dash <<-)
+ * perform NO shell expansion inside the body -- all characters are
+ * literal. Stripping them before pattern matching eliminates false
+ * positives when the body contains text that looks like dangerous
+ * shell constructs (e.g. backticks in Markdown code blocks, "eval"
+ * in documentation, curl-pipe-sh examples).
+ *
+ * Unquoted heredocs (<<DELIM, $ and backtick still expand) are NOT
+ * stripped -- they can still execute arbitrary code.
+ *
+ * Handles multiple heredocs and unterminated heredocs (gracefully
+ * falls back to the original command).
+ */
+function stripQuotedHeredocs(cmd: string): string {
+	// Match <<'DELIM' or <<-"DELIM" -- optional dash, single or double quotes.
+	// Delimiter: starts with letter/underscore, then alphanumeric/underscore/hyphen.
+	const startRe = /<<-?(['"])([a-zA-Z_][a-zA-Z0-9_-]*)\1/g;
+
+	let result = "";
+	let lastEnd = 0;
+	let match: RegExpExecArray | null;
+
+	while ((match = startRe.exec(cmd)) !== null) {
+		const matchStart = match.index;
+		const matchEnd = matchStart + match[0].length;
+		const delim = match[2]!;
+
+		// Search for closing delimiter on its own line (possibly with
+		// leading tabs when <<- was used). Bash requires the closing
+		// delimiter at the start of a line; optional tabs accommodate
+		// the tab-stripping <<- variant.
+		const afterHeredoc = cmd.slice(matchEnd);
+		const closeRe = new RegExp(`^\\t*${escapeRegex(delim)}$`, "m");
+		const closeMatch = closeRe.exec(afterHeredoc);
+
+		if (closeMatch) {
+			// Append content before the heredoc start
+			result += cmd.slice(lastEnd, matchStart);
+			// Skip the heredoc body (from <<'DELIM' through the closing delimiter line)
+			const closeEnd = matchEnd + closeMatch.index + closeMatch[0].length;
+			lastEnd = closeEnd;
+			startRe.lastIndex = closeEnd;
+		} else {
+			// Unterminated heredoc -- bail out, keep the original command
+			break;
+		}
+	}
+
+	if (lastEnd > 0) {
+		result += cmd.slice(lastEnd);
+		return result;
+	}
+	return cmd;
+}
+
+/** Escape regex meta-characters in a literal string. */
+function escapeRegex(s: string): string {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
  * Normalize whitespace in a command string: collapse tabs and multiple spaces
  * to a single space, then trim. This prevents bypass via extra spaces or tabs.
  */
@@ -87,7 +150,10 @@ function normalizeWhitespace(cmd: string): string {
  * Returns the risk level and matched pattern, or null if safe.
  */
 function detectDestructiveCommand(cmd: string): { level: "HIGH" | "MEDIUM"; pattern: string } | null {
-	const normalized = normalizeWhitespace(cmd);
+	// Strip quoted heredoc bodies before pattern matching to prevent false
+	// positives from literal text inside <<'EOF' ... EOF blocks.
+	const stripped = stripQuotedHeredocs(cmd);
+	const normalized = normalizeWhitespace(stripped);
 	const lower = normalized.toLowerCase();
 	const argv = tokenizeCommand(cmd);
 
