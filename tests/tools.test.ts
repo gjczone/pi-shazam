@@ -162,6 +162,53 @@ describe("Tool: symbol", () => {
 		expect(Array.isArray(result)).toBe(true);
 		expect(result.some((s: any) => s.name.includes("scanProject"))).toBe(true);
 	});
+
+	// -- #490: Concept search tests --
+
+	it("should return results for concept search (#490)", async () => {
+		const { _executeSearch } = await import("../tools/lookup.js");
+		const results = _executeSearch(getGraph(), "tree-sitter parser");
+		expect(results.length).toBeGreaterThan(0);
+		expect(results[0].score).toBeGreaterThan(0);
+	});
+
+	it("should rank higher-PageRank symbols first (#490)", async () => {
+		const { _executeSearch } = await import("../tools/lookup.js");
+		const results = _executeSearch(getGraph(), "symbol");
+		expect(results.length).toBeGreaterThan(0);
+		// Results should be sorted by score descending
+		for (let i = 1; i < results.length; i++) {
+			expect(results[i - 1]!.score).toBeGreaterThanOrEqual(results[i]!.score);
+		}
+	});
+
+	it("should match across name, kind, and signature (#490)", async () => {
+		const { _executeSearch } = await import("../tools/lookup.js");
+		const results = _executeSearch(getGraph(), "graph");
+		expect(results.length).toBeGreaterThan(0);
+		// Should find symbols with "graph" in name, kind, or signature
+		expect(results.some((r: any) => r.sym.name.toLowerCase().includes("graph"))).toBe(true);
+	});
+
+	it("should return empty for no matches (#490)", async () => {
+		const { _executeSearch } = await import("../tools/lookup.js");
+		const results = _executeSearch(getGraph(), "zzz_nonexistent_concept_zzz");
+		expect(results.length).toBe(0);
+	});
+
+	it("should return empty for empty query (#490)", async () => {
+		const { _executeSearch } = await import("../tools/lookup.js");
+		const results = _executeSearch(getGraph(), "");
+		expect(results.length).toBe(0);
+	});
+
+	it("should rank symbols with full token matches higher (#490)", async () => {
+		const { _executeSearch } = await import("../tools/lookup.js");
+		const results = _executeSearch(getGraph(), "scan project");
+		expect(results.length).toBeGreaterThan(0);
+		// scanProject should be found (matches "scan" and "project" tokens)
+		expect(results.some((r: any) => r.sym.name === "scanProject")).toBe(true);
+	});
 });
 
 describe("Tool: call_chain", () => {
