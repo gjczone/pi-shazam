@@ -73,7 +73,8 @@ export function registerLookup(pi: ExtensionAPI): void {
 		Auto-detects whether the input is a file path or symbol name and returns
 		the most relevant information: definition, kind, signature, type hierarchy,
 		file structure, PageRank, callers/callees. Use mode=state for enum/state
-		analysis. Pass showCallbacks=true to expand anonymous functions.`,
+		analysis. Use mode=search for fuzzy concept search ("how is X implemented").
+		Pass showCallbacks=true to expand anonymous functions.`,
 		params: Type.Object({
 			name: Type.String(),
 			file: Type.Optional(Type.String()),
@@ -120,6 +121,17 @@ export function registerLookup(pi: ExtensionAPI): void {
 				text = _executeStateMap(graph, name);
 				if (json) {
 					text = buildEnvelope("shazam_lookup", projectRoot, "ok", { symbol: name, mode: "state", text });
+				}
+			} else if (mode === "search") {
+				const results = _executeSearch(graph, name);
+				if (json) {
+					text = buildEnvelope("shazam_lookup", projectRoot, "ok", {
+						mode: "search",
+						query: name,
+						results,
+					});
+				} else {
+					text = _formatSearchResults(name, results);
 				}
 			} else {
 				text = json
@@ -951,6 +963,83 @@ function _executeFileDetailJson(graph: RepoGraph, file: string): string {
 			outgoingCount: (graph.outgoing.get(s.id) || []).length,
 		})),
 	});
+}
+
+// -- Concept search (#490) -------------------------------------------------
+
+interface SearchResult {
+	sym: Symbol;
+	score: number;
+}
+
+/**
+ * Execute a fuzzy concept search across the full symbol metadata corpus.
+ *
+ * Algorithm: token-overlap scoring weighted by PageRank.
+ * For each symbol, builds a searchable text corpus from name, kind, signature,
+ * and docstring (all lowercased). Scores each symbol by (matchedTokens / totalTokens)
+ * multiplied by (1 + pagerank) to surface high-impact matches first.
+ *
+ * This beats raw grep by matching semantic concepts (e.g., "authentication"
+ * matches symbols named "authenticate", "login", "verifyCredentials") based
+ * on the existing symbol metadata across all languages.
+ */
+export function _executeSearch(graph: RepoGraph, query: string): SearchResult[] {
+	if (!query || query.trim().length === 0) return [];
+
+	const queryTokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+	if (queryTokens.length === 0) return [];
+
+	const results: SearchResult[] = [];
+
+	for (const sym of graph.symbols.values()) {
+		// Build searchable text corpus
+		const corpus = [sym.name, sym.kind, sym.signature, sym.docstring].filter(Boolean).join(" ").toLowerCase();
+
+		// Count how many query tokens appear in the corpus
+		let matchCount = 0;
+		for (const token of queryTokens) {
+			if (corpus.includes(token)) matchCount++;
+		}
+
+		if (matchCount > 0) {
+			const tokenRatio = matchCount / queryTokens.length;
+			const score = tokenRatio * (1 + sym.pagerank);
+			results.push({ sym, score });
+		}
+	}
+
+	// Sort by score descending, take top 15
+	return results.sort((a, b) => b.score - a.score).slice(0, 15);
+}
+
+/**
+ * Format search results as readable text output.
+ */
+function _formatSearchResults(query: string, results: SearchResult[]): string {
+	const lines: string[] = [];
+	lines.push(`## Concept Search: \`${_sanitizeMarkdown(query)}\` — ${results.length} results`);
+	lines.push("");
+
+	if (results.length === 0) {
+		lines.push("No matching symbols found.");
+		lines.push("");
+		lines.push("Try:");
+		lines.push("- Using fewer or different keywords");
+		lines.push("- Running \`shazam_overview\` to browse the project structure");
+		return lines.join("\n");
+	}
+
+	for (let i = 0; i < results.length; i++) {
+		const { sym, score } = results[i]!;
+		const desc = sym.docstring ? sym.docstring.split(".")[0]!.slice(0, 100) : sym.signature.slice(0, 100);
+		lines.push(`${i + 1}. **${_sanitizeMarkdown(sym.name)}** (${sym.kind}) — \`${sym.file}:${sym.line}\``);
+		lines.push(`   ${desc || "-"}`);
+		lines.push(`   Score: ${score.toFixed(4)}`);
+		lines.push("");
+	}
+
+	return lines.join("\n").trim();
 }
 
 // -- State map (from symbol.ts) -------------------------------------------
