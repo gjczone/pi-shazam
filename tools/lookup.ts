@@ -73,7 +73,7 @@ export function registerLookup(pi: ExtensionAPI): void {
 		Auto-detects whether the input is a file path or symbol name and returns
 		the most relevant information: definition, kind, signature, type hierarchy,
 		file structure, PageRank, callers/callees. Use mode=state for enum/state
-		analysis. Use mode=search for fuzzy concept search ("how is X implemented").
+		analysis. Use mode=search for fuzzy concept search, or just ask in natural language (auto-detected).
 		Pass showCallbacks=true to expand anonymous functions.`,
 		params: Type.Object({
 			name: Type.String(),
@@ -134,15 +134,31 @@ export function registerLookup(pi: ExtensionAPI): void {
 					text = _formatSearchResults(name, results);
 				}
 			} else {
-				text = json
-					? _executeSymbolJson(graph, name, params.file as string | undefined)
-					: await _executeLookupAsync(
-							graph,
-							name,
-							params.file as string | undefined,
-							(params.direction as "both" | "supertypes" | "subtypes") ?? "both",
-							(params.showCallbacks as boolean) ?? false,
-						);
+				// Default: symbol lookup. If not found and input looks like natural
+				// language (multi-word concept query), auto-fallback to search (#490).
+				const matches = _findSymbols(graph, name, params.file as string | undefined);
+				if (matches.length === 0 && _looksLikeNaturalLanguage(name)) {
+					const results = _executeSearch(graph, name);
+					if (json) {
+						text = buildEnvelope("shazam_lookup", projectRoot, "ok", {
+							mode: "search",
+							query: name,
+							results,
+						});
+					} else {
+						text = _formatSearchResults(name, results);
+					}
+				} else {
+					text = json
+						? _executeSymbolJson(graph, name, params.file as string | undefined)
+						: await _executeLookupAsync(
+								graph,
+								name,
+								params.file as string | undefined,
+								(params.direction as "both" | "supertypes" | "subtypes") ?? "both",
+								(params.showCallbacks as boolean) ?? false,
+							);
+				}
 			}
 
 			if (maxTokens && !json) {
@@ -963,6 +979,33 @@ function _executeFileDetailJson(graph: RepoGraph, file: string): string {
 			outgoingCount: (graph.outgoing.get(s.id) || []).length,
 		})),
 	});
+}
+
+/**
+ * Detect whether a query string looks like natural language (concept search)
+ * rather than a symbol name. Used for auto-fallback: when symbol lookup returns
+ * 0 results and the input looks like NL, automatically switch to search mode.
+ *
+ * Heuristics:
+ *   - Contains whitespace (multi-word) -> natural language
+ *   - Contains question words (how, what, where, why, who, when, which)
+ *   - Starts with lowercase letter followed by lowercase (not CamelCase)
+ */
+export function _looksLikeNaturalLanguage(query: string): boolean {
+	const trimmed = query.trim();
+	if (!trimmed) return false;
+
+	// Multi-word with spaces -> natural language
+	if (/\s/.test(trimmed)) return true;
+
+	// Contains question-like patterns
+	if (/^(how|what|where|why|who|when|which)/i.test(trimmed)) return true;
+
+	// All lowercase with no obvious code patterns (no dots, parens, underscores)
+	// and longer than a typical symbol name prefix
+	if (/^[a-z][a-z0-9 ]{10,}$/.test(trimmed) && !/[._($]/.test(trimmed)) return true;
+
+	return false;
 }
 
 // -- Concept search (#490) -------------------------------------------------

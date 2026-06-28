@@ -209,6 +209,28 @@ describe("Tool: symbol", () => {
 		// scanProject should be found (matches "scan" and "project" tokens)
 		expect(results.some((r: any) => r.sym.name === "scanProject")).toBe(true);
 	});
+
+	// -- #490: Natural language auto-detection tests --
+
+	it("should detect multi-word queries as natural language (#490)", async () => {
+		const { _looksLikeNaturalLanguage } = await import("../tools/lookup.js");
+		expect(_looksLikeNaturalLanguage("how does authentication work")).toBe(true);
+		expect(_looksLikeNaturalLanguage("tree-sitter parser")).toBe(true);
+		expect(_looksLikeNaturalLanguage("where is caching")).toBe(true);
+	});
+
+	it("should NOT detect symbol names as natural language (#490)", async () => {
+		const { _looksLikeNaturalLanguage } = await import("../tools/lookup.js");
+		expect(_looksLikeNaturalLanguage("scanProject")).toBe(false);
+		expect(_looksLikeNaturalLanguage("RepoGraph")).toBe(false);
+		expect(_looksLikeNaturalLanguage("createRepoGraph")).toBe(false);
+	});
+
+	it("should handle empty and whitespace input (#490)", async () => {
+		const { _looksLikeNaturalLanguage } = await import("../tools/lookup.js");
+		expect(_looksLikeNaturalLanguage("")).toBe(false);
+		expect(_looksLikeNaturalLanguage("   ")).toBe(false);
+	});
 });
 
 describe("Tool: call_chain", () => {

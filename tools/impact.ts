@@ -14,6 +14,7 @@ import { isNonSourceFile } from "../core/filter.js";
 import { assessRisk } from "../core/risk.js";
 import { recordCallChain } from "../hooks/rename-state.js";
 import { getEffectiveRoot } from "../core/scanner.js";
+import { clearPendingImpact } from "../hooks/impact-state.js";
 
 export function registerImpact(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -39,6 +40,8 @@ export function registerImpact(pi: ExtensionAPI): void {
 			direction: Type.Optional(Type.Union([Type.Literal("incoming"), Type.Literal("outgoing"), Type.Literal("both")])),
 		}),
 		execute(graph, params) {
+			// Clear pending impact flag set by issue-guard hook (#494)
+			clearPendingImpact();
 			const json = params.json ?? false;
 			const depth = Math.min(Math.max((params.depth as number) ?? 3, 1), 10);
 			const symbolName = params.symbol as string | undefined;
