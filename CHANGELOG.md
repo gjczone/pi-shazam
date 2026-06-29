@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.1] - 2026-06-29
+
+### Features
+
+- **feat(safety): argv-based safety detection with precise flag parsing** — Rewrote `detectDestructiveCommand()` in `hooks/safety.ts` with segment-aware argv parsing. `rm` detection now requires BOTH recursive and force flags for HIGH risk; plain `rm -r ./subdir` (no force, not root) is safe. Added `_shortFlagHas`, `_argvHasFlag`, `_argvTargetsRoot`, `_findCommandSegment` helpers.
+- **feat(safety): partition tools allow read-only operations** — `fdisk -l`, `parted print`/`parted -l`, `sfdisk -l`/`sfdisk -d` are now recognized as read-only and will not trigger safety popups. Only mutating partition operations (e.g. `fdisk /dev/sda`, `parted mklabel`, `sfdisk /dev/sda`) remain MEDIUM risk.
+- **feat(safety): sudo/nice prefix support** — Commands prefixed with `sudo`, `nice`, `command`, `busybox`, `ionice`, `chroot`, `strace`, `timeout` are now correctly parsed, so `sudo fdisk -l` is safe while `sudo fdisk /dev/sda` correctly triggers MEDIUM risk.
+
+### Bug Fixes
+
+- **fix(safety): rm -r without force no longer blocked** — `rm -r ./dist` and similar recursive deletes without `-f`/`--force` are now allowed (the shell already prompts per file). Previous regex-based detection flagged all `-r` as HIGH risk.
+- **fix(safety): fdisk/parted/sfdisk read-only false positives eliminated** — Moved partition tools from regex-based matching to argv-based read-only detection, eliminating false positives for listing and dump operations.
+
 ## [0.22.0] - 2026-06-28
 
 ### Features
