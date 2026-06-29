@@ -55,8 +55,7 @@ describe("hooks/safety pre-commit gate", () => {
 
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("git commit -m test"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
@@ -136,8 +135,7 @@ describe("hooks/safety HIGH-risk patterns (rm -rf, dd, mkfs, mkswap)", () => {
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("rm -rf /tmp/data"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 		expect(result?.reason).toMatch(/rm -rf/);
@@ -172,8 +170,7 @@ describe("hooks/safety HIGH-risk patterns (rm -rf, dd, mkfs, mkswap)", () => {
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("rm -rf /"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 	});
@@ -183,8 +180,7 @@ describe("hooks/safety HIGH-risk patterns (rm -rf, dd, mkfs, mkswap)", () => {
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("rm --recursive --force ./dir"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 		expect(result?.reason).toMatch(/rm -rf/);
@@ -195,8 +191,7 @@ describe("hooks/safety HIGH-risk patterns (rm -rf, dd, mkfs, mkswap)", () => {
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("rm -frv ./build"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 	});
@@ -206,8 +201,7 @@ describe("hooks/safety HIGH-risk patterns (rm -rf, dd, mkfs, mkswap)", () => {
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("rm -r -f ./out"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 	});
@@ -225,8 +219,7 @@ describe("hooks/safety HIGH-risk patterns (rm -rf, dd, mkfs, mkswap)", () => {
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("dd if=/dev/zero of=/dev/sda bs=1M"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 		expect(result?.reason).toMatch(/dd/);
@@ -237,8 +230,7 @@ describe("hooks/safety HIGH-risk patterns (rm -rf, dd, mkfs, mkswap)", () => {
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("mkfs.ext4 /dev/sdb1"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 	});
@@ -248,8 +240,7 @@ describe("hooks/safety HIGH-risk patterns (rm -rf, dd, mkfs, mkswap)", () => {
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("mkswap /dev/sdc1"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 	});
@@ -330,8 +321,7 @@ describe("hooks/safety git commit bypass (issue #394)", () => {
 		markVerifyCalled("[PASS] READY");
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent('git commit -m "x" && rm -rf /'), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 		expect(result?.reason).toMatch(/rm -rf/);
@@ -343,8 +333,7 @@ describe("hooks/safety git commit bypass (issue #394)", () => {
 		markVerifyCalled("[PASS] READY");
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent('git commit -m "x" || rm -rf /'), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 	});
@@ -393,8 +382,7 @@ describe("hooks/safety chained-command bypass (#467)", () => {
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent('echo safe && git commit -m "bypass"'), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 		expect(result?.reason).toMatch(/shazam_verify/);
@@ -405,8 +393,7 @@ describe("hooks/safety chained-command bypass (#467)", () => {
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent('ls; git commit -m "bypass"'), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 	});
@@ -620,8 +607,7 @@ describe("hooks/safety quoted heredoc false positives (#492)", () => {
 		const ctx = buildCtx();
 		// No closing EOF -- falls back to original command. rm -rf pattern still triggers.
 		const result = (await handler.current!(buildBashEvent("cat <<'EOF'\nrm -rf /"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 		expect(result?.reason).toMatch(/rm -rf/);
@@ -655,8 +641,7 @@ describe("hooks/safety MEDIUM-risk patterns (partition tools, chmod, iptables, .
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("fdisk /dev/sda"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 		expect(result?.reason).toMatch(/fdisk/);
@@ -683,8 +668,7 @@ describe("hooks/safety MEDIUM-risk patterns (partition tools, chmod, iptables, .
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("parted /dev/sda mklabel gpt"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 		expect(result?.reason).toMatch(/parted/);
@@ -712,8 +696,7 @@ describe("hooks/safety MEDIUM-risk patterns (partition tools, chmod, iptables, .
 		const ctx = buildCtx();
 		// sfdisk reads partition table from stdin when no -l/-d flags
 		const result = (await handler.current!(buildBashEvent("sfdisk /dev/sda"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 		expect(result?.reason).toMatch(/sfdisk/);
@@ -732,8 +715,7 @@ describe("hooks/safety MEDIUM-risk patterns (partition tools, chmod, iptables, .
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("sudo fdisk /dev/sda"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 	});
@@ -743,8 +725,7 @@ describe("hooks/safety MEDIUM-risk patterns (partition tools, chmod, iptables, .
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("chmod 777 /"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 		expect(result?.reason).toMatch(/chmod 777/);
@@ -755,8 +736,7 @@ describe("hooks/safety MEDIUM-risk patterns (partition tools, chmod, iptables, .
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("chmod -R 777 /some/dir"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 		expect(result?.reason).toMatch(/chmod/);
@@ -767,8 +747,7 @@ describe("hooks/safety MEDIUM-risk patterns (partition tools, chmod, iptables, .
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("iptables -F"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 		expect(result?.reason).toMatch(/iptables/);
@@ -779,8 +758,7 @@ describe("hooks/safety MEDIUM-risk patterns (partition tools, chmod, iptables, .
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("rm -r /"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 		expect(result?.reason).toMatch(/rm -r \//);
@@ -791,8 +769,7 @@ describe("hooks/safety MEDIUM-risk patterns (partition tools, chmod, iptables, .
 		registerSafetyHooks(pi);
 		const ctx = buildCtx();
 		const result = (await handler.current!(buildBashEvent("rm -r -f /"), ctx)) as
-			| { block: boolean; reason?: string }
-			| undefined;
+			{ block: boolean; reason?: string } | undefined;
 		expect(result).toBeDefined();
 		expect(result?.block).toBe(true);
 		// rm -rf on root is HIGH, not MEDIUM
