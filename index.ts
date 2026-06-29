@@ -241,7 +241,6 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 				// Log analysis is best-effort
 			}
 
-
 			const msg = parts.join("\n");
 			ctx.ui?.setStatus?.("shazam-doctor", "Health check complete");
 			pi.sendMessage({
@@ -251,7 +250,6 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 			});
 		},
 	});
-
 
 	// -- Tools (LLM-visible) ------------------------------------------------
 	registerOverview(pi);

@@ -30,9 +30,7 @@ export function registerPrecommitVerify(pi: ExtensionAPI): void {
 
 		// #467: segment-aware git commit detection.
 		const segments = tokenizeSegments(cmd);
-		const gitCommitSeg = segments.find(
-			(seg) => seg[0] === "git" && seg.length >= 2 && seg[1] === "commit",
-		);
+		const gitCommitSeg = segments.find((seg) => seg[0] === "git" && seg.length >= 2 && seg[1] === "commit");
 		if (!gitCommitSeg) return;
 
 		// Skip if --no-verify or -n flag is present (user explicitly bypassing)
