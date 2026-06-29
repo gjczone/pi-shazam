@@ -33,10 +33,10 @@ updates:
           - "tree-sitter"
           - "tree-sitter-*"
     ignore:
-      # tree-sitter core is pinned at 0.22.4; grammars >=0.24.x require
-      # tree-sitter core 0.25.x (breaking API changes). Coordinate ALL
-      # grammar upgrades together when upgrading tree-sitter core.
+      # tree-sitter core is pinned at 0.22.4; must NOT upgrade alone.
+      # Grammars 0.24.x/0.25.x require tree-sitter core 0.25.x (breaking API).
+      # Ignore 0.24.x and 0.25.x; allow 0.26.x+ to trigger re-evaluation PRs.
       - dependency-name: "tree-sitter"
         versions: [">=0.23.0"]
       - dependency-name: "tree-sitter-*"
-        versions: [">=0.24.0"]
+        versions: [">=0.24.0, <0.26.0"]
