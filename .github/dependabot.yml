@@ -7,3 +7,28 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      typescript:
+        patterns:
+          - "typescript"
+          - "@types/*"
+      test:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+      lsp:
+        patterns:
+          - "vscode-*"
+      runtime:
+        patterns:
+          - "typebox"
+          - "iconv-lite"
+      tree-sitter:
+        patterns:
+          - "tree-sitter"
+          - "tree-sitter-*"
