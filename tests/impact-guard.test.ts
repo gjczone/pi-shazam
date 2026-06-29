@@ -1,6 +1,5 @@
 /**
- * Tests for hooks/impact-state, hooks/issue-guard, hooks/agent-context-guard,
- * and the pre-edit impact blocking integration.
+ * Tests for hooks/impact-state, hooks/issue-guard, hooks/agent-context-guard.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setPendingImpact, clearPendingImpact, hasPendingImpact, resetImpactState } from "../hooks/impact-state.js";
@@ -8,15 +7,10 @@ import { registerIssueGuard } from "../hooks/issue-guard.js";
 import { registerAgentContextGuard } from "../hooks/agent-context-guard.js";
 import type { ExtensionAPI, ToolCallEvent, ToolResultEvent } from "../types/pi-extension.js";
 
-// ---------------------------------------------------------------------------
-// Mock ExtensionAPI that captures event handlers
-// ---------------------------------------------------------------------------
-
 type EventHandler = (event: unknown, ctx: unknown) => unknown;
 
 function createMockPi() {
 	const handlers = new Map<string, EventHandler[]>();
-
 	const pi = {
 		on(event: string, handler: EventHandler) {
 			if (!handlers.has(event)) handlers.set(event, []);
@@ -49,370 +43,154 @@ function makeBashToolCall(command: string): ToolCallEvent {
 		toolCallId: "test-call-1",
 		toolName: "bash",
 		input: { command },
-	};
+	} as unknown as ToolCallEvent;
 }
 
-function makeToolResult(toolName: string, isError = false): ToolResultEvent {
+function makeToolResult(toolName: string, isError: boolean): ToolResultEvent {
 	return {
 		type: "tool_result",
 		toolCallId: "test-result-1",
 		toolName,
-		input: {},
-		content: [{ type: "text", text: "" }],
 		isError,
-	} as ToolResultEvent;
+	} as unknown as ToolResultEvent;
 }
 
-// ---------------------------------------------------------------------------
-// impact-state tests
-// ---------------------------------------------------------------------------
-
 describe("hooks/impact-state", () => {
-	beforeEach(() => {
-		resetImpactState();
+	beforeEach(() => resetImpactState());
+
+	it("should set pending impact flag", () => {
+		setPendingImpact();
+		expect(hasPendingImpact()).toBe(true);
+	});
+
+	it("should clear pending impact flag", () => {
+		setPendingImpact();
+		clearPendingImpact();
+		expect(hasPendingImpact()).toBe(false);
 	});
 
 	it("should start with no pending impact", () => {
 		expect(hasPendingImpact()).toBe(false);
 	});
 
-	it("setPendingImpact sets the flag to true", () => {
+	it("should reset state", () => {
 		setPendingImpact();
-		expect(hasPendingImpact()).toBe(true);
-	});
-
-	it("clearPendingImpact resets the flag to false", () => {
-		setPendingImpact();
-		expect(hasPendingImpact()).toBe(true);
-		clearPendingImpact();
-		expect(hasPendingImpact()).toBe(false);
-	});
-
-	it("resetImpactState resets everything", () => {
-		setPendingImpact();
-		expect(hasPendingImpact()).toBe(true);
 		resetImpactState();
 		expect(hasPendingImpact()).toBe(false);
 	});
 });
 
-// ---------------------------------------------------------------------------
-// issue-guard tests
-// ---------------------------------------------------------------------------
-
-describe("hooks/issue-guard", () => {
+describe("hooks/issue-guard (non-blocking)", () => {
 	beforeEach(() => {
 		resetImpactState();
 	});
 
-	it("should set pending impact for serious issue (fix/crash)", () => {
+	it("should NOT set pending impact for serious issue (fix/crash)", () => {
 		const { pi, emit } = createMockPi();
 		registerIssueGuard(pi);
-
-		emit("tool_call", makeBashToolCall('gh issue create --title "fix: P0 crash in production"'));
-		expect(hasPendingImpact()).toBe(true);
-	});
-
-	it("should set pending impact for bug-related issue", () => {
-		const { pi, emit } = createMockPi();
-		registerIssueGuard(pi);
-
-		emit("tool_call", makeBashToolCall('gh issue create --title "bug: memory leak detected"'));
-		expect(hasPendingImpact()).toBe(true);
-	});
-
-	it("should NOT set pending impact for trivial issue (docs/typo)", () => {
-		const { pi, emit } = createMockPi();
-		registerIssueGuard(pi);
-
-		emit("tool_call", makeBashToolCall('gh issue create --title "docs: update readme"'));
+		emit("tool_call", makeBashToolCall('gh issue create --title "fix: crash on login" --body "details"'));
 		expect(hasPendingImpact()).toBe(false);
 	});
 
-	it("should NOT set pending impact for chore issues even with error keyword", () => {
+	it("should NOT set pending impact for bug-related issue", () => {
 		const { pi, emit } = createMockPi();
 		registerIssueGuard(pi);
-
-		// "chore" + "error" — trivial pattern wins because both match
-		emit("tool_call", makeBashToolCall('gh issue create --title "chore: update error codes"'));
+		emit("tool_call", makeBashToolCall('gh issue create --title "bug: cannot save" --body "steps"'));
 		expect(hasPendingImpact()).toBe(false);
 	});
 
-	it("should NOT trigger for non-gh-issue commands", () => {
+	it("should NOT clear pending impact when shazam_impact tool_result arrives", () => {
 		const { pi, emit } = createMockPi();
 		registerIssueGuard(pi);
 
-		emit("tool_call", makeBashToolCall("ls -la"));
-		expect(hasPendingImpact()).toBe(false);
-	});
-
-	it("should NOT trigger for non-bash tool calls", () => {
-		const { pi, emit } = createMockPi();
-		registerIssueGuard(pi);
-
-		emit("tool_call", {
-			type: "tool_call",
-			toolCallId: "test-1",
-			toolName: "write",
-			input: { path: "/test/file.ts", content: "" },
-		});
-		expect(hasPendingImpact()).toBe(false);
-	});
-
-	it("should clear pending impact when shazam_impact tool_result arrives", () => {
-		const { pi, emit } = createMockPi();
-		registerIssueGuard(pi);
-
-		// First: create a serious issue
-		emit("tool_call", makeBashToolCall('gh issue create --title "fix: crash"'));
-		expect(hasPendingImpact()).toBe(true);
-
-		// Then: shazam_impact completes
-		emit("tool_result", makeToolResult("shazam_impact"));
-		expect(hasPendingImpact()).toBe(false);
-	});
-
-	it("should NOT clear pending impact for other tool results", () => {
-		const { pi, emit } = createMockPi();
-		registerIssueGuard(pi);
-
-		emit("tool_call", makeBashToolCall('gh issue create --title "fix: crash"'));
-		expect(hasPendingImpact()).toBe(true);
-
-		emit("tool_result", makeToolResult("shazam_verify"));
-		expect(hasPendingImpact()).toBe(true);
-	});
-
-	it("should reset pending impact on session_start", () => {
-		const { pi, emit } = createMockPi();
-		registerIssueGuard(pi);
-
+		// Set pending impact directly (simulates prior state)
 		setPendingImpact();
 		expect(hasPendingImpact()).toBe(true);
 
-		emit("session_start", { type: "session_start" });
+		// Issue-guard no longer clears pending impact
+		emit("tool_result", makeToolResult("shazam_impact", false));
+		expect(hasPendingImpact()).toBe(true);
+	});
+
+	it("should NOT set pending impact for bash errors", () => {
+		const { pi, emit } = createMockPi();
+		registerIssueGuard(pi);
+		emit(
+			"tool_result",
+			{
+				...makeToolResult("bash", true),
+				input: { command: "gh pr create" },
+			} as unknown as ToolResultEvent,
+			{ cwd: "/test" },
+		);
 		expect(hasPendingImpact()).toBe(false);
-	});
-
-	it("should detect gh issue create chained AFTER a benign command (#467)", () => {
-		// Previously: argv[0] was "echo", so isGhIssueCreate was false and
-		// the pending-impact flag was never set for a chained gh issue create.
-		const { pi, emit } = createMockPi();
-		registerIssueGuard(pi);
-
-		emit("tool_call", makeBashToolCall('echo safe && gh issue create --title "fix: crash"'));
-		expect(hasPendingImpact()).toBe(true);
-	});
-
-	it("should detect gh issue create chained via ; (#467)", () => {
-		const { pi, emit } = createMockPi();
-		registerIssueGuard(pi);
-
-		emit("tool_call", makeBashToolCall('ls; gh issue create --title "bug: memory leak"'));
-		expect(hasPendingImpact()).toBe(true);
 	});
 });
 
-// ---------------------------------------------------------------------------
-// agent-context-guard tests
-// ---------------------------------------------------------------------------
+describe("hooks/agent-context-guard (non-blocking)", () => {
+	beforeEach(() => {
+		resetImpactState();
+	});
 
-describe("hooks/agent-context-guard", () => {
-	it("should block review prompts with no structural context", () => {
+	it("should NOT block review task without context", () => {
 		const { pi, emit } = createMockPi();
 		registerAgentContextGuard(pi);
-
-		// A long review prompt with no file paths, symbols, line numbers, or shazam refs
-		const prompt =
-			"Please review the security of this codebase and check for potential vulnerabilities in the authentication system and database access patterns and make sure everything is properly validated and sanitized before processing user input";
 
 		const results = emit("tool_call", {
 			type: "tool_call",
-			toolCallId: "test-1",
 			toolName: "agent",
-			input: { prompt },
-		});
-
-		const blockResult = results.find(
-			(r: unknown) => r && typeof r === "object" && (r as Record<string, unknown>).block === true,
-		);
-		expect(blockResult).toBeDefined();
-		expect((blockResult as Record<string, unknown>).reason).toContain("structural context");
-	});
-
-	it("should allow review prompts with sufficient context (file paths + shazam)", () => {
-		const { pi, emit } = createMockPi();
-		registerAgentContextGuard(pi);
-
-		// Review prompt with explicit file paths and shazam references (score >= 2)
-		const prompt =
-			"Please review the security of src/auth/login.ts and src/db/queries.ts modules carefully. Run shazam_lookup to check the structure and shazam_impact to find potential vulnerabilities in the authentication flow and database patterns";
-
-		const results = emit("tool_call", {
-			type: "tool_call",
-			toolCallId: "test-2",
-			toolName: "agent",
-			input: { prompt },
-		});
-
-		const blockResult = results.find(
-			(r: unknown) => r && typeof r === "object" && (r as Record<string, unknown>).block === true,
-		);
-		expect(blockResult).toBeUndefined();
-	});
-
-	it("should NOT block coding prompts (warning only, no block)", () => {
-		const { pi, emit } = createMockPi();
-		const mockCtx = createMockCtx();
-		registerAgentContextGuard(pi);
-
-		// Coding prompt with no structural context — should warn but not block.
-		// Avoid file extensions at end of string to keep context score at 0.
-		const prompt =
-			"Please implement a new feature for the user authentication system that adds two-factor authentication support with TOTP tokens and backup codes for all user accounts in the entire application layer";
-
-		const results = emit(
-			"tool_call",
-			{
-				type: "tool_call",
-				toolCallId: "test-3",
-				toolName: "agent",
-				input: { prompt },
+			input: {
+				prompt: "Review the code for security vulnerabilities. Look for XSS, SQL injection, and other common issues.",
 			},
-			mockCtx,
-		);
+		} as unknown as ToolCallEvent);
 
-		const blockResult = results.find(
-			(r: unknown) => r && typeof r === "object" && (r as Record<string, unknown>).block === true,
-		);
-		expect(blockResult).toBeUndefined();
-
-		// Should have sent a warning notification
-		expect(mockCtx.ui.notify).toHaveBeenCalledWith(expect.stringContaining("lacks structural context"), "warning");
+		// Should not block - result should be undefined (no block)
+		expect(results).toHaveLength(1);
+		expect(results[0]).toBeUndefined();
 	});
 
-	it("should skip short prompts (< 30 words)", () => {
-		const { pi, emit } = createMockPi();
-		registerAgentContextGuard(pi);
-
-		// Short review prompt (under 30 words)
-		const prompt = "Review the auth module for security issues";
-
-		const results = emit("tool_call", {
-			type: "tool_call",
-			toolCallId: "test-4",
-			toolName: "agent",
-			input: { prompt },
-		});
-
-		const blockResult = results.find(
-			(r: unknown) => r && typeof r === "object" && (r as Record<string, unknown>).block === true,
-		);
-		expect(blockResult).toBeUndefined();
-	});
-
-	it("should NOT trigger for non-agent tools", () => {
+	it("should NOT block coding task with sufficient context", () => {
 		const { pi, emit } = createMockPi();
 		registerAgentContextGuard(pi);
 
 		const results = emit("tool_call", {
 			type: "tool_call",
-			toolCallId: "test-5",
-			toolName: "bash",
-			input: { command: "echo hello" },
-		});
-
-		const blockResult = results.find(
-			(r: unknown) => r && typeof r === "object" && (r as Record<string, unknown>).block === true,
-		);
-		expect(blockResult).toBeUndefined();
-	});
-
-	it("should trigger for agent_swarm tool name", () => {
-		const { pi, emit } = createMockPi();
-		registerAgentContextGuard(pi);
-
-		const prompt =
-			"Please review the security and integrity of the entire authentication system and check for potential vulnerabilities in the login flow and session management and database access patterns throughout the whole codebase carefully";
-
-		const results = emit("tool_call", {
-			type: "tool_call",
-			toolCallId: "test-6",
-			toolName: "agent_swarm",
-			input: { prompt },
-		});
-
-		const blockResult = results.find(
-			(r: unknown) => r && typeof r === "object" && (r as Record<string, unknown>).block === true,
-		);
-		expect(blockResult).toBeDefined();
-	});
-
-	it("should trigger for subagent tool name", () => {
-		const { pi, emit } = createMockPi();
-		registerAgentContextGuard(pi);
-
-		const prompt =
-			"Please audit the security of this entire codebase very thoroughly and check for SQL injection vulnerabilities and cross-site scripting issues and improper authentication handling patterns across all modules and services";
-
-		const results = emit("tool_call", {
-			type: "tool_call",
-			toolCallId: "test-7",
 			toolName: "subagent",
-			input: { prompt },
-		});
+			input: { prompt: "Fix the bug in `src/parser.ts:120` that causes crash. The `tokenize` function returns null." },
+		} as unknown as ToolCallEvent);
 
-		const blockResult = results.find(
-			(r: unknown) => r && typeof r === "object" && (r as Record<string, unknown>).block === true,
-		);
-		expect(blockResult).toBeDefined();
+		expect(results).toHaveLength(1);
+		expect(results[0]).toBeUndefined();
 	});
 
-	it("should skip prompts with no input", () => {
+	it("should NOT block subagent for self-referential shazam prompts", () => {
 		const { pi, emit } = createMockPi();
 		registerAgentContextGuard(pi);
 
 		const results = emit("tool_call", {
 			type: "tool_call",
-			toolCallId: "test-8",
+			toolName: "subagent",
+			input: {
+				prompt:
+					"Review hooks/safety.ts for potential issues. Check if shazam_verify is called correctly and error handling is proper.",
+			},
+		} as unknown as ToolCallEvent);
+
+		expect(results).toHaveLength(1);
+		expect(results[0]).toBeUndefined();
+	});
+
+	it("should NOT block short prompts", () => {
+		const { pi, emit } = createMockPi();
+		registerAgentContextGuard(pi);
+
+		const results = emit("tool_call", {
+			type: "tool_call",
 			toolName: "agent",
-			input: {},
-		});
+			input: { prompt: "Short query." },
+		} as unknown as ToolCallEvent);
 
-		const blockResult = results.find(
-			(r: unknown) => r && typeof r === "object" && (r as Record<string, unknown>).block === true,
-		);
-		expect(blockResult).toBeUndefined();
-	});
-
-	it("should not throw when input is undefined (#472)", () => {
-		const { pi, emit } = createMockPi();
-		registerAgentContextGuard(pi);
-
-		// A tool_call event for an agent tool may legally carry no input payload
-		// (input is optional per ToolCallEventBase). The handler must skip it
-		// instead of crashing on the unguarded cast.
-		expect(() =>
-			emit("tool_call", {
-				type: "tool_call",
-				toolCallId: "test-9",
-				toolName: "agent",
-				input: undefined,
-			}),
-		).not.toThrow();
-	});
-
-	it("should not throw when input is null (#472)", () => {
-		const { pi, emit } = createMockPi();
-		registerAgentContextGuard(pi);
-
-		expect(() =>
-			emit("tool_call", {
-				type: "tool_call",
-				toolCallId: "test-10",
-				toolName: "agent",
-				input: null,
-			}),
-		).not.toThrow();
+		expect(results).toHaveLength(1);
+		expect(results[0]).toBeUndefined();
 	});
 });

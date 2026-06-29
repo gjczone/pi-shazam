@@ -1,28 +1,30 @@
 /**
- * pi-shazam hooks/precommit-verify -- Pre-commit verification reminder.
+ * pi-shazam hooks/precommit-verify -- Auto-run verify before commit.
  *
- * When the agent runs `git commit` without `--no-verify`, sends a steer
- * message suggesting to run `shazam_verify --preCommit` first.
+ * When the agent runs `git commit` without `--no-verify`, automatically
+ * runs `shazam_verify --preCommit` and sends the results to the LLM.
  *
- * Does NOT block the commit -- just reminds. This is safer for automated
- * subagents (Swarm, workflow phases) that cannot interact with dialogs.
+ * Does NOT block the commit -- the LLM sees the results and can decide
+ * to fix issues or proceed anyway. Automated subagents (Swarm, workflow
+ * phases) are unaffected -- steer messages don't interrupt them.
  *
  * Quality enforcement happens in CI, not in pre-commit hooks.
  */
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
+import type { VerifyOptions } from "../tools/verify.js";
 import { tokenizeSegments, extractCommandFromEvent } from "./_bash-utils.js";
 import { _logInternal } from "../core/output.js";
 
 /**
- * Register the pre-commit verification reminder hook.
+ * Register the pre-commit auto-verify hook.
  *
  * On bash tool_call: detects `git commit` via argv-based parsing.
- * Sends a steer message to suggest running verify first.
+ * Auto-runs `shazam_verify --preCommit` and sends results to LLM.
  * Does NOT block the command.
  */
 export function registerPrecommitVerify(pi: ExtensionAPI): void {
-	pi.on("tool_call", (event, _ctx) => {
+	pi.on("tool_call", (event, ctx) => {
 		if (event.toolName !== "bash") return;
 
 		const cmd = extractCommandFromEvent(event);
@@ -39,28 +41,50 @@ export function registerPrecommitVerify(pi: ExtensionAPI): void {
 			gitCommitSeg.some((a) => a.startsWith("-") && !a.startsWith("--") && a.includes("n"));
 		if (hasNoVerify) return;
 
-		// Send a reminder steer message
-		_logInternal("precommit-verify", "commit detected, verification reminder sent", {
+		// Auto-run shazam_verify --preCommit
+		_logInternal("precommit-verify", "commit detected, auto-running verify", {
 			cmd: cmd.slice(0, 200),
+			cwd: ctx.cwd,
 		});
 
-		pi.sendMessage(
-			{
-				customType: "shazam-reminder",
-				content: [
-					"[shazam] Commit detected -- remember to verify first",
-					"",
-					"Run `shazam_verify --preCommit` before committing to catch type errors,",
-					"lint issues, and broken references early.",
-					"",
-					"To skip this reminder: `git commit --no-verify`",
-				].join("\n"),
-				display: false,
-			},
-			{
-				triggerTurn: false,
-				deliverAs: "steer",
-			},
-		);
+		(async () => {
+			try {
+				const { executeVerifyTextAsync } = await import("../tools/verify.js");
+				const opts: VerifyOptions = {
+					preCommit: true,
+					quick: false,
+					lspOnly: false,
+					delta: false,
+					noCascade: false,
+				};
+				const result = await executeVerifyTextAsync(ctx.cwd, opts);
+
+				// Truncate long results for the steer message
+				const lines = result.split("\n");
+				const truncated = lines.length > 60 ? lines.slice(0, 60).join("\n") + "\n... (truncated)" : result;
+
+				pi.sendMessage(
+					{
+						customType: "shazam-reminder",
+						content: [
+							"[shazam] Auto-verify before commit:",
+							"",
+							truncated,
+							"",
+							"Fix any issues above before committing, or use `git commit --no-verify` to skip.",
+						].join("\n"),
+						display: false,
+					},
+					{
+						triggerTurn: false,
+						deliverAs: "steer",
+					},
+				);
+			} catch (err) {
+				_logInternal("precommit-verify", "auto-verify failed", {
+					err: err instanceof Error ? err.message : String(err),
+				});
+			}
+		})();
 	});
 }
