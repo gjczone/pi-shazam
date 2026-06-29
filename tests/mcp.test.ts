@@ -83,7 +83,7 @@ describe("MCP: tool schemas", () => {
 		expect(() => schema.parse({ symbol: "oldName" })).toThrow();
 	});
 
-	it("safe_delete schema should accept symbol with optional dryRun", () => {
+	it("zod schema should accept symbol with optional dryRun", () => {
 		const schema = z.object({ symbol: z.string(), dryRun: z.boolean().optional() });
 		expect(() => schema.parse({ symbol: "deadCode" })).not.toThrow();
 		expect(() => schema.parse({ symbol: "deadCode", dryRun: true })).not.toThrow();

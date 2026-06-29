@@ -1,6 +1,6 @@
 ---
 name: pi-shazam
-description: "MUST invoke BEFORE reading, editing, searching, or understanding ANY code in a project. pi-shazam builds a codebase graph (tree-sitter AST -> symbols -> dependencies -> PageRank) with 9 tools for query, verification, and safe code modification."
+description: "MUST invoke BEFORE reading, editing, searching, or understanding ANY code in a project. pi-shazam builds a codebase graph (tree-sitter AST -> symbols -> dependencies -> PageRank) with 7 tools for query, verification, and safe code modification."
 ---
 
 # pi-shazam
@@ -172,25 +172,6 @@ shazam_rename_symbol({ symbol: "oldName", newName: "newName", dryRun: true })  /
 shazam_rename_symbol({ symbol: "oldName", newName: "newName" })                // execute
 ```
 
-### shazam_safe_delete
-
-Required safety gate before removing any symbol. READ-ONLY safety check; returns deletion guidance, does not delete.
-
-**Parameters**: `{ symbol: string, dryRun?, json?, maxTokens? }`
-
-- `symbol`: symbol name to delete
-- `dryRun`: preview only, do not modify files
-
-**Safety workflow**: verifies zero incoming references, reports outgoing references, provides deletion guidance. Do not delete based on intuition — a symbol that looks unused may be called dynamically.
-
-**When to use**: removing dead code, cleaning up deprecated functions, removing a replaced utility.
-
-**Example**:
-
-```
-shazam_safe_delete({ symbol: "unusedHelper" })
-```
-
 ## Git Tools
 
 Git change summary with risk level. Shows what changed in the working tree and assesses the risk of each change.
@@ -248,6 +229,6 @@ pi-shazam reads source files with adaptive encoding: UTF-8 -> GBK -> GB2312. It 
 ## Environment
 
 - **Runtime**: Node.js >=18, TypeScript ES2022, ESM
-- **Grammar support**: 7 languages via tree-sitter (Python, TypeScript, JavaScript, Go, Rust, Dart, JSON)
-- **LSP**: 7 languages with auto-spawned language servers (Python, TypeScript, JavaScript, Go, Rust, JSON, YAML)
+- **Grammar support**: 8 file extensions across 7 tree-sitter grammars (Python, TypeScript/TSX, JavaScript, Go, Rust, Dart, JSON)
+- **LSP**: 7 languages with auto-spawned language servers (Python, TypeScript, JavaScript, Go, Rust, Dart, JSON, YAML)
 - **Install**: `npm install pi-shazam` in Pi extensions directory

@@ -78,14 +78,14 @@ Evidence: `grep "export function register" tools/*.ts` -> 9 matches. `grep "crea
 
 ## 5. Naming Conventions (Project-Specific)
 
-| Kind            | Pattern             | Examples                                              |
-| --------------- | ------------------- | ----------------------------------------------------- |
-| Private helpers | `_camelCase`        | `_logWarn`, `_buildEdges`, `_formatEntry`             |
-| Tool names      | `shazam_snake_case` | `shazam_overview`, `shazam_lookup`                    |
-| Tool labels     | Title Case          | `"Project Overview"`, `"Impact Analysis"`             |
-| Constants       | `UPPER_SNAKE_CASE`  | `EXT_TO_LANG`, `NEXT_RULES`, `SKIP_DIRS`              |
-| Hook files      | `kebab-case.ts`     | `before-start.ts`, `agent-context-guard.ts`           |
-| Tool files      | `snake_case.ts`     | `find_tests.ts`, `rename_symbol.ts`, `safe_delete.ts` |
+| Kind            | Pattern             | Examples                                    |
+| --------------- | ------------------- | ------------------------------------------- |
+| Private helpers | `_camelCase`        | `_logWarn`, `_buildEdges`, `_formatEntry`   |
+| Tool names      | `shazam_snake_case` | `shazam_overview`, `shazam_lookup`          |
+| Tool labels     | Title Case          | `"Project Overview"`, `"Impact Analysis"`   |
+| Constants       | `UPPER_SNAKE_CASE`  | `EXT_TO_LANG`, `NEXT_RULES`, `SKIP_DIRS`    |
+| Hook files      | `kebab-case.ts`     | `before-start.ts`, `agent-context-guard.ts` |
+| Tool files      | `snake_case.ts`     | `rename_symbol.ts`                          |
 
 **Symbol ID format:** `{file}::{name}::{line}` (e.g., `core/graph.ts::buildGraph::42`). Stable across all tools.
 
