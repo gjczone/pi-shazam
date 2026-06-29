@@ -88,7 +88,7 @@ export const SKIP_DIRS = new Set([
 	".cache",
 	".worktrees",
 	".pi-shazam",
-  ".pi",
+	".pi",
 	".qoder",
 	"__pycache__",
 	"coverage",

@@ -86,7 +86,6 @@ export function registerVerify(pi: ExtensionAPI): void {
 			maxFiles: Type.Optional(Type.Number()),
 			noCascade: Type.Optional(Type.Boolean()),
 			noSecrets: Type.Optional(Type.Boolean()),
-
 		}),
 		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
