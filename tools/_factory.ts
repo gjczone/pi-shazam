@@ -127,6 +127,7 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 		...spec.params.properties,
 		json: Type.Optional(Type.Boolean()),
 		maxTokens: Type.Optional(Type.Number()),
+		refresh: Type.Optional(Type.Boolean()),
 	});
 
 	if (spec.customExecute) {
@@ -164,6 +165,10 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 			const project = getEffectiveRoot();
 			// L7: Avoid mutating caller's params object -- use spread to create a new one
 			const effectiveParams = { ...params, project };
+			if (params.refresh) {
+				const { resetCache } = await import("../core/scanner.js");
+				resetCache();
+			}
 			const graph = scanProject(".");
 
 			let text: string;

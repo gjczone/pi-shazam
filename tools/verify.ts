@@ -77,7 +77,7 @@ export function registerVerify(pi: ExtensionAPI): void {
 		analysis (git diff, risk level, orphan detection, graph diffs).
 		Verdict: PASS / WARN / FAIL. Use --quick for a fast git-change-only
 		check (~2s). Use --lspOnly for diagnostics only. Use --preCommit for
-		stricter thresholds.`,
+		stricter thresholds. Use --refresh to force a full re-scan, bypassing caches.`,
 		params: Type.Object({
 			quick: Type.Optional(Type.Boolean()),
 			lspOnly: Type.Optional(Type.Boolean()),
@@ -86,11 +86,17 @@ export function registerVerify(pi: ExtensionAPI): void {
 			maxFiles: Type.Optional(Type.Number()),
 			noCascade: Type.Optional(Type.Boolean()),
 			noSecrets: Type.Optional(Type.Boolean()),
+			refresh: Type.Optional(Type.Boolean()),
 		}),
 		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
 			const maxTokens = params.maxTokens;
 			const projectRoot = getEffectiveRoot();
+			const refresh = (params.refresh as boolean) ?? false;
+			if (refresh) {
+				const { resetCache } = await import("../core/scanner.js");
+				resetCache();
+			}
 			const options: VerifyOptions = {
 				quick: (params.quick as boolean) ?? false,
 				lspOnly: (params.lspOnly as boolean) ?? false,
