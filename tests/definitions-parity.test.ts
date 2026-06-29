@@ -9,7 +9,7 @@ import { TOOL_DEFINITIONS, getToolDefinition } from "../tools/definitions.js";
 describe("definitions parity (#332)", () => {
 	const tools = Object.keys(TOOL_DEFINITIONS);
 
-	it("should have definitions for all 9 tools", () => {
+	it("should have definitions for all 7 tools", () => {
 		expect(tools.length).toBe(7);
 	});
 
