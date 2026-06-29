@@ -36,7 +36,10 @@ import { uriToPath, pathToUri } from "../lsp/client.js";
  * break markdown formatting when interpolated into tool output.
  */
 function _sanitizeMarkdown(s: string): string {
-	return s.replace(/`/g, "\\`");
+	// Escape backslashes first, then backticks, to prevent markdown injection
+	// when input contains a pre-escaped backtick (e.g., \` becomes \\` which
+	// renders as ` in markdown).
+	return s.replace(/\\/g, "\\\\").replace(/`/g, "\\`");
 }
 
 // -- State map kinds (from symbol.ts) -------------------------------------
