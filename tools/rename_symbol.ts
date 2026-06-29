@@ -18,6 +18,7 @@ import { ensureFileOpened } from "./lsp_enrich.js";
 import type { WorkspaceEdit, TextEdit } from "vscode-languageserver-protocol";
 import { uriToPath } from "../lsp/client.js";
 import { createTool, buildEnvelope, validatePathInProject } from "./_factory.js";
+import { setLastToolTiming } from "./_context.js";
 import { scanProject, getEffectiveRoot } from "../core/scanner.js";
 import { hasCallChainChecked } from "../hooks/rename-state.js";
 
@@ -81,8 +82,10 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 				// call_chain was checked -- proceed with actual rename below
 			}
 			// Scan project to get graph (fixes #209 -- customExecute must not rely on module-level variable)
+			const t0 = Date.now();
 			const projectRoot = getEffectiveRoot();
 			const graph = scanProject(projectRoot);
+			const scanMs = Date.now() - t0;
 			if (!graph?.symbols) {
 				return {
 					content: [
@@ -104,6 +107,7 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 			if (maxTokens && !json) {
 				text = truncateOutput(text.split("\n"), maxTokens);
 			}
+			setLastToolTiming({ scanProject: scanMs, execute: Date.now() - t0 });
 			return { content: [{ type: "text", text }] };
 		},
 	});

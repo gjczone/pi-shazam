@@ -225,7 +225,7 @@ pi-shazam auto-detects language servers for supported languages:
 
 When a language server is unavailable, tools fall back to tree-sitter only and annotate output with `(tree-sitter only, LSP unavailable)`.
 
-Run `/shazam-setup` to check LSP availability and get install instructions. Run `/shazam-doctor` for a full health check.
+Run `/shazam-doctor` for a full health check including LSP status and recent diagnostics.
 
 ## JSON Output Envelope
 

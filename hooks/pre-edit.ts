@@ -12,6 +12,7 @@ import type { ExtensionAPI, ToolCallEventResult } from "../types/pi-extension.js
 import { resolve } from "node:path";
 import { isTrackableEditedPath } from "../core/filter.js";
 import { hasPendingImpact } from "./impact-state.js";
+import { _logInternal } from "../core/output.js";
 
 /**
  * Filenames that represent project-wide configuration files.
@@ -295,6 +296,7 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 				`[shazam] Caution: ${reasons.join("; ")}. Run \`shazam_impact --files ${allFiles.join(" ")}\` to assess blast radius before editing.`,
 				"warning",
 			);
+			_logInternal("pre-edit", "multi-file edit warning", { fileCount: allFiles.length, files: allFiles });
 		}
 	});
 

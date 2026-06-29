@@ -12,7 +12,7 @@
  *   - On age: delete the entire log file (content older than 30 days is stale)
  */
 
-import { stat, rename, unlink } from "node:fs/promises";
+import { stat, rename, unlink, appendFile, mkdir, chmod } from "node:fs/promises";
 import { _logWarn } from "./output.js";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -28,6 +28,9 @@ export const MAX_AUDIT_LOG_FILES = 5;
 
 /** Max age of a log file before it is rotated out (30 days in ms). */
 export const MAX_AUDIT_LOG_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Path to the internal event log. */
+export const INTERNAL_LOG_PATH = join(AUDIT_LOG_DIR, "internal.log");
 
 /**
  * Rotate the audit log at `logPath`.
@@ -65,4 +68,61 @@ export async function rotateAuditLog(logPath: string): Promise<void> {
 		// File may not exist yet -- first write creates it
 		_logWarn("rotateAuditLog", `stat/unlink failed for ${logPath}`, err);
 	}
+}
+
+// -- Shared JSONL write helpers --------------------------------------------
+
+/** ISO-8601 timestamp with timezone offset. */
+export function ts(): string {
+	const d = new Date();
+	const pad = (n: number): string => String(n).padStart(2, "0");
+	const off = -d.getTimezoneOffset();
+	const sign = off >= 0 ? "+" : "-";
+	const tz = `${sign}${pad(Math.floor(Math.abs(off) / 60))}${pad(Math.abs(off) % 60)}`;
+	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${tz}`;
+}
+
+export let _logDirEnsured = false;
+
+/** Ensure the audit log directory exists with restricted permissions. */
+export async function ensureLogDir(): Promise<void> {
+	if (_logDirEnsured) return;
+	await mkdir(AUDIT_LOG_DIR, { recursive: true });
+	try {
+		await chmod(AUDIT_LOG_DIR, 0o700);
+	} catch {
+		// best-effort
+	}
+	_logDirEnsured = true;
+}
+
+// Async mutex for serializing log writes
+let _writeMutex: Promise<void> = Promise.resolve();
+
+/**
+ * Serialized JSONL write to a log path.
+ * Ensures the directory exists, rotates if needed, then appends.
+ */
+export async function writeJsonlEntry(logPath: string, data: Record<string, unknown>): Promise<void> {
+	await ensureLogDir();
+	await rotateAuditLog(logPath);
+	const json = JSON.stringify(data);
+	await appendFile(logPath, json + "\n", "utf-8");
+	try {
+		await chmod(logPath, 0o600);
+	} catch {
+		// best-effort
+	}
+}
+
+/**
+ * Queue a JSONL write via async mutex.
+ * Fire-and-forget: swallows write errors to avoid unhandled rejections.
+ */
+export function writeJsonl(logPath: string, data: Record<string, unknown>): void {
+	_writeMutex = _writeMutex
+		.then(() => writeJsonlEntry(logPath, data))
+		.catch(() => {
+			// swallow
+		});
 }
