@@ -21,6 +21,7 @@ import { getLspManager } from "./_context.js";
 import { lspDocumentSymbols, lspCodeLens, lspImplementation, ensureFileOpened } from "./lsp_enrich.js";
 import type { DocumentSymbol } from "vscode-languageserver-protocol";
 import { createTool, buildEnvelope, validatePathInProject } from "./_factory.js";
+import { setLastToolTiming } from "./_context.js";
 import { statSync } from "node:fs";
 import { readFileAdaptive } from "../core/encoding.js";
 import { resolve } from "node:path";
@@ -93,7 +94,10 @@ export function registerLookup(pi: ExtensionAPI): void {
 				return { content: [{ type: "text", text: "Error: name parameter is required" }] };
 			}
 
+			const tScan = Date.now();
 			const graph = scanProject(".");
+			const scanMs = Date.now() - tScan;
+			const laps: Record<string, number> = { scanProject: scanMs };
 
 			// Path traversal guard: reject file paths outside project root.
 			// Skip guard when the name matches a known symbol (fix #497) —
@@ -169,6 +173,8 @@ export function registerLookup(pi: ExtensionAPI): void {
 			if (maxTokens && !json) {
 				text = truncateOutput(text.split("\n"), maxTokens as number);
 			}
+			laps.formatOutput = Date.now() - tScan - Object.values(laps).reduce((a, b) => a + b, 0);
+			setLastToolTiming(laps);
 			return { content: [{ type: "text", text }] };
 		},
 	});

@@ -41,17 +41,16 @@ For Kimi Code, CodeBuddy, Qwen Code, Claude, Codex, Qoder, Trae, and any MCP-com
 | `shazam_format`        | When `shazam_verify` reports format errors | Auto-fix formatting (prettier, biome, eslint, ruff, cargo fmt, gofmt)                                             |
 | `shazam_rename_symbol` | Before renaming any symbol                 | LSP cross-file symbol rename with atomic writes                                                                   |
 
-## Slash Commands
+## Manual Slash Commands
 
-Setup and hook installation run automatically on session start. No manual commands needed.
+Setup and hook installation run automatically on session start. Only two manual commands are available:
 
-| Command                     | When                 | Purpose                                                              |
-| --------------------------- | -------------------- | -------------------------------------------------------------------- |
-| `/shazam-setup`             | Automatic (on start) | Detect and report LSP server availability with install instructions  |
-| `/shazam-install-git-hooks` | Automatic (on start) | Install git pre-commit hook that runs `shazam_verify`                |
-| `/shazam-doctor`            | When troubleshooting | Health check: tree-sitter grammars, LSP servers, cache integrity     |
-| `/shazam-remove-git-hooks`  | When uninstalling    | Remove the shazam git pre-commit hook                                |
-| `/shazam-pre-commit-verify` | Automatic (by hook)  | Run pre-commit verification (called by git hook; not for manual use) |
+| Command                 | When                 | Purpose                                                          |
+| ----------------------- | -------------------- | ---------------------------------------------------------------- |
+| `/shazam-doctor`        | When troubleshooting | Health check: tree-sitter grammars, LSP servers, cache integrity |
+| `/shazam-toggle-safety` | When bypassing       | Toggle destructive-command safety checks on/off                  |
+
+## Supported Languages
 
 ## Supported Languages
 

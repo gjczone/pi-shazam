@@ -16,6 +16,7 @@
 import type { RepoGraph } from "./graph.js";
 import { getGraphEdgeCount } from "./graph.js";
 import { execSync } from "node:child_process";
+import { INTERNAL_LOG_PATH, writeJsonl, ts } from "./audit-log.js";
 
 // -- Next recommendation system --------------------------------------------
 
@@ -402,7 +403,7 @@ export function truncateOutput(lines: string[], maxTokens: number): string {
 /**
  * Log a warning without printing the full error stack trace.
  *
- * For ENOENT (file not found — expected when a configured binary is not
+ * For ENOENT (file not found -- expected when a configured binary is not
  * installed), suppress log output entirely to avoid noise.
  *
  * For other errors, prints a concise one-line message: "tag: msg - reason".
@@ -411,6 +412,8 @@ export function truncateOutput(lines: string[], maxTokens: number): string {
  *
  * `err` is optional: omit it for warning conditions with no caught error
  * (the " - reason" suffix is dropped so output stays clean).
+ *
+ * Also writes an entry to the internal event log.
  *
  * Usage:
  *   _logWarn("isExecutable", "statSync failed for /path/to/binary", err)
@@ -422,4 +425,17 @@ export function _logWarn(tag: string, message: string, err?: unknown): void {
 	}
 	const reason = err instanceof Error ? err.message : err != null ? String(err) : "";
 	console.warn(`[pi-shazam] ${tag}: ${message}${reason ? ` - ${reason}` : ""}`);
+	// Also persist to internal event log
+	writeJsonl(INTERNAL_LOG_PATH, { ts: ts(), tag, message, err: reason || undefined });
+}
+
+/**
+ * Log a structured internal event to the internal event log.
+ * Used by hooks and tools to record decisions, timings, and diagnostics.
+ *
+ * Usage:
+ *   _logInternal("safety", "destructive command blocked", { pattern: "rm -rf", cmd: "..." });
+ */
+export function _logInternal(tag: string, message: string, extra?: Record<string, unknown>): void {
+	writeJsonl(INTERNAL_LOG_PATH, { ts: ts(), tag, message, ...extra });
 }

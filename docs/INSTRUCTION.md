@@ -263,7 +263,7 @@ index.ts                    <- Pi extension entry, default export(pi: ExtensionA
   │   ├── manager.ts        <- Server lifecycle (spawn, stdio, health, shutdown)
   │   ├── client.ts         <- LSP protocol communication (JSON-RPC via vscode-jsonrpc)
   │   ├── servers.ts        <- Language->server config table (7 languages)
-  │   └── setup.ts          <- /shazam-setup command: detect + install guidance
+  │   └── setup.ts          <- LSP setup: detect + install guidance (auto-runs)
   ├── tools/                <- One file per registerTool call
   │   ├── _context.ts       <- Tool-level shared LspManager holder
   │   ├── _factory.ts       <- createTool() registration factory

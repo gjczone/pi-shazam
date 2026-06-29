@@ -6,72 +6,23 @@
  * - result: ts, project, tool, durationMs, success, error, result (truncated output)
  *
  * With 72h auto-cleanup via radar.ts, log size stays bounded.
+ *
+ * Uses shared JSONL write helpers from core/audit-log.ts.
  */
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
-import { appendFile, mkdir, chmod } from "node:fs/promises";
 import { join } from "node:path";
 import { redact } from "../core/redact.js";
-import { AUDIT_LOG_DIR, rotateAuditLog } from "../core/audit-log.js";
-import { _logWarn } from "../core/output.js";
+import { AUDIT_LOG_DIR, ts, writeJsonl } from "../core/audit-log.js";
+import { consumeLastToolTiming } from "../tools/_context.js";
 
-const AUDIT_DIR = AUDIT_LOG_DIR;
-const LOG_FILE = join(AUDIT_DIR, "shazam-calls.log");
+const LOG_FILE = join(AUDIT_LOG_DIR, "shazam-calls.log");
 const MAX_RESULT_CHARS = 10_000;
 
 const _starts = new Map<string, number>();
-let _writeFailed = false;
-
-async function ensureDir(): Promise<void> {
-	await mkdir(AUDIT_DIR, { recursive: true });
-	// Restrict access to audit directory and file
-	try {
-		await chmod(AUDIT_DIR, 0o700);
-	} catch (err) {
-		/* best-effort */
-		_logWarn("ensureDir", "chmod failed for audit dir", err);
-	}
-}
-
-async function rotateIfNeeded(): Promise<void> {
-	await rotateAuditLog(LOG_FILE);
-}
-
-function ts(): string {
-	const d = new Date();
-	const pad = (n: number): string => String(n).padStart(2, "0");
-	const off = -d.getTimezoneOffset();
-	const sign = off >= 0 ? "+" : "-";
-	const tz = `${sign}${pad(Math.floor(Math.abs(off) / 60))}${pad(Math.abs(off) % 60)}`;
-	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${tz}`;
-}
-
-// Async mutex for serializing log writes
-let _writePromise: Promise<void> = Promise.resolve();
 
 function write(entry: Record<string, unknown>): void {
-	_writePromise = _writePromise.then(async () => {
-		try {
-			await ensureDir();
-			await rotateIfNeeded();
-			const json = redact(JSON.stringify(entry));
-			await appendFile(LOG_FILE, json + "\n", "utf-8");
-			try {
-				await chmod(LOG_FILE, 0o600);
-			} catch (err) {
-				/* best-effort */
-				_logWarn("write", "chmod failed for audit log file", err);
-			}
-			_writeFailed = false;
-		} catch (err) {
-			if (!_writeFailed) {
-				_writeFailed = true;
-				_logWarn("write", "audit log write failed", err);
-			}
-		}
-	});
-	// Prevent unhandled rejections from fire-and-forget writes
-	_writePromise.catch((err) => _logWarn("write", "Unexpected audit log error", err));
+	writeJsonl(LOG_FILE, entry);
 }
 
 function isShazam(name: string): boolean {
@@ -94,7 +45,6 @@ function summarize(v: unknown): unknown {
 
 function cleanupState(): void {
 	_starts.clear();
-	_writeFailed = false;
 }
 
 export function registerToolLogger(pi: ExtensionAPI): void {
@@ -135,7 +85,7 @@ export function registerToolLogger(pi: ExtensionAPI): void {
 					`\n... [truncated at ${MAX_RESULT_CHARS} chars, total was ${redacted.length}]`
 				: redacted;
 
-		write({
+		const entry: Record<string, unknown> = {
 			ts: ts(),
 			project: ctx.cwd,
 			event: "result",
@@ -144,7 +94,15 @@ export function registerToolLogger(pi: ExtensionAPI): void {
 			success: !event.isError,
 			error: event.isError ? (texts[0]?.slice(0, 300) ?? null) : null,
 			result: truncated,
-		});
+		};
+
+		// Include nestedTiming if available (stored via _context.ts by instrumented tools)
+		const timing = consumeLastToolTiming();
+		if (timing) {
+			entry.nestedTiming = timing;
+		}
+
+		write(entry);
 	});
 
 	// Clean up orphaned entries on session boundaries

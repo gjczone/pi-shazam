@@ -11,6 +11,7 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { setPendingImpact, clearPendingImpact } from "./impact-state.js";
 import { tokenizeSegments, extractCommandFromEvent } from "./_bash-utils.js";
+import { _logInternal } from "../core/output.js";
 
 /**
  * Patterns that indicate a serious issue requiring impact analysis.
@@ -56,6 +57,7 @@ export function registerIssueGuard(pi: ExtensionAPI): void {
 		const isTrivial = TRIVIAL_PATTERNS.test(command);
 
 		if (isSerious && !isTrivial) {
+			_logInternal("issue-guard", "pending-impact flag set", { issueType: "serious", cmd: command?.slice(0, 200) });
 			setPendingImpact();
 		}
 	});
@@ -63,6 +65,7 @@ export function registerIssueGuard(pi: ExtensionAPI): void {
 	// Clear pending impact when shazam_impact completes
 	pi.on("tool_result", (event) => {
 		if (event.toolName === "shazam_impact" && !event.isError) {
+			_logInternal("issue-guard", "pending-impact flag cleared", { issueType: "impact-complete" });
 			clearPendingImpact();
 		}
 
@@ -70,10 +73,12 @@ export function registerIssueGuard(pi: ExtensionAPI): void {
 		// scoped to gh/npm-test commands that indicate workflow failures
 		if (event.isError && event.toolName === "bash") {
 			const cmd = extractCommandFromEvent(event);
-			if (/\b(gh|npm\s+(test|run\s+test))\b/.test(cmd)) {
+			const issueGuardErrorRe = /\b(gh|npm\s+(test|run\s+test))\b/;
+			if (issueGuardErrorRe.test(cmd)) {
 				const now = Date.now();
 				if (now - _lastErrorFlagTime > ERROR_COOLDOWN_MS) {
 					_lastErrorFlagTime = now;
+					_logInternal("issue-guard", "pending-impact flag set", { issueType: "error", cmd: cmd?.slice(0, 200) });
 					setPendingImpact();
 				}
 			}

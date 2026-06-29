@@ -12,7 +12,49 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { hasRecentPassingVerify } from "./verify-state.js";
 import { tokenizeSegments, extractCommandFromEvent } from "./_bash-utils.js";
-import { _logWarn } from "../core/output.js";
+import { _logWarn, _logInternal } from "../core/output.js";
+import { AUDIT_LOG_DIR } from "../core/audit-log.js";
+import * as path from "node:path";
+import * as fs from "node:fs";
+
+// --- Safety toggle ---
+
+const SAFETY_CONFIG_PATH = path.join(AUDIT_LOG_DIR, "safety-config.json");
+
+/** Whether destructive command detection is enabled. Default true. */
+let _safetyEnabled = true;
+
+// Read persisted config on module load
+try {
+	if (fs.existsSync(SAFETY_CONFIG_PATH)) {
+		const raw = fs.readFileSync(SAFETY_CONFIG_PATH, "utf-8");
+		const config = JSON.parse(raw);
+		if (typeof config.safetyEnabled === "boolean") {
+			_safetyEnabled = config.safetyEnabled;
+		}
+	}
+} catch {
+	// Ignore read errors, default to enabled
+}
+
+/**
+ * Enable or disable destructive command safety detection.
+ * Persists the setting to a config file in the audit log directory.
+ */
+export function setSafetyEnabled(enabled: boolean): void {
+	_safetyEnabled = enabled;
+	try {
+		fs.mkdirSync(path.dirname(SAFETY_CONFIG_PATH), { recursive: true });
+		fs.writeFileSync(SAFETY_CONFIG_PATH, JSON.stringify({ safetyEnabled: enabled }), "utf-8");
+	} catch {
+		// Best-effort persistence
+	}
+}
+
+/** Whether destructive command detection is currently enabled. */
+export function isSafetyEnabled(): boolean {
+	return _safetyEnabled;
+}
 
 /**
  * HIGH-risk — destructive commands that cause IRREVERSIBLE data loss.
@@ -75,9 +117,6 @@ const MEDIUM_RISK_PATTERNS: Array<{ regex: RegExp; label: string }> = [
 	},
 ];
 
-/**
- * Git commit pattern for pre-commit gate.
- */
 /**
  * Strip bodies of QUOTED bash heredocs from the command string.
  *
@@ -256,11 +295,239 @@ function _isPartedReadOnly(argv: string[]): boolean {
 }
 
 /**
+ * Extract positional target arguments from an argv array for rm.
+ * Skips argv[0] (command name), skips flags starting with `-`,
+ * handles `--` separator, and returns the remaining positional args.
+ */
+function _extractRmTargets(argv: string[]): string[] {
+	const targets: string[] = [];
+	let afterSep = false;
+	for (let i = 1; i < argv.length; i++) {
+		const a = argv[i];
+		if (a === "--") {
+			afterSep = true;
+			continue;
+		}
+		if (!afterSep && a.startsWith("-")) {
+			continue;
+		}
+		targets.push(a);
+	}
+	return targets;
+}
+
+/**
+ * Check whether the resolved target path is safe to delete for rm -rf.
+ *
+ * Safe heuristics (checked in order, returns { safe: true } on first match):
+ *   1. Inside node_modules: resolvedPath includes "/node_modules/"
+ *   2. Git worktree: resolvedPath/.git exists as a FILE containing "gitdir:"
+ *   3. Matches .gitignore: read cwd/.gitignore, parse patterns, check suffix match
+ *   4. Project-level dot-directory: resolvedPath is directly inside cwd AND basename starts with "."
+ *
+ * Danger heuristics (returns { safe: false, reason } on first match):
+ *   5. Root "/" — "Deleting the entire filesystem root — will destroy ALL data"
+ *   6. System path — starts with /etc/, /usr/, /bin/, /sbin/, /var/, /opt/, /lib/, /root/, /dev/, /proc/, /sys/
+ *   7. Cross-project — resolves outside cwd
+ *   8. Database files — ends in .db, .sqlite, .sqlite3
+ *   9. Default — "Force-recursive delete will permanently remove these files"
+ */
+function _isTargetSafe(resolvedPath: string, cwd: string): { safe: boolean; reason?: string } {
+	// --- Safe heuristics (return safe on first match) ---
+
+	// 1. Inside node_modules
+	if (resolvedPath.includes("/node_modules/")) {
+		return { safe: true };
+	}
+
+	// 2. Git worktree: check resolvedPath/.git exists as FILE containing "gitdir:"
+	try {
+		const gitPath = path.join(resolvedPath, ".git");
+		if (fs.existsSync(gitPath) && fs.statSync(gitPath).isFile()) {
+			const content = fs.readFileSync(gitPath, "utf-8");
+			if (content.startsWith("gitdir:")) {
+				return { safe: true };
+			}
+		}
+	} catch {
+		// If the stat/read fails, skip this heuristic
+	}
+
+	// 3. Matches .gitignore: read cwd/.gitignore, parse patterns, check suffix
+	try {
+		const gitignorePath = path.join(cwd, ".gitignore");
+		if (fs.existsSync(gitignorePath)) {
+			const gitignoreContent = fs.readFileSync(gitignorePath, "utf-8");
+			const relativePath = path.relative(cwd, resolvedPath);
+			const lines = gitignoreContent.split("\n");
+			for (const line of lines) {
+				const trimmed = line.trim();
+				if (trimmed.length === 0 || trimmed.startsWith("#")) continue;
+				// Strip trailing / for matching
+				const pattern = trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+				if (
+					relativePath === pattern ||
+					relativePath.startsWith(pattern + "/") ||
+					relativePath.endsWith("/" + pattern)
+				) {
+					return { safe: true };
+				}
+			}
+		}
+	} catch {
+		// If gitignore read fails, skip this heuristic
+	}
+
+	// 4. Project-level dot-directory: directly inside cwd and basename starts with "."
+	if (path.dirname(resolvedPath) === cwd && resolvedPath !== cwd) {
+		const base = path.basename(resolvedPath);
+		if (base.startsWith(".")) {
+			return { safe: true };
+		}
+	}
+
+	// --- Danger heuristics (return danger on first match) ---
+
+	// 5. Root "/"
+	if (resolvedPath === "/") {
+		return { safe: false, reason: "Deleting the entire filesystem root — will destroy ALL data" };
+	}
+
+	// 6. System path
+	const SYSTEM_DIRS = [
+		"/etc/",
+		"/usr/",
+		"/bin/",
+		"/sbin/",
+		"/var/",
+		"/opt/",
+		"/lib/",
+		"/root/",
+		"/dev/",
+		"/proc/",
+		"/sys/",
+	];
+	for (const sysDir of SYSTEM_DIRS) {
+		if (resolvedPath.startsWith(sysDir)) {
+			return { safe: false, reason: "Deleting a system directory" };
+		}
+	}
+
+	// 7. Cross-project: resolves outside cwd
+	const rel = path.relative(cwd, resolvedPath);
+	if (rel.startsWith("..")) {
+		return { safe: false, reason: "Deleting files outside current project" };
+	}
+
+	// 8. Database files
+	if (resolvedPath.endsWith(".db") || resolvedPath.endsWith(".sqlite") || resolvedPath.endsWith(".sqlite3")) {
+		return { safe: false, reason: "Deleting database files" };
+	}
+
+	// 9. Default
+	return { safe: false, reason: "Force-recursive delete will permanently remove these files" };
+}
+
+/**
+ * Map a pattern label to the default category and reason for non-rm-rf
+ * destructive commands. The rm -rf pattern is handled separately via
+ * safety heuristics.
+ */
+function _getDefaultCategory(pattern: string): { category: string; reason: string } {
+	switch (pattern) {
+		case "rm -rf":
+			// Handled separately by _isTargetSafe heuristics — should not reach here
+			return { category: "DELETE", reason: "Force-recursive delete will permanently remove these files" };
+		case "rm -r /":
+			return { category: "DELETE", reason: "Recursive delete on root path — will destroy system files" };
+		case "dd if=":
+			return { category: "DD_WRITE", reason: "Direct block device write — will destroy data on the target device" };
+		case "mkfs":
+			return { category: "MKFS", reason: "Creating a filesystem — will destroy data on the target device" };
+		case "mkswap":
+			return { category: "MKSWAP", reason: "Creating swap — will destroy data on the target device" };
+		case "fdisk":
+			return { category: "FDISK", reason: "Modifying partition table — can destroy data on the target disk" };
+		case "sfdisk":
+			return { category: "SFDISK", reason: "Modifying partition table — can destroy data on the target disk" };
+		case "parted":
+			return { category: "PARTED", reason: "Modifying partition table — can destroy data on the target disk" };
+		case "chmod 777 /":
+			return { category: "CHMOD", reason: "Making entire root directory world-writable — security risk" };
+		case "chmod -R 777":
+			return { category: "CHMOD", reason: "Recursively making files world-writable — security risk" };
+		case "chown -R":
+			return { category: "CHOWN", reason: "Recursively changing file ownership — can break permission model" };
+		case "> /dev/sd":
+			return {
+				category: "DEVICE_WRITE",
+				reason: "Writing directly to block device — can destroy filesystem",
+			};
+		case "> /dev/nvme":
+			return {
+				category: "DEVICE_WRITE",
+				reason: "Writing directly to block device — can destroy filesystem",
+			};
+		case "> /dev/mmcblk":
+			return {
+				category: "DEVICE_WRITE",
+				reason: "Writing directly to block device — can destroy filesystem",
+			};
+		case "pvcreate":
+			return { category: "LVM", reason: "Creating a physical volume — can destroy data on the target device" };
+		case "vgcreate":
+			return { category: "LVM", reason: "Creating a volume group — can destroy data on the target device" };
+		case "lvcreate":
+			return { category: "LVM", reason: "Creating a logical volume — can destroy data on the target device" };
+		case "iptables -F":
+			return { category: "IPTABLES", reason: "Flushing all iptables rules — can disable network access" };
+		case "iptables -P":
+			return { category: "IPTABLES", reason: "Setting iptables default policy — can disable network access" };
+		default:
+			return { category: "UNKNOWN", reason: `High-risk command detected: ${pattern}` };
+	}
+}
+
+/**
+ * Check if ALL targets of an rm -rf argv segment pass the safety heuristics.
+ * Returns true when every resolved target is safe, false otherwise.
+ */
+function _isRmRfAllSafe(argv: string[], cwd: string): boolean {
+	const targets = _extractRmTargets(argv);
+	if (targets.length === 0) return true;
+	for (const t of targets) {
+		const resolved = path.resolve(cwd, t);
+		const result = _isTargetSafe(resolved, cwd);
+		if (!result.safe) return false;
+	}
+	return true;
+}
+
+/**
+ * Get the first failure reason from rm -rf targets.
+ * Assumes at least one target is dangerous.
+ */
+function _firstRmRfDanger(argv: string[], cwd: string): string {
+	const targets = _extractRmTargets(argv);
+	for (const t of targets) {
+		const resolved = path.resolve(cwd, t);
+		const result = _isTargetSafe(resolved, cwd);
+		if (!result.safe) {
+			return result.reason ?? "Force-recursive delete will permanently remove these files";
+		}
+	}
+	return "Force-recursive delete will permanently remove these files";
+}
+
+/**
  * Check if a command matches any destructive pattern.
  * Uses argv-based parsing for robust matching with precise flag detection.
- * Returns the risk level and matched pattern, or null if safe.
+ * Returns the risk level, matched pattern, category, and reason, or null if safe.
  */
-function detectDestructiveCommand(cmd: string): { level: "HIGH" | "MEDIUM"; pattern: string } | null {
+function detectDestructiveCommand(
+	cmd: string,
+	cwd: string,
+): { level: "HIGH" | "MEDIUM"; pattern: string; reason: string; category: string } | null {
 	// Strip quoted heredoc bodies and single-quoted string bodies before
 	// pattern matching to prevent false positives from literal text inside
 	// <<'EOF' ... EOF blocks or 'single-quoted arguments'.
@@ -282,10 +549,28 @@ function detectDestructiveCommand(cmd: string): { level: "HIGH" | "MEDIUM"; patt
 		const targetsRoot = _argvTargetsRoot(rmSeg);
 
 		if (hasRecursive && hasForce) {
-			return { level: "HIGH", pattern: "rm -rf" };
+			// Safety heuristic check: if ALL targets pass heuristics, allow silently
+			const targets = _extractRmTargets(rmSeg);
+			if (targets.length === 0) {
+				return null; // No targets — rm -rf with no targets is safe (no-op)
+			}
+			let allSafe = true;
+			for (const t of targets) {
+				const resolved = path.resolve(cwd, t);
+				if (!_isTargetSafe(resolved, cwd).safe) {
+					allSafe = false;
+					break;
+				}
+			}
+			if (allSafe) {
+				return null; // All targets pass safety heuristics — allow
+			}
+			// At least one target is dangerous — escalate
+			const reason = _firstRmRfDanger(rmSeg, cwd);
+			return { level: "HIGH", pattern: "rm -rf", category: "DELETE", reason };
 		}
 		if (hasRecursive && targetsRoot) {
-			return { level: "MEDIUM", pattern: "rm -r /" };
+			return { level: "MEDIUM", pattern: "rm -r /", ..._getDefaultCategory("rm -r /") };
 		}
 		// hasRecursive but no force and not root: safe (rm prompts per file), no popup
 	}
@@ -296,7 +581,7 @@ function detectDestructiveCommand(cmd: string): { level: "HIGH" | "MEDIUM"; patt
 		// fdisk -l / fdisk --list = list partitions (read-only, safe)
 		const isReadOnly = _argvHasFlag(fdiskSeg, "l", "--list");
 		if (!isReadOnly) {
-			return { level: "MEDIUM", pattern: "fdisk" };
+			return { level: "MEDIUM", pattern: "fdisk", ..._getDefaultCategory("fdisk") };
 		}
 	}
 
@@ -305,7 +590,7 @@ function detectDestructiveCommand(cmd: string): { level: "HIGH" | "MEDIUM"; patt
 		// sfdisk -l (list), sfdisk -d (dump) = read-only, safe
 		const isReadOnly = _argvHasFlag(sfdiskSeg, "l", "--list") || _argvHasFlag(sfdiskSeg, "d", "--dump");
 		if (!isReadOnly) {
-			return { level: "MEDIUM", pattern: "sfdisk" };
+			return { level: "MEDIUM", pattern: "sfdisk", ..._getDefaultCategory("sfdisk") };
 		}
 	}
 
@@ -314,20 +599,32 @@ function detectDestructiveCommand(cmd: string): { level: "HIGH" | "MEDIUM"; patt
 		// parted -l (list all), parted [dev] print = read-only, safe
 		const isReadOnly = _argvHasFlag(partedSeg, "l", "--list") || _isPartedReadOnly(partedSeg);
 		if (!isReadOnly) {
-			return { level: "MEDIUM", pattern: "parted" };
+			return { level: "MEDIUM", pattern: "parted", ..._getDefaultCategory("parted") };
 		}
 	}
 
-	// Fallback to regex patterns for commands not covered by argv analysis
+	// --- Regex fallback: skip rm -rf pattern when all targets are safe ---
+	// The argv-based detection above handles normal rm invocations; this
+	// covers edge cases where the command was not tokenized as an rm segment.
+	let _skipRmRfPattern = false;
+	if (rmSeg) {
+		const hasRecursive = _argvHasFlag(rmSeg, "r", "--recursive") || _argvHasFlag(rmSeg, "R", null);
+		const hasForce = _argvHasFlag(rmSeg, "f", "--force");
+		if (hasRecursive && hasForce) {
+			_skipRmRfPattern = _isRmRfAllSafe(rmSeg, cwd);
+		}
+	}
+
 	for (const { regex, label } of HIGH_RISK_PATTERNS) {
+		if (label === "rm -rf" && _skipRmRfPattern) continue;
 		if (regex.test(lower)) {
-			return { level: "HIGH", pattern: label };
+			return { level: "HIGH", pattern: label, ..._getDefaultCategory(label) };
 		}
 	}
 
 	for (const { regex, label } of MEDIUM_RISK_PATTERNS) {
 		if (regex.test(lower)) {
-			return { level: "MEDIUM", pattern: label };
+			return { level: "MEDIUM", pattern: label, ..._getDefaultCategory(label) };
 		}
 	}
 
@@ -350,44 +647,56 @@ export function registerSafetyHooks(pi: ExtensionAPI): void {
 		if (!cmd) return;
 
 		// -- Check 1: Destructive command detection --
-		const destructive = detectDestructiveCommand(cmd);
-		if (destructive) {
-			const levelTag = destructive.level === "HIGH" ? "HIGH" : "MED";
-			const message = [
-				`[${levelTag}] Destructive command detected [${levelTag}]`,
-				"",
-				`Risk level: ${destructive.level}`,
-				`Pattern: ${destructive.pattern}`,
-				`Command: ${cmd.slice(0, 200)}${cmd.length > 200 ? "..." : ""}`,
-				"",
-				"Do you want to continue?",
-			].join("\n");
+		// Skip detection when safety is disabled
+		if (_safetyEnabled) {
+			const destructive = detectDestructiveCommand(cmd, ctx.cwd);
+			if (destructive) {
+				const message = [
+					`[${destructive.category}]: ${cmd.slice(0, 200)}${cmd.length > 200 ? "..." : ""}`,
+					"",
+					destructive.reason,
+					"",
+					"Do you want to continue?",
+				].join("\n");
 
-			try {
-				const confirmed = await ctx.ui.confirm("Safety Warning", message);
+				try {
+					const confirmed = await ctx.ui.confirm("Safety Warning", message);
 
-				if (!confirmed) {
-					return {
-						block: true,
-						reason: `Command blocked by safety check: ${destructive.pattern}`,
-					};
+					if (!confirmed) {
+						_logInternal("safety", "destructive command blocked", {
+							pattern: destructive.pattern,
+							cmd: cmd.slice(0, 200),
+							level: destructive.level,
+							reason: destructive.reason,
+						});
+						return {
+							block: true,
+							reason: `Command blocked by safety check: ${destructive.pattern}`,
+						};
+					}
+
+					// User confirmed, allow the command
+					_logInternal("safety", "destructive command allowed", {
+						pattern: destructive.pattern,
+						cmd: cmd.slice(0, 200),
+						level: destructive.level,
+						reason: destructive.reason,
+					});
+					ctx.ui.notify(`Proceeding with ${destructive.level}-risk command...`, "warning");
+				} catch (err) {
+					// If confirm dialog fails (e.g., non-interactive mode), block high-risk
+					_logWarn("registerSafetyHooks", "confirm dialog failed", err);
+					if (destructive.level === "HIGH") {
+						return {
+							block: true,
+							reason: `High-risk command blocked in non-interactive mode: ${destructive.pattern}`,
+						};
+					}
+					// Allow medium-risk in non-interactive mode
 				}
 
-				// User confirmed, allow the command
-				ctx.ui.notify(`Proceeding with ${destructive.level}-risk command...`, "warning");
-			} catch (err) {
-				// If confirm dialog fails (e.g., non-interactive mode), block high-risk
-				_logWarn("registerSafetyHooks", "confirm dialog failed", err);
-				if (destructive.level === "HIGH") {
-					return {
-						block: true,
-						reason: `High-risk command blocked in non-interactive mode: ${destructive.pattern}`,
-					};
-				}
-				// Allow medium-risk in non-interactive mode
+				return;
 			}
-
-			return;
 		}
 
 		// -- Check 2: Pre-commit gate --

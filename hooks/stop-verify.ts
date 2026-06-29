@@ -24,6 +24,7 @@ import {
 	wasReminderSent,
 	resetReminderSent,
 } from "./verify-state.js";
+import { _logInternal } from "../core/output.js";
 
 /** Minimum interval between auto-verify steer messages (60 seconds). */
 const REMINDER_DEBOUNCE_MS = 60 * 1000;
@@ -102,6 +103,7 @@ export function registerStopVerify(pi: ExtensionAPI): void {
 		// to run shazam_verify before continuing. deliverAs: "steer" makes
 		// the message more prominent; triggerTurn: true schedules an
 		// immediate internal continuation.
+		_logInternal("stop-verify", "verification reminder sent", { editCount: editedFiles.length });
 		pi.sendMessage(
 			{
 				customType: "shazam-reminder",

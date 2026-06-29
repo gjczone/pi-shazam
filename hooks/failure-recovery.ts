@@ -12,6 +12,7 @@
  */
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
+import { _logInternal } from "../core/output.js";
 
 /**
  * Stored failure info per tool: consecutive failure count, last error message, and timestamp.
@@ -247,6 +248,11 @@ export function registerFailureRecovery(pi: ExtensionAPI): void {
 			const suggestion = getSuggestion(toolName, failCount, errorText);
 
 			if (suggestion) {
+				_logInternal("failure-recovery", "failure recorded", {
+					tool: toolName,
+					errorType: errorText.slice(0, 200),
+					suggestion: suggestion.slice(0, 200),
+				});
 				pi.sendMessage({
 					customType: "shazam-failure-recovery",
 					content: suggestion,

@@ -243,7 +243,7 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 | Symptom                               | Likely cause                             | Check                                                                    |
 | ------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------ |
 | Tree-sitter parse returns empty       | Grammar version mismatch                 | `package.json` `overrides` for `tree-sitter` version                     |
-| LSP tool returns "(tree-sitter only)" | Language server not installed or crashed | Run `/shazam-setup` to check LSP availability                            |
+| LSP tool returns "(tree-sitter only)" | Language server not installed or crashed | Run `/shazam-doctor` for a full health check                             |
 | LSP communication errors              | JSON-RPC frame parsing                   | `lsp/client.ts` Content-Length header mismatch, incomplete reads         |
 | Tool not appearing in Pi              | Registration missing                     | Verify `register*` called in `index.ts`; check Pi extension loading logs |
 | Test failures with stream errors      | vscode-jsonrpc pre-existing issue        | `vitest.setup.ts` suppresses these; not a real bug                       |

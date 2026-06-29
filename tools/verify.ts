@@ -64,6 +64,7 @@ import { getNextForTool, formatNextSection, truncateOutput, estimateTokens, _log
 import { getLspManager } from "./_context.js";
 import { lspCodeActions } from "./lsp_enrich.js";
 import { createTool } from "./_factory.js";
+import { setLastToolTiming } from "./_context.js";
 import { uriToPath } from "../lsp/client.js";
 
 export function registerVerify(pi: ExtensionAPI): void {
@@ -100,6 +101,7 @@ export function registerVerify(pi: ExtensionAPI): void {
 				noSecrets: (params.noSecrets as boolean) ?? false,
 			};
 
+			const t0 = Date.now();
 			let text: string;
 			if (json) {
 				const result = await executeVerifyJsonAsync(projectRoot, options);
@@ -124,6 +126,8 @@ export function registerVerify(pi: ExtensionAPI): void {
 					text = truncateOutput(text.split("\n"), maxTokens as number);
 				}
 			}
+			const totalMs = Date.now() - t0;
+			setLastToolTiming({ execute: totalMs });
 			return { content: [{ type: "text", text }] };
 		},
 	});

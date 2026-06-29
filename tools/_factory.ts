@@ -22,6 +22,7 @@ import { Type, type TProperties, type TObject } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject, getEffectiveRoot } from "../core/scanner.js";
 import { truncateOutput, _logWarn } from "../core/output.js";
+import { setLastToolTiming } from "./_context.js";
 import { resolve, relative, isAbsolute } from "node:path";
 import { realpathSync } from "node:fs";
 
@@ -167,7 +168,10 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 
 			let text: string;
 			try {
+				const t0 = Date.now();
 				text = await domainFn(graph, effectiveParams);
+				const totalMs = Date.now() - t0;
+				setLastToolTiming({ formatOutput: totalMs });
 			} catch (err) {
 				const errMsg = err instanceof Error ? err.message : String(err);
 				if (json) {
