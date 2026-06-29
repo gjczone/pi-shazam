@@ -16,14 +16,13 @@ import { setLspManager, awaitPreviousShutdown } from "./tools/_context.js";
 import { installPreCommitHook, isPreCommitHookInstalled } from "./core/git-hooks.js";
 import { setProjectRoot as scannerSetProjectRoot } from "./core/scanner.js";
 import { _logWarn, _logInternal } from "./core/output.js";
-import { isSafetyEnabled, setSafetyEnabled } from "./hooks/safety.js";
 
 // -- Hook registrations ---------------------------------------------------
 import { registerBeforeStartHook } from "./hooks/before-start.js";
 import { registerToolLogger } from "./hooks/tool-logger.js";
 import { registerShazamGuide } from "./hooks/shazam-guide.js";
 import { registerPreEditGuard } from "./hooks/pre-edit.js";
-import { registerSafetyHooks } from "./hooks/safety.js";
+import { registerPrecommitVerify } from "./hooks/precommit-verify.js";
 import { registerStopVerify } from "./hooks/stop-verify.js";
 import { registerFailureRecovery } from "./hooks/failure-recovery.js";
 import { registerIssueGuard } from "./hooks/issue-guard.js";
@@ -163,7 +162,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 	registerToolLogger(pi);
 	registerShazamGuide(pi);
 	registerPreEditGuard(pi);
-	registerSafetyHooks(pi);
+	registerPrecommitVerify(pi);
 	registerStopVerify(pi);
 	registerFailureRecovery(pi);
 	registerIssueGuard(pi);
@@ -242,10 +241,6 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 				// Log analysis is best-effort
 			}
 
-			// Safety status
-			parts.push("", `### Safety Checks`);
-			parts.push("");
-			parts.push(`- Destructive command safety: ${isSafetyEnabled() ? "ON" : "OFF"}`);
 
 			const msg = parts.join("\n");
 			ctx.ui?.setStatus?.("shazam-doctor", "Health check complete");
@@ -257,49 +252,6 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 		},
 	});
 
-	// -- /shazam-toggle-safety command ----------------------------------------
-
-	pi.registerCommand("shazam-toggle-safety", {
-		description: "Toggle destructive-command safety checks on/off",
-		async handler(args: string, ctx: ExtensionCommandContext) {
-			const trimmed = args.trim().toLowerCase();
-			if (trimmed === "off" || trimmed === "0" || trimmed === "false" || trimmed === "disable") {
-				setSafetyEnabled(false);
-				_logInternal("safety-toggle", "safety disabled by user", { args: trimmed });
-				ctx.ui?.setStatus?.("shazam-toggle-safety", "Safety: OFF");
-				pi.sendMessage({
-					customType: "shazam-toggle-safety",
-					content: [
-						"## Safety: OFF",
-						"",
-						"Safety checks are now OFF. Destructive commands will not be blocked.",
-						"Use with caution.",
-						"",
-						"To re-enable: `/shazam-toggle-safety on`",
-					].join("\n"),
-					display: true,
-				});
-			} else {
-				setSafetyEnabled(true);
-				_logInternal("safety-toggle", "safety enabled by user", { args: trimmed });
-				ctx.ui?.setStatus?.("shazam-toggle-safety", "Safety: ON");
-				const current = isSafetyEnabled();
-				pi.sendMessage({
-					customType: "shazam-toggle-safety",
-					content: [
-						`## Safety: ${current ? "ON" : "OFF"}`,
-						"",
-						current
-							? "Safety checks are active. Destructive commands will prompt for confirmation."
-							: "Safety checks are OFF.",
-						"",
-						current ? "To disable: `/shazam-toggle-safety off`" : "To enable: `/shazam-toggle-safety on`",
-					].join("\n"),
-					display: true,
-				});
-			}
-		},
-	});
 
 	// -- Tools (LLM-visible) ------------------------------------------------
 	registerOverview(pi);

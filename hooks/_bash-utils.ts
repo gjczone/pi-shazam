@@ -1,7 +1,7 @@
 /**
  * pi-shazam hooks/_bash-utils -- Shared bash command utilities.
  *
- * Extracted from hooks/safety.ts and hooks/issue-guard.ts to eliminate
+ * Extracted from hooks/issue-guard.ts to eliminate
  * duplication. Provides command tokenization (with bash quote/escape
  * semantics, command-substitution awareness, and pipe/separator splitting)
  * and safe event input extraction.
