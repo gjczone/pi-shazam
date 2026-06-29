@@ -51,6 +51,17 @@ Setup and hook installation run automatically on session start. No manual setup 
 
 ## Supported Languages
 
+| Language   | Tree-sitter | LSP                         |
+| ---------- | ----------- | --------------------------- |
+| Python     | Yes         | pyright / pylsp             |
+| TypeScript | Yes         | typescript-language-server  |
+| JavaScript | Yes         | typescript-language-server  |
+| Go         | Yes         | gopls                       |
+| Rust       | Yes         | rust-analyzer               |
+| Dart       | Yes         | dart language-server        |
+| JSON       | Yes         | vscode-json-language-server |
+| YAML       | -           | yaml-language-server        |
+
 ## Platform Support
 
 | Platform | Status                                      |
