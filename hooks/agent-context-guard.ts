@@ -107,13 +107,13 @@ export function registerAgentContextGuard(pi: ExtensionAPI): void {
 		const isSelfReferential = hasShazam && /pi-shazam|shazam_\w+/i.test(prompt);
 		if (isSelfReferential) return;
 
-		// Block review tasks without sufficient context
+		// Warn review tasks without sufficient context (non-blocking)
+		// Does NOT block -- automated subagents cannot interact with dialogs.
 		if (isReview && contextScore < reviewThreshold) {
-			return {
-				block: true,
-				reason:
-					"Review task lacks structural context. Provide file paths and symbols from shazam_lookup or shazam_impact first.",
-			};
+			ctx.ui?.notify?.(
+				"[shazam] Review task lacks structural context. Consider running shazam_lookup or shazam_impact first for better results.",
+				"warning",
+			);
 		}
 
 		// Warn coding tasks without context (non-blocking)

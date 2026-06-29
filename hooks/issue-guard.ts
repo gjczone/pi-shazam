@@ -1,39 +1,34 @@
 /**
- * pi-shazam hooks/issue-guard -- GitHub issue creation detector.
+ * pi-shazam hooks/issue-guard -- GitHub issue creation logger.
  *
- * Intercepts bash tool_call events to detect `gh issue create` commands.
- * When a serious issue (bug/crash/error) is created, sets a pending impact
- * flag that blocks subsequent file edits until shazam_impact is run.
+ * Logs `gh issue create` commands to internal.log for observability.
+ * Does NOT block or set pending-impact flags (subagent-safe).
  *
- * Trivial issues (chore/docs/typo) do not trigger the flag.
+ * Trivial issues (chore/docs/typo) are not logged.
  */
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
-import { setPendingImpact, clearPendingImpact } from "./impact-state.js";
 import { tokenizeSegments, extractCommandFromEvent } from "./_bash-utils.js";
 import { _logInternal } from "../core/output.js";
 
 /**
- * Patterns that indicate a serious issue requiring impact analysis.
+ * Patterns that indicate a serious issue.
  */
 const SERIOUS_PATTERNS = /\b(fix|bug|P0|P1|crash|error|broken|fail)\b/i;
 
 /**
- * Patterns that indicate a trivial issue not requiring impact analysis.
+ * Patterns that indicate a trivial issue.
  */
 const TRIVIAL_PATTERNS = /chore|docs|typo|readme/i;
 
-/** Cooldown between isError-triggered impact flag sets (30s). */
-let _lastErrorFlagTime = 0;
+/** Cooldown for error logging (30s). */
+let _lastErrorTime = 0;
 const ERROR_COOLDOWN_MS = 30_000;
 
 /**
  * Register the issue guard hook.
  *
- * On bash tool_call: detects `gh issue create` via argv-based parsing.
- * On isError tool_result: sets pending impact with 30s cooldown.
- * On shazam_impact tool_result: clears the pending impact flag.
- * On session_start: resets the pending impact flag.
+ * Does NOT block anything -- only logs to internal.log.
  */
 export function registerIssueGuard(pi: ExtensionAPI): void {
 	pi.on("tool_call", (event) => {
@@ -41,53 +36,33 @@ export function registerIssueGuard(pi: ExtensionAPI): void {
 
 		const command = extractCommandFromEvent(event);
 
-		// #467: segment-aware gh issue create detection. Previously only
-		// argv[0] was checked, so a chained command like
-		// `echo safe && gh issue create` bypassed detection (argv[0] was
-		// "echo") and the pending-impact flag was never set. Scan every
-		// segment for a `gh issue create` invocation.
+		// #467: segment-aware gh issue create detection
 		const segments = tokenizeSegments(command);
 		const isGhIssueCreate = segments.some(
 			(seg) => seg[0] === "gh" && seg.length >= 3 && seg[1] === "issue" && seg[2] === "create",
 		);
 		if (!isGhIssueCreate) return;
 
-		// Classify severity from title/body patterns in the command
 		const isSerious = SERIOUS_PATTERNS.test(command);
 		const isTrivial = TRIVIAL_PATTERNS.test(command);
 
 		if (isSerious && !isTrivial) {
-			_logInternal("issue-guard", "pending-impact flag set", { issueType: "serious", cmd: command?.slice(0, 200) });
-			setPendingImpact();
+			_logInternal("issue-guard", "serious issue created", { issueType: "serious", cmd: command?.slice(0, 200) });
 		}
 	});
 
-	// Clear pending impact when shazam_impact completes
+	// Log bash errors with cooldown
 	pi.on("tool_result", (event) => {
-		if (event.toolName === "shazam_impact" && !event.isError) {
-			_logInternal("issue-guard", "pending-impact flag cleared", { issueType: "impact-complete" });
-			clearPendingImpact();
-		}
-
-		// On isError from bash: set pending impact with 30s cooldown,
-		// scoped to gh/npm-test commands that indicate workflow failures
 		if (event.isError && event.toolName === "bash") {
 			const cmd = extractCommandFromEvent(event);
 			const issueGuardErrorRe = /\b(gh|npm\s+(test|run\s+test))\b/;
 			if (issueGuardErrorRe.test(cmd)) {
 				const now = Date.now();
-				if (now - _lastErrorFlagTime > ERROR_COOLDOWN_MS) {
-					_lastErrorFlagTime = now;
-					_logInternal("issue-guard", "pending-impact flag set", { issueType: "error", cmd: cmd?.slice(0, 200) });
-					setPendingImpact();
+				if (now - _lastErrorTime > ERROR_COOLDOWN_MS) {
+					_lastErrorTime = now;
+					_logInternal("issue-guard", "bash error detected", { issueType: "error", cmd: cmd?.slice(0, 200) });
 				}
 			}
 		}
-	});
-
-	// Reset pending impact on session start
-	pi.on("session_start", () => {
-		clearPendingImpact();
-		_lastErrorFlagTime = 0;
 	});
 }
