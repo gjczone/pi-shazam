@@ -116,6 +116,12 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 		} catch (err) {
 			_logWarn("sessionShutdown", "lsp enrich state reset failed", err);
 		}
+		try {
+			const { resetBaseline } = await import("./core/baseline.js");
+			resetBaseline();
+		} catch (err) {
+			_logWarn("sessionShutdown", "baseline reset failed", err);
+		}
 	});
 
 	// Reset rename safety gate state on new session (issue #326).
@@ -237,8 +243,8 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 						}
 					}
 				}
-			} catch {
-				// Log analysis is best-effort
+			} catch (err) {
+				_logWarn("shazam-doctor", "log analysis failed", err as Error);
 			}
 
 			const msg = parts.join("\n");

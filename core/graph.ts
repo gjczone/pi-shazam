@@ -267,7 +267,11 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 		}
 	}
 
+	const seenEdges = new Set<string>();
 	for (const e of data.edges) {
+		const ident = edgeIdentityFromRow(e);
+		if (seenEdges.has(ident)) continue;
+		seenEdges.add(ident);
 		// H6: Skip edges with dangling source/target (corrupted or version-mismatched cache)
 		if (!graph.symbols.has(e.source) || !graph.symbols.has(e.target)) {
 			_logWarn("deserializeGraphV2", `skipping dangling edge ${e.source} -> ${e.target}`);
@@ -492,12 +496,18 @@ export function compareGraphSnapshots(
 		modifiedSymbols,
 		callChainChanges: {
 			newCalls: edgesAdded.slice(0, 20).map((e) => {
-				const [from, to, kind] = e.split("::", 3);
-				return { from: from!, to: to!, kind: kind! };
+				const parts = e.split("::");
+				const kind = parts[parts.length - 3];
+				const target = parts.slice(3, 6).join("::");
+				const source = parts.slice(0, 3).join("::");
+				return { from: source, to: target, kind };
 			}),
 			removedCalls: edgesRemoved.slice(0, 20).map((e) => {
-				const [from, to, kind] = e.split("::", 3);
-				return { from: from!, to: to!, kind: kind! };
+				const parts = e.split("::");
+				const kind = parts[parts.length - 3];
+				const target = parts.slice(3, 6).join("::");
+				const source = parts.slice(0, 3).join("::");
+				return { from: source, to: target, kind };
 			}),
 		},
 	};

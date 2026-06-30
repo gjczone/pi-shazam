@@ -8,7 +8,15 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RepoGraph } from "../core/graph.js";
 import { executeOverview } from "../tools/overview.js";
 import { executeImpact, executeCallChain, getFlatReferences, formatFlatReferences } from "../tools/impact.js";
-import { executeLookupAsync, executeFileDetailAsync, executeStateMap } from "../tools/lookup.js";
+import {
+	executeLookupAsync,
+	executeFileDetailAsync,
+	executeStateMap,
+	_executeSearch,
+	_formatSearchResults,
+	_looksLikeNaturalLanguage,
+	_findSymbols,
+} from "../tools/lookup.js";
 import { executeFormat } from "../tools/format.js";
 import { executeVerifyTextAsync, executeVerifyJsonAsync } from "../tools/verify.js";
 import { executeChanges, executeChangesJson } from "../tools/changes.js";
@@ -148,14 +156,23 @@ export function registerAllTools(
 				text = await executeFileDetailAsync(getGraph(), nameStr);
 			} else if (mode === "state") {
 				text = executeStateMap(getGraph(), nameStr);
+			} else if (mode === "search") {
+				const results = _executeSearch(getGraph(), nameStr);
+				text = _formatSearchResults(nameStr, results);
 			} else {
-				text = await executeLookupAsync(
-					getGraph(),
-					nameStr,
-					file as string | undefined,
-					(direction as "both" | "supertypes" | "subtypes") ?? "both",
-					(showCallbacks as boolean) ?? false,
-				);
+				const matches = _findSymbols(getGraph(), nameStr, fileParam);
+				if (matches.length === 0 && _looksLikeNaturalLanguage(nameStr)) {
+					const results = _executeSearch(getGraph(), nameStr);
+					text = _formatSearchResults(nameStr, results);
+				} else {
+					text = await executeLookupAsync(
+						getGraph(),
+						nameStr,
+						file as string | undefined,
+						(direction as "both" | "supertypes" | "subtypes") ?? "both",
+						(showCallbacks as boolean) ?? false,
+					);
+				}
 			}
 			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
 			return { content: [{ type: "text", text }] };

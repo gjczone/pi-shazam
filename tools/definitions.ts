@@ -55,7 +55,10 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		zodParams: z.object({
 			name: z.string().describe("Symbol name or file path to look up"),
 			file: z.string().optional().describe("Optional file path to scope the search"),
-			mode: z.enum(["state"]).optional().describe("Use 'state' for enum/state map analysis"),
+			mode: z
+				.enum(["state", "search"])
+				.optional()
+				.describe("Use 'state' for enum/state map analysis, or 'search' for concept/fuzzy search"),
 			showCallbacks: z.boolean().optional().describe("Expand anonymous functions (default: collapsed)"),
 			direction: z
 				.enum(["both", "supertypes", "subtypes"])
