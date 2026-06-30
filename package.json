@@ -35,6 +35,9 @@
 			"./dist"
 		]
 	},
+	"publishConfig": {
+		"registry": "https://registry.npmjs.org"
+	},
 	"author": "gjczone",
 	"license": "MIT",
 	"repository": {
