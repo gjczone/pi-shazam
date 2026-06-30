@@ -468,6 +468,7 @@ export class LspManager {
 		const resolved = resolve(newRoot);
 		if (resolved !== this.projectRoot) {
 			this.projectRoot = resolved;
+			this._openedFilePaths.clear();
 			this.log?.(`Project root updated to ${this.projectRoot}`);
 		}
 	}
@@ -616,18 +617,42 @@ export class LspManager {
 			// Re-open previously opened files after server crash/reconnection
 			const prevOpened = this._openedFilePaths.get(language);
 			if (prevOpened && prevOpened.size > 0) {
-				// Read all files in parallel, then send didOpen in parallel
+				const rootResolved = resolve(this.projectRoot);
+				let realRoot: string;
+				try {
+					realRoot = realpathSync(rootResolved);
+				} catch {
+					realRoot = rootResolved;
+				}
 				const entries = [...prevOpened];
 				const readResults = await Promise.allSettled(
 					entries.map(async (filePath) => {
 						const absPath = resolve(detection.workspaceRoot, filePath);
+						if (!isPathInRoot(absPath, rootResolved)) {
+							_logWarn("_initServerForLanguage", `skipping out-of-root file after restart: ${filePath}`);
+							return { filePath, content: null, skipped: true };
+						}
+						try {
+							const realAbs = realpathSync(absPath);
+							if (!isPathInRoot(realAbs, realRoot)) {
+								_logWarn("_initServerForLanguage", `skipping symlink-escaped file after restart: ${filePath}`);
+								return { filePath, content: null, skipped: true };
+							}
+						} catch {
+							_logWarn("_initServerForLanguage", `skipping unreadable file after restart: ${filePath}`);
+							return { filePath, content: null, skipped: true };
+						}
 						const content = await readFileAdaptiveAsync(absPath);
-						return { filePath, content };
+						return { filePath, content, skipped: false };
 					}),
 				);
 				await Promise.allSettled(
 					readResults.map(async (result) => {
 						if (result.status === "fulfilled") {
+							if (result.value.skipped || result.value.content === null) {
+								prevOpened.delete(result.value.filePath);
+								return;
+							}
 							try {
 								await client.didOpen(result.value.filePath, result.value.content);
 							} catch (err) {
@@ -635,7 +660,6 @@ export class LspManager {
 								prevOpened.delete(result.value.filePath);
 							}
 						} else {
-							// File read failed -- likely deleted; remove from tracking
 							const filePath = entries[readResults.indexOf(result)]!;
 							_logWarn("_initServerForLanguage", `read failed for ${filePath}`, result.reason);
 							prevOpened.delete(filePath);
