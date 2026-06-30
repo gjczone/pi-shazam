@@ -27,7 +27,7 @@ describe("Tool context: LspManager injection", () => {
 		const { setLspManager, getLspManager } = await import("../tools/_context.js");
 		const { LspManager } = await import("../lsp/manager.js");
 		const mgr = new LspManager("/tmp/test-project");
-		setLspManager(mgr);
+		await setLspManager(mgr);
 		expect(getLspManager()).toBe(mgr);
 	});
 });
