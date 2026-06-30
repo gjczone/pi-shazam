@@ -71,4 +71,19 @@ INFO: done`;
 		expect(result).not.toContain("base64body");
 		expect(result).toContain("INFO: done");
 	});
+
+	it("handles single-line PEM blocks without dropping subsequent lines (#532)", () => {
+		const input = `line before
+-----BEGIN PRIVATE KEY-----MIIE...base64...-----END PRIVATE KEY-----
+line after
+another line`;
+		const result = redact(input);
+		expect(result).toContain("line before");
+		expect(result).toContain("line after");
+		expect(result).toContain("another line");
+		expect(result).not.toContain("MIIE...base64...");
+		expect(result).toContain("[REDACTED]");
+		const redactCount = (result.match(/\[REDACTED\]/g) || []).length;
+		expect(redactCount).toBe(1);
+	});
 });

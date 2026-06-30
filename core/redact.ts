@@ -43,6 +43,9 @@ function accumulatePemBlocks(s: string): string {
 		if (PEM_BEGIN_RE.test(line)) {
 			inPem = true;
 			result.push("[REDACTED]");
+			if (PEM_END_RE.test(line)) {
+				inPem = false;
+			}
 		} else if (inPem && PEM_END_RE.test(line)) {
 			inPem = false;
 			// END line absorbed into [REDACTED], skip output
