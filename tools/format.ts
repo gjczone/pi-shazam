@@ -41,9 +41,10 @@ export function registerFormat(pi: ExtensionAPI): void {
 			// preserve valid JSON (mirrors tools/lookup.ts:136-138).
 			const maxTokens = params.maxTokens as number | undefined;
 			const graph = scanProject(getEffectiveRoot());
+			const effectiveRoot = getEffectiveRoot();
 			let text = json
-				? await executeFormatJson(graph, ".", { dryRun, file })
-				: await executeFormat(graph, ".", { dryRun, file });
+				? await executeFormatJson(graph, effectiveRoot, { dryRun, file })
+				: await executeFormat(graph, effectiveRoot, { dryRun, file });
 			if (maxTokens && !json) {
 				text = truncateOutput(text.split("\n"), maxTokens);
 			}

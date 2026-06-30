@@ -125,6 +125,14 @@ export function diffFromBaseline(graph: RepoGraph, lspErrors: number, lspWarning
 }
 
 /**
+ * Reset the session baseline (called on session shutdown).
+ */
+export function resetBaseline(): void {
+	_baseline = null;
+	_previousOrphans = new Map();
+}
+
+/**
  * Format a baseline summary section for tool output.
  */
 export function formatBaselineSummary(baseline: SessionBaseline): string {

@@ -352,6 +352,7 @@ export function estimateTokens(text: string): number {
 function isHighPriorityLine(line: string): boolean {
 	if (line.startsWith("## ")) return true;
 	if (line.startsWith("### ")) return true;
+	if (line.startsWith("#### ")) return true;
 	if (line.startsWith("**") && line.includes(":**")) return true;
 	return false;
 }
@@ -378,6 +379,11 @@ export function truncateOutput(lines: string[], maxTokens: number): string {
 		const lineTokens = estimateTokens(line);
 
 		if (isHighPriorityLine(line)) {
+			if (usedTokens > maxTokens) {
+				truncating = true;
+				truncatedCount++;
+				continue;
+			}
 			kept.push(line);
 			usedTokens += lineTokens;
 			continue;

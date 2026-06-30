@@ -740,7 +740,7 @@ async function _executeFileDetailAsync(
 	const cached = fileDetailCache.get(cacheKey);
 	if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
 		try {
-			const st = statSync(file);
+			const st = statSync(resolve(getEffectiveRoot(), file));
 			if (st.mtimeMs === cached.mtimeMs) {
 				// LRU: move current key to the head of access order
 				const idx = _detailAccessOrder.indexOf(cacheKey);
@@ -797,7 +797,7 @@ async function _executeFileDetailAsync(
 
 	let mtimeMs = 0;
 	try {
-		mtimeMs = statSync(file).mtimeMs;
+		mtimeMs = statSync(resolve(getEffectiveRoot(), file)).mtimeMs;
 	} catch (err) {
 		_logWarn("_executeFileDetailAsync", `stat failed for ${file}`, err);
 		// File may not exist
@@ -1073,7 +1073,7 @@ export function _executeSearch(graph: RepoGraph, query: string): SearchResult[] 
 /**
  * Format search results as readable text output.
  */
-function _formatSearchResults(query: string, results: SearchResult[]): string {
+export function _formatSearchResults(query: string, results: SearchResult[]): string {
 	const lines: string[] = [];
 	lines.push(`## Concept Search: \`${_sanitizeMarkdown(query)}\` — ${results.length} results`);
 	lines.push("");
