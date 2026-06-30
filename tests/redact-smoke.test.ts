@@ -35,6 +35,22 @@ line2`;
 		}
 	});
 
+	it("redacts URL credentials in HTTP(S)/AMQP/FTP URLs (#533)", () => {
+		const cases: [string, string][] = [
+			["https://token:x-oauth-basic@github.com/user/repo.git", "[REDACTED]github.com/user/repo.git"],
+			["http://user:pass@example.com/path", "[REDACTED]example.com/path"],
+			["amqp://user:pass@rabbitmq:5672/vhost", "[REDACTED]rabbitmq:5672/vhost"],
+			["ftp://admin:secret@ftp.example.com/files", "[REDACTED]ftp.example.com/files"],
+			[
+				"https://x-access-token:ghu_abcdefghijklmnopqrstuvwxyz1234567890@github.com/gjczone/pi-shazam",
+				"[REDACTED]github.com/gjczone/pi-shazam",
+			],
+		];
+		for (const [input, expected] of cases) {
+			expect(redact(input)).toBe(expected);
+		}
+	});
+
 	it("redacts bearer tokens", () => {
 		expect(redact("bearer abcdefghijklmnopqrstuv")).toContain("[REDACTED]");
 		expect(redact("Bearer xyz1234567890abcdef_+-=")).toContain("[REDACTED]");

@@ -244,8 +244,12 @@ export function installPreCommitHook(projectRoot: string): string {
 			const backupPath = join(hooksDir, "pre-commit.shazam-backup");
 			writeFileSync(backupPath, existingContent, "utf-8");
 		}
-	} catch {
-		// Hook file does not exist or was removed between check and read.
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+			_logWarn("git-hooks", `unexpected error reading hook file: ${hookPath}`, err as Error);
+			throw err;
+		}
+		// ENOENT: hook file does not exist or was removed between check and read.
 		// Treat as no existing hook and proceed with fresh installation.
 	}
 
@@ -270,8 +274,11 @@ export function isPreCommitHookInstalled(projectRoot: string): boolean {
 	try {
 		const content = readFileSync(hookPath, "utf-8");
 		return content.includes("shazam");
-	} catch {
-		// Hook file does not exist or was removed between check and read.
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+			_logWarn("git-hooks", `failed to read hook file: ${hookPath}`, err as Error);
+		}
+		// ENOENT or other error: treat as not installed.
 		return false;
 	}
 }
@@ -293,8 +300,11 @@ export function removePreCommitHook(projectRoot: string): boolean {
 	let content: string;
 	try {
 		content = readFileSync(hookPath, "utf-8");
-	} catch {
-		// Hook file does not exist or was removed between check and read.
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+			_logWarn("git-hooks", `failed to read hook file: ${hookPath}`, err as Error);
+		}
+		// ENOENT or other error: hook not present or unreadable, nothing to remove.
 		return false;
 	}
 	if (!content.includes("shazam")) return false;
@@ -305,10 +315,14 @@ export function removePreCommitHook(projectRoot: string): boolean {
 		const backupContent = readFileSync(backupPath, "utf-8");
 		writeFileSync(hookPath, backupContent, "utf-8");
 		chmodSync(hookPath, 0o755);
-	} catch {
-		// Backup file does not exist or was removed between check and read.
-		// Remove the shazam-installed hook instead of restoring backup.
-		unlinkSync(hookPath);
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+			// Backup file does not exist or was removed between check and read.
+			// Remove the shazam-installed hook instead of restoring backup.
+			unlinkSync(hookPath);
+		} else {
+			_logWarn("git-hooks", `failed to read backup, not removing hook: ${backupPath}`, err as Error);
+		}
 	}
 
 	return true;
