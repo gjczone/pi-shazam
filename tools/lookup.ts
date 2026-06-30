@@ -752,8 +752,8 @@ async function _executeFileDetailAsync(
 			}
 			_removeFromDetailCache(cacheKey);
 		} catch (err) {
-			_logWarn("_executeFileDetailAsync", "stat failed for cache entry", err);
-			return cached.text;
+			_logWarn("_executeFileDetailAsync", "stat failed for cache entry, returning stale content", err);
+			return `[STALE CACHE WARNING] File '${file}' is no longer accessible (stat failed). The content below may be outdated.\n\n${cached.text}`;
 		}
 	}
 

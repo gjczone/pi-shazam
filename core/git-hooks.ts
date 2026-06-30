@@ -360,11 +360,13 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 					cwd: projectRoot,
 					encoding: "utf-8",
 					timeout: 60000,
-					stdio: ["ignore", "ignore", "pipe"],
+					stdio: ["ignore", "pipe", "pipe"],
 				});
 			} catch (err) {
 				const stderr = (err as { stderr?: string })?.stderr ?? "";
-				errors.push(`TypeScript typecheck failed: ${String(stderr).slice(0, 500)}`);
+				const stdout = (err as { stdout?: string })?.stdout ?? "";
+				const detail = String(stdout + stderr).slice(0, 500);
+				errors.push(`TypeScript typecheck failed: ${detail}`);
 			}
 		}
 
@@ -407,17 +409,19 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 					cwd: projectRoot,
 					encoding: "utf-8",
 					timeout: 60000,
-					stdio: ["ignore", "ignore", "pipe"],
+					stdio: ["ignore", "pipe", "pipe"],
 				});
 				pyrightAvailable = true;
 			} catch (err: unknown) {
 				const errnoErr = err as NodeJS.ErrnoException;
 				const stderr = (errnoErr as { stderr?: string })?.stderr ?? "";
+				const stdout = (errnoErr as { stdout?: string })?.stdout ?? "";
 				if (errnoErr.code === "ENOENT" || (errnoErr as NodeJS.ErrnoException & { status?: number }).status === 127) {
 					// pyright not installed -- try mypy
 				} else {
 					// pyright found type errors
-					errors.push(`pyright found type errors: ${String(stderr).slice(0, 500)}`);
+					const detail = String(stdout + stderr).slice(0, 500);
+					errors.push(`pyright found type errors: ${detail}`);
 					pyrightAvailable = true; // already reported, don't fall through
 				}
 			}
@@ -428,11 +432,13 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 						cwd: projectRoot,
 						encoding: "utf-8",
 						timeout: 60000,
-						stdio: ["ignore", "ignore", "pipe"],
+						stdio: ["ignore", "pipe", "pipe"],
 					});
 				} catch (err) {
 					const stderr = (err as { stderr?: string })?.stderr ?? "";
-					errors.push(`Python type check failed: ${String(stderr).slice(0, 500)}`);
+					const stdout = (err as { stdout?: string })?.stdout ?? "";
+					const detail = String(stdout + stderr).slice(0, 500);
+					errors.push(`Python type check failed: ${detail}`);
 				}
 			}
 		}
