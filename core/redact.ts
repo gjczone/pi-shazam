@@ -9,8 +9,8 @@
 export const SECRET_PATTERNS: RegExp[] = [
 	// Multiline -- PEM private key blocks (also handled by accumulatePemBlocks for line-by-line safety)
 	/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
-	// Connection strings with embedded credentials
-	/(?:mongodb|postgres(?:ql)?|mysql|redis):\/\/[^:]*:[^@]*@/gi,
+	// URL credentials (any scheme: http, https, mongodb, amqp, ftp, etc.)
+	/(?:[a-z][a-z0-9+\-.]*):\/\/[^:@\s"']+:[^@\s"']+@/gi,
 	// Bearer tokens (opaque, non-JWT)
 	/bearer\s+[A-Za-z0-9_\-+=]{20,}/gi,
 	/(?:token|secret|password|key|credential|auth)\s*[:=]\s*["'\w-]{8,}/gi,

@@ -12,8 +12,9 @@ import { tmpdir } from "node:os";
 // Hoisted state: paths that should simulate TOCTOU race.
 // existsSync returns true (file physically exists), but readFileSync throws
 // ENOENT to simulate the file being deleted between the two calls.
-const { racePaths } = vi.hoisted(() => ({
+const { racePaths, errorCodeMap } = vi.hoisted(() => ({
 	racePaths: new Set<string>(),
+	errorCodeMap: new Map<string, string>(),
 }));
 
 vi.mock("node:fs", async (importOriginal) => {
@@ -23,8 +24,9 @@ vi.mock("node:fs", async (importOriginal) => {
 		readFileSync: vi.fn((...args: Parameters<typeof actual.readFileSync>) => {
 			const path = String(args[0]);
 			if (racePaths.has(path)) {
-				const err = new Error(`ENOENT: no such file or directory, open '${path}'`) as NodeJS.ErrnoException;
-				err.code = "ENOENT";
+				const code = errorCodeMap.get(path) || "ENOENT";
+				const err = new Error(`${code}: error, open '${path}'`) as NodeJS.ErrnoException;
+				err.code = code;
 				throw err;
 			}
 			return actual.readFileSync(...args);
@@ -62,6 +64,7 @@ let hooksDir: string;
 
 beforeEach(() => {
 	racePaths.clear();
+	errorCodeMap.clear();
 	tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-githooks-"));
 	hooksDir = join(tmpDir, ".git", "hooks");
 	mkdirSync(hooksDir, { recursive: true });
@@ -69,6 +72,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	racePaths.clear();
+	errorCodeMap.clear();
 	try {
 		rmSync(tmpDir, { recursive: true, force: true });
 	} catch {
@@ -159,5 +163,49 @@ describe("removePreCommitHook: TOCTOU resilience (#462)", () => {
 		// Backup content should now be in hookPath (readFileSync passes through
 		// to real impl since hookPath is not in racePaths)
 		expect(readFileSync(hookPath, "utf-8")).toContain("original custom hook");
+	});
+});
+
+describe("non-ENOENT error handling (#534)", () => {
+	it("installPreCommitHook should throw on EACCES reading existing hook", () => {
+		const hookPath = join(hooksDir, "pre-commit");
+		writeFileSync(hookPath, "# custom hook", "utf-8");
+		racePaths.add(hookPath);
+		errorCodeMap.set(hookPath, "EACCES");
+
+		expect(() => installPreCommitHook(tmpDir)).toThrow();
+	});
+
+	it("isPreCommitHookInstalled should return false on non-ENOENT error", () => {
+		const hookPath = join(hooksDir, "pre-commit");
+		writeFileSync(hookPath, "# shazam hook", "utf-8");
+		racePaths.add(hookPath);
+		errorCodeMap.set(hookPath, "EACCES");
+
+		const result = isPreCommitHookInstalled(tmpDir);
+		expect(result).toBe(false);
+	});
+
+	it("removePreCommitHook should return false on non-ENOENT error reading hook", () => {
+		const hookPath = join(hooksDir, "pre-commit");
+		writeFileSync(hookPath, "# shazam hook", "utf-8");
+		racePaths.add(hookPath);
+		errorCodeMap.set(hookPath, "EACCES");
+
+		const result = removePreCommitHook(tmpDir);
+		expect(result).toBe(false);
+	});
+
+	it("removePreCommitHook should NOT unlink hook on non-ENOENT error reading backup", () => {
+		const hookPath = join(hooksDir, "pre-commit");
+		const backupPath = join(hooksDir, "pre-commit.shazam-backup");
+		writeFileSync(hookPath, "# shazam hook", "utf-8");
+		writeFileSync(backupPath, "# original hook", "utf-8");
+		racePaths.add(backupPath);
+		errorCodeMap.set(backupPath, "EACCES");
+
+		const result = removePreCommitHook(tmpDir);
+		expect(result).toBe(true);
+		expect(readFileSync(hookPath, "utf-8")).toContain("shazam hook");
 	});
 });
