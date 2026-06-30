@@ -294,8 +294,11 @@ export function _getVersionManagerBinDirs(): string[] {
 			if (statSync(dir).isDirectory()) {
 				dirs.push(dir);
 			}
-		} catch {
-			// Directory does not exist — skip silently
+		} catch (err) {
+			// Directory does not exist — skip silently for ENOENT, log unexpected errors
+			if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+				_logWarn("_getVersionManagerBinDirs", `stat failed for ${dir}`, err);
+			}
 		}
 	}
 	// Fallback: check default install directories when env var is not set
@@ -305,8 +308,11 @@ export function _getVersionManagerBinDirs(): string[] {
 			if (statSync(dir).isDirectory()) {
 				dirs.push(dir);
 			}
-		} catch {
-			// Directory does not exist — skip silently
+		} catch (err) {
+			// Directory does not exist — skip silently for ENOENT, log unexpected errors
+			if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+				_logWarn("_getVersionManagerBinDirs", `stat failed for ${dir}`, err);
+			}
 		}
 	}
 	return dirs;
@@ -621,7 +627,8 @@ export class LspManager {
 				let realRoot: string;
 				try {
 					realRoot = realpathSync(rootResolved);
-				} catch {
+				} catch (err) {
+					_logWarn("_initServerForLanguage", "realpathSync project root failed, using unresolved path", err);
 					realRoot = rootResolved;
 				}
 				const entries = [...prevOpened];
@@ -638,8 +645,8 @@ export class LspManager {
 								_logWarn("_initServerForLanguage", `skipping symlink-escaped file after restart: ${filePath}`);
 								return { filePath, content: null, skipped: true };
 							}
-						} catch {
-							_logWarn("_initServerForLanguage", `skipping unreadable file after restart: ${filePath}`);
+						} catch (err) {
+							_logWarn("_initServerForLanguage", `skipping unreadable file after restart: ${filePath}`, err);
 							return { filePath, content: null, skipped: true };
 						}
 						const content = await readFileAdaptiveAsync(absPath);

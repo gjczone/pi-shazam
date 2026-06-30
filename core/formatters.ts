@@ -53,8 +53,8 @@ export function detectFormatters(projectRoot: string): string[] {
 			const pkg = JSON.parse(pkgRaw);
 			if (pkg.prettier) formatters.push("prettier");
 			if (pkg.eslintConfig) formatters.push("eslint");
-		} catch {
-			_logWarn("detectFormatters", "package.json parse failed");
+		} catch (err) {
+			_logWarn("detectFormatters", "package.json parse failed", err);
 			// package.json invalid -- continue
 		}
 	}
@@ -71,8 +71,8 @@ export function detectFormatters(projectRoot: string): string[] {
 		try {
 			const pyproject = readFileAdaptive(join(projectRoot, "pyproject.toml"));
 			if (pyproject.includes("[tool.ruff")) formatters.push("ruff");
-		} catch {
-			_logWarn("detectFormatters", "pyproject.toml parse failed");
+		} catch (err) {
+			_logWarn("detectFormatters", "pyproject.toml parse failed", err);
 		}
 	}
 
@@ -85,8 +85,8 @@ export function detectFormatters(projectRoot: string): string[] {
 		try {
 			const cargo = readFileAdaptive(join(projectRoot, "Cargo.toml"));
 			if (cargo.includes("[package]")) formatters.push("rustfmt");
-		} catch {
-			_logWarn("detectFormatters", "Cargo.toml parse failed");
+		} catch (err) {
+			_logWarn("detectFormatters", "Cargo.toml parse failed", err);
 		}
 	}
 

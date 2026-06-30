@@ -283,8 +283,8 @@ function parseEditorconfig(projectRoot: string): { style?: string; size?: number
 		}
 
 		return { style, size };
-	} catch {
-		_logWarn("parseEditorconfig", "failed to parse .editorconfig");
+	} catch (err) {
+		_logWarn("parseEditorconfig", "failed to parse .editorconfig", err);
 		return null;
 	}
 }
@@ -349,8 +349,8 @@ function hasUseTabsInConfig(projectRoot: string): boolean {
 				if (content.includes('"useTabs"') || content.includes("'useTabs'")) {
 					return content.includes('"useTabs": true') || content.includes("'useTabs': true");
 				}
-			} catch {
-				_logWarn("hasUseTabsInConfig", "failed to read config file");
+			} catch (err) {
+				_logWarn("hasUseTabsInConfig", "failed to read config file", err);
 				// Skip unreadable configs
 			}
 		}
@@ -363,8 +363,8 @@ function hasUseTabsInConfig(projectRoot: string): boolean {
 			const pkg = JSON.parse(readFileAdaptive(pkgPath));
 			if (pkg.prettier?.useTabs === true) return true;
 		}
-	} catch {
-		_logWarn("hasUseTabsInConfig", "failed to read package.json");
+	} catch (err) {
+		_logWarn("hasUseTabsInConfig", "failed to read package.json", err);
 		// Skip
 	}
 

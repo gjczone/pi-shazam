@@ -55,8 +55,8 @@ function atomicRename(tmpPath: string, targetPath: string): void {
 		if (code === "EPERM" || code === "EBUSY") {
 			try {
 				unlinkSync(targetPath);
-			} catch {
-				_logWarn("atomicRename", "unlinkSync target failed (may not exist)");
+			} catch (unlinkErr) {
+				_logWarn("atomicRename", "unlinkSync target failed (may not exist)", unlinkErr);
 			}
 			renameSync(tmpPath, targetPath);
 		} else {
@@ -90,8 +90,8 @@ export function saveGraphCache(graph: RepoGraph, fileMtimes: Map<string, number>
 		// Clean up tmp file on failure
 		try {
 			unlinkSync(tmpPath);
-		} catch {
-			_logWarn("saveGraphCache", "failed to clean up tmp file");
+		} catch (cleanupErr) {
+			_logWarn("saveGraphCache", "failed to clean up tmp file", cleanupErr);
 		}
 		throw err;
 	}

@@ -90,8 +90,9 @@ export async function ensureLogDir(): Promise<void> {
 	await mkdir(AUDIT_LOG_DIR, { recursive: true });
 	try {
 		await chmod(AUDIT_LOG_DIR, 0o700);
-	} catch {
-		// best-effort
+	} catch (err) {
+		// best-effort: log the cause but do not fail the write
+		_logWarn("ensureLogDir", "chmod 0o700 failed on audit log dir", err);
 	}
 	_logDirEnsured = true;
 }
@@ -110,8 +111,9 @@ export async function writeJsonlEntry(logPath: string, data: Record<string, unkn
 	await appendFile(logPath, json + "\n", "utf-8");
 	try {
 		await chmod(logPath, 0o600);
-	} catch {
-		// best-effort
+	} catch (err) {
+		// best-effort: log the cause but do not fail the write
+		_logWarn("writeJsonlEntry", "chmod 0o600 failed on log file", err);
 	}
 }
 

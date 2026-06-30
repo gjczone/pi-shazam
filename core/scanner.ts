@@ -1066,8 +1066,8 @@ function _walkDirectory(
 				if (SOURCE_EXTS.has(ext)) {
 					files.push(relPath);
 				}
-			} catch {
-				_logWarn("_walkDirectory", `broken symlink: ${relPath}`);
+			} catch (err) {
+				_logWarn("_walkDirectory", `broken symlink: ${relPath}`, err);
 				continue; // broken symlink, skip
 			}
 		} else if (entry.isFile()) {

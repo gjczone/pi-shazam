@@ -120,7 +120,8 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 			if (!hasRuff && existsSync(join(projectRoot, "pyproject.toml"))) {
 				try {
 					hasRuff = readFileAdaptive(join(projectRoot, "pyproject.toml")).includes("[tool.ruff");
-				} catch {
+				} catch (err) {
+					_logWarn("shazam-guide", "pyproject.toml read failed, skipping ruff detection", err);
 					hasRuff = false;
 				}
 			}
