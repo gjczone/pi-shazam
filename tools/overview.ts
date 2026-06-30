@@ -709,8 +709,13 @@ export function _buildDataStructuresSection(graph: RepoGraph): string | null {
 	const dataSyms = [...graph.symbols.values()].filter((s) => DATA_STRUCTURE_KINDS.has(s.kind));
 	if (dataSyms.length === 0) return null;
 
-	// Sort by PageRank descending, take top N
-	const top = dataSyms.sort((a, b) => b.pagerank - a.pagerank).slice(0, DATA_STRUCTURES_TOP_N);
+	// Sort by PageRank descending, then by name ascending for stability
+	const top = dataSyms
+		.sort((a, b) => {
+			if (b.pagerank !== a.pagerank) return b.pagerank - a.pagerank;
+			return a.name.localeCompare(b.name);
+		})
+		.slice(0, DATA_STRUCTURES_TOP_N);
 
 	const lines: string[] = [];
 	lines.push("### Key Data Structures");

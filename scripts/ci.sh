@@ -25,7 +25,11 @@ echo ""
 
 # Step 4: Tests
 echo "--- Tests ---"
-npm test 2>/dev/null && echo "  tests passed" || echo "  (no tests configured)"
+if ! npm test; then
+  echo "  FAILED -- tests must pass before push"
+  exit 1
+fi
+echo "  tests passed"
 echo ""
 
 # Step 5: CI config check
