@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.2] - 2026-06-30
+
+### Bug Fixes
+
+- **fix(#542): extract TypeScript type references into dependency graph** —
+  Added 'type' tree-sitter query for extends/implements clauses, type annotations, and generic type arguments; built 'type' edges (weight 0.4, confidence 0.8); updated filter and graph serialization.
+
+- **fix(#520): ci.sh test failure masking + flaky data structures test** —
+  Replaced chain with proper if/else that exits 1 on failure. Removed stderr redirect so test failures are visible. Fixed flaky data structures test by sorting by name when PageRank is equal.
+
+- **fix(#521-#529): batch fix 9 P0/P1 code review issues** —
+  MCP search mode, sub-header priority, empty catch logging, high-priority truncation budget, edge identity parsing, graph dedup, session baseline reset, format root path, lookup path resolution.
+
+- **fix(#530,#531,#532): redact PEM state, audit-log warnings, tool-logger error redaction** —
+  Redact error text in tool-logger results, add _logWarn to writeJsonl catch, fix accumulatePemBlocks single-line PEM handling.
+
+- **fix(#533,#534): broaden URL credential redaction, narrow git-hooks catch blocks** —
+  Match any scheme in SECRET_PATTERNS URL regex. Narrow TOCTOU catches to only swallow ENOENT.
+
+- **fix(#535,#536): correct project root handling in rename and LSP recovery** —
+  executeRenameSymbol and applyWorkspaceEdit now use getEffectiveRoot(). LSP crash recovery clears tracked files on root change and validates path containment.
+
 ## [0.23.0] - 2026-06-29
 
 ### Removals
