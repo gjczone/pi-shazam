@@ -87,7 +87,15 @@ export let _logDirEnsured = false;
 /** Ensure the audit log directory exists with restricted permissions. */
 export async function ensureLogDir(): Promise<void> {
 	if (_logDirEnsured) return;
-	await mkdir(AUDIT_LOG_DIR, { recursive: true });
+	// Wrap mkdir in try/catch and log via console.error -- NOT _logWarn -- so a
+	// persistent failure on the audit dir does not re-enter writeJsonl (which
+	// _logWarn would call) and start an unbounded recursion cycle (#552).
+	// Mark _logDirEnsured regardless of outcome to avoid retry storms.
+	try {
+		await mkdir(AUDIT_LOG_DIR, { recursive: true });
+	} catch (err) {
+		console.error("[pi-shazam] ensureLogDir: mkdir failed for", AUDIT_LOG_DIR, err);
+	}
 	try {
 		await chmod(AUDIT_LOG_DIR, 0o700);
 	} catch (err) {
@@ -120,11 +128,17 @@ export async function writeJsonlEntry(logPath: string, data: Record<string, unkn
 /**
  * Queue a JSONL write via async mutex.
  * Fire-and-forget: swallows write errors to avoid unhandled rejections.
+ *
+ * Routes write failures to console.error -- NOT _logWarn -- so a persistent
+ * fs failure (EACCES, EROFS, ENOSPC) does not re-enter writeJsonl via
+ * _logWarn -> writeJsonl(INTERNAL_LOG_PATH) and start an unbounded recursion
+ * cycle (#552). console.error is the only safe sink when the file-based
+ * logger is broken.
  */
 export function writeJsonl(logPath: string, data: Record<string, unknown>): void {
 	_writeMutex = _writeMutex
 		.then(() => writeJsonlEntry(logPath, data))
 		.catch((err) => {
-			_logWarn("audit-log", `writeJsonl failed for ${logPath}`, err);
+			console.error("[pi-shazam] writeJsonl failed for", logPath, err);
 		});
 }

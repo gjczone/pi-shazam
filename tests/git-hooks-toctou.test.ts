@@ -125,6 +125,20 @@ describe("isPreCommitHookInstalled: TOCTOU resilience (#462)", () => {
 
 		expect(isPreCommitHookInstalled(tmpDir)).toBe(false);
 	});
+
+	it("should not log a warning when hook file is genuinely missing (#551 local guard)", () => {
+		// The hook file is not created -- readFileSync throws ENOENT naturally.
+		// The local ENOENT guard at core/git-hooks.ts must suppress _logWarn so
+		// the missing-hook probe stays silent (issue #551 removed the blanket
+		// global suppression in _logWarn; genuinely-expected ENOENT is now
+		// handled by per-call-site guards).
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const result = isPreCommitHookInstalled(tmpDir);
+		expect(result).toBe(false);
+		// No warning: the local guard skips _logWarn for ENOENT.
+		expect(warnSpy).not.toHaveBeenCalled();
+		warnSpy.mockRestore();
+	});
 });
 
 describe("removePreCommitHook: TOCTOU resilience (#462)", () => {

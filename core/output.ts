@@ -339,10 +339,12 @@ export function getGraphSummary(graph: RepoGraph): { symbols: number; files: num
 
 // -- Token budget truncation -------------------------------------------------
 
-const CHARS_PER_TOKEN = 4;
+const CHARS_PER_TOKEN = 2;
 
 /**
- * Estimate token count for a text string using ~4 chars/token heuristic.
+ * Estimate token count for a text string using ~2 chars/token heuristic.
+ * Conservative for both ASCII (slight over-estimate) and CJK (no longer
+ * under-counted 4-8x as with the previous 4-chars/token ratio, #555).
  * No external dependency -- fast enough for inline use during formatting.
  */
 export function estimateTokens(text: string): number {
@@ -409,8 +411,13 @@ export function truncateOutput(lines: string[], maxTokens: number): string {
 /**
  * Log a warning without printing the full error stack trace.
  *
- * For ENOENT (file not found -- expected when a configured binary is not
- * installed), suppress log output entirely to avoid noise.
+ * Always records the warning (console.warn + internal event log). The previous
+ * blanket ENOENT early-return was removed (#551) because it hid root causes in
+ * paths where ENOENT signals a real problem (LSP hover failure, mid-walk
+ * directory deletion). Callers that genuinely expect ENOENT (optional-file
+ * probes, log rotation on a missing log) now add their own local
+ * `if (err.code === "ENOENT") return;` guard before calling _logWarn -- see
+ * core/scanner.ts:141 and core/git-hooks.ts for the reference pattern.
  *
  * For other errors, prints a concise one-line message: "tag: msg - reason".
  * Never passes the raw Error object to console, as Node.js would print the
@@ -426,9 +433,6 @@ export function truncateOutput(lines: string[], maxTokens: number): string {
  *   _logWarn("parseEditorconfig", "failed to parse .editorconfig")
  */
 export function _logWarn(tag: string, message: string, err?: unknown): void {
-	if (err instanceof Error && (err as NodeJS.ErrnoException).code === "ENOENT") {
-		return; // expected: file not found, suppress completely
-	}
 	const reason = err instanceof Error ? err.message : err != null ? String(err) : "";
 	console.warn(`[pi-shazam] ${tag}: ${message}${reason ? ` - ${reason}` : ""}`);
 	// Also persist to internal event log

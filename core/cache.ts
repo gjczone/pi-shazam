@@ -56,7 +56,12 @@ function atomicRename(tmpPath: string, targetPath: string): void {
 			try {
 				unlinkSync(targetPath);
 			} catch (unlinkErr) {
-				_logWarn("atomicRename", "unlinkSync target failed (may not exist)", unlinkErr);
+				// ENOENT here is genuinely expected -- the target does not exist
+				// yet on the first rename. Only log non-ENOENT failures (#551:
+				// blanket global suppression in _logWarn was removed; guard locally).
+				if ((unlinkErr as NodeJS.ErrnoException).code !== "ENOENT") {
+					_logWarn("atomicRename", "unlinkSync target failed", unlinkErr);
+				}
 			}
 			renameSync(tmpPath, targetPath);
 		} else {
