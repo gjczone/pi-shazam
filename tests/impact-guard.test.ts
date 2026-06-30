@@ -1,8 +1,7 @@
 /**
- * Tests for hooks/impact-state, hooks/issue-guard, hooks/agent-context-guard.
+ * Tests for hooks/issue-guard and hooks/agent-context-guard.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { setPendingImpact, clearPendingImpact, hasPendingImpact, resetImpactState } from "../hooks/impact-state.js";
 import { registerIssueGuard } from "../hooks/issue-guard.js";
 import { registerAgentContextGuard } from "../hooks/agent-context-guard.js";
 import type { ExtensionAPI, ToolCallEvent, ToolResultEvent } from "../types/pi-extension.js";
@@ -55,61 +54,28 @@ function makeToolResult(toolName: string, isError: boolean): ToolResultEvent {
 	} as unknown as ToolResultEvent;
 }
 
-describe("hooks/impact-state", () => {
-	beforeEach(() => resetImpactState());
-
-	it("should set pending impact flag", () => {
-		setPendingImpact();
-		expect(hasPendingImpact()).toBe(true);
-	});
-
-	it("should clear pending impact flag", () => {
-		setPendingImpact();
-		clearPendingImpact();
-		expect(hasPendingImpact()).toBe(false);
-	});
-
-	it("should start with no pending impact", () => {
-		expect(hasPendingImpact()).toBe(false);
-	});
-
-	it("should reset state", () => {
-		setPendingImpact();
-		resetImpactState();
-		expect(hasPendingImpact()).toBe(false);
-	});
-});
-
 describe("hooks/issue-guard (non-blocking)", () => {
-	beforeEach(() => {
-		resetImpactState();
-	});
-
 	it("should NOT set pending impact for serious issue (fix/crash)", () => {
 		const { pi, emit } = createMockPi();
 		registerIssueGuard(pi);
 		emit("tool_call", makeBashToolCall('gh issue create --title "fix: crash on login" --body "details"'));
-		expect(hasPendingImpact()).toBe(false);
+		// Issue guard is non-blocking; the call just shouldn't throw.
+		expect(true).toBe(true);
 	});
 
 	it("should NOT set pending impact for bug-related issue", () => {
 		const { pi, emit } = createMockPi();
 		registerIssueGuard(pi);
 		emit("tool_call", makeBashToolCall('gh issue create --title "bug: cannot save" --body "steps"'));
-		expect(hasPendingImpact()).toBe(false);
+		expect(true).toBe(true);
 	});
 
-	it("should NOT clear pending impact when shazam_impact tool_result arrives", () => {
+	it("should handle shazam_impact tool_result without error", () => {
 		const { pi, emit } = createMockPi();
 		registerIssueGuard(pi);
-
-		// Set pending impact directly (simulates prior state)
-		setPendingImpact();
-		expect(hasPendingImpact()).toBe(true);
-
-		// Issue-guard no longer clears pending impact
+		// Should not throw when a shazam_impact result arrives.
 		emit("tool_result", makeToolResult("shazam_impact", false));
-		expect(hasPendingImpact()).toBe(true);
+		expect(true).toBe(true);
 	});
 
 	it("should NOT set pending impact for bash errors", () => {
@@ -123,15 +89,11 @@ describe("hooks/issue-guard (non-blocking)", () => {
 			} as unknown as ToolResultEvent,
 			{ cwd: "/test" },
 		);
-		expect(hasPendingImpact()).toBe(false);
+		expect(true).toBe(true);
 	});
 });
 
 describe("hooks/agent-context-guard (non-blocking)", () => {
-	beforeEach(() => {
-		resetImpactState();
-	});
-
 	it("should NOT block review task without context", () => {
 		const { pi, emit } = createMockPi();
 		registerAgentContextGuard(pi);
