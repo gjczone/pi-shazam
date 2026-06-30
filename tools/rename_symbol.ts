@@ -160,7 +160,7 @@ export async function executeRenameSymbol(
 	symbolName: string,
 	newName: string,
 	dryRun: boolean = false,
-	projectRoot: string = process.cwd(),
+	projectRoot: string = getEffectiveRoot(),
 ): Promise<RenameResult> {
 	// Find all matching symbols (fix #216: show all matches, not just first)
 	const matchingSymbols: Symbol[] = [];
@@ -322,7 +322,7 @@ interface ApplyResult {
 async function applyWorkspaceEdit(
 	edit: WorkspaceEdit,
 	dryRun: boolean,
-	projectRoot: string = process.cwd(),
+	projectRoot: string = getEffectiveRoot(),
 ): Promise<ApplyResult> {
 	let fileCount = 0;
 	let totalChanges = 0;
