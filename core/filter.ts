@@ -292,6 +292,12 @@ function _hasSameFileRef(graph: RepoGraph, sym: { name: string; file: string }):
 			if (refName === sym.name) return true;
 		}
 	}
+	const typeRefs = graph.fileTypeRefs.get(sym.file);
+	if (typeRefs) {
+		for (const [typeName] of typeRefs) {
+			if (typeName === sym.name) return true;
+		}
+	}
 	return false;
 }
 

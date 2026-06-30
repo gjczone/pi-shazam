@@ -110,6 +110,7 @@ interface FileCacheEntry {
 	imports: [string, number][];
 	calls: [string, number, string][];
 	refs: [string, number][];
+	typeRefs: [string, number][];
 	jsImportBindings: import("./graph.js").JSImportBinding[];
 }
 
@@ -253,6 +254,7 @@ export function removeEdgesForFile(graph: RepoGraph, relPath: string, preserveIn
 	graph.fileCalls.delete(relPath);
 	graph.fileImportBindings.delete(relPath);
 	graph.fileRefs.delete(relPath);
+	graph.fileTypeRefs.delete(relPath);
 
 	// Use reverse edge index to clean cross-file references: O(K) not O(E).
 	// Skip when preserveIncoming is true -- the cross-file source->B edges
@@ -339,6 +341,7 @@ export function removeFileData(graph: RepoGraph, relPath: string): void {
 	graph.fileCalls.delete(relPath);
 	graph.fileImportBindings.delete(relPath);
 	graph.fileRefs.delete(relPath);
+	graph.fileTypeRefs.delete(relPath);
 
 	// Use reverse edge index to clean cross-file references: O(K) not O(E)
 	for (const targetId of symIdSet) {
@@ -474,9 +477,10 @@ function parseFile(adapter: TreeSitterAdapter, root: string, relPath: string, mt
 			const imports = adapter.extractImports(tree, lang);
 			const calls = adapter.extractCalls(tree, lang);
 			const refs = adapter.extractRefs(tree, lang);
+			const typeRefs = adapter.extractTypeRefs(tree, lang);
 			const jsImportBindings = adapter.extractJsTsImportBindings(tree, lang);
 
-			return { mtime, symbols, imports, calls, refs, jsImportBindings };
+			return { mtime, symbols, imports, calls, refs, typeRefs, jsImportBindings };
 		} finally {
 			tree.delete?.();
 		}
@@ -543,6 +547,24 @@ function buildEdgesForFile(graph: RepoGraph, root: string, relPath: string, entr
 				for (const caller of callerSyms) {
 					if (caller.id !== calleeSym.id) {
 						addEdge(graph, createEdge(caller.id, calleeSym.id, 0.5, "ref", 0.9));
+					}
+				}
+			}
+		}
+	}
+
+	// Type reference edges -- type annotations, extends/implements, generic args (issue #542)
+	if (entry.typeRefs.length > 0) {
+		graph.fileTypeRefs.set(relPath, entry.typeRefs);
+		for (const [typeName, typeLine] of entry.typeRefs) {
+			// Find the enclosing symbol that contains this type reference
+			const callerSyms = findCallerSymbols(thisFileSymIds, graph.symbols, typeLine);
+			// Type references can be cross-file (like calls), search all symbols by name
+			const targetSyms = findCalleeSymbols(typeName, graph);
+			for (const caller of callerSyms) {
+				for (const target of targetSyms) {
+					if (caller.id !== target.id) {
+						addEdge(graph, createEdge(caller.id, target.id, 0.4, "type", 0.8));
 					}
 				}
 			}
@@ -719,9 +741,10 @@ function reconstructFileCache(graph: RepoGraph, fileMtimes: Map<string, number>)
 
 		const calls = graph.fileCalls.get(relPath) || [];
 		const refs: [string, number][] = graph.fileRefs.get(relPath) || [];
+		const typeRefs: [string, number][] = graph.fileTypeRefs.get(relPath) || [];
 		const jsImportBindings = graph.fileImportBindings.get(relPath) || [];
 
-		entries.set(relPath, { mtime, symbols, imports, calls, refs, jsImportBindings });
+		entries.set(relPath, { mtime, symbols, imports, calls, refs, typeRefs, jsImportBindings });
 	}
 
 	return entries;

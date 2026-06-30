@@ -548,6 +548,95 @@ export class TreeSitterAdapter {
 			.sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]));
 	}
 
+	// -- Type reference extraction (TypeScript/TSX) -----------------------------
+
+	/**
+	 * Extract type identifier references from type annotations, extends/implements clauses,
+	 * generic type arguments, and return types.
+	 *
+	 * These references build type dependency edges in the graph, ensuring that
+	 * interfaces/types used by other symbols receive appropriate PageRank scores
+	 * instead of all having identical scores (issue #542).
+	 */
+	extractTypeRefs(tree: Tree, lang: string): [string, number][] {
+		const langQueries = this.queries.get(lang);
+		const query = langQueries?.get("type");
+		if (!query) return [];
+
+		const results = new Map<string, number>();
+
+		for (const { name: capName, node } of query.captures(tree.rootNode)) {
+			if (capName !== "name") continue;
+			const name = node.text;
+			if (!name) continue;
+
+			// Skip predefined TypeScript types that are not user-defined symbols
+			if (this._isPredefinedType(name)) continue;
+
+			const line = node.startPosition.row + 1;
+			const key = `${name}::${line}`;
+			if (!results.has(key)) {
+				results.set(key, line);
+			}
+		}
+
+		return [...results.entries()]
+			.map(([k, line]) => {
+				const idx = k.lastIndexOf("::");
+				return [k.slice(0, idx), line] as [string, number];
+			})
+			.sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]));
+	}
+
+	/**
+	 * Check if a type name is a TypeScript predefined/built-in type that should
+	 * not be treated as a reference to a user-defined symbol.
+	 */
+	private _isPredefinedType(name: string): boolean {
+		const PREDEFINED_TYPES = new Set([
+			"string",
+			"number",
+			"boolean",
+			"any",
+			"unknown",
+			"never",
+			"void",
+			"object",
+			"symbol",
+			"bigint",
+			"undefined",
+			"null",
+			// Uppercase built-in constructors (used as types)
+			"String",
+			"Number",
+			"Boolean",
+			"Object",
+			"Symbol",
+			"BigInt",
+			"Array",
+			"Promise",
+			"ReadonlyArray",
+			"Partial",
+			"Required",
+			"Readonly",
+			"Record",
+			"Pick",
+			"Omit",
+			"Exclude",
+			"Extract",
+			"NonNullable",
+			"Parameters",
+			"ConstructorParameters",
+			"ReturnType",
+			"InstanceType",
+			"Uppercase",
+			"Lowercase",
+			"Capitalize",
+			"Uncapitalize",
+		]);
+		return PREDEFINED_TYPES.has(name);
+	}
+
 	// -- JS/TS import/export binding extraction ---------------------------------
 
 	extractJsTsImportBindings(tree: Tree, lang: string): JSImportBinding[] {

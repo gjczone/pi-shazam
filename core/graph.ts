@@ -44,6 +44,7 @@ export interface RepoGraph {
 	fileImports: Map<string, string[]>;
 	fileCalls: Map<string, [string, number, string][]>;
 	fileRefs: Map<string, [string, number][]>;
+	fileTypeRefs: Map<string, [string, number][]>;
 	fileImportBindings: Map<string, JSImportBinding[]>;
 	/** Index symbols by name for O(1) lookup in findCalleeSymbols / findSymbolByNameInFile */
 	nameIndex: Map<string, Symbol[]>;
@@ -84,6 +85,7 @@ export function createRepoGraph(): RepoGraph {
 		fileImports: new Map(),
 		fileCalls: new Map(),
 		fileRefs: new Map(),
+		fileTypeRefs: new Map(),
 		fileImportBindings: new Map(),
 		nameIndex: new Map(),
 		targetToSources: new Map(),
@@ -189,6 +191,7 @@ export interface SerializedGraphV2 {
 	fileSymbols: Record<string, string[]>;
 	fileImports: Record<string, [string, number][]>;
 	fileRefs: Record<string, [string, number][]>;
+	fileTypeRefs?: Record<string, [string, number][]>;
 	fileCalls: Record<string, [string, number, string][]>;
 	fileImportBindings: Record<string, JSImportBinding[]>;
 	fileMtimes: Record<string, number>;
@@ -218,6 +221,9 @@ export function serializeGraphV2(graph: RepoGraph, fileMtimes: Map<string, numbe
 	const fileRefs: Record<string, [string, number][]> = {};
 	for (const [k, v] of graph.fileRefs) fileRefs[k] = v;
 
+	const fileTypeRefs: Record<string, [string, number][]> = {};
+	for (const [k, v] of graph.fileTypeRefs) fileTypeRefs[k] = v;
+
 	const fileImportBindings: Record<string, JSImportBinding[]> = {};
 	for (const [k, v] of graph.fileImportBindings) fileImportBindings[k] = v;
 
@@ -232,6 +238,7 @@ export function serializeGraphV2(graph: RepoGraph, fileMtimes: Map<string, numbe
 		fileSymbols,
 		fileImports,
 		fileRefs,
+		fileTypeRefs,
 		fileCalls,
 		fileImportBindings,
 		fileMtimes: fileMtimesObj,
@@ -320,6 +327,9 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 	}
 	for (const [k, v] of Object.entries(data.fileRefs ?? {})) {
 		graph.fileRefs.set(k, v);
+	}
+	for (const [k, v] of Object.entries(data.fileTypeRefs ?? {})) {
+		graph.fileTypeRefs.set(k, v);
 	}
 	for (const [k, v] of Object.entries(data.fileImportBindings ?? {})) {
 		graph.fileImportBindings.set(k, v);

@@ -150,4 +150,118 @@ export function greet(): string {
 			}
 		}
 	});
+
+	// Issue #542: TypeScript type references should create dependency edges
+	it("should create edges for TypeScript interface extends (issue #542)", () => {
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-test-"));
+		try {
+			writeFileSync(
+				join(tmpDir, "types.ts"),
+				`
+export interface Base {
+    id: string;
+}
+
+export interface Child extends Base {
+    name: string;
+}
+`.trim(),
+			);
+
+			const graph = scanProject(tmpDir);
+			const base = [...graph.symbols.values()].find((s) => s.name === "Base");
+			const child = [...graph.symbols.values()].find((s) => s.name === "Child");
+
+			expect(base).toBeDefined();
+			expect(child).toBeDefined();
+
+			// Child should have an outgoing edge to Base via type reference
+			if (child && base) {
+				const childOutgoing = graph.outgoing.get(child.id) || [];
+				const typeEdge = childOutgoing.find((e) => e.target === base.id && e.kind === "type");
+				expect(typeEdge).toBeDefined();
+			}
+		} finally {
+			try {
+				rmSync(tmpDir, { recursive: true, force: true });
+			} catch {
+				/* ok */
+			}
+		}
+	});
+
+	it("should create edges for TypeScript class implements (issue #542)", () => {
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-test-"));
+		try {
+			writeFileSync(
+				join(tmpDir, "types.ts"),
+				`
+export interface Serializable {
+    serialize(): string;
+}
+
+export class Model implements Serializable {
+    serialize() { return ""; }
+}
+`.trim(),
+			);
+
+			const graph = scanProject(tmpDir);
+			const serializable = [...graph.symbols.values()].find((s) => s.name === "Serializable");
+			const model = [...graph.symbols.values()].find((s) => s.name === "Model");
+
+			expect(serializable).toBeDefined();
+			expect(model).toBeDefined();
+
+			if (model && serializable) {
+				const modelOutgoing = graph.outgoing.get(model.id) || [];
+				const typeEdge = modelOutgoing.find((e) => e.target === serializable.id && e.kind === "type");
+				expect(typeEdge).toBeDefined();
+			}
+		} finally {
+			try {
+				rmSync(tmpDir, { recursive: true, force: true });
+			} catch {
+				/* ok */
+			}
+		}
+	});
+
+	it("should create edges for type annotations in variables and parameters (issue #542)", () => {
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-test-"));
+		try {
+			writeFileSync(
+				join(tmpDir, "types.ts"),
+				`
+export interface User {
+    name: string;
+}
+
+export function greet(user: User): string {
+    const current: User = user;
+    return "Hello " + current.name;
+}
+`.trim(),
+			);
+
+			const graph = scanProject(tmpDir);
+			const userIface = [...graph.symbols.values()].find((s) => s.name === "User");
+			const greet = [...graph.symbols.values()].find((s) => s.name === "greet");
+
+			expect(userIface).toBeDefined();
+			expect(greet).toBeDefined();
+
+			if (greet && userIface) {
+				const greetOutgoing = graph.outgoing.get(greet.id) || [];
+				const typeEdge = greetOutgoing.find((e) => e.target === userIface.id && e.kind === "type");
+				expect(typeEdge).toBeDefined();
+			}
+		} finally {
+			try {
+				rmSync(tmpDir, { recursive: true, force: true });
+			} catch {
+				/* ok */
+			}
+		}
+	});
 });

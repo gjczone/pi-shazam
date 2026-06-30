@@ -1,8 +1,11 @@
 /**
- * pi-shazam core/treesitter-queries -- Tree-sitter query patterns for 18 languages.
+ * pi-shazam core/treesitter-queries -- Tree-sitter query patterns for supported languages.
  *
  * Ported from repomap/src/queries.py.
- * Each language has patterns for: function, class, import, call, http_route.
+ * Each language can define patterns for: function, class, import, call, ref, type.
+ * Query types: function (function/method definitions), class (class/interface/type/enum),
+ * import (import statements), call (function call expressions), ref (identifier references),
+ * type (type annotations, extends/implements clauses, generic type arguments -- TS/TSX only).
  */
 
 export interface QueryDict {
@@ -12,6 +15,7 @@ export interface QueryDict {
 		import?: string;
 		call?: string;
 		ref?: string;
+		type?: string;
 	};
 }
 
@@ -87,6 +91,12 @@ export const QUERIES: QueryDict = {
 		ref: `\
 	(call_expression arguments: (arguments (identifier) @name))
 	(return_statement (identifier) @name)
+	`,
+		type: `\
+	(extends_type_clause (type_identifier) @name)
+	(implements_clause (type_identifier) @name)
+	(type_annotation (type_identifier) @name)
+	(generic_type (type_arguments (type_identifier) @name))
 	`,
 	},
 	go: {
