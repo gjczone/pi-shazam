@@ -85,6 +85,8 @@ export function registerToolLogger(pi: ExtensionAPI): void {
 					`\n... [truncated at ${MAX_RESULT_CHARS} chars, total was ${redacted.length}]`
 				: redacted;
 
+		const errorText = event.isError && texts[0] ? redact(texts[0].slice(0, 300)) : null;
+
 		const entry: Record<string, unknown> = {
 			ts: ts(),
 			project: ctx.cwd,
@@ -92,7 +94,7 @@ export function registerToolLogger(pi: ExtensionAPI): void {
 			tool: event.toolName,
 			durationMs,
 			success: !event.isError,
-			error: event.isError ? (texts[0]?.slice(0, 300) ?? null) : null,
+			error: errorText,
 			result: truncated,
 		};
 

@@ -122,7 +122,7 @@ export async function writeJsonlEntry(logPath: string, data: Record<string, unkn
 export function writeJsonl(logPath: string, data: Record<string, unknown>): void {
 	_writeMutex = _writeMutex
 		.then(() => writeJsonlEntry(logPath, data))
-		.catch(() => {
-			// swallow
+		.catch((err) => {
+			_logWarn("audit-log", `writeJsonl failed for ${logPath}`, err);
 		});
 }
