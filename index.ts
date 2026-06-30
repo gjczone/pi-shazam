@@ -122,6 +122,17 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 		} catch (err) {
 			_logWarn("sessionShutdown", "baseline reset failed", err);
 		}
+		// Reset the rename safety-gate state so a stale "call-chain-checked"
+		// Set does not persist across crash recovery, hot reload, or any
+		// session boundary that fires session_shutdown without a preceding
+		// session_start (issue #548). Without this, shazam_rename_symbol
+		// could bypass the impact-call gate based on the prior session's
+		// reviewed symbols.
+		try {
+			clearRenameState();
+		} catch (err) {
+			_logWarn("sessionShutdown", "rename state reset failed", err);
+		}
 	});
 
 	// Reset rename safety gate state on new session (issue #326).

@@ -673,3 +673,116 @@ describe("LspClient didClose and collectDiagnostics", () => {
 		expect(remainingEntries[1]).toBe(notifC);
 	});
 });
+
+// ═══ Issue #556: didClose must clean up local state even when sendNotification rejects ═══
+
+describe("LspClient didClose cleanup on sendNotification failure (#556)", () => {
+	const FILE_PATH = "/test/workspace/src/file.ts";
+	const FILE_URI = "file:///test/workspace/src/file.ts";
+
+	function setupOpenedClient(): { client: LspClient; conn: MockConnection } {
+		const { client, conn } = createRunningClient();
+		// Pre-populate local tracking as if didOpen had succeeded.
+		(client as any)._openedFiles.add(FILE_PATH);
+		(client as any)._docVersions.set(FILE_URI, 1);
+		expect(client.isFileOpened(FILE_PATH)).toBe(true);
+		return { client, conn };
+	}
+
+	it("clears _docVersions and _openedFiles even when sendNotification rejects", async () => {
+		const { client, conn } = setupOpenedClient();
+		conn.sendNotification.mockRejectedValueOnce(new Error("connection disposed"));
+
+		// The rejection must propagate (per issue constraint: do not swallow).
+		await expect(client.didClose(FILE_PATH)).rejects.toThrow("connection disposed");
+
+		// Local tracking MUST be cleared regardless of the rejection.
+		expect((client as any)._docVersions.has(FILE_URI)).toBe(false);
+		expect((client as any)._openedFiles.has(FILE_PATH)).toBe(false);
+		expect(client.isFileOpened(FILE_PATH)).toBe(false);
+	});
+
+	it("does not leave stale opened-file state that would short-circuit a subsequent didOpen", async () => {
+		// This is the user-facing symptom of the bug: after a failed didClose,
+		// isFileOpened still returns true, so a subsequent didOpen for the same
+		// file returns early — but the server no longer has it open, so
+		// diagnostics stop arriving.
+		const { client, conn } = setupOpenedClient();
+		conn.sendNotification.mockRejectedValueOnce(new Error("connection disposed"));
+
+		await expect(client.didClose(FILE_PATH)).rejects.toThrow("connection disposed");
+
+		// After the failed didClose, isFileOpened must be false so the next
+		// didOpen does not short-circuit.
+		expect(client.isFileOpened(FILE_PATH)).toBe(false);
+
+		// Subsequent didOpen should actually send the notification (not skip).
+		// Reset sendNotification to resolve for the second didOpen.
+		conn.sendNotification.mockResolvedValueOnce(undefined);
+		await client.didOpen(FILE_PATH, "const x = 1;");
+
+		const didOpenCalls = conn.sendNotification.mock.calls.filter((c: any[]) => c[0] === "textDocument/didOpen");
+		expect(didOpenCalls.length).toBe(1);
+	});
+
+	it("still clears local state when connection is null (no notification sent)", async () => {
+		// Regression: when connection is null, didClose early-returns after
+		// the if (this.connection) check. The deletes must still run.
+		const { client } = setupOpenedClient();
+		// Simulate no connection.
+		(client as any).connection = null;
+
+		await client.didClose(FILE_PATH);
+
+		expect((client as any)._docVersions.has(FILE_URI)).toBe(false);
+		expect((client as any)._openedFiles.has(FILE_PATH)).toBe(false);
+		expect(client.isFileOpened(FILE_PATH)).toBe(false);
+	});
+});
+
+// ═══ Static gate: didClose body uses try/finally (#556) ═══
+
+describe("didClose source structure (#556)", () => {
+	it("didClose wraps sendNotification in try/finally so deletes run on rejection", () => {
+		const { readFileSync } = require("node:fs");
+		const { join } = require("node:path");
+		const src = readFileSync(join(import.meta.dirname, "..", "lsp", "client.ts"), "utf-8");
+
+		// Locate `async didClose(...)` and walk braces to find the method body.
+		const startMatch = src.match(/async\s+didClose\s*\([^)]*\)\s*:\s*Promise<void>\s*\{/);
+		expect(startMatch, "didClose method must be locatable in lsp/client.ts").not.toBeNull();
+		const startIdx = startMatch!.index! + startMatch![0].length; // position just after `{`
+		let depth = 1;
+		let endIdx = -1;
+		for (let i = startIdx; i < src.length; i++) {
+			const ch = src[i];
+			if (ch === "{") depth++;
+			else if (ch === "}") {
+				depth--;
+				if (depth === 0) {
+					endIdx = i;
+					break;
+				}
+			}
+		}
+		expect(endIdx, "didClose method body must be brace-balanced").not.toBe(-1);
+		const body = src.slice(startIdx, endIdx);
+
+		// Must contain a try { ... } finally { ... } block.
+		expect(body).toMatch(/try\s*\{/);
+		expect(body).toMatch(/finally\s*\{/);
+
+		// The deletes must be inside the finally block (after `finally {`).
+		const finallyIdx = body.indexOf("finally");
+		const finallyBody = body.slice(finallyIdx);
+		expect(finallyBody).toMatch(/_docVersions\.delete\s*\(/);
+		expect(finallyBody).toMatch(/_openedFiles\.delete\s*\(/);
+
+		// And the deletes must NOT appear before the try block (i.e., the
+		// old "delete after the await" pattern must be gone).
+		const tryIdx = body.indexOf("try");
+		const beforeTry = body.slice(0, tryIdx);
+		expect(beforeTry).not.toMatch(/_docVersions\.delete\s*\(/);
+		expect(beforeTry).not.toMatch(/_openedFiles\.delete\s*\(/);
+	});
+});

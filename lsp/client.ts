@@ -515,13 +515,26 @@ export class LspClient {
 	async didClose(filePath: string): Promise<void> {
 		// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
 		const uri = pathToUri(this.resolveRel(filePath));
-		if (this.connection) {
-			await this.connection.sendNotification("textDocument/didClose", {
-				textDocument: { uri },
-			});
+		// #556: Wrap sendNotification in try/finally so the local tracking
+		// maps (_docVersions, _openedFiles) are cleared even when the
+		// notification rejects. Without this, a transient send failure (e.g.
+		// connection disposed between the if-check and the await) leaves the
+		// file marked as opened; a subsequent didOpen short-circuits, but the
+		// server no longer has the file open, so diagnostics stop arriving.
+		// The rejection is intentionally NOT swallowed — it propagates to the
+		// caller; we only guarantee local-state cleanup. The `if (connection)`
+		// guard stays outside the finally so a null connection still falls
+		// through to the cleanup (matches pre-fix behavior).
+		try {
+			if (this.connection) {
+				await this.connection.sendNotification("textDocument/didClose", {
+					textDocument: { uri },
+				});
+			}
+		} finally {
+			this._docVersions.delete(uri);
+			this._openedFiles.delete(this.resolveRel(filePath));
 		}
-		this._docVersions.delete(uri);
-		this._openedFiles.delete(this.resolveRel(filePath));
 	}
 
 	async didSave(filePath: string): Promise<void> {
