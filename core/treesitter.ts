@@ -215,15 +215,15 @@ export class TreeSitterAdapter {
 				this.parsers.set("tsx", tsxParser);
 				_parserStatus.set("tsx", { status: "loaded" });
 				this.log("Parser loaded: tsx (dedicated)");
-			} catch {
+			} catch (err) {
 				_parserStatus.set("tsx", {
 					status: "unavailable",
 					reason: "TSX grammar load failed",
 					suggestion: "Falls back to TypeScript parser.",
 				});
-				this.log("TSX parser unavailable");
+				this.log(`TSX parser unavailable: ${err}`);
 			}
-		} catch {
+		} catch (err) {
 			// Fall back to JavaScript parser for TypeScript.
 			// Create independent Parser instances for typescript and tsx fallbacks
 			// instead of sharing the JavaScript parser reference -- the Parser holds
@@ -239,7 +239,7 @@ export class TreeSitterAdapter {
 				this.parsers.set("tsx", tsxFallback);
 				_parserStatus.set("typescript", { status: "loaded", reason: "Fell back to JavaScript parser" });
 				_parserStatus.set("tsx", { status: "loaded", reason: "Fell back to JavaScript parser" });
-				this.log("TypeScript parser unavailable, falling back to JavaScript parser");
+				this.log(`TypeScript parser unavailable, falling back to JavaScript parser: ${err}`);
 			} else {
 				_parserStatus.set("typescript", {
 					status: "unavailable",
@@ -268,8 +268,8 @@ export class TreeSitterAdapter {
 						this.log(`Query compile failed [${lang}/${qtype}]: ${e}`);
 					}
 				}
-			} catch {
-				this.log(`Unable to create queries for ${lang}`);
+			} catch (err) {
+				this.log(`Unable to create queries for ${lang}: ${err}`);
 			}
 			this.queries.set(lang, langQueries);
 		}

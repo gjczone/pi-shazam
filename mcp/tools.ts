@@ -60,8 +60,8 @@ async function logMCP(entry: Record<string, unknown>): Promise<void> {
 				}) + "\n",
 				"utf-8",
 			);
-		} catch {
-			_logWarn("logMCP", "audit log write failed");
+		} catch (err) {
+			_logWarn("logMCP", "audit log write failed", err);
 		}
 	});
 }

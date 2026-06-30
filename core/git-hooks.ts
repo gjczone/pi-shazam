@@ -185,8 +185,8 @@ export function getGitHooksDir(projectRoot: string): string {
 			return hooksPath;
 		}
 		return resolve(projectRoot, hooksPath);
-	} catch {
-		_logWarn("getGitHooksDir", "git rev-parse failed, falling back to .git/hooks");
+	} catch (err) {
+		_logWarn("getGitHooksDir", "git rev-parse failed, falling back to .git/hooks", err);
 		// Fallback to .git/hooks for non-git directories
 		const gitDir = resolve(projectRoot, ".git");
 		return join(gitDir, "hooks");

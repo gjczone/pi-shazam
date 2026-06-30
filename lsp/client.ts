@@ -36,9 +36,10 @@ interface RpcModule {
 let _rpcModule: RpcModule | null = null;
 try {
 	_rpcModule = _require("vscode-jsonrpc/node") as RpcModule;
-} catch {
+} catch (err) {
 	// vscode-jsonrpc/node not available -- LSP functionality disabled.
 	// Tree-sitter analysis remains fully operational.
+	_logWarn("LspClient", "vscode-jsonrpc/node not available, LSP disabled", err);
 	_rpcModule = null;
 }
 
@@ -152,7 +153,8 @@ export function uriToPath(uri: string): string {
 			}
 			try {
 				return decodeURIComponent(p);
-			} catch {
+			} catch (err) {
+				_logWarn("uriToPath", "decodeURIComponent fallback failed, returning raw path", err);
 				return p;
 			}
 		}
@@ -1170,8 +1172,8 @@ export class LspClient {
 					if (proc.stderr) {
 						proc.stderr.removeAllListeners("data");
 					}
-				} catch {
-					_logWarn("_doClose", "proc.stderr.removeAllListeners failed");
+				} catch (err) {
+					_logWarn("_doClose", "proc.stderr.removeAllListeners failed", err);
 					// stderr may not be an EventEmitter (e.g., in tests).
 				}
 			}
@@ -1192,8 +1194,8 @@ export class LspClient {
 					const fallbackTimer = setTimeout(() => {
 						try {
 							proc.kill("SIGKILL");
-						} catch {
-							_logWarn("_doClose", "proc.kill(SIGKILL) failed");
+						} catch (err) {
+							_logWarn("_doClose", "proc.kill(SIGKILL) failed", err);
 						}
 						resolve();
 					}, 2000);

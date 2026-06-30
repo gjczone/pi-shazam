@@ -47,9 +47,10 @@ try {
 		CancellationTokenSource: new () => CtsInstance;
 	};
 	_ctsCtor = mod.CancellationTokenSource;
-} catch {
+} catch (err) {
 	// vscode-jsonrpc/node not available -- LSP enrich disabled.
 	// All enrich helpers will return null gracefully.
+	_logWarn("lsp_enrich", "vscode-jsonrpc/node not available, LSP enrich disabled", err);
 	_ctsCtor = null;
 }
 
@@ -127,20 +128,33 @@ function withEnrichTimeout<T>(
 	cts?: CtsInstance | null,
 ): Promise<T | null> {
 	return new Promise<T | null>((resolve) => {
+		// Guard against duplicate resolve + duplicate log when the promise
+		// rejects after the timeout already fired (both the timeout-branch
+		// late-rejection handler and the main-chain .catch would fire).
+		let settled = false;
 		const timer = setTimeout(() => {
+			if (settled) return;
+			settled = true;
 			// Cancel the underlying LSP request to free server resources
 			cts?.cancel();
-			// Silence the original promise to prevent unhandled rejections
-			// if it resolves/rejects after timeout.
-			void promise.catch(() => {});
+			// Log late rejections instead of silently swallowing them (issue #550).
+			void promise.catch((err) => {
+				_logWarn("withEnrichTimeout", "LSP enrich late rejection after timeout", err);
+			});
 			resolve(null);
 		}, ms);
 		promise
 			.then((v) => {
+				if (settled) return;
+				settled = true;
 				clearTimeout(timer);
 				resolve(v ?? null);
 			})
-			.catch(() => {
+			.catch((err) => {
+				if (settled) return;
+				settled = true;
+				// Log the rejection cause so silent LSP failures are diagnosable (issue #550).
+				_logWarn("withEnrichTimeout", "LSP enrich request rejected, degrading to tree-sitter only", err);
 				clearTimeout(timer);
 				resolve(null);
 			});

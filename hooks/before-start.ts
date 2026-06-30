@@ -58,8 +58,8 @@ function countSourceFilesUpTo(root: string, limit: number): number {
 		let entries;
 		try {
 			entries = readdirSync(dir, { withFileTypes: true });
-		} catch {
-			_logWarn("countSourceFilesUpTo", `permission denied or unreadable directory: ${dir}`);
+		} catch (err) {
+			_logWarn("countSourceFilesUpTo", `permission denied or unreadable directory: ${dir}`, err);
 			return; // permission denied or unreadable directory
 		}
 		for (const entry of entries) {

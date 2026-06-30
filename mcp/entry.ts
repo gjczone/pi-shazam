@@ -48,8 +48,8 @@ export function validateProjectRoot(root: string): { ok: boolean; error?: string
 			}
 		}
 		return { ok: true };
-	} catch {
-		return { ok: false, error: "Invalid PROJECT_ROOT path" };
+	} catch (err) {
+		return { ok: false, error: `Invalid PROJECT_ROOT path: ${err instanceof Error ? err.message : String(err)}` };
 	}
 }
 
@@ -82,8 +82,8 @@ for (const candidate of [resolve(__dirname, "..", "..", "package.json"), resolve
 			VERSION = pkg.version;
 			break;
 		}
-	} catch {
-		// not found at this level, try next candidate
+	} catch (err) {
+		_logWarn("entry", `package.json not readable at ${candidate}`, err);
 	}
 }
 if (VERSION === "0.0.0") {
@@ -129,8 +129,8 @@ async function main(): Promise<void> {
 		_shuttingDown = true;
 		try {
 			await lspManager.shutdown();
-		} catch {
-			_logWarn("shutdown", "lspManager.shutdown failed");
+		} catch (err) {
+			_logWarn("shutdown", "lspManager.shutdown failed", err);
 			/* best effort */
 		}
 	};
@@ -162,7 +162,8 @@ const isMainModule = (() => {
 	if (!process.argv[1]) return false;
 	try {
 		return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
-	} catch {
+	} catch (err) {
+		_logWarn("entry", "realpath comparison failed, falling back to URL comparison", err);
 		return import.meta.url === pathToFileURL(process.argv[1]).href;
 	}
 })();
