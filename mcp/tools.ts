@@ -74,7 +74,13 @@ function withLogging(
 ): (args: Record<string, unknown>) => Promise<Content> {
 	return async (args) => {
 		const t0 = Date.now();
-		void logMCP({ tool, event: "start", params: redact(JSON.stringify(args).slice(0, 200)) });
+		// #544: redact the FULL string first, then truncate. The previous order
+		// `redact(s.slice(0, N))` split secrets across the truncation boundary
+		// before redact() ever saw them, leaking partial AKIA/ghp_/JWT fragments
+		// to the on-disk audit log. Secret patterns in core/redact.ts are
+		// full-match only, so a sliced fragment never matches and is written
+		// verbatim. Redacting first guarantees no partial secret survives.
+		void logMCP({ tool, event: "start", params: redact(JSON.stringify(args)).slice(0, 200) });
 		try {
 			const result = await fn(args);
 			void logMCP({
@@ -91,7 +97,7 @@ function withLogging(
 				event: "end",
 				durationMs: Date.now() - t0,
 				success: false,
-				error: redact(String(err).slice(0, 300)),
+				error: redact(String(err)).slice(0, 300),
 			});
 			throw err;
 		}
@@ -132,7 +138,7 @@ export function registerAllTools(
 		withLogging("shazam_lookup", async ({ name, mode, file, showCallbacks, direction, maxTokens }) => {
 			const nameStr = name as string;
 			if (!nameStr) {
-				return { content: [{ type: "text", text: "Error: name parameter is required" }] };
+				return { content: [{ type: "text", text: "Error: name parameter is required" }], isError: true };
 			}
 			const isFilePath =
 				nameStr.includes("/") ||
@@ -145,11 +151,15 @@ export function registerAllTools(
 			if (isFilePath && !validatePathInProject(nameStr, projectRoot)) {
 				return {
 					content: [{ type: "text", text: `Error: Path '${nameStr}' is outside the project root and cannot be read.` }],
+					isError: true,
 				};
 			}
 			const fileParam = file as string | undefined;
 			if (fileParam && !validatePathInProject(fileParam, projectRoot)) {
-				return { content: [{ type: "text", text: `Error: File path '${fileParam}' is outside the project root.` }] };
+				return {
+					content: [{ type: "text", text: `Error: File path '${fileParam}' is outside the project root.` }],
+					isError: true,
+				};
 			}
 			let text: string;
 			if (isFilePath) {
@@ -216,6 +226,7 @@ export function registerAllTools(
 							text: "Error: either --symbol (for call chain) or --files (for impact analysis) is required",
 						},
 					],
+					isError: true,
 				};
 			}
 			// #445: Validate user-supplied file paths against project root (path-traversal guard)
@@ -225,6 +236,7 @@ export function registerAllTools(
 						content: [
 							{ type: "text", text: `Error: File path '${f}' is outside the project root and cannot be accessed.` },
 						],
+						isError: true,
 					};
 				}
 			}
@@ -357,6 +369,7 @@ export function registerAllTools(
 							].join("\n"),
 						},
 					],
+					isError: true,
 				};
 			}
 			const result = await executeRenameSymbol(

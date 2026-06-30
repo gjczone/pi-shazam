@@ -55,10 +55,10 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 			const symbolName = typeof params.symbol === "string" ? params.symbol : "";
 			const newName = typeof params.newName === "string" ? params.newName : "";
 			if (!symbolName) {
-				return { content: [{ type: "text", text: "Error: symbol parameter is required" }] };
+				return { content: [{ type: "text", text: "Error: symbol parameter is required" }], isError: true };
 			}
 			if (!newName) {
-				return { content: [{ type: "text", text: "Error: newName parameter is required" }] };
+				return { content: [{ type: "text", text: "Error: newName parameter is required" }], isError: true };
 			}
 			// Block non-dry-run unless shazam_impact --symbol was run for this symbol (issue #326)
 			if (!dryRun) {
@@ -77,6 +77,7 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 								].join("\n"),
 							},
 						],
+						isError: true,
 					};
 				}
 				// call_chain was checked -- proceed with actual rename below
@@ -94,6 +95,7 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 							text: "Error: Failed to scan project graph. Please try again or run shazam_overview first.",
 						},
 					],
+					isError: true,
 				};
 			}
 			const result = await executeRenameSymbol(graph, symbolName, newName, dryRun, projectRoot);
