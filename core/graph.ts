@@ -319,7 +319,9 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 		const imports =
 			Array.isArray(v) && v.length > 0 && Array.isArray(v[0])
 				? (v as [string, number][]).map(([m]) => m)
-				: (v as unknown as string[]);
+				: Array.isArray(v)
+					? (v as unknown as string[])
+					: [];
 		graph.fileImports.set(k, imports);
 	}
 	for (const [k, v] of Object.entries(data.fileCalls ?? {})) {

@@ -8,7 +8,7 @@
  * - state resets on clearRenameState (session boundary)
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { recordCallChain, hasCallChainChecked, clearRenameState } from "../hooks/rename-state.js";
+import { recordCallChain, hasCallChainChecked, clearRenameState } from "../tools/rename-state.js";
 import { scanProject } from "../core/scanner.js";
 import { executeCallChain } from "../tools/impact.js";
 import type { RepoGraph } from "../core/graph.js";
@@ -102,5 +102,26 @@ describe("Issue #326: call_chain records state for rename gate", () => {
 		// Now the gate should pass
 		expect(hasCallChainChecked("scanProject")).toBe(true);
 		// The rename tool would proceed to executeRenameSymbol
+	});
+
+	it("Issue #569: call_chain does NOT mark nonexistent symbol as reviewed", () => {
+		// Bug: recordCallChain is called BEFORE _executeCallChain verifies the
+		// symbol exists. If the symbol is not found, _executeCallChain returns
+		// "Symbol not found" but the symbol name is already added to _reviewedSymbols.
+		const graph = getGraph();
+		const nonexistent = "NonExistentSymbol_xyz123";
+
+		// Verify the symbol truly does not exist in the graph
+		expect(graph.nameIndex.has(nonexistent)).toBe(false);
+
+		// Execute call_chain for the nonexistent symbol
+		const result = executeCallChain(graph, nonexistent);
+
+		// The function should return "Symbol not found"
+		expect(result).toContain("Symbol not found");
+
+		// But the bug is: hasCallChainChecked returns true despite symbol not found.
+		// The fix moves recordCallChain after symbol existence verification.
+		expect(hasCallChainChecked(nonexistent)).toBe(false);
 	});
 });

@@ -30,7 +30,7 @@ import { registerAllTools } from "./tools.js";
  * If an opt-in home-only mode is desired, set PI_SHAZAM_HOME_ONLY=1.
  * Returns { ok: true } on success, or { ok: false, error } on failure.
  */
-export function validateProjectRoot(root: string): { ok: boolean; error?: string } {
+export function validateProjectRoot(root: string): { ok: boolean; error?: string; realRoot?: string } {
 	try {
 		const realRoot = realpathSync(root);
 		const stats = statSync(realRoot);
@@ -47,17 +47,17 @@ export function validateProjectRoot(root: string): { ok: boolean; error?: string
 				return { ok: false, error: "PROJECT_ROOT must be within user home directory (PI_SHAZAM_HOME_ONLY=1)" };
 			}
 		}
-		return { ok: true };
+		return { ok: true, realRoot };
 	} catch (err) {
 		return { ok: false, error: `Invalid PROJECT_ROOT path: ${err instanceof Error ? err.message : String(err)}` };
 	}
 }
 
 // Priority: CLI arg > PI_SHAZAM_PROJECT_ROOT env > PWD env > cwd
-const PROJECT_ROOT = resolve(process.argv[2] || process.env.PI_SHAZAM_PROJECT_ROOT || process.env.PWD || ".");
+const rawRoot = resolve(process.argv[2] || process.env.PI_SHAZAM_PROJECT_ROOT || process.env.PWD || ".");
 // #464/#465: validate PROJECT_ROOT exists and is a directory, then propagate
 // it to the scanner override so getEffectiveRoot() returns PROJECT_ROOT.
-const rootValidation = validateProjectRoot(PROJECT_ROOT);
+const rootValidation = validateProjectRoot(rawRoot);
 if (!rootValidation.ok) {
 	console.error(`[pi-shazam mcp] ${rootValidation.error}`);
 	process.exit(1);
@@ -67,6 +67,9 @@ if (!rootValidation.ok) {
 // this, factory-injected params.project and buildEnvelope project fields
 // would fall back to process.cwd(), diverging from PROJECT_ROOT used by
 // scanProject and the LSP manager.
+// #570: use the realpath-resolved root from validateProjectRoot to avoid
+// path mismatches with LSP (symlink paths vs resolved paths).
+const PROJECT_ROOT = rootValidation.realRoot!;
 
 setProjectRoot(PROJECT_ROOT);
 
@@ -144,10 +147,10 @@ async function main(): Promise<void> {
 	// Start stdio transport
 	const transport = new StdioServerTransport();
 	transport.onclose = () => {
-		shutdown().catch(() => {});
+		shutdown().catch((err) => _logWarn("mcpShutdown", "shutdown failed on transport close", err));
 	};
 	process.stdin.on("end", () => {
-		shutdown().catch(() => {});
+		shutdown().catch((err) => _logWarn("mcpShutdown", "shutdown failed on stdin end", err));
 	});
 	await server.connect(transport);
 }

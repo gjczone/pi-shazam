@@ -29,7 +29,7 @@ import type { RepoGraph } from "../core/graph.js";
 import type { ExtensionAPI, AgentToolResult, ExtensionContext } from "../types/pi-extension.js";
 import { registerAllTools } from "../mcp/tools.js";
 import { registerRenameSymbol } from "../tools/rename_symbol.js";
-import { clearRenameState } from "../hooks/rename-state.js";
+import { clearRenameState } from "../tools/rename-state.js";
 
 // -- Capture harnesses --------------------------------------------------
 

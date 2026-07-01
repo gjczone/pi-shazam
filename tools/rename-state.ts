@@ -1,5 +1,5 @@
 /**
- * pi-shazam hooks/rename-state -- Shared rename safety gate state.
+ * pi-shazam tools/rename-state -- Shared rename safety gate state.
  *
  * Tracks which symbols have been reviewed via shazam_impact --symbol.
  * shazam_rename_symbol checks this state before allowing a non-dry-run rename.

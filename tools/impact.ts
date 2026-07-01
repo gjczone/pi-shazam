@@ -11,7 +11,7 @@ import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool, buildEnvelope, validatePathInProject } from "./_factory.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { assessRisk } from "../core/risk.js";
-import { recordCallChain } from "../hooks/rename-state.js";
+import { recordCallChain } from "./rename-state.js";
 import { getEffectiveRoot } from "../core/scanner.js";
 
 export function registerImpact(pi: ExtensionAPI): void {
@@ -511,8 +511,13 @@ export function executeCallChain(
 	depth: number = 2,
 	direction: "incoming" | "outgoing" | "both" = "both",
 ): string {
-	recordCallChain(symbolName);
-	return _executeCallChain(graph, symbolName, depth, direction);
+	const result = _executeCallChain(graph, symbolName, depth, direction);
+	// Only record the symbol as reviewed if it actually exists in the graph.
+	// recordCallChain was previously called before checking symbol existence,
+	// which allowed the rename safety gate to be bypassed (#569).
+	const exists = (graph.nameIndex.get(symbolName)?.length ?? 0) > 0;
+	if (exists) recordCallChain(symbolName);
+	return result;
 }
 
 export function executeCallChainJson(
@@ -521,7 +526,8 @@ export function executeCallChainJson(
 	depth: number,
 	direction: "incoming" | "outgoing" | "both" = "both",
 ): string {
-	recordCallChain(symbolName);
+	const exists = (graph.nameIndex.get(symbolName)?.length ?? 0) > 0;
+	if (exists) recordCallChain(symbolName);
 	return _executeCallChainJson(graph, symbolName, depth, direction);
 }
 
