@@ -174,6 +174,7 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 				setLastToolTiming({ formatOutput: totalMs });
 			} catch (err) {
 				const errMsg = err instanceof Error ? err.message : String(err);
+				_logWarn("createTool", `${spec.name} domainFn failed`, err);
 				if (json) {
 					text = buildEnvelope(spec.name, project, "error", { message: errMsg });
 				} else {

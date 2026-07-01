@@ -11,7 +11,8 @@
 set -eu
 
 INPUT=$(cat)
-cmd=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
+# #570: jq may not be installed; fall back to empty string without blocking.
+cmd=$(echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null || echo "")
 
 # Only intercept git commit (without --no-verify)
 if ! echo "$cmd" | grep -qE '(^|[;&|])git[[:space:]]+commit'; then

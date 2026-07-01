@@ -128,7 +128,7 @@ vi.mock("../core/audit-log.js", () => ({
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RepoGraph } from "../core/graph.js";
 import { registerAllTools } from "../mcp/tools.js";
-import { clearRenameState } from "../hooks/rename-state.js";
+import { clearRenameState } from "../tools/rename-state.js";
 
 interface CapturedHandler {
 	(args: Record<string, unknown>): Promise<{ content: { type: string; text: string }[]; isError?: boolean }>;

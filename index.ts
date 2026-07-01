@@ -27,7 +27,7 @@ import { registerStopVerify } from "./hooks/stop-verify.js";
 import { registerFailureRecovery } from "./hooks/failure-recovery.js";
 import { registerIssueGuard } from "./hooks/issue-guard.js";
 import { registerAgentContextGuard } from "./hooks/agent-context-guard.js";
-import { clearRenameState } from "./hooks/rename-state.js";
+import { clearRenameState } from "./tools/rename-state.js";
 
 // -- Tool registrations ----------------------------------------------------
 import { registerOverview } from "./tools/overview.js";
@@ -72,12 +72,17 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 			const languages = lspManager.detectLanguages();
 			if (languages.length > 0) {
 				log(`Detected languages: ${languages.join(", ")}`);
-				await Promise.race([
-					lspManager.initializeAll(),
-					new Promise<void>((_, reject) =>
-						setTimeout(() => reject(new Error("LSP initialization timed out after 15s")), 15000),
-					),
-				]);
+				let initTimer: NodeJS.Timeout | undefined;
+				try {
+					await Promise.race([
+						lspManager.initializeAll(),
+						new Promise<void>((_, reject) => {
+							initTimer = setTimeout(() => reject(new Error("LSP initialization timed out after 15s")), 15000);
+						}),
+					]);
+				} finally {
+					if (initTimer) clearTimeout(initTimer);
+				}
 			}
 		} catch (err) {
 			const isTimeout = err instanceof Error && err.message.includes("timed out");
@@ -100,8 +105,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 			log("Shutting down LSP servers...");
 			await lspManager.shutdown();
 		} catch (err) {
-			const errMsg = err instanceof Error ? err.message : String(err);
-			console.error(`[pi-shazam] session_shutdown: LSP shutdown failed: ${errMsg}`);
+			_logWarn("sessionShutdown", "LSP shutdown failed", err);
 		}
 		// Clean up module-level caches to prevent memory leaks
 		try {

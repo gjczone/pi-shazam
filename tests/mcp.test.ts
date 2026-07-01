@@ -6,7 +6,7 @@ import { writeFileSync, rmSync, existsSync } from "node:fs";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { validatePathInProject } from "../tools/_factory.js";
-import { clearRenameState, hasCallChainChecked, recordCallChain } from "../hooks/rename-state.js";
+import { clearRenameState, hasCallChainChecked, recordCallChain } from "../tools/rename-state.js";
 
 let _graph: RepoGraph | null = null;
 function getGraph(): RepoGraph {

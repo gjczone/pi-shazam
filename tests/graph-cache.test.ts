@@ -132,6 +132,27 @@ describe("Graph serialization V2 round-trip", () => {
 		expect(restored.symbols.size).toBe(3);
 		expect(restored.fileSymbols.get("a.ts")!.length).toBe(2);
 	});
+
+	it("Issue #570.7: corrupted fileImports (non-array) does not crash deserialization", () => {
+		const graph = buildTestGraph();
+		const fileMtimes = new Map([
+			["a.ts", 1000],
+			["b.ts", 2000],
+		]);
+		const serialized = serializeGraphV2(graph, fileMtimes);
+		// Corrupt fileImports: replace array value with a number (corrupted cache)
+		(serialized.fileImports as Record<string, unknown>)["a.ts"] = 12345;
+		const json = JSON.stringify(serialized);
+		const parsed = JSON.parse(json);
+
+		// Should not throw -- the unsafe `(v as unknown as string[])` cast
+		// on non-array data will cause later iteration to crash.
+		const restored = deserializeGraphV2(parsed);
+		// After the fix, corrupted entries should produce empty arrays rather than
+		// raw non-array values that would crash downstream consumers.
+		const imports = restored.fileImports.get("a.ts");
+		expect(Array.isArray(imports)).toBe(true);
+	});
 });
 
 describe("Graph cache save/load", () => {

@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
-import { getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
+import { getNextForTool, formatNextSection, truncateOutput, _logWarn } from "../core/output.js";
 import { readFileAdaptive } from "../core/encoding.js";
 import { getLspManager } from "./_context.js";
 import { ensureFileOpened } from "./lsp_enrich.js";
@@ -20,7 +20,7 @@ import { uriToPath } from "../lsp/client.js";
 import { createTool, buildEnvelope, validatePathInProject } from "./_factory.js";
 import { setLastToolTiming } from "./_context.js";
 import { scanProject, getEffectiveRoot } from "../core/scanner.js";
-import { hasCallChainChecked } from "../hooks/rename-state.js";
+import { hasCallChainChecked } from "./rename-state.js";
 
 /**
  * Atomic write: write to temp file then rename over target.
@@ -422,7 +422,7 @@ async function applyWorkspaceEdit(
 					try {
 						atomicWriteFile(backup.filePath, backup.content);
 					} catch (rollbackErr) {
-						console.error(`[pi-shazam] Rollback failed for ${backup.filePath}:`, rollbackErr);
+						_logWarn("renameRollback", `Rollback failed for ${backup.filePath}`, rollbackErr);
 						rollbackFailures.push(backup.filePath);
 					}
 				}

@@ -21,7 +21,7 @@ import { executeFormat } from "../tools/format.js";
 import { executeVerifyTextAsync, executeVerifyJsonAsync } from "../tools/verify.js";
 import { executeChanges, executeChangesJson } from "../tools/changes.js";
 import { executeRenameSymbol, formatRenameResult } from "../tools/rename_symbol.js";
-import { hasCallChainChecked, recordCallChain } from "../hooks/rename-state.js";
+import { hasCallChainChecked, recordCallChain } from "../tools/rename-state.js";
 
 import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -99,7 +99,10 @@ function withLogging(
 				success: false,
 				error: redact(String(err)).slice(0, 300),
 			});
-			throw err;
+			const redactedMsg = redact(err instanceof Error ? err.message : String(err)).slice(0, 500);
+			const wrapped = new Error(redactedMsg);
+			if (err instanceof Error && err.stack) wrapped.stack = err.stack;
+			throw wrapped;
 		}
 	};
 }
@@ -266,7 +269,7 @@ export function registerAllTools(
 					lspOnly: lspOnly as boolean,
 					preCommit: preCommit as boolean,
 					delta: delta as boolean,
-					maxFiles: maxFiles as number,
+					maxFiles: (maxFiles as number | undefined) ?? 100,
 					noCascade: noCascade as boolean,
 					noSecrets: noSecrets as boolean,
 				};

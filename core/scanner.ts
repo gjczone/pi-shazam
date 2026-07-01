@@ -8,7 +8,7 @@
  */
 
 import { readdirSync, statSync, existsSync, realpathSync } from "node:fs";
-import { join, relative, resolve, dirname } from "node:path";
+import { join, relative, resolve, dirname, isAbsolute } from "node:path";
 import { TreeSitterAdapter, EXT_TO_LANG } from "./treesitter.js";
 import { createRepoGraph, createEdge } from "./graph.js";
 import type { RepoGraph, Symbol, Edge } from "./graph.js";
@@ -1044,10 +1044,11 @@ function _walkDirectory(
 						continue;
 					}
 					visitedSymlinks.add(realPath);
-					// Directory symlink containment check: same as file symlinks,
-					// prevent traversal outside project root (C4: path traversal)
+					// Directory symlink containment check: use relative() instead of
+					// startsWith(root + "/") for cross-platform correctness (#570).
 					const resolvedRoot = resolve(root);
-					if (!realPath.startsWith(resolvedRoot + "/") && realPath !== resolvedRoot) {
+					const relToRoot = relative(resolvedRoot, realPath);
+					if (relToRoot !== "" && (relToRoot.startsWith("..") || isAbsolute(relToRoot))) {
 						_logWarn("_walkDirectory", `symlink target outside project root, skipping: ${relPath} -> ${realPath}`);
 						continue;
 					}
@@ -1058,7 +1059,8 @@ function _walkDirectory(
 				// then treat as regular file (C1: was silently skipped before).
 				const realPath = realpathSync(join(dir, entry.name));
 				const resolvedRoot = resolve(root);
-				if (!realPath.startsWith(resolvedRoot + "/") && realPath !== resolvedRoot) {
+				const relToRoot = relative(resolvedRoot, realPath);
+				if (relToRoot !== "" && (relToRoot.startsWith("..") || isAbsolute(relToRoot))) {
 					_logWarn("_walkDirectory", `symlink target outside project root, skipping: ${relPath} -> ${realPath}`);
 					continue;
 				}
@@ -1253,7 +1255,7 @@ function resolveImport(importPath: string, fromFile: string, root: string, graph
 				const found = tryCandidate(graph, root, c);
 				if (found) return found;
 			}
-			return candidates[0]!;
+			return null;
 		}
 		// mod X; or use X::Y without crate:: - try sibling module (X.rs or X/mod.rs)
 		if (!importPath.includes("::") && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(importPath)) {
@@ -1262,7 +1264,7 @@ function resolveImport(importPath: string, fromFile: string, root: string, graph
 				const found = tryCandidate(graph, root, c);
 				if (found) return found;
 			}
-			return candidates[0]!;
+			return null;
 		}
 		// super:: paths
 		if (importPath.startsWith("super::")) {
@@ -1272,7 +1274,7 @@ function resolveImport(importPath: string, fromFile: string, root: string, graph
 				const found = tryCandidate(graph, root, c);
 				if (found) return found;
 			}
-			return candidates[0]!;
+			return null;
 		}
 	}
 
