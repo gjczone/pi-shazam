@@ -109,12 +109,11 @@ These tools modify files or verify changes.
 
 After every write or edit, run this to confirm no errors were introduced. When diagnostics are found, fetches LSP codeAction suggested fixes.
 
-**Parameters**: `{ quick?, lspOnly?, preCommit?, delta?, maxFiles?, noCascade?, noSecrets?, json?, maxTokens? }`
+**Parameters**: `{ quick?, lspOnly?, preCommit?, maxFiles?, noCascade?, noSecrets?, json?, maxTokens? }`
 
 - `quick`: git changes + risk only (~2s)
 - `lspOnly`: LSP diagnostics only, skip graph analysis
 - `preCommit`: stricter thresholds for pre-commit gate
-- `delta`: only check changed files
 - `maxFiles`: max files to check
 - `noCascade`: skip cascade analysis
 - `noSecrets`: skip secrets detection
@@ -230,5 +229,5 @@ pi-shazam reads source files with adaptive encoding: UTF-8 -> GBK -> GB2312. It 
 
 - **Runtime**: Node.js >=18, TypeScript ES2022, ESM
 - **Grammar support**: 8 file extensions across 7 tree-sitter grammars (Python, TypeScript/TSX, JavaScript, Go, Rust, Dart, JSON)
-- **LSP**: 7 languages with auto-spawned language servers (Python, TypeScript, JavaScript, Go, Rust, Dart, JSON, YAML)
+- **LSP**: 8 languages with auto-spawned language servers (Python, TypeScript/JavaScript, Go, Rust, Dart, JSON, YAML)
 - **Install**: `npm install pi-shazam` in Pi extensions directory

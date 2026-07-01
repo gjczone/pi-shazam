@@ -111,7 +111,7 @@ Config file: `mcp.json`
 }
 ```
 
-## Available Tools (9)
+## Available Tools (7)
 
 All tools use the `shazam_` prefix for consistency with the Pi extension.
 

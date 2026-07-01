@@ -195,7 +195,7 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 - **What it does**: Codebase graph construction (tree-sitter AST -> symbols -> dependencies -> PageRank), LSP integration, and safe code modification tools
 - **Package manager**: npm (lockfile: `package-lock.json`)
 - **Deployment**: Pi extension (symlink dist/ into `~/.pi/agent/extensions/pi-shazam`) + MCP server (`npx pi-shazam-mcp`)
-- **Test framework**: vitest, 48 TypeScript source files, tests in `tests/`
+- **Test framework**: vitest, 50 TypeScript source files, tests in `tests/`
 - **Key boundaries**: `core/` must never import from `tools/`, `hooks/`, or `lsp/`. Zero HTTP framework, zero ORM, zero auth.
 - **Primary risk areas**: tree-sitter grammar version compatibility, LSP JSON-RPC frame parsing, encoding fallback (UTF-8/GBK/GB2312), MCP/Pi tool definition sync
 
@@ -227,7 +227,7 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 | -------------------------------- | --------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------- |
 | Module-level cached scan results | In-memory                                           | `scanProject()` result reused across tools within a session | New tool call with `scanProject` flag, or session end |
 | LSP client connections           | Process                                             | Spawned language server processes per language              | Session end, server crash, or explicit shutdown       |
-| Audit log                        | File (`~/.pi/agent/extensions/pi-shazam/audit.log`) | All tool invocations                                        | Log rotation (10 MB cap)                              |
+| Audit log                        | File (`~/.pi/hooks/audit/`)                         | All tool invocations                                        | Log rotation (10 MB cap)                              |
 | Graph cache                      | In-memory                                           | RepoGraph built from tree-sitter parse                      | File change detected, or session end                  |
 
 ## Security
