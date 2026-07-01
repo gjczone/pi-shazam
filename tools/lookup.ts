@@ -52,14 +52,15 @@ const MAX_DETAIL_CACHE_SIZE = 200;
 const fileDetailCache = new Map<string, { text: string; timestamp: number; mtimeMs: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-// LRU access-order tracking (issue #368): array head = most recently accessed, tail = least recently accessed.
-const _detailAccessOrder: string[] = [];
+// LRU access-order tracking (issue #368): Map insertion order provides O(1) LRU.
+// Map keys are ordered by insertion time; deleting and re-inserting moves a key
+// to the "most recently used" end. The first key yielded by keys() is the LRU.
+const _detailAccessOrder = new Map<string, true>();
 
-/** Remove a key from both the cache and the access-order array. */
+/** Remove a key from both the cache and the access-order tracking. */
 function _removeFromDetailCache(key: string): void {
 	fileDetailCache.delete(key);
-	const idx = _detailAccessOrder.indexOf(key);
-	if (idx >= 0) _detailAccessOrder.splice(idx, 1);
+	_detailAccessOrder.delete(key);
 }
 
 // -- LSP SymbolKind constants ---------------------------------------------
@@ -742,12 +743,9 @@ async function _executeFileDetailAsync(
 		try {
 			const st = statSync(resolve(getEffectiveRoot(), file));
 			if (st.mtimeMs === cached.mtimeMs) {
-				// LRU: move current key to the head of access order
-				const idx = _detailAccessOrder.indexOf(cacheKey);
-				if (idx >= 0) {
-					_detailAccessOrder.splice(idx, 1);
-					_detailAccessOrder.unshift(cacheKey);
-				}
+				// LRU: move current key to the "most recently used" end
+				_detailAccessOrder.delete(cacheKey);
+				_detailAccessOrder.set(cacheKey, true);
 				return cached.text;
 			}
 			_removeFromDetailCache(cacheKey);
@@ -803,13 +801,16 @@ async function _executeFileDetailAsync(
 		// File may not exist
 	}
 	if (fileDetailCache.size >= MAX_DETAIL_CACHE_SIZE) {
-		// LRU: evict the tail key of access order (least recently accessed, not earliest inserted)
-		const lruKey = _detailAccessOrder.pop();
-		if (lruKey !== undefined) fileDetailCache.delete(lruKey);
+		// LRU: evict the first key (least recently accessed, earliest inserted)
+		const lruKey = _detailAccessOrder.keys().next().value;
+		if (lruKey !== undefined) {
+			_detailAccessOrder.delete(lruKey);
+			fileDetailCache.delete(lruKey);
+		}
 	}
 	fileDetailCache.set(cacheKey, { text, timestamp: Date.now(), mtimeMs });
-	// LRU: insert new key at the head of access order
-	_detailAccessOrder.unshift(cacheKey);
+	// LRU: insert new key at the "most recently used" end
+	_detailAccessOrder.set(cacheKey, true);
 
 	return text;
 }

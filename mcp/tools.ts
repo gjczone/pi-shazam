@@ -25,7 +25,6 @@ import { hasCallChainChecked, recordCallChain } from "../tools/rename-state.js";
 
 import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { LspManager } from "../lsp/manager.js";
 import { getToolDefinition } from "../tools/definitions.js";
 import { validatePathInProject } from "../tools/_factory.js";
 import { _logWarn, truncateOutput } from "../core/output.js";
@@ -109,12 +108,7 @@ function withLogging(
 
 // -- Registration -------------------------------------------------
 
-export function registerAllTools(
-	server: McpServer,
-	getGraph: () => RepoGraph,
-	projectRoot: string,
-	_lspManager?: LspManager,
-): void {
+export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, projectRoot: string): void {
 	// shazam_overview (includes hotspots)
 	const overviewDef = getToolDefinition("shazam_overview")!;
 	server.registerTool(
@@ -263,12 +257,11 @@ export function registerAllTools(
 		},
 		withLogging(
 			"shazam_verify",
-			async ({ quick, lspOnly, preCommit, delta, maxFiles, noCascade, noSecrets, maxTokens, json }) => {
+			async ({ quick, lspOnly, preCommit, maxFiles, noCascade, noSecrets, maxTokens, json }) => {
 				const opts = {
 					quick: quick as boolean,
 					lspOnly: lspOnly as boolean,
 					preCommit: preCommit as boolean,
-					delta: delta as boolean,
 					maxFiles: (maxFiles as number | undefined) ?? 100,
 					noCascade: noCascade as boolean,
 					noSecrets: noSecrets as boolean,

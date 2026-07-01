@@ -406,8 +406,15 @@ export function compareGraphSnapshots(
 	const currentIds = new Set(currentSymMap.keys());
 	const prevIds = new Set(prevSymMap.keys());
 
-	let addedIds = [...currentIds].filter((id) => !prevIds.has(id));
-	let removedIds = [...prevIds].filter((id) => !currentIds.has(id));
+	// Direct Set iteration avoids intermediate array copies (#573)
+	let addedIds: string[] = [];
+	for (const id of currentIds) {
+		if (!prevIds.has(id)) addedIds.push(id);
+	}
+	let removedIds: string[] = [];
+	for (const id of prevIds) {
+		if (!currentIds.has(id)) removedIds.push(id);
+	}
 
 	// Stable key matching for line-drift reconciliation
 	const addedByKey = new Map<string, string[]>();
@@ -440,7 +447,10 @@ export function compareGraphSnapshots(
 	removedIds = removedIds.filter((id) => !reconciledRemoved.has(id));
 
 	// Modified: same ID, signature or location changed
-	const commonIds = [...currentIds].filter((id) => prevIds.has(id));
+	const commonIds: string[] = [];
+	for (const id of currentIds) {
+		if (prevIds.has(id)) commonIds.push(id);
+	}
 	const modifiedSymbols: ModifiedSymbol[] = [];
 	for (const id of commonIds) {
 		const cur = currentSymMap.get(id)!;

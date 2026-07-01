@@ -122,8 +122,8 @@ async function main(): Promise<void> {
 	// Share LspManager with tools layer so LSP enrichment works in MCP mode
 	await setLspManager(lspManager);
 
-	// Register all analysis tools with LSP support
-	registerAllTools(server, getGraph, PROJECT_ROOT, lspManager);
+	// Register all analysis tools
+	registerAllTools(server, getGraph, PROJECT_ROOT);
 
 	// Graceful shutdown on process exit (with reentrancy guard)
 	let _shuttingDown = false;

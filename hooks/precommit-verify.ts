@@ -54,7 +54,6 @@ export function registerPrecommitVerify(pi: ExtensionAPI): void {
 					preCommit: true,
 					quick: false,
 					lspOnly: false,
-					delta: false,
 					noCascade: false,
 				};
 				const result = await executeVerifyTextAsync(ctx.cwd, opts);

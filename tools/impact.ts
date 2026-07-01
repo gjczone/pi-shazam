@@ -131,8 +131,9 @@ function computeImpactBfs(graph: RepoGraph, files: string[], depth: number): Imp
 	const queueUp: { id: string; level: number }[] = initialSymIds.map((id) => ({ id, level: 0 }));
 	for (const id of initialSymIds) visitedUp.add(id);
 
-	while (queueUp.length > 0) {
-		const { id, level } = queueUp.shift()!;
+	let headUp = 0;
+	while (headUp < queueUp.length) {
+		const { id, level } = queueUp[headUp++];
 		if (level >= depth) continue;
 
 		const incoming = graph.incoming.get(id);
@@ -155,8 +156,9 @@ function computeImpactBfs(graph: RepoGraph, files: string[], depth: number): Imp
 	const queueDown: { id: string; level: number }[] = initialSymIds.map((id) => ({ id, level: 0 }));
 	for (const id of initialSymIds) visitedDown.add(id);
 
-	while (queueDown.length > 0) {
-		const { id, level } = queueDown.shift()!;
+	let headDown = 0;
+	while (headDown < queueDown.length) {
+		const { id, level } = queueDown[headDown++];
 		if (level >= depth) continue;
 
 		const outgoing = graph.outgoing.get(id);
@@ -386,8 +388,9 @@ function _traceIncoming(graph: RepoGraph, startId: string, maxDepth: number): [n
 	const queue: { id: string; depth: number }[] = [{ id: startId, depth: 0 }];
 	visited.add(startId);
 
-	while (queue.length > 0) {
-		const { id, depth } = queue.shift()!;
+	let head = 0;
+	while (head < queue.length) {
+		const { id, depth } = queue[head++];
 		if (depth >= maxDepth) continue;
 		const incoming = graph.incoming.get(id);
 		if (!incoming) continue;
@@ -409,8 +412,9 @@ function _traceOutgoing(graph: RepoGraph, startId: string, maxDepth: number): [n
 	const queue: { id: string; depth: number }[] = [{ id: startId, depth: 0 }];
 	visited.add(startId);
 
-	while (queue.length > 0) {
-		const { id, depth } = queue.shift()!;
+	let head = 0;
+	while (head < queue.length) {
+		const { id, depth } = queue[head++];
 		if (depth >= maxDepth) continue;
 		const outgoing = graph.outgoing.get(id);
 		if (!outgoing) continue;
