@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0] - 2026-07-02
+
+### Bug Fixes
+
+- **fix(#564): Rust resolveImport returns null instead of phantom paths** —
+  Rust `crate::`, `mod X;`, and `super::` imports now return `null` when no candidate file exists, matching the behavior of all other languages and preventing phantom paths from entering `fileImports`.
+
+- **fix(#565): Move rename-state.ts from hooks/ to tools/ to fix layer violation** —
+  `tools/impact.ts`, `tools/rename_symbol.ts`, and `mcp/tools.ts` no longer import from `hooks/`, fixing the one-way dependency rule violation.
+
+- **fix(#566): Log MCP shutdown errors instead of empty catch blocks** —
+  `transport.onclose` and `stdin.on("end")` handlers now log shutdown errors via `_logWarn` instead of silently swallowing them.
+
+- **fix(#567): Clear LSP init timeout timer to prevent UnhandledPromiseRejection** —
+  The 15-second LSP initialization timeout timer is now cleared on success, preventing UnhandledPromiseRejection that could crash the process under `--unhandled-rejections=strict`.
+
+- **fix(#568): Redact error messages in withLogging before re-throwing to MCP clients** —
+  Error messages sent to MCP clients are now redacted to prevent leaking absolute paths and stack traces. Original stack trace is preserved on the wrapped error.
+
+- **fix(#569): Move recordCallChain after symbol existence verification** —
+  The rename safety gate no longer marks nonexistent symbols as reviewed, preventing bypass when the impact analysis fails to find the target symbol.
+
+- **fix(#570): Batch P1 reliability and safety fixes** —
+  Cross-platform path containment using `path.relative()` (Windows compatibility), `createTool` error logging via `_logWarn`, `validateProjectRoot` returns resolved real path for LSP consistency, `maxFiles` defaults to 100 instead of unsafe type cast, `jq` fallback in `pre-commit-verify.sh`, cache deserialization `Array.isArray` guard for corrupted `fileImports`, `console.error` replaced with `_logWarn` in rename_symbol and index.ts.
+
+### Simplified
+
+- **Dead code removal (#572)**: Removed delta mode residual code (`options.delta`, `deltaLabel`) from `verify.ts`, `tools/definitions.ts`, `mcp/tools.ts`, and `precommit-verify.ts`. Removed unused `_lspManager` parameter from `registerAllTools`.
+
+- **Hot-path optimizations (#573)**: BFS queue `shift()` replaced with O(1) head-index dequeue in all 4 BFS loops. LRU detail cache uses O(1) Map-based ordering instead of O(n) `indexOf`+`splice`. Single-pass diagnostics counting avoids multiple `filter().length` iterations. Eliminated intermediate `[...Set].filter()` arrays in graph snapshot comparison.
+
+### Documentation
+
+- **docs**: Fixed documentation alignment with actual implementation — updated SKILL.md (removed non-existent delta parameter, fixed LSP language count), mcp/README.md (tool count), AGENTS.md (source file count, audit log path), mcp/tools.ts (tool consolidation comment).
+
 ## [0.23.3] - 2026-06-30
 
 ### Bug Fixes
