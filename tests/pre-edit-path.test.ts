@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { getEditedFiles, clearEditedFiles, normalizeEditedPath } from "../hooks/pre-edit.js";
+import { resolve } from "node:path";
 
 describe("hooks/pre-edit path normalization", () => {
 	beforeEach(() => {
@@ -27,7 +28,8 @@ describe("hooks/pre-edit path normalization", () => {
 	});
 
 	it("should preserve absolute paths", () => {
-		const abs = "/project/src/foo.ts";
+		// Use resolve so the expected value matches the platform-native result
+		const abs = resolve("/project", "src/foo.ts");
 		const result = normalizeEditedPath(abs, "/project");
 		expect(result).toBe(abs);
 	});

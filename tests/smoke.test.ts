@@ -26,7 +26,8 @@ describe("smoke: core pipeline", () => {
 	it("graph contains expected project files", () => {
 		const files = Array.from(graph.fileSymbols.keys());
 		expect(files).toContain("index.ts");
-		const hasCoreFile = files.some((f) => f.startsWith("core/"));
+		// Cross-platform: file paths may use / or \ separators
+		const hasCoreFile = files.some((f) => f.startsWith("core/") || f.startsWith("core\\"));
 		expect(hasCoreFile).toBe(true);
 	});
 

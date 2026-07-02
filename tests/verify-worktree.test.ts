@@ -130,6 +130,16 @@ describe("getGitChangedFiles — worktree awareness (issue #226)", () => {
 			cwd: worktreeDir,
 			encoding: "utf-8",
 		}).trim();
-		expect(realpathSync(resolved)).toBe(realpathSync(worktreeDir));
+		// #592: On Windows, git rev-parse may return short-name paths
+		// (e.g. C:\Users\RUNNER~1) while mkdtempSync returns long names.
+		// Use realpathSync on both sides to resolve to canonical form,
+		// then compare lowercased on Windows (case-insensitive filesystem).
+		const resolvedCanon = realpathSync(resolved);
+		const worktreeCanon = realpathSync(worktreeDir);
+		if (process.platform === "win32") {
+			expect(resolvedCanon.toLowerCase()).toBe(worktreeCanon.toLowerCase());
+		} else {
+			expect(resolvedCanon).toBe(worktreeCanon);
+		}
 	});
 });

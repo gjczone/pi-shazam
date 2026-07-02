@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { registerPreEditGuard, clearEditedFiles, getEditedFiles } from "../hooks/pre-edit.js";
 import type { ExtensionAPI, ToolCallEvent, ExtensionContext } from "../types/pi-extension.js";
+import { resolve, join } from "node:path";
 
 type Handler = (event: ToolCallEvent, ctx: ExtensionContext) => unknown;
 
@@ -23,7 +24,7 @@ function buildFakePi(): { pi: ExtensionAPI; handlers: Handler[] } {
 function buildCtx(cwd = "/project"): ExtensionContext {
 	return {
 		ui: { notify: vi.fn(), confirm: vi.fn(), select: vi.fn(), setStatus: vi.fn() },
-		cwd,
+		cwd: resolve(cwd),
 	} as unknown as ExtensionContext;
 }
 
@@ -34,6 +35,11 @@ function buildWriteEvent(path: string): ToolCallEvent {
 		input: { path, content: "x" },
 		toolCallId: `call_${Math.random()}`,
 	} as unknown as ToolCallEvent;
+}
+
+/** Resolve a relative path against the context cwd to get the expected tracked path. */
+function expectedPath(rel: string): string {
+	return resolve("/project", rel);
 }
 
 describe("hooks/pre-edit path filtering", () => {
@@ -47,8 +53,8 @@ describe("hooks/pre-edit path filtering", () => {
 		const toolCallHandler = handlers[0];
 		expect(toolCallHandler).toBeDefined();
 
-		toolCallHandler(buildWriteEvent("/project/src/foo.ts"), buildCtx());
-		expect(getEditedFiles()).toContain("/project/src/foo.ts");
+		toolCallHandler(buildWriteEvent("src/foo.ts"), buildCtx());
+		expect(getEditedFiles()).toContain(expectedPath("src/foo.ts"));
 	});
 
 	it("should NOT track writes to /tmp/ paths", () => {
@@ -68,14 +74,14 @@ describe("hooks/pre-edit path filtering", () => {
 	it("should NOT track writes to node_modules", () => {
 		const { pi, handlers } = buildFakePi();
 		registerPreEditGuard(pi);
-		handlers[0](buildWriteEvent("/project/node_modules/pkg/index.ts"), buildCtx());
+		handlers[0](buildWriteEvent(join("node_modules", "pkg", "index.ts")), buildCtx());
 		expect(getEditedFiles()).toHaveLength(0);
 	});
 
 	it("should NOT track writes to dist/ output", () => {
 		const { pi, handlers } = buildFakePi();
 		registerPreEditGuard(pi);
-		handlers[0](buildWriteEvent("/project/dist/index.js"), buildCtx());
+		handlers[0](buildWriteEvent(join("dist", "index.js")), buildCtx());
 		expect(getEditedFiles()).toHaveLength(0);
 	});
 });

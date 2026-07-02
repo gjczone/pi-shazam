@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { fileURLToPath } from "node:url";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, sep } from "node:path";
+import { join, sep, resolve } from "node:path";
 import { uriToPath, pathToUri } from "../lsp/client.js";
 import { detectLspServer } from "../lsp/manager.js";
 
@@ -35,8 +35,10 @@ describe("lsp/client uriToPath (#466)", () => {
 	});
 
 	it("round-trips with pathToUri on POSIX-style absolute paths", () => {
-		// pathToUri is already correct since #429; uriToPath must invert it.
-		const abs = "/proj/src/foo.ts";
+		// pathToUri calls path.resolve internally, so the round-trip
+		// returns a platform-native resolved path (e.g. D:\proj\src\foo.ts
+		// on Windows). Compare against path.resolve for portability.
+		const abs = resolve("/proj/src/foo.ts");
 		const uri = pathToUri(abs);
 		expect(uriToPath(uri)).toBe(abs);
 	});
