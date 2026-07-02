@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, realpathSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -131,15 +131,22 @@ describe("getGitChangedFiles — worktree awareness (issue #226)", () => {
 			encoding: "utf-8",
 		}).trim();
 		// #592: On Windows, git rev-parse may return short-name paths
-		// (e.g. C:\Users\RUNNER~1) while mkdtempSync returns long names.
-		// Use realpathSync on both sides to resolve to canonical form,
-		// then compare lowercased on Windows (case-insensitive filesystem).
+		// (e.g. C:\Users\RUNNER~1) while mkdtempSync returns long names
+		// (C:\Users\runneradmin). realpathSync does not always resolve
+		// intermediate short-name components. Compare using stat inodes.
 		const resolvedCanon = realpathSync(resolved);
 		const worktreeCanon = realpathSync(worktreeDir);
-		if (process.platform === "win32") {
-			expect(resolvedCanon.toLowerCase()).toBe(worktreeCanon.toLowerCase());
-		} else {
-			expect(resolvedCanon).toBe(worktreeCanon);
+		try {
+			const st1 = statSync(resolvedCanon);
+			const st2 = statSync(worktreeCanon);
+			expect(st1.ino).toBe(st2.ino);
+		} catch {
+			// Fallback: case-insensitive compare on win32
+			if (process.platform === "win32") {
+				expect(resolvedCanon.toLowerCase()).toBe(worktreeCanon.toLowerCase());
+			} else {
+				expect(resolvedCanon).toBe(worktreeCanon);
+			}
 		}
 	});
 });

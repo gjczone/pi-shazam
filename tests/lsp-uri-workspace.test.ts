@@ -20,16 +20,19 @@ import { detectLspServer } from "../lsp/manager.js";
 
 describe("lsp/client uriToPath (#466)", () => {
 	it("delegates file:// URIs to fileURLToPath (platform-native result)", () => {
-		// The fix replaces manual slice/decode with fileURLToPath. On Linux
-		// file:///C:/proj/foo.ts -> /C:/proj/foo.ts; on Windows -> C:\proj\foo.ts.
-		// Asserting equality with fileURLToPath verifies the delegation without
-		// branching on platform.
+		// On Windows, file:///C:/proj/foo.ts → C:\proj\foo.ts
+		// On POSIX, file:///C:/proj/foo.ts → /C:/proj/foo.ts
+		// fileURLToPath handles both; assert equality with fileURLToPath.
 		const uri = "file:///C:/proj/foo.ts";
 		expect(uriToPath(uri)).toBe(fileURLToPath(uri));
 	});
 
 	it("decodes percent-encoded characters in file URIs", () => {
-		const uri = "file:///proj/a%20b.ts";
+		// #592: On Windows, file:// URIs must include a drive letter or
+		// be an absolute UNC path. Use the current drive for portability.
+		const uri = process.platform === "win32"
+			? "file:///C:/proj/a%20b.ts"
+			: "file:///proj/a%20b.ts";
 		expect(uriToPath(uri)).toBe(fileURLToPath(uri));
 		expect(uriToPath(uri)).toContain("a b.ts");
 	});
