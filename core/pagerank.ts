@@ -71,7 +71,9 @@ export function calculatePageRank(
 	const base = (1 - damping) / n;
 
 	for (let iter = 0; iter < maxIter; iter++) {
+		// Pass 1: compute new PageRank scores and accumulate dangling sum
 		const newPr = new Map<string, number>();
+		let danglingSum = 0;
 		for (const id of ids) {
 			let score = base;
 			const incoming = inc.get(id);
@@ -83,42 +85,34 @@ export function calculatePageRank(
 				}
 			}
 			newPr.set(id, score);
-		}
 
-		// Dangling node redistribution: nodes with zero outgoing edges distribute
-		// their accumulated score uniformly to all nodes (standard PageRank).
-		let danglingSum = 0;
-		for (const id of ids) {
+			// Dangling node redistribution: nodes with zero outgoing edges
+			// distribute their score uniformly to all nodes (standard PageRank).
 			if ((outW.get(id) || 0) === 0) {
 				danglingSum += pr.get(id) || 0;
 			}
 		}
-		const danglingContrib = (damping * danglingSum) / n;
-		for (const id of ids) {
-			newPr.set(id, (newPr.get(id) || 0) + danglingContrib);
-		}
 
-		// Normalize
+		// Pass 2: apply dangling contribution and accumulate normalization total
+		const danglingContrib = (damping * danglingSum) / n;
 		let total = 0;
-		for (const score of newPr.values()) {
+		for (const id of ids) {
+			const score = (newPr.get(id) || 0) + danglingContrib;
+			newPr.set(id, score);
 			total += score;
 		}
 		total = total || 1.0;
-		for (const [id, score] of newPr) {
-			newPr.set(id, score / total);
-		}
 
-		// Convergence check
+		// Pass 3: normalize, update pr, and check convergence in one pass
 		let delta = 0;
 		for (const id of ids) {
-			const oldScore = pr.get(id) || 0;
-			const newScore = newPr.get(id) || 0;
-			delta = Math.max(delta, Math.abs(newScore - oldScore));
-		}
+			const normalizedScore = (newPr.get(id) || 0) / total;
+			newPr.set(id, normalizedScore);
 
-		// Update pr for next iteration
-		for (const [id, score] of newPr) {
-			pr.set(id, score);
+			const oldScore = pr.get(id) || 0;
+			delta = Math.max(delta, Math.abs(normalizedScore - oldScore));
+
+			pr.set(id, normalizedScore);
 		}
 
 		if (delta < tol) break;

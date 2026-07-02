@@ -434,11 +434,35 @@ function getDocstringAdapter(): TreeSitterAdapter {
 	return _docstringAdapter;
 }
 
+// Per-file docstring cache: keyed by filePath + mtime, stores parsed comment
+// nodes so that multiple symbol lookups in the same file reuse one parse.
+// Avoids N× read+parse for N symbols in a single file.
+interface DocstringCacheEntry {
+	mtime: number;
+	comments: { row: number; text: string; endRow: number }[];
+}
+const _docstringCache = new Map<string, DocstringCacheEntry>();
+
 function _extractDocstring(filePath: string, symbolLine: number): string | undefined {
 	try {
+		let mtime: number;
+		try {
+			mtime = statSync(filePath).mtimeMs;
+		} catch (_e) {
+			mtime = 0;
+		}
+
+		const cacheKey = `${filePath}::${mtime}`;
+		const cached = _docstringCache.get(cacheKey);
+		if (cached) {
+			return _findCommentForLine(cached.comments, symbolLine);
+		}
+
 		const content = readFileAdaptive(filePath);
 		const ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
 		const lang = TreeSitterAdapter.langForExtension(ext);
+
+		let comments: { row: number; text: string; endRow: number }[] | null = null;
 
 		if (lang) {
 			const tsAdapter = getDocstringAdapter();
@@ -447,14 +471,21 @@ function _extractDocstring(filePath: string, symbolLine: number): string | undef
 				if (tree) {
 					try {
 						const rootNode = tree.rootNode as AstNode;
-						const docComment = _extractDocstringFromAst(rootNode, symbolLine);
-						if (docComment) return docComment;
+						comments = _collectCommentNodes(rootNode);
 					} finally {
 						tree.delete?.();
 					}
 				}
 			}
 		}
+
+		// Populate cache before falling back to text search, so subsequent
+		// calls for the same file reuse the cached comment nodes.
+		if (!comments) comments = [];
+		_docstringCache.set(cacheKey, { mtime, comments });
+
+		const astResult = _findCommentForLine(comments, symbolLine);
+		if (astResult) return astResult;
 
 		return _extractDocstringTextFallback(content, symbolLine);
 	} catch (err) {
@@ -463,25 +494,28 @@ function _extractDocstring(filePath: string, symbolLine: number): string | undef
 	}
 }
 
-function _extractDocstringFromAst(root: AstNode, symbolLine: number): string | undefined {
-	const commentNodes: { row: number; text: string; endRow: number }[] = [];
-
+function _collectCommentNodes(root: AstNode): { row: number; text: string; endRow: number }[] {
+	const nodes: { row: number; text: string; endRow: number }[] = [];
 	function walk(n: AstNode): void {
 		const row = n.startPosition.row + 1;
 		const endRow = n.endPosition.row + 1;
-		if (n.type === "comment") commentNodes.push({ row, text: n.text, endRow });
+		if (n.type === "comment") nodes.push({ row, text: n.text, endRow });
 		if (n.children && n.children.length > 0) {
 			for (const child of n.children) walk(child);
 		}
 	}
-
 	walk(root);
+	return nodes;
+}
 
+function _findCommentForLine(
+	comments: { row: number; text: string; endRow: number }[],
+	symbolLine: number,
+): string | undefined {
 	let bestComment: string | undefined;
-	for (const c of commentNodes) {
+	for (const c of comments) {
 		if (c.endRow >= symbolLine - 1 && c.endRow < symbolLine) bestComment = c.text;
 	}
-
 	if (bestComment) {
 		return bestComment
 			.replace(/^\/\*\*?\s?/, "")

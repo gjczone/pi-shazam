@@ -76,4 +76,70 @@ describe("pagerank", () => {
 			expect(sym.pagerank).toBeGreaterThan(0);
 		}
 	});
+
+	// -- Issue #577: PageRank pass merge verification ------------------------
+
+	it("should handle dangling node (zero outgoing edges) by distributing its score", () => {
+		const graph = createRepoGraph();
+		const a = createSymbol("a", "A", "function", "f.ts", 1);
+		const b = createSymbol("b", "B", "function", "f.ts", 5);
+
+		graph.symbols.set("a", a);
+		graph.symbols.set("b", b);
+
+		// A -> B, B has no outgoing edges (dangling)
+		graph.outgoing.set("a", [createEdge("a", "b", 0.5, "call")]);
+		graph.incoming.set("b", [createEdge("a", "b", 0.5, "call")]);
+		// B has no outgoing edges — dangling
+
+		calculatePageRank(graph);
+
+		expect(a.pagerank).toBeGreaterThan(0);
+		expect(b.pagerank).toBeGreaterThan(0);
+		expect(isFinite(a.pagerank)).toBe(true);
+		expect(isFinite(b.pagerank)).toBe(true);
+		const total = a.pagerank + b.pagerank;
+		expect(total).toBeCloseTo(1.0, 5);
+	});
+
+	it("should produce deterministic results on repeated calls (same graph)", () => {
+		const graph1 = createRepoGraph();
+		const graph2 = createRepoGraph();
+
+		for (const g of [graph1, graph2]) {
+			for (let i = 0; i < 5; i++) {
+				const sym = createSymbol(`s${i}`, `sym${i}`, "function", "f.ts", i);
+				g.symbols.set(`s${i}`, sym);
+			}
+			// Ring: s0->s1->s2->s3->s4->s0
+			for (let i = 0; i < 5; i++) {
+				const tgt = `s${(i + 1) % 5}`;
+				const src = `s${i}`;
+				g.outgoing.set(src, [createEdge(src, tgt, 0.5, "call")]);
+			}
+		}
+
+		calculatePageRank(graph1);
+		calculatePageRank(graph2);
+
+		for (let i = 0; i < 5; i++) {
+			const s1 = graph1.symbols.get(`s${i}`)!;
+			const s2 = graph2.symbols.get(`s${i}`)!;
+			expect(s1.pagerank).toBeCloseTo(s2.pagerank, 5);
+		}
+	});
+
+	it("should handle all-dangling graph (no edges at all)", () => {
+		const graph = createRepoGraph();
+		for (let i = 0; i < 4; i++) {
+			const sym = createSymbol(`s${i}`, `sym${i}`, "function", "f.ts", i);
+			graph.symbols.set(`s${i}`, sym);
+		}
+
+		calculatePageRank(graph);
+
+		for (const sym of graph.symbols.values()) {
+			expect(sym.pagerank).toBeCloseTo(0.25, 5);
+		}
+	});
 });

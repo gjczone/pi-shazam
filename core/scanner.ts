@@ -501,17 +501,25 @@ function parseFile(adapter: TreeSitterAdapter, root: string, relPath: string, mt
 function buildEdgesForFile(graph: RepoGraph, root: string, relPath: string, entry: FileCacheEntry): void {
 	const thisFileSymIds = graph.fileSymbols.get(relPath) || [];
 
-	// Import edges
+	// Pre-sort symbols by line for O(log S) binary search in findCallerSymbols.
+	// Sorting once per file avoids the O(S log S) sort on every call/ref lookup.
+	const sortedFileSymIds =
+		thisFileSymIds.length > 1
+			? [...thisFileSymIds].sort((a, b) => {
+					const sa = graph.symbols.get(a);
+					const sb = graph.symbols.get(b);
+					return (sa?.line ?? 0) - (sb?.line ?? 0);
+				})
+			: thisFileSymIds;
+
+	// Import edges — resolve each import once, reuse for both
+	// fileImports (for dependent detection) and edge creation.
 	if (entry.imports.length > 0) {
-		// Store resolved file paths (not raw module specifiers) so
-		// incrementalScanProject can match them against relPath for dependent detection
-		graph.fileImports.set(
-			relPath,
-			entry.imports.map(([m]) => resolveImport(m, relPath, root, graph)).filter((f): f is string => f !== null),
-		);
+		const resolvedImports: string[] = [];
 		for (const [importedModule] of entry.imports) {
 			const resolvedImport = resolveImport(importedModule, relPath, root, graph);
 			if (!resolvedImport) continue;
+			resolvedImports.push(resolvedImport);
 			const targetFileSyms = graph.fileSymbols.get(resolvedImport) || [];
 			for (const srcId of thisFileSymIds) {
 				for (const tgtId of targetFileSyms) {
@@ -519,13 +527,14 @@ function buildEdgesForFile(graph: RepoGraph, root: string, relPath: string, entr
 				}
 			}
 		}
+		graph.fileImports.set(relPath, resolvedImports);
 	}
 
 	// Call edges
 	if (entry.calls.length > 0) {
 		graph.fileCalls.set(relPath, entry.calls);
 		for (const [calledName, callLine] of entry.calls) {
-			const callerSyms = findCallerSymbols(thisFileSymIds, graph.symbols, callLine);
+			const callerSyms = findCallerSymbols(sortedFileSymIds, graph.symbols, callLine);
 			const calleeSyms = findCalleeSymbols(calledName, graph);
 			for (const caller of callerSyms) {
 				for (const callee of calleeSyms) {
@@ -541,7 +550,7 @@ function buildEdgesForFile(graph: RepoGraph, root: string, relPath: string, entr
 	if (entry.refs.length > 0) {
 		graph.fileRefs.set(relPath, entry.refs);
 		for (const [refName, refLine] of entry.refs) {
-			const callerSyms = findCallerSymbols(thisFileSymIds, graph.symbols, refLine);
+			const callerSyms = findCallerSymbols(sortedFileSymIds, graph.symbols, refLine);
 			const calleeSym = findSymbolByNameInFile(refName, relPath, graph);
 			if (calleeSym) {
 				for (const caller of callerSyms) {
@@ -558,7 +567,7 @@ function buildEdgesForFile(graph: RepoGraph, root: string, relPath: string, entr
 		graph.fileTypeRefs.set(relPath, entry.typeRefs);
 		for (const [typeName, typeLine] of entry.typeRefs) {
 			// Find the enclosing symbol that contains this type reference
-			const callerSyms = findCallerSymbols(thisFileSymIds, graph.symbols, typeLine);
+			const callerSyms = findCallerSymbols(sortedFileSymIds, graph.symbols, typeLine);
 			// Type references can be cross-file (like calls), search all symbols by name
 			const targetSyms = findCalleeSymbols(typeName, graph);
 			for (const caller of callerSyms) {
@@ -1294,24 +1303,38 @@ function resolveImport(importPath: string, fromFile: string, root: string, graph
 
 // -- Symbol lookup helpers ----------------------------------------------------
 
+// fileSymIds MUST be pre-sorted by symbol line (ascending) before calling.
+// Uses binary search O(log S) to find the index range, then bounded linear
+// scan to pick the narrowest-range symbol that contains callLine.
 function findCallerSymbols(fileSymIds: string[], symbols: Map<string, Symbol>, callLine: number): Symbol[] {
-	// Find symbols in the file that contain this call line within their range
-	const candidates: Symbol[] = [];
-	for (const id of fileSymIds) {
-		const sym = symbols.get(id);
-		if (!sym) continue;
-		if (sym.line <= callLine && callLine <= sym.endLine) {
-			candidates.push(sym);
+	// Binary search: find the last index where symbols[id].line <= callLine
+	let lo = 0;
+	let hi = fileSymIds.length;
+	while (lo < hi) {
+		const mid = (lo + hi) >> 1;
+		const sym = symbols.get(fileSymIds[mid]!);
+		if (sym && sym.line <= callLine) {
+			lo = mid + 1;
+		} else {
+			hi = mid;
 		}
 	}
-	// Return the most specific (narrowest range) match first
-	candidates.sort((a, b) => {
-		const aRange = a.endLine - a.line;
-		const bRange = b.endLine - b.line;
-		return aRange - bRange || a.line - b.line;
-	});
-	// Return the most specific one
-	return candidates.length > 0 ? [candidates[0]!] : [];
+
+	// Scan backward from lo-1 (closest matches first) to find the symbol
+	// with narrowest range that still contains callLine.
+	let bestSym: Symbol | null = null;
+	let bestRange = Infinity;
+	for (let i = lo - 1; i >= 0; i--) {
+		const sym = symbols.get(fileSymIds[i]!);
+		if (!sym) continue;
+		if (callLine > sym.endLine) continue; // symbol ended before callLine — stop scanning
+		const range = sym.endLine - sym.line;
+		if (range < bestRange) {
+			bestRange = range;
+			bestSym = sym;
+		}
+	}
+	return bestSym ? [bestSym] : [];
 }
 
 function findCalleeSymbols(name: string, graph: RepoGraph): Symbol[] {
