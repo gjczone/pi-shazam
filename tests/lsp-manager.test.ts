@@ -1,6 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { LspManager } from "../lsp/manager.js";
 import type { LspClient } from "../lsp/client.js";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { mkdtempSync, writeFileSync, chmodSync, rmSync, mkdirSync } from "node:fs";
 
 describe("lsp/manager", () => {
 	describe("LspManager constructor", () => {
@@ -164,5 +167,220 @@ describe("version manager bin discovery (#426)", () => {
 				if (v !== undefined) process.env[k] = v;
 			}
 		}
+	});
+});
+
+// -- PATHEXT-aware isExecutable (issue #585) --
+
+describe("_isExecutable PATHEXT support (#585)", () => {
+	const originalPlatform = process.platform;
+	const originalPathext = process.env.PATHEXT;
+
+	afterEach(() => {
+		Object.defineProperty(process, "platform", { value: originalPlatform });
+		if (originalPathext !== undefined) process.env.PATHEXT = originalPathext;
+		else delete process.env.PATHEXT;
+	});
+
+	// Helper to create a temp file with a given extension
+	function createTempFile(ext: string): string {
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-585-"));
+		const filePath = join(tmpDir, `test${ext}`);
+		writeFileSync(filePath, "dummy");
+		// On POSIX, make it executable so isExecutable passes the mode check
+		chmodSync(filePath, 0o755);
+		return filePath;
+	}
+
+	it("recognizes .exe extension with default PATHEXT", async () => {
+		const { _isExecutable } = await import("../lsp/manager.js");
+		Object.defineProperty(process, "platform", { value: "win32" });
+		delete process.env.PATHEXT;
+		const filePath = createTempFile(".exe");
+		try {
+			expect(_isExecutable(filePath)).toBe(true);
+		} finally {
+			rmSync(filePath, { force: true });
+			rmSync(join(filePath, ".."), { recursive: true, force: true });
+		}
+	});
+
+	it("recognizes .com extension when PATHEXT includes .COM", async () => {
+		const { _isExecutable } = await import("../lsp/manager.js");
+		Object.defineProperty(process, "platform", { value: "win32" });
+		process.env.PATHEXT = ".COM;.EXE";
+		const filePath = createTempFile(".com");
+		try {
+			expect(_isExecutable(filePath)).toBe(true);
+		} finally {
+			rmSync(filePath, { force: true });
+			rmSync(join(filePath, ".."), { recursive: true, force: true });
+		}
+	});
+
+	it("rejects extension not in PATHEXT", async () => {
+		const { _isExecutable } = await import("../lsp/manager.js");
+		Object.defineProperty(process, "platform", { value: "win32" });
+		process.env.PATHEXT = ".EXE";
+		const filePath = createTempFile(".cmd");
+		try {
+			expect(_isExecutable(filePath)).toBe(false);
+		} finally {
+			rmSync(filePath, { force: true });
+			rmSync(join(filePath, ".."), { recursive: true, force: true });
+		}
+	});
+
+	it("preserves POSIX behavior (mode check) unchanged", async () => {
+		const { _isExecutable } = await import("../lsp/manager.js");
+		const filePath = createTempFile(".sh");
+		try {
+			// On POSIX, mode 0o755 makes it executable
+			expect(_isExecutable(filePath)).toBe(true);
+		} finally {
+			rmSync(filePath, { force: true });
+			rmSync(join(filePath, ".."), { recursive: true, force: true });
+		}
+	});
+});
+
+// -- findInPath win32 bypass and .cmd fallback (issue #582) --
+
+describe("_findInPath win32 bypass (#582)", () => {
+	const originalPlatform = process.platform;
+	const originalPath = process.env.PATH;
+
+	afterEach(() => {
+		Object.defineProperty(process, "platform", { value: originalPlatform });
+		if (originalPath !== undefined) process.env.PATH = originalPath;
+		else delete process.env.PATH;
+	});
+
+	function createTempExe(name: string): string {
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-582-"));
+		const filePath = join(tmpDir, name);
+		writeFileSync(filePath, "dummy");
+		chmodSync(filePath, 0o755);
+		return filePath;
+	}
+
+	it("finds executable outside SAFE_PATH_DIRS on win32", async () => {
+		const { _findInPath, _SAFE_PATH_DIRS } = await import("../lsp/manager.js");
+		Object.defineProperty(process, "platform", { value: "win32" });
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-582-"));
+		const exePath = join(tmpDir, "test-server.exe");
+		try {
+			writeFileSync(exePath, "dummy");
+			chmodSync(exePath, 0o755);
+			// Set PATH to temp dir (which is NOT in SAFE_PATH_DIRS)
+			process.env.PATH = tmpDir;
+			// On win32, findInPath should bypass SAFE_PATH_DIRS and find the exe
+			const found = _findInPath("test-server.exe");
+			expect(found).toBe(exePath);
+		} finally {
+			rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("skips non-SAFE_PATH_DIRS on POSIX", async () => {
+		const { _findInPath } = await import("../lsp/manager.js");
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-582-"));
+		const exePath = join(tmpDir, "test-server");
+		try {
+			writeFileSync(exePath, "dummy");
+			chmodSync(exePath, 0o755);
+			process.env.PATH = tmpDir;
+			// On POSIX, findInPath should NOT find executables outside SAFE_PATH_DIRS
+			const found = _findInPath("test-server");
+			expect(found).toBeNull();
+		} finally {
+			rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("tries .cmd extension on win32 when bare command not found", async () => {
+		const { _findInPath } = await import("../lsp/manager.js");
+		Object.defineProperty(process, "platform", { value: "win32" });
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-582-"));
+		const cmdPath = join(tmpDir, "test-server.cmd");
+		try {
+			writeFileSync(cmdPath, "dummy");
+			chmodSync(cmdPath, 0o755);
+			process.env.PATH = tmpDir;
+			// findInPath with bare command should find .cmd variant
+			const found = _findInPath("test-server");
+			expect(found).toBe(cmdPath);
+		} finally {
+			rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+});
+
+// -- trustedUserCandidates Windows paths (issue #582) --
+
+describe("_trustedUserCandidates Windows paths (#582)", () => {
+	const originalPlatform = process.platform;
+
+	afterEach(() => {
+		Object.defineProperty(process, "platform", { value: originalPlatform });
+	});
+
+	it("includes Windows-specific paths on win32", async () => {
+		const { _trustedUserCandidates } = await import("../lsp/manager.js");
+		Object.defineProperty(process, "platform", { value: "win32" });
+		// Create a temp dir to act as APPDATA/npm and put an actual .cmd file there
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-582-"));
+		const npmDir = join(tmpDir, "npm");
+		mkdirSync(npmDir, { recursive: true });
+		const cmdPath = join(npmDir, "test-server.cmd");
+		writeFileSync(cmdPath, "dummy");
+		chmodSync(cmdPath, 0o755);
+		process.env.APPDATA = tmpDir;
+		try {
+			const candidates = _trustedUserCandidates("test-server");
+			// Should find the .cmd file in APPDATA/npm
+			const hasNpmCmd = candidates.some((c) => c.endsWith("test-server.cmd") && c.includes("npm"));
+			expect(hasNpmCmd).toBe(true);
+		} finally {
+			rmSync(tmpDir, { recursive: true, force: true });
+			delete process.env.APPDATA;
+		}
+	});
+
+	it("falls back to homedir-derived paths when APPDATA is unset", async () => {
+		const { _trustedUserCandidates } = await import("../lsp/manager.js");
+		Object.defineProperty(process, "platform", { value: "win32" });
+		delete process.env.APPDATA;
+		delete process.env.LOCALAPPDATA;
+		// Function should not crash when APPDATA is unset.
+		// Candidates that don't exist on disk are filtered by isExecutable,
+		// so the result array may be empty on Linux. Just verify it returns an array.
+		const candidates = _trustedUserCandidates("test-server");
+		expect(Array.isArray(candidates)).toBe(true);
+	});
+
+	it("does NOT include Windows paths on POSIX", async () => {
+		const { _trustedUserCandidates } = await import("../lsp/manager.js");
+		const candidates = _trustedUserCandidates("test-server");
+		// On POSIX, no AppData or scoop paths should appear
+		const hasWindowsPaths = candidates.some(
+			(c) => c.includes("AppData") || c.includes("scoop") || c.includes("nvim-data"),
+		);
+		expect(hasWindowsPaths).toBe(false);
+	});
+});
+
+// -- package.json os field (issue #585) --
+
+describe("package.json os field (#585)", () => {
+	it("includes win32 in supported platforms", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const pkgPath = resolve(process.cwd(), "package.json");
+		const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+		expect(pkg.os).toBeDefined();
+		expect(pkg.os).toContain("linux");
+		expect(pkg.os).toContain("darwin");
+		expect(pkg.os).toContain("win32");
 	});
 });

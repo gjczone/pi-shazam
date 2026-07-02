@@ -249,14 +249,26 @@ function detectWorkspaceRoot(projectRoot: string, filePath: string | null, langu
 
 // -- Executable search --------------------------------------------------------
 
-function isExecutable(filePath: string): boolean {
+/**
+ * Check if a file path points to an executable.
+ *
+ * On Windows, respects the PATHEXT environment variable for extension
+ * recognition (issue #585). On POSIX, checks the executable permission bit.
+ */
+export function _isExecutable(filePath: string): boolean {
 	try {
 		const st = statSync(filePath);
 		if (!st.isFile()) return false;
 		if (process.platform === "win32") {
-			// On Windows, check for executable extensions
+			// #585: Use PATHEXT to determine which extensions are executable.
+			// Default to standard Windows executable extensions if PATHEXT is unset.
+			const pathext = (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD;.VBS;.JS").toLowerCase();
+			const exts = pathext
+				.split(";")
+				.map((e) => e.trim())
+				.filter(Boolean);
 			const lower = filePath.toLowerCase();
-			return lower.endsWith(".exe") || lower.endsWith(".cmd") || lower.endsWith(".bat");
+			return exts.some((ext) => lower.endsWith(ext));
 		}
 		// On POSIX, check the executable permission bit
 		// eslint-disable-next-line no-bitwise
@@ -272,7 +284,11 @@ function isExecutable(filePath: string): boolean {
 	}
 }
 
-const SAFE_PATH_DIRS = new Set([
+function isExecutable(filePath: string): boolean {
+	return _isExecutable(filePath);
+}
+
+export const _SAFE_PATH_DIRS = new Set([
 	"/usr/local/bin",
 	"/usr/bin",
 	"/bin",
@@ -356,18 +372,35 @@ export function _getVersionManagerBinDirs(): string[] {
 
 // Wire version-manager bin dirs into trusted paths at module init.
 for (const dir of _getVersionManagerBinDirs()) {
-	SAFE_PATH_DIRS.add(dir);
+	_SAFE_PATH_DIRS.add(dir);
 }
 
 function findInPath(command: string): string | null {
 	const pathEnv = process.env.PATH ?? "";
 	const dirs = pathEnv.split(delimiter);
+	// #582: On win32, bypass SAFE_PATH_DIRS filtering. Windows PATH is already
+	// user-scoped, and the POSIX-only SAFE_PATH_DIRS set blocks all LSP discovery.
+	// On POSIX, keep the safety filter to avoid scanning system bin dirs.
 	for (const dir of dirs) {
-		if (!SAFE_PATH_DIRS.has(dir)) continue; // only search trusted directories
+		if (process.platform !== "win32" && !_SAFE_PATH_DIRS.has(dir)) continue;
 		const candidate = join(dir, command);
 		if (isExecutable(candidate)) return candidate;
 	}
+	// #582: On win32, npm global installs create .cmd shims (e.g.,
+	// typescript-language-server.cmd). Try the .cmd extension when the
+	// bare command name was not found.
+	if (process.platform === "win32" && !command.endsWith(".cmd") && !command.endsWith(".exe")) {
+		for (const dir of dirs) {
+			const candidate = join(dir, command + ".cmd");
+			if (isExecutable(candidate)) return candidate;
+		}
+	}
 	return null;
+}
+
+/** Public export for testing (#582). */
+export function _findInPath(command: string): string | null {
+	return findInPath(command);
 }
 
 function trustedUserCandidates(commandName: string): string[] {
@@ -388,6 +421,28 @@ function trustedUserCandidates(commandName: string): string[] {
 		join(home, ".pyenv", "shims", commandName),
 		join(home, ".linuxbrew", "bin", commandName),
 	];
+
+	// #582: Windows user paths for globally installed tools.
+	if (process.platform === "win32") {
+		const appData = process.env.APPDATA || join(home, "AppData", "Roaming");
+		const localAppData = process.env.LOCALAPPDATA || join(home, "AppData", "Local");
+		candidates.push(
+			// npm global installs
+			join(appData, "npm", commandName),
+			join(appData, "npm", commandName + ".cmd"),
+			// Scoop shims
+			join(home, "scoop", "shims", commandName + ".exe"),
+			join(home, "scoop", "shims", commandName + ".cmd"),
+			// Cargo (Rust) global installs
+			join(home, ".cargo", "bin", commandName + ".exe"),
+			// Neovim Mason LSP installs
+			join(localAppData, "nvim-data", "mason", "bin", commandName + ".cmd"),
+			join(localAppData, "nvim-data", "mason", "bin", commandName + ".exe"),
+			// VS Code bundled servers (if installed via VS Code extension)
+			join(localAppData, "Programs", "Microsoft VS Code", "bin", commandName + ".cmd"),
+		);
+	}
+
 	// Return all matching executables, not just the first (fixes for-of with immediate return)
 	const results: string[] = [];
 	for (const candidate of candidates) {
@@ -403,6 +458,11 @@ function trustedUserCandidates(commandName: string): string[] {
 		}
 	}
 	return results;
+}
+
+/** Public export for testing (#582). */
+export function _trustedUserCandidates(commandName: string): string[] {
+	return trustedUserCandidates(commandName);
 }
 
 // -- Detection ----------------------------------------------------------------
