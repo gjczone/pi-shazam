@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-07-03
+
+### Added
+
+- **Windows LSP server discovery (#582, #585)**: LSP servers are now discoverable on
+  Windows. `findInPath` bypasses POSIX-only `SAFE_PATH_DIRS` filtering on win32
+  and auto-appends `.cmd` extension when the bare command is not found (npm global
+  installs create `.cmd` shims). `trustedUserCandidates` includes Windows paths
+  (`%APPDATA%/npm`, Scoop, Cargo, Mason, VS Code).
+
+- **PATHEXT-aware executable detection (#585)**: `isExecutable` on win32 now
+  respects the `PATHEXT` environment variable (`.COM;.EXE;.BAT;.CMD;.VBS;.JS`
+  default) instead of hardcoding only `.exe`, `.cmd`, `.bat`.
+
+- **Platform-appropriate cache directory (#584)**: Cache now uses
+  `%LOCALAPPDATA%/pi-shazam/cache` on Windows, `~/Library/Caches/pi-shazam` on
+  macOS, and `$XDG_CACHE_HOME/pi-shazam` on Linux (renamed from `repomap`).
+
+- **Windows CI coverage (#583, #592)**: `windows-latest` runner added to CI matrix
+  (typecheck, tests, build) and publish workflow. All 662 tests pass on Windows.
+  `package.json` `os` field now includes `"win32"`.
+
+- **MCP documentation for Windows (#586)**: `mcp/README.md` now includes Windows
+  MCP client configuration examples (Claude Desktop on cmd, PowerShell, Git Bash).
+
+### Bug Fixes
+
+- **MCP HOME fallback on Windows (#586)**: `PI_SHAZAM_HOME_ONLY` check now falls
+  back to `USERPROFILE` before the hardcoded "/home", fixing the home-directory
+  gate on Windows where `HOME` is not set by default.
+
+- **Cross-platform path normalization in MCP (#586)**: `buildEnvelope` now
+  normalizes backslash project paths to forward slashes for consistent JSON
+  output across platforms.
+
+- **Cross-platform test compatibility (#592)**: 8 test files fixed for Windows —
+  path comparisons, URI construction, file separator handling, short-name paths,
+  and log message assertions now work correctly on all platforms.
+
 ## [0.24.4] - 2026-07-02
 
 ### Bug Fixes
