@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { z } from "zod";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeFileSync, rmSync, existsSync, mkdirSync, mkdtempSync } from "node:fs";
+import { writeFileSync, rmSync, existsSync, mkdirSync, mkdtempSync, realpathSync } from "node:fs";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { validatePathInProject, buildEnvelope } from "../tools/_factory.js";
@@ -422,10 +422,16 @@ describe("MCP: server starts correctly via symlink (#485)", () => {
 describe("MCP: HOME/USERPROFILE fallback (#586)", () => {
 	const originalEnv = { ...process.env };
 
+	// On macOS, /tmp is a symlink to /private/tmp. Always resolve through
+	// realpathSync so HOME matches the directory validateProjectRoot sees.
+	function makeTempDir(): string {
+		const dir = mkdtempSync(join(tmpdir(), "pi-shazam-586-"));
+		return realpathSync(dir);
+	}
+
 	it("uses HOME when HOME is set (#586)", async () => {
 		const { validateProjectRoot } = await import("../mcp/entry.js");
-		// Create a temp dir under HOME so realpath passes
-		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-586-"));
+		const tmpDir = makeTempDir();
 		const savedHome = process.env.HOME;
 		const savedUserprofile = process.env.USERPROFILE;
 		const savedHomeOnly = process.env.PI_SHAZAM_HOME_ONLY;
@@ -448,8 +454,7 @@ describe("MCP: HOME/USERPROFILE fallback (#586)", () => {
 
 	it("uses USERPROFILE when HOME is unset (#586)", async () => {
 		const { validateProjectRoot } = await import("../mcp/entry.js");
-		// Create a temp dir under USERPROFILE so realpath passes
-		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-586-"));
+		const tmpDir = makeTempDir();
 		const savedHome = process.env.HOME;
 		const savedUserprofile = process.env.USERPROFILE;
 		const savedHomeOnly = process.env.PI_SHAZAM_HOME_ONLY;
