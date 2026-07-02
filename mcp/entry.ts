@@ -41,7 +41,10 @@ export function validateProjectRoot(root: string): { ok: boolean; error?: string
 		// Defaults to off so container/CI topologies (/workspace, /srv, /opt)
 		// work out of the box.
 		if (process.env.PI_SHAZAM_HOME_ONLY === "1") {
-			const homeDir = process.env.HOME || "/home";
+			// #586: On Windows, HOME is not set by default in cmd/PowerShell.
+			// USERPROFILE is the Windows equivalent. Fall back to USERPROFILE
+			// before the hardcoded "/home" (which does not exist on Windows).
+			const homeDir = process.env.HOME || process.env.USERPROFILE || (process.platform === "win32" ? "" : "/home");
 			const isUnderHome = realRoot === homeDir || realRoot.startsWith(homeDir + "/");
 			if (!isUnderHome) {
 				return { ok: false, error: "PROJECT_ROOT must be within user home directory (PI_SHAZAM_HOME_ONLY=1)" };

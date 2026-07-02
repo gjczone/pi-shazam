@@ -4,7 +4,7 @@ Exposes pi-shazam's codebase analysis tools to any MCP-compatible AI client via 
 
 ## Setup
 
-Add the following to your MCP client's server configuration. Replace `/path/to/project` with your project root (or omit it to use the current working directory).
+Add the following to your MCP client's server configuration. Replace `/path/to/project` with your project root (or omit it to use the current working directory). On Windows, use forward slashes or escape backslashes (e.g., `C:/Users/<username>/projects/my-project` or `C:\\Users\\<username>\\projects\\my-project`).
 
 ### CodeBuddy
 
@@ -55,6 +55,8 @@ Config file: `mcp.json`
 
 Config file: `claude_desktop_config.json`
 
+**Linux/macOS:**
+
 ```json
 {
 	"mcpServers": {
@@ -65,6 +67,21 @@ Config file: `claude_desktop_config.json`
 	}
 }
 ```
+
+**Windows (cmd / PowerShell / Git Bash):**
+
+```json
+{
+	"mcpServers": {
+		"pi-shazam": {
+			"command": "npx",
+			"args": ["-y", "-p", "pi-shazam@latest", "pi-shazam-mcp", "C:/Users/<username>/projects/my-project"]
+		}
+	}
+}
+```
+
+On Windows, use forward slashes (`C:/Users/...`) or escape backslashes (`C:\\Users\\...`) in JSON config. All Windows shells (cmd, PowerShell 5/7, Git Bash) are supported.
 
 ### Codex
 

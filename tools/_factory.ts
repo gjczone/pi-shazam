@@ -73,11 +73,14 @@ export function validatePathInProject(rawPath: string, projectRoot: string = pro
  * Used by all tools to produce consistent schema_version/command/project/status/result.
  */
 export function buildEnvelope(name: string, project: string, status: "ok" | "error", result: unknown): string {
+	// #586: Normalize backslash paths (Windows) to forward slashes for
+	// consistent JSON output across platforms.
+	const normalizedProject = project.replace(/\\/g, "/");
 	return JSON.stringify(
 		{
 			schema_version: "1.0",
 			command: name.replace("shazam_", ""),
-			project,
+			project: normalizedProject,
 			status,
 			result,
 		},

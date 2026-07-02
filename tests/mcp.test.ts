@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { z } from "zod";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeFileSync, rmSync, existsSync } from "node:fs";
+import { writeFileSync, rmSync, existsSync, mkdirSync, mkdtempSync } from "node:fs";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
-import { validatePathInProject } from "../tools/_factory.js";
+import { validatePathInProject, buildEnvelope } from "../tools/_factory.js";
 import { clearRenameState, hasCallChainChecked, recordCallChain } from "../tools/rename-state.js";
 
 let _graph: RepoGraph | null = null;
@@ -414,5 +414,107 @@ describe("MCP: server starts correctly via symlink (#485)", () => {
 			expect(pkg.version).not.toBe("0.0.0");
 			// If we get here, the bug exists — the test documents it
 		}
+	});
+});
+
+// -- MCP HOME/USERPROFILE fallback for Windows (issue #586) --
+
+describe("MCP: HOME/USERPROFILE fallback (#586)", () => {
+	const originalEnv = { ...process.env };
+
+	it("uses HOME when HOME is set (#586)", async () => {
+		const { validateProjectRoot } = await import("../mcp/entry.js");
+		// Create a temp dir under HOME so realpath passes
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-586-"));
+		const savedHome = process.env.HOME;
+		const savedUserprofile = process.env.USERPROFILE;
+		const savedHomeOnly = process.env.PI_SHAZAM_HOME_ONLY;
+		try {
+			process.env.HOME = tmpDir;
+			delete process.env.USERPROFILE;
+			process.env.PI_SHAZAM_HOME_ONLY = "1";
+			const result = validateProjectRoot(tmpDir);
+			expect(result.ok).toBe(true);
+		} finally {
+			if (savedHome !== undefined) process.env.HOME = savedHome;
+			else delete process.env.HOME;
+			if (savedUserprofile !== undefined) process.env.USERPROFILE = savedUserprofile;
+			else delete process.env.USERPROFILE;
+			if (savedHomeOnly !== undefined) process.env.PI_SHAZAM_HOME_ONLY = savedHomeOnly;
+			else delete process.env.PI_SHAZAM_HOME_ONLY;
+			rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("uses USERPROFILE when HOME is unset (#586)", async () => {
+		const { validateProjectRoot } = await import("../mcp/entry.js");
+		// Create a temp dir under USERPROFILE so realpath passes
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-586-"));
+		const savedHome = process.env.HOME;
+		const savedUserprofile = process.env.USERPROFILE;
+		const savedHomeOnly = process.env.PI_SHAZAM_HOME_ONLY;
+		try {
+			delete process.env.HOME;
+			process.env.USERPROFILE = tmpDir;
+			process.env.PI_SHAZAM_HOME_ONLY = "1";
+			const result = validateProjectRoot(tmpDir);
+			expect(result.ok).toBe(true);
+		} finally {
+			if (savedHome !== undefined) process.env.HOME = savedHome;
+			else delete process.env.HOME;
+			if (savedUserprofile !== undefined) process.env.USERPROFILE = savedUserprofile;
+			else delete process.env.USERPROFILE;
+			if (savedHomeOnly !== undefined) process.env.PI_SHAZAM_HOME_ONLY = savedHomeOnly;
+			else delete process.env.PI_SHAZAM_HOME_ONLY;
+			rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("fails when PI_SHAZAM_HOME_ONLY=1 and neither HOME nor USERPROFILE are set and path is outside /home (#586)", async () => {
+		const { validateProjectRoot } = await import("../mcp/entry.js");
+		// /tmp is outside /home, so with no HOME/USERPROFILE fallback
+		// it should fail on POSIX when PI_SHAZAM_HOME_ONLY=1
+		const savedHome = process.env.HOME;
+		const savedUserprofile = process.env.USERPROFILE;
+		const savedHomeOnly = process.env.PI_SHAZAM_HOME_ONLY;
+		try {
+			delete process.env.HOME;
+			delete process.env.USERPROFILE;
+			process.env.PI_SHAZAM_HOME_ONLY = "1";
+			const result = validateProjectRoot(tmpdir());
+			// On POSIX without HOME/USERPROFILE, the fallback is "/home"
+			// and /tmp is not under /home, so it should fail
+			expect(result.ok).toBe(false);
+			expect(result.error).toBeDefined();
+		} finally {
+			if (savedHome !== undefined) process.env.HOME = savedHome;
+			else delete process.env.HOME;
+			if (savedUserprofile !== undefined) process.env.USERPROFILE = savedUserprofile;
+			else delete process.env.USERPROFILE;
+			if (savedHomeOnly !== undefined) process.env.PI_SHAZAM_HOME_ONLY = savedHomeOnly;
+			else delete process.env.PI_SHAZAM_HOME_ONLY;
+		}
+	});
+});
+
+// -- buildEnvelope path normalization for Windows (issue #586) --
+
+describe("buildEnvelope path normalization (#586)", () => {
+	it("normalizes backslash project paths to forward slashes", () => {
+		const result = buildEnvelope("shazam_lookup", "C:\\Users\\test\\project", "ok", { key: "value" });
+		const parsed = JSON.parse(result);
+		expect(parsed.project).toBe("C:/Users/test/project");
+	});
+
+	it("preserves forward-slash project paths", () => {
+		const result = buildEnvelope("shazam_lookup", "/home/user/project", "ok", { key: "value" });
+		const parsed = JSON.parse(result);
+		expect(parsed.project).toBe("/home/user/project");
+	});
+
+	it("handles mixed slash paths", () => {
+		const result = buildEnvelope("shazam_lookup", "C:\\Users\\test\\nested/subdir", "ok", {});
+		const parsed = JSON.parse(result);
+		expect(parsed.project).toBe("C:/Users/test/nested/subdir");
 	});
 });
