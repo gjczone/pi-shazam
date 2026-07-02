@@ -16,7 +16,26 @@ import { _logWarn } from "./output.js";
 
 // -- Cache directory management -----------------------------------------------
 
-const CACHE_ROOT = join(homedir(), ".cache", "repomap");
+/**
+ * Get the platform-appropriate cache root directory.
+ *
+ * - Windows: %LOCALAPPDATA%\pi-shazam\cache (or %USERPROFILE%\AppData\Local fallback)
+ * - macOS: ~/Library/Caches/pi-shazam
+ * - Linux: $XDG_CACHE_HOME/pi-shazam (or ~/.cache/pi-shazam fallback)
+ */
+function getCacheRoot(): string {
+	if (process.platform === "win32") {
+		const localAppData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
+		return join(localAppData, "pi-shazam", "cache");
+	}
+	if (process.platform === "darwin") {
+		return join(homedir(), "Library", "Caches", "pi-shazam");
+	}
+	const xdgCache = process.env.XDG_CACHE_HOME || join(homedir(), ".cache");
+	return join(xdgCache, "pi-shazam");
+}
+
+export const CACHE_ROOT = getCacheRoot();
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 1 day - prevents stale cache in active projects (fixes #100)
 // M2: Shared size limit for cache files - both load and save respect this (prevents OOM on huge projects)
 const MAX_CACHE_SIZE = 20 * 1024 * 1024; // 20MB
@@ -26,7 +45,8 @@ const MAX_CACHE_SIZE = 20 * 1024 * 1024; // 20MB
  * Uses SHA-256 hash of canonical path for isolation.
  */
 export function getProjectCacheDir(projectPath: string): string {
-	const canonical = projectPath.replace(/\/$/, "");
+	// #584: Strip both Unix (/) and Windows (\) trailing separators
+	const canonical = projectPath.replace(/[\\/]$/, "");
 	const hash = createHash("sha256").update(canonical).digest("hex").slice(0, 8);
 	const projectName = canonical.split("/").pop() || "unknown";
 	const cacheDir = join(CACHE_ROOT, `${projectName}_${hash}`);

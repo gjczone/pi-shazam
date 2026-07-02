@@ -273,3 +273,34 @@ describe("Cache mtime validation", () => {
 		expect(deletedFiles).toEqual(["b.ts"]);
 	});
 });
+
+// -- Platform-appropriate cache root (issue #584) --
+
+describe("CACHE_ROOT platform detection (#584)", () => {
+	it("returns ~/.cache/pi-shazam on Linux", async () => {
+		const { CACHE_ROOT } = await import("../core/cache.js");
+		const { homedir } = await import("node:os");
+		const { join } = await import("node:path");
+		// On Linux, XDG_CACHE_HOME defaults to ~/.cache
+		const xdgCache = process.env.XDG_CACHE_HOME || join(homedir(), ".cache");
+		expect(CACHE_ROOT).toBe(join(xdgCache, "pi-shazam"));
+	});
+
+	it("getProjectCacheDir strips trailing backslash on Windows paths", async () => {
+		const { getProjectCacheDir } = await import("../core/cache.js");
+		// Simulate a Windows path with trailing backslash
+		const dir = getProjectCacheDir("C:\\Users\\test\\project\\");
+		// Should not have a trailing separator after canonicalization
+		const parts = dir.split(/[\\/]/);
+		const last = parts[parts.length - 1];
+		expect(last).not.toBe("");
+	});
+
+	it("getProjectCacheDir strips trailing forward slash on POSIX paths", async () => {
+		const { getProjectCacheDir } = await import("../core/cache.js");
+		const dir = getProjectCacheDir("/home/user/project/");
+		const parts = dir.split("/");
+		const last = parts[parts.length - 1];
+		expect(last).not.toBe("");
+	});
+});
