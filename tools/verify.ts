@@ -239,17 +239,18 @@ export async function executeVerifyJsonAsync(projectRoot: string, options: Verif
 		};
 	}
 
-	const lspErrors = (preCommit ? lspDiagnostics.filter((d) => !isTestFile(d.file)) : lspDiagnostics).filter(
-		(d) => d.severity === "error",
-	).length;
-	const lspWarnings = (preCommit ? lspDiagnostics.filter((d) => !isTestFile(d.file)) : lspDiagnostics).filter(
-		(d) => d.severity === "warning",
-	).length;
+	// Single-pass count to avoid multiple filter().length iterations (#573)
+	let lspErrors = 0;
+	let lspWarnings = 0;
+	for (const d of lspDiagnostics) {
+		if (preCommit && isTestFile(d.file)) continue;
+		if (d.severity === "error") lspErrors++;
+		else if (d.severity === "warning") lspWarnings++;
+	}
 	const risk = _assessVerifyRisk(graph, internalOrphans, gitChangedFiles, preCommit, lspErrors, lspWarnings);
 
 	let verdict = "PASS";
-	const verdictDiags = preCommit ? lspDiagnostics.filter((d) => !isTestFile(d.file)) : lspDiagnostics;
-	if (verdictDiags.some((d) => d.severity === "error")) {
+	if (lspErrors > 0) {
 		verdict = "FAIL";
 	} else if (!lspAvailable && !quick && !lspOnly) {
 		verdict = "WARN";

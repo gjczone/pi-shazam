@@ -496,8 +496,15 @@ export function compareGraphSnapshots(
 	const currentEdgeSet = new Set(currentEdges.map(edgeIdentity));
 	const prevEdgeSet = new Set(previousEdges.map(edgeIdentityFromRow));
 
-	const edgesAdded = [...currentEdgeSet].filter((e) => !prevEdgeSet.has(e));
-	const edgesRemoved = [...prevEdgeSet].filter((e) => !currentEdgeSet.has(e));
+	// Direct Set iteration avoids intermediate array copies (#573)
+	const edgesAdded: string[] = [];
+	for (const e of currentEdgeSet) {
+		if (!prevEdgeSet.has(e)) edgesAdded.push(e);
+	}
+	const edgesRemoved: string[] = [];
+	for (const e of prevEdgeSet) {
+		if (!currentEdgeSet.has(e)) edgesRemoved.push(e);
+	}
 
 	return {
 		summary: {
