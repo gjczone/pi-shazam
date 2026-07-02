@@ -5,7 +5,7 @@
  *   1. Backward compat: every tool still emits the same recommendations
  *      it did under the switch-case implementation.
  *   2. Graph-aware filters suppress irrelevant recommendations
- *      (e.g., find_tests when project has no test files).
+ *      (e.g., skip recommendations when project has no matching symbols).
  *   3. Rule engine API: getNextForTool(tool, ctx, graph?) signature.
  */
 import { describe, it, expect } from "vitest";

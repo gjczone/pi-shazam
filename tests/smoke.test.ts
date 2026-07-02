@@ -132,19 +132,7 @@ describe("smoke: changes", () => {
 	});
 });
 
-// ── 7. Find tests ──────────────────────────────────────────────────────────
-
-describe("smoke: find_tests", () => {
-	it("finds test files for a source file", async () => {
-		const { executeFindTests } = await import("../tools/find_tests.js");
-		const result = executeFindTests(graph, ".", { sourceFile: "core/scanner.ts" });
-		expect(result).toBeTruthy();
-		expect(result.matches).toBeDefined();
-		expect(Array.isArray(result.matches)).toBe(true);
-	});
-});
-
-// ── 9. Verify ──────────────────────────────────────────────────────────────
+// ── 7. Verify ──────────────────────────────────────────────────────────────
 
 describe("smoke: verify", () => {
 	it("returns diagnostic results", async () => {

@@ -9,8 +9,8 @@
  * This module provides builders for each section. The Next recommendation
  * system is driven by a declarative rule array (NEXT_RULES) -- adding a
  * new tool = adding rules, not editing a switch. Rules can evaluate against
- * the RepoGraph to suppress irrelevant recommendations (e.g., no find_tests
- * when project has zero test files).
+ * the RepoGraph to suppress irrelevant recommendations (e.g., skip
+ * overview type-hierarchy hint when project has no type definitions).
  */
 
 import type { RepoGraph } from "./graph.js";
@@ -253,7 +253,7 @@ function buildToolCommand(item: NextRecommendation): string {
  * adding rules to NEXT_RULES, not editing this function.
  *
  * Pass the RepoGraph when available to enable graph-aware filters
- * (e.g., suppress find_tests when project has no test files). When
+ * (e.g., skip type-hierarchy hint when project has no type defs). When
  * graph is undefined, filters preserve legacy (always-emit) behavior.
  */
 export function getNextForTool(toolName: string, context?: NextContext, graph?: RepoGraph): NextRecommendation[] {

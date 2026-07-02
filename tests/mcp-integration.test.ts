@@ -208,18 +208,6 @@ describe("MCP integration: impact call_chain pipeline", () => {
 	});
 });
 
-// ── Integration: find_tests → MCP envelope ───────────────────────────────
-
-describe("MCP integration: find_tests pipeline", () => {
-	it("should produce valid result from find_tests", async () => {
-		const { executeFindTests } = await import("../tools/find_tests.js");
-		const result = executeFindTests(graph, ".", {});
-		expect(result).toBeDefined();
-		expect(result.matches).toBeDefined();
-		expect(Array.isArray(result.matches)).toBe(true);
-	});
-});
-
 // ── Integration: fix → MCP envelope ──────────────────────────────────────
 
 describe("MCP integration: fix pipeline", () => {

@@ -59,15 +59,6 @@ describe("MCP: tool schemas", () => {
 		expect(() => schema.parse({ symbol: "main", direction: "outgoing" })).not.toThrow();
 	});
 
-	it("find_tests schema should accept optional sourceFile and module", () => {
-		const schema = z.object({
-			sourceFile: z.string().optional(),
-			module: z.string().optional(),
-		});
-		expect(() => schema.parse({})).not.toThrow();
-		expect(() => schema.parse({ sourceFile: "index.ts" })).not.toThrow();
-	});
-
 	it("verify schema should accept optional boolean flags", () => {
 		const schema = z.object({
 			quick: z.boolean().optional(),
@@ -112,13 +103,6 @@ describe("MCP: tool output format", () => {
 		expect(result.length).toBeGreaterThan(0);
 	});
 
-	it("find_tests returns result object", async () => {
-		const { executeFindTests } = await import("../tools/find_tests.js");
-		const result = executeFindTests(getGraph(), ".", {});
-		expect(result).toBeDefined();
-		expect(result.matches).toBeDefined();
-	});
-
 	it("all tool results can be serialized as MCP content", async () => {
 		const { executeOverview } = await import("../tools/overview.js");
 		const text = executeOverview(getGraph(), ".");
@@ -154,16 +138,16 @@ describe("MCP: path-traversal guards", () => {
 		}
 	});
 
-	it("shazam_find_tests sourceFile rejects path-traversal via validatePathInProject (#446)", () => {
-		const sourceFile = "../../etc/passwd";
+	it("shazam_lookup file rejects path-traversal via validatePathInProject (#446)", () => {
+		const file = "../../etc/passwd";
 		const projectRoot = ".";
-		expect(validatePathInProject(sourceFile, projectRoot)).toBe(false);
+		expect(validatePathInProject(file, projectRoot)).toBe(false);
 	});
 
-	it("shazam_find_tests sourceFile accepts valid in-root paths (#446)", () => {
-		const sourceFile = "core/scanner.ts";
+	it("shazam_lookup file accepts valid in-root paths (#446)", () => {
+		const file = "core/scanner.ts";
 		const projectRoot = ".";
-		expect(validatePathInProject(sourceFile, projectRoot)).toBe(true);
+		expect(validatePathInProject(file, projectRoot)).toBe(true);
 	});
 
 	// #465 Finding A: shazam_format is the only file-accepting MCP handler
