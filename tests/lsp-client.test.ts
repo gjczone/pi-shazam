@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { EventEmitter } from "node:events";
+import { pathToUri } from "../lsp/client.js";
 
 // ── Mock connections ───────────────────────────────────────────────────────────
 
@@ -678,7 +679,9 @@ describe("LspClient didClose and collectDiagnostics", () => {
 
 describe("LspClient didClose cleanup on sendNotification failure (#556)", () => {
 	const FILE_PATH = "/test/workspace/src/file.ts";
-	const FILE_URI = "file:///test/workspace/src/file.ts";
+	// #592: use pathToUri so the URI matches what didClose computes internally
+	// (on Windows this includes a drive letter, e.g. file:///D:/test/...).
+	const FILE_URI = pathToUri(FILE_PATH);
 
 	function setupOpenedClient(): { client: LspClient; conn: MockConnection } {
 		const { client, conn } = createRunningClient();
