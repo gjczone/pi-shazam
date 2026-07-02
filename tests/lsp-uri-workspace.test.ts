@@ -30,9 +30,7 @@ describe("lsp/client uriToPath (#466)", () => {
 	it("decodes percent-encoded characters in file URIs", () => {
 		// #592: On Windows, file:// URIs must include a drive letter or
 		// be an absolute UNC path. Use the current drive for portability.
-		const uri = process.platform === "win32"
-			? "file:///C:/proj/a%20b.ts"
-			: "file:///proj/a%20b.ts";
+		const uri = process.platform === "win32" ? "file:///C:/proj/a%20b.ts" : "file:///proj/a%20b.ts";
 		expect(uriToPath(uri)).toBe(fileURLToPath(uri));
 		expect(uriToPath(uri)).toContain("a b.ts");
 	});
