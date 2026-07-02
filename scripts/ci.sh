@@ -34,7 +34,7 @@ echo ""
 
 # Step 5: CI config check
 echo "--- CI config check ---"
-test -f .github/workflows/ci.yml || { echo "  ci.yml missing"; exit 1; }
+node -e "require('fs').existsSync('.github/workflows/ci.yml')||(console.error('ci.yml missing'),process.exit(1))"
 echo "  ci.yml present"
 echo ""
 
