@@ -32,6 +32,7 @@ import { scanProject } from "../core/scanner.js";
 import type { RepoGraph } from "../core/graph.js";
 import { executeFileDetailAsync } from "../tools/lookup.js";
 import { statSync as statSyncMock } from "node:fs";
+import { join } from "node:path";
 
 let graph: RepoGraph;
 
@@ -45,7 +46,7 @@ afterEach(() => {
 	vi.mocked(statSyncMock).mockRestore();
 });
 
-const TEST_FILE = "core/output.ts";
+const TEST_FILE = join("core", "output.ts");
 
 describe("issue #557: stale cache warning banner on statSync failure", () => {
 	it("prepends [STALE CACHE WARNING] when statSync fails on cache hit", async () => {
