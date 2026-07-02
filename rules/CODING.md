@@ -149,7 +149,16 @@ Evidence: `types/pi-extension.d.ts`, `tools/_factory.ts` imports `{ Type } from 
 
 ---
 
-## 10. Shared State & Lifecycle
+## 10. Cross-Platform Conventions
+
+- **Shell commands in `package.json` scripts**: Use Node.js built-ins over POSIX commands. `node -e "require('fs').rmSync('dist',{recursive:true,force:true})"` replaces `rm -rf dist`. Never use `test -f`, `cp`, `mv` in npm scripts.
+- **Path separators**: Always normalize with `path.join()` / `path.resolve()`. When splitting paths, use `filePath.replace(/\\/g, "/").split("/")` (already done in `core/filter.ts:126`, `core/resolve-import.ts:247`).
+- **Environment variables**: Fallback chain for home directory: `process.env.HOME || process.env.USERPROFILE`. Windows has no `HOME` in cmd/PowerShell.
+- **LSP server discovery**: `lsp/manager.ts` `findInPath` and `trustedUserCandidates` must handle Windows PATH layout. Use `process.platform` branches, never assume POSIX directories.
+- **isExecutable**: `lsp/manager.ts:256` win32 branch checks `.exe`/`.cmd`/`.bat`. When adding new LSP servers, verify the command name resolves on Windows (npm global installs create `.cmd` shims).
+- **CI**: `windows-latest` runner must be in the CI matrix. Use `fail-fast: false` so Windows failures don't block Linux publish.
+
+## 11. Shared State & Lifecycle
 
 - Shared business rules, cache keys, classification logic belong in `core/` -- single source of truth.
 - Module-level caches must reset in `session_shutdown` (`index.ts` lines 108-119).

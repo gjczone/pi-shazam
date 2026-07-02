@@ -193,23 +193,24 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 
 - **Language**: TypeScript (ES2022, ESM), Node.js >= 18
 - **What it does**: Codebase graph construction (tree-sitter AST -> symbols -> dependencies -> PageRank), LSP integration, and safe code modification tools
+- **Platforms**: Linux, macOS, Windows — all tree-sitter grammars ship prebuilt binaries for linux/darwin/win32 (x64 + arm64). On Windows, all 4 shells (cmd, PowerShell 5/7, Git Bash) are supported; `npm run build` works everywhere, `bash scripts/ci.sh` requires Git Bash.
 - **Package manager**: npm (lockfile: `package-lock.json`)
 - **Deployment**: Pi extension (symlink dist/ into `~/.pi/agent/extensions/pi-shazam`) + MCP server (`npx pi-shazam-mcp`)
 - **Test framework**: vitest, 50 TypeScript source files, tests in `tests/`
 - **Key boundaries**: `core/` must never import from `tools/`, `hooks/`, or `lsp/`. Zero HTTP framework, zero ORM, zero auth.
-- **Primary risk areas**: tree-sitter grammar version compatibility, LSP JSON-RPC frame parsing, encoding fallback (UTF-8/GBK/GB2312), MCP/Pi tool definition sync
+- **Primary risk areas**: tree-sitter grammar version compatibility, LSP JSON-RPC frame parsing, encoding fallback (UTF-8/GBK/GB2312), MCP/Pi tool definition sync, Windows LSP server discovery (SAFE_PATH_DIRS)
 
 ## Commands
 
-| Command                          | Purpose                                                              |
-| -------------------------------- | -------------------------------------------------------------------- |
-| `npm install --legacy-peer-deps` | Install dependencies (legacy-peer-deps required for tree-sitter)     |
-| `npm run build`                  | Compile TS -> `dist/`                                                |
-| `npm run typecheck`              | `tsc --noEmit` — type validation without emit                        |
-| `npm run dev`                    | `tsc --watch` — incremental compilation                              |
-| `npm test`                       | Run all tests via vitest                                             |
-| `bash scripts/ci.sh`             | Local CI quick gate — run before every commit                        |
-| `bash scripts/release.sh`        | Release operations — run through ALL checklist items when publishing |
+| Command                          | Purpose                                                                    |
+| -------------------------------- | -------------------------------------------------------------------------- |
+| `npm install --legacy-peer-deps` | Install dependencies (legacy-peer-deps required for tree-sitter)           |
+| `npm run build`                  | Compile TS -> `dist/`                                                      |
+| `npm run typecheck`              | `tsc --noEmit` — type validation without emit                              |
+| `npm run dev`                    | `tsc --watch` — incremental compilation                                    |
+| `npm test`                       | Run all tests via vitest                                                   |
+| `bash scripts/ci.sh`             | Local CI quick gate — run before every commit (Windows: requires Git Bash) |
+| `bash scripts/release.sh`        | Release operations — run through ALL checklist items when publishing       |
 
 ## Architecture
 
@@ -245,6 +246,8 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 | Tree-sitter parse returns empty       | Grammar version mismatch                 | `package.json` `overrides` for `tree-sitter` version                     |
 | LSP tool returns "(tree-sitter only)" | Language server not installed or crashed | Run `/shazam-doctor` for a full health check                             |
 | LSP communication errors              | JSON-RPC frame parsing                   | `lsp/client.ts` Content-Length header mismatch, incomplete reads         |
+| LSP server not found on Windows       | SAFE_PATH_DIRS is POSIX-only             | `lsp/manager.ts` findInPath filter; install LSP server globally via npm  |
+| Build fails on Windows (`rm -rf`)     | POSIX command in prebuild script         | `package.json` prebuild uses Node.js `fs.rmSync` since v0.24.4           |
 | Tool not appearing in Pi              | Registration missing                     | Verify `register*` called in `index.ts`; check Pi extension loading logs |
 | Test failures with stream errors      | vscode-jsonrpc pre-existing issue        | `vitest.setup.ts` suppresses these; not a real bug                       |
 | Encoding errors on source read        | Non-UTF-8 file                           | `core/encoding.ts` adaptive reader tries UTF-8 -> GBK -> GB2312          |
@@ -258,6 +261,7 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 - **Changing LSP protocol**: Modify `lsp/client.ts` -> verify `lsp/manager.ts` lifecycle -> test with at least 2 different language servers.
 - **Changing tool output format**: Update the specific `tools/*.ts` formatter -> verify JSON envelope schema (all tools support `{ json: true }`).
 - **Changing tool names, adding/removing tools, or changing tool behaviors**: After the code change, read `docs/kimi-code-hooks.md` -> run through the checklist -> update version mapping table -> sync Kimi Code shell hooks if needed. Kimi Code uses MCP format (`mcp__pi-shazam__shazam_<name>`); old tool names in shell hooks will silently fail on Kimi Code.
+- **Adding platform support**: Check `process.platform` branches in `lsp/manager.ts` (isExecutable, findInPath, SAFE_PATH_DIRS, trustedUserCandidates). Ensure all shell commands in `package.json` scripts use Node.js built-ins (no `rm -rf`, `test -f`). Add platform-specific paths to `lsp/servers.ts` LSP server specs if needed. Verify `mcp/entry.ts` env var fallbacks (HOME vs USERPROFILE). Add `windows-latest` to CI matrix.
 
 ## First Places to Inspect
 

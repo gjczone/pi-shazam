@@ -64,11 +64,15 @@ Setup and hook installation run automatically on session start. No manual setup 
 
 ## Platform Support
 
-| Platform | Status                                      |
-| -------- | ------------------------------------------- |
-| Linux    | Supported                                   |
-| macOS    | Supported                                   |
-| Windows  | Not supported (tree-sitter native bindings) |
+| Platform | Status                                    |
+| -------- | ----------------------------------------- |
+| Linux    | Supported                                 |
+| macOS    | Supported                                 |
+| Windows  | Supported (cmd, PowerShell 5/7, Git Bash) |
+
+All tree-sitter grammars ship prebuilt binaries for linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64, and win32-arm64. No C++ compiler required on any platform.
+
+On Windows, `npm run build` works in any shell. `bash scripts/ci.sh` requires Git Bash (bundled with Git for Windows).
 
 ## License
 
