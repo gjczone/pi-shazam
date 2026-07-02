@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { EventEmitter } from "node:events";
+import { pathToUri } from "../lsp/client.js";
 
 // ── Mock connections ───────────────────────────────────────────────────────────
 
@@ -652,14 +653,19 @@ describe("LspClient didClose and collectDiagnostics", () => {
 		(client as any)._openedFiles.add("/test/fileB.ts");
 		(client as any)._openedFiles.add("/test/fileC.ts");
 
+		// #592: use pathToUri so URIs match what collectDiagnostics computes
+		const uriA = pathToUri("/test/fileA.ts");
+		const uriB = pathToUri("/test/fileB.ts");
+		const uriC = pathToUri("/test/fileC.ts");
+
 		// Push 3 mock notifications in order: A, B, C
-		const notifA = { uri: "file:///test/fileA.ts", diagnostics: [] };
-		const notifB = { uri: "file:///test/fileB.ts", diagnostics: [] };
-		const notifC = { uri: "file:///test/fileC.ts", diagnostics: [] };
+		const notifA = { uri: uriA, diagnostics: [] };
+		const notifB = { uri: uriB, diagnostics: [] };
+		const notifC = { uri: uriC, diagnostics: [] };
 		(client as any)._notifications = new Map([
-			["file:///test/fileA.ts", notifA],
-			["file:///test/fileB.ts", notifB],
-			["file:///test/fileC.ts", notifC],
+			[uriA, notifA],
+			[uriB, notifB],
+			[uriC, notifC],
 		]);
 
 		// Consume fileA — remaining should be [B, C] in original order
@@ -678,7 +684,9 @@ describe("LspClient didClose and collectDiagnostics", () => {
 
 describe("LspClient didClose cleanup on sendNotification failure (#556)", () => {
 	const FILE_PATH = "/test/workspace/src/file.ts";
-	const FILE_URI = "file:///test/workspace/src/file.ts";
+	// #592: use pathToUri so the URI matches what didClose computes internally
+	// (on Windows this includes a drive letter, e.g. file:///D:/test/...).
+	const FILE_URI = pathToUri(FILE_PATH);
 
 	function setupOpenedClient(): { client: LspClient; conn: MockConnection } {
 		const { client, conn } = createRunningClient();

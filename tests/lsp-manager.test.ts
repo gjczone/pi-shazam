@@ -233,9 +233,11 @@ describe("_isExecutable PATHEXT support (#585)", () => {
 
 	it("preserves POSIX behavior (mode check) unchanged", async () => {
 		const { _isExecutable } = await import("../lsp/manager.js");
+		// #592: On Windows, chmod does not set executable bits, and .sh
+		// is not in PATHEXT. Skip the POSIX-mode check on win32.
+		if (process.platform === "win32") return;
 		const filePath = createTempFile(".sh");
 		try {
-			// On POSIX, mode 0o755 makes it executable
 			expect(_isExecutable(filePath)).toBe(true);
 		} finally {
 			rmSync(filePath, { force: true });

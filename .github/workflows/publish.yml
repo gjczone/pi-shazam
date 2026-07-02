@@ -39,7 +39,6 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Run tests
-        continue-on-error: ${{ matrix.os == 'windows-latest' }}
         run: npm test
 
       - name: Build
