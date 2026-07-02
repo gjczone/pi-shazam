@@ -201,7 +201,12 @@ export function findDependentFiles(graph: RepoGraph, changedFiles: string[]): Se
  * @param deleteSymbols - When true, also delete symbols from graph.symbols.
  *   Used by removeFileData which removes the file entirely.
  */
-function _cleanEdgesForSymbols(graph: RepoGraph, symIds: Set<string>, preserveIncoming = false, deleteSymbols = false): void {
+function _cleanEdgesForSymbols(
+	graph: RepoGraph,
+	symIds: Set<string>,
+	preserveIncoming = false,
+	deleteSymbols = false,
+): void {
 	// Clean incoming entries on targets of this file's outgoing edges
 	// before deleting the outgoing map (Bug #4: prevent stale incoming refs)
 	for (const id of symIds) {

@@ -91,7 +91,11 @@ export function shouldSkipPath(filePath: string): boolean {
  * @param filePaths - Optional pre-collected file paths (e.g. from
  *   graph.fileSymbols.keys()). When provided, skips the directory walk.
  */
-export function detectProjectLanguages(projectRoot: string, maxFiles: number = 5000, filePaths?: Iterable<string>): string[] {
+export function detectProjectLanguages(
+	projectRoot: string,
+	maxFiles: number = 5000,
+	filePaths?: Iterable<string>,
+): string[] {
 	const langs = new Set<string>();
 	const root = resolve(projectRoot);
 
