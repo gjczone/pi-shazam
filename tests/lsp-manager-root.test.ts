@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve as pathResolve } from "node:path";
 import { tmpdir } from "node:os";
 import { LspManager } from "../lsp/manager.js";
 
@@ -30,9 +30,12 @@ describe("LspManager.setProjectRoot", () => {
 	it("should update projectRoot when a new path is provided", () => {
 		const log = vi.fn();
 		const manager = new LspManager("/original/root", log);
-		manager.setProjectRoot("/new/root");
+		// #592: use path.resolve so the expected log message matches the
+		// platform-native resolved path (e.g. D:\new\root on Windows).
+		const newRoot = pathResolve("/new/root");
+		manager.setProjectRoot(newRoot);
 		expect(() => manager.detectLanguages()).not.toThrow();
-		expect(log).toHaveBeenCalledWith(expect.stringContaining("/new/root"));
+		expect(log).toHaveBeenCalledWith(expect.stringContaining(join("new", "root")));
 	});
 
 	it("should be a no-op when the resolved path is unchanged", () => {
