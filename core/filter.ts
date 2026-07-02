@@ -7,42 +7,7 @@
  */
 
 import type { RepoGraph } from "./graph.js";
-import { dirname, join } from "node:path";
-
-/**
- * Resolve an import specifier to a normalized file path, mirroring
- * core/scanner.ts resolveImport. Used to match raw import specifiers
- * (e.g. "./utils") against symbol file paths (e.g. "src/utils.ts").
- *
- * Tries common TypeScript/JavaScript extensions when the specifier
- * does not include one.
- */
-function resolveModulePath(importPath: string, fromFile: string): string {
-	if (!importPath.startsWith(".")) return importPath;
-	const fromDir = dirname(fromFile);
-	let resolved = join(fromDir, importPath);
-	resolved = resolved.replace(/\\/g, "/");
-	// Normalize leading "./" for consistency with RepoGraph symbol files
-	if (resolved.startsWith("./")) resolved = resolved.slice(2);
-	return resolved;
-}
-
-/**
- * Check if a resolved module path matches a target symbol file.
- * Supports matches with or without file extensions.
- */
-function moduleMatchesFile(resolvedModule: string, targetFile: string): boolean {
-	if (resolvedModule === targetFile) return true;
-	const EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs"];
-	for (const ext of EXTENSIONS) {
-		if (resolvedModule + ext === targetFile) return true;
-	}
-	// Handle /index.* default imports
-	for (const ext of EXTENSIONS) {
-		if (resolvedModule + "/index" + ext === targetFile) return true;
-	}
-	return false;
-}
+import { resolveModulePath, moduleMatchesFile } from "./resolve-import.js";
 
 /**
  * Config files, generated files, and lockfiles -- excluded from source-file
@@ -109,6 +74,57 @@ export const SKIP_DIRS = new Set([
 
 export function isNonSourceFile(file: string): boolean {
 	return NON_SOURCE_FILE_PATTERNS.some((p) => p.test(file));
+}
+
+/**
+ * Test file patterns -- matches common test file naming conventions
+ * across languages (TS/JS, Python, Go, Rust, etc.).
+ *
+ * Single source of truth for test file detection. Superset of the
+ * patterns previously scattered across output.ts, verify.ts, and
+ * filter.ts findOrphans.
+ */
+const TEST_FILE_PATTERNS: readonly RegExp[] = [
+	// JS/TS test file extensions
+	/\.(test|spec|e2e)\.(ts|js|tsx|jsx|mts|mjs|cjs|cts)$/,
+	// Python test files
+	/(?:^|\/)(?:test_[^/]+\.py|[^/]+_test\.py)$/,
+	// Go test files
+	/(?:^|\/)[^/]+_test\.go$/,
+	// Rust test files
+	/(?:^|\/)(?:test_[^/]+\.rs|[^/]+_test\.rs)$/,
+	// Generic test directory patterns (tests/, test/, __tests__/)
+	/(?:^|[/.])tests?\//,
+	/(?:^|[/.])__tests?\//,
+	// Generic .test.* and .spec.* (language-agnostic, covers .test.py, .test.go, etc.)
+	/\.test\.[a-z]+$/,
+	/\.spec\.[a-z]+$/,
+	// Generic test_ prefix (language-agnostic)
+	/(?:^|[/.])test_[a-z_]+\.[a-z]+$/,
+	// Generic _test suffix (language-agnostic)
+	/_test\.[a-z]+$/,
+];
+
+/**
+ * Directories that indicate a test context.
+ */
+const TEST_DIRS = new Set(["__tests__", "__test__", "test", "tests", "spec"]);
+
+/**
+ * Check whether a file path belongs to a test file.
+ *
+ * Uses both pattern matching on the file path and directory name
+ * checks. Covers JS/TS (.test.ts, .spec.tsx), Python (test_*.py,
+ * *_test.py), Go (*_test.go), Rust (test_*.rs, *_test.rs), and
+ * generic patterns (tests/ dir, __tests__/ dir).
+ *
+ * Single source of truth -- consumed by core/output.ts,
+ * tools/verify.ts, and core/filter.ts findOrphans.
+ */
+export function isTestFile(filePath: string): boolean {
+	if (TEST_FILE_PATTERNS.some((p) => p.test(filePath))) return true;
+	const parts = filePath.replace(/\\/g, "/").split("/");
+	return parts.some((p) => TEST_DIRS.has(p));
 }
 
 /**
@@ -401,13 +417,7 @@ export function findOrphans(graph: RepoGraph): {
 			// and are never referenced by name in the call graph (fixes #252).
 			if (sym.kind === "impl") continue;
 			// Skip test files
-			if (
-				/(^|\/)tests?(\/|$)/.test(sym.file) ||
-				/\.test\./.test(sym.file) ||
-				/(^|\/)test_/.test(sym.file) ||
-				/_test\./.test(sym.file)
-			)
-				continue;
+			if (isTestFile(sym.file)) continue;
 			// Skip registration functions called dynamically by frameworks
 			if (isRegistrationSymbol(sym.name)) continue;
 			// Skip language-specific entry point symbols

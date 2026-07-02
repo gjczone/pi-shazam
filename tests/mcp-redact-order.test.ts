@@ -110,7 +110,7 @@ describe("MCP audit log redaction order (#544)", () => {
 // This is the test that FAILS against the buggy slice-then-redact ordering.
 // ---------------------------------------------------------------------------
 
-// Capture fs.appendFile writes so we can inspect the redacted audit-log line.
+// Capture writeJsonl calls so we can inspect the redacted audit-log line.
 // vi.hoisted() runs before vi.mock factories are hoisted, so the mock fn is
 // initialized when the factory executes.
 const { appendFileMock } = vi.hoisted(() => ({
@@ -123,6 +123,11 @@ vi.mock("node:fs/promises", () => ({
 vi.mock("../core/audit-log.js", () => ({
 	AUDIT_LOG_DIR: "/tmp/pi-shazam-test-audit",
 	rotateAuditLog: vi.fn().mockResolvedValue(undefined),
+	writeJsonl: (_file: string, entry: Record<string, unknown>) => {
+		// Simulate writeJsonl by calling appendFileMock so tests can capture
+		appendFileMock("/tmp/pi-shazam-test-audit/shazam-calls.log", JSON.stringify(entry) + "\n", "utf-8");
+	},
+	ts: () => new Date().toISOString(),
 }));
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";

@@ -42,39 +42,21 @@ const VALIDATION_CHUNK_SIZE = 64 * 1024;
 // -- Encoding detection and reading -------------------------------------------
 
 /**
- * Read a file with adaptive encoding fallback:
+ * Decode a buffer to string using adaptive encoding fallback:
  * 1. Try UTF-8
  * 2. Try GBK (cp936)
  * 3. Try GB2312
  *
- * Returns the decoded string content.
- * Throws if the file exceeds MAX_FILE_SIZE (2MB) to prevent OOM.
+ * Pure function: no I/O, no side effects. The sync/async readFileAdaptive
+ * functions handle file I/O and size checks, then delegate to this for
+ * charset detection and decoding. Extracted to eliminate the diverged
+ * duplicate between readFileAdaptive and readFileAdaptiveAsync (issue #571
+ * step 3).
+ *
  * For encoding detection, validates only the first 64KB to avoid
  * allocating huge strings during multi-encoding fallback.
  */
-export function readFileAdaptive(filePath: string): string {
-	// Check file size before reading to prevent OOM
-	let fileSize: number;
-	try {
-		const stat = statSync(filePath);
-		fileSize = stat.size;
-		if (fileSize > MAX_FILE_SIZE) {
-			throw new FileTooLargeError(filePath, fileSize, MAX_FILE_SIZE);
-		}
-	} catch (err) {
-		if (err instanceof FileTooLargeError) {
-			throw err; // re-throw our size error
-		}
-		// Only warn for non-ENOENT errors (permission, I/O, etc.).
-		// ENOENT is expected when callers read optional config files (e.g. package.json)
-		// and handle the missing-file case via try/catch (#459).
-		if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
-			_logWarn("readFileAdaptive", `stat failed for ${filePath}`, err);
-		}
-		// stat failed (permission, missing) -- fall through to readFileSync which will error with a clearer message
-	}
-	const buffer = readFileSync(filePath);
-
+export function decodeBufferAdaptive(buffer: Buffer): string {
 	// For small files (<64KB), validate full buffer
 	// For larger files, validate only first chunk to reduce memory pressure
 	const validationBuffer = buffer.length > VALIDATION_CHUNK_SIZE ? buffer.subarray(0, VALIDATION_CHUNK_SIZE) : buffer;
@@ -119,6 +101,42 @@ export function readFileAdaptive(filePath: string): string {
 }
 
 /**
+ * Read a file with adaptive encoding fallback:
+ * 1. Try UTF-8
+ * 2. Try GBK (cp936)
+ * 3. Try GB2312
+ *
+ * Returns the decoded string content.
+ * Throws if the file exceeds MAX_FILE_SIZE (2MB) to prevent OOM.
+ * For encoding detection, validates only the first 64KB to avoid
+ * allocating huge strings during multi-encoding fallback.
+ */
+export function readFileAdaptive(filePath: string): string {
+	// Check file size before reading to prevent OOM
+	let fileSize: number;
+	try {
+		const stat = statSync(filePath);
+		fileSize = stat.size;
+		if (fileSize > MAX_FILE_SIZE) {
+			throw new FileTooLargeError(filePath, fileSize, MAX_FILE_SIZE);
+		}
+	} catch (err) {
+		if (err instanceof FileTooLargeError) {
+			throw err; // re-throw our size error
+		}
+		// Only warn for non-ENOENT errors (permission, I/O, etc.).
+		// ENOENT is expected when callers read optional config files (e.g. package.json)
+		// and handle the missing-file case via try/catch (#459).
+		if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+			_logWarn("readFileAdaptive", `stat failed for ${filePath}`, err);
+		}
+		// stat failed (permission, missing) -- fall through to readFileSync which will error with a clearer message
+	}
+	const buffer = readFileSync(filePath);
+	return decodeBufferAdaptive(buffer);
+}
+
+/**
  * Async variant of readFileAdaptive using fs.promises.
  * Same encoding fallback logic (UTF-8 -> GBK -> GB2312) but non-blocking.
  * Use this in async contexts (e.g., LSP enrichment) to avoid blocking the event loop.
@@ -142,48 +160,7 @@ export async function readFileAdaptiveAsync(filePath: string): Promise<string> {
 		// stat failed -- fall through to readFile which will error with a clearer message
 	}
 	const buffer = await readFileAsync(filePath);
-
-	// For small files (<64KB), validate full buffer
-	// For larger files, validate only first chunk to reduce memory pressure
-	const validationBuffer = buffer.length > VALIDATION_CHUNK_SIZE ? buffer.subarray(0, VALIDATION_CHUNK_SIZE) : buffer;
-
-	// Try UTF-8 first
-	const utf8Result = tryDecode(validationBuffer, "utf-8");
-	if (utf8Result !== null) {
-		// UTF-8 validation passed on chunk.
-		// For large files, the first 64KB may be valid UTF-8 while later bytes
-		// are GBK/GB2312 (#438). Decode full buffer as UTF-8, then check
-		// replacement character ratio on the full decoded string. If >5%,
-		// fall back to GBK -> GB2312 on the full buffer.
-		if (buffer.length > VALIDATION_CHUNK_SIZE) {
-			const fullUtf8 = buffer.toString("utf-8");
-			if (_replacementRatio(fullUtf8) <= 0.05) return fullUtf8;
-
-			const fullGbk = iconv.decode(buffer, "gbk");
-			if (_replacementRatio(fullGbk) <= 0.05) return fullGbk;
-
-			const fullGb = iconv.decode(buffer, "gb2312");
-			if (_replacementRatio(fullGb) <= 0.05) return fullGb;
-
-			return fullUtf8;
-		}
-		return utf8Result;
-	}
-
-	// Try GBK
-	const gbkResult = tryDecode(validationBuffer, "gbk");
-	if (gbkResult !== null) {
-		return buffer.length > VALIDATION_CHUNK_SIZE ? iconv.decode(buffer, "gbk") : gbkResult;
-	}
-
-	// Try GB2312
-	const gbResult = tryDecode(validationBuffer, "gb2312");
-	if (gbResult !== null) {
-		return buffer.length > VALIDATION_CHUNK_SIZE ? iconv.decode(buffer, "gb2312") : gbResult;
-	}
-
-	// Last resort: UTF-8 with replacement
-	return buffer.toString("utf-8");
+	return decodeBufferAdaptive(buffer);
 }
 
 // -- Internal helpers ---------------------------------------------------------

@@ -22,6 +22,8 @@ vi.mock("node:fs/promises", () => ({
 vi.mock("../core/audit-log.js", () => ({
 	AUDIT_LOG_DIR: "/tmp/pi-shazam-test-audit",
 	rotateAuditLog: vi.fn().mockResolvedValue(undefined),
+	writeJsonl: vi.fn(),
+	ts: () => new Date().toISOString(),
 }));
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";

@@ -23,46 +23,19 @@ import { executeChanges, executeChangesJson } from "../tools/changes.js";
 import { executeRenameSymbol, formatRenameResult } from "../tools/rename_symbol.js";
 import { hasCallChainChecked, recordCallChain } from "../tools/rename-state.js";
 
-import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { getToolDefinition } from "../tools/definitions.js";
 import { validatePathInProject } from "../tools/_factory.js";
-import { _logWarn, truncateOutput } from "../core/output.js";
+import { truncateOutput } from "../core/output.js";
 import { redact } from "../core/redact.js";
-import { AUDIT_LOG_DIR, rotateAuditLog } from "../core/audit-log.js";
+import { AUDIT_LOG_DIR, ts, writeJsonl } from "../core/audit-log.js";
 
 // -- Logging ------------------------------------------------------
 
-const LOG_DIR = AUDIT_LOG_DIR;
+const LOG_FILE = join(AUDIT_LOG_DIR, "shazam-calls.log");
 
-let _logLock: Promise<void> = Promise.resolve();
-function withLogLock<T>(fn: () => Promise<T>): Promise<T> {
-	const prev = _logLock;
-	let release: () => void;
-	_logLock = new Promise<void>((r) => {
-		release = r;
-	});
-	return prev.then(fn).finally(() => release!());
-}
-
-async function logMCP(entry: Record<string, unknown>): Promise<void> {
-	await withLogLock(async () => {
-		try {
-			await mkdir(LOG_DIR, { recursive: true });
-			await rotateAuditLog(join(LOG_DIR, "shazam-calls.log"));
-			await appendFile(
-				join(LOG_DIR, "shazam-calls.log"),
-				JSON.stringify({
-					ts: new Date().toISOString(),
-					source: "mcp",
-					...entry,
-				}) + "\n",
-				"utf-8",
-			);
-		} catch (err) {
-			_logWarn("logMCP", "audit log write failed", err);
-		}
-	});
+function logMCP(entry: Record<string, unknown>): void {
+	writeJsonl(LOG_FILE, { ts: ts(), source: "mcp", ...entry });
 }
 
 type Content = { content: { type: "text"; text: string }[] };

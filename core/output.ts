@@ -17,6 +17,7 @@ import type { RepoGraph } from "./graph.js";
 import { getGraphEdgeCount } from "./graph.js";
 import { execSync } from "node:child_process";
 import { INTERNAL_LOG_PATH, writeJsonl, ts } from "./audit-log.js";
+import { isTestFile } from "./filter.js";
 
 // -- Next recommendation system --------------------------------------------
 
@@ -65,23 +66,13 @@ export interface NextRule {
 
 // -- Graph-aware filter helpers -----------------------------------------------
 
-const TEST_FILE_PATTERNS = [
-	/(?:^|[/.])tests?\//,
-	/(?:^|[/.])__tests__\//,
-	/\.test\.[a-z]+$/,
-	/\.spec\.[a-z]+$/,
-	/(?:^|[/.])test_[a-z_]+\.[a-z]+$/,
-];
-
 /**
  * True when the graph has at least one file matching test-file heuristics.
  */
 export function hasTestFiles(graph?: RepoGraph): boolean {
 	if (!graph) return false;
 	for (const file of graph.fileSymbols.keys()) {
-		for (const pat of TEST_FILE_PATTERNS) {
-			if (pat.test(file)) return true;
-		}
+		if (isTestFile(file)) return true;
 	}
 	return false;
 }

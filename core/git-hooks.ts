@@ -14,6 +14,7 @@ import { writeFileSync, chmodSync, existsSync, readFileSync, unlinkSync } from "
 import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { _logWarn } from "./output.js";
+import { detectProjectLanguages } from "./formatters.js";
 
 /**
  * Pre-commit hook script content.
@@ -352,9 +353,10 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 
 		const changedFiles = changedOutput.split("\n").filter(Boolean);
 		const errors: string[] = [];
+		const languages = detectProjectLanguages(projectRoot);
 
 		// -- TypeScript/JavaScript ------------------------------------------
-		if (existsSync(join(projectRoot, "tsconfig.json"))) {
+		if (languages.includes("typescript")) {
 			try {
 				execFileSync("npx", ["--no-install", "tsc", "--noEmit"], {
 					cwd: projectRoot,
@@ -371,7 +373,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 		}
 
 		// -- Rust -----------------------------------------------------------
-		if (existsSync(join(projectRoot, "Cargo.toml"))) {
+		if (languages.includes("rust")) {
 			try {
 				execFileSync("cargo", ["check"], {
 					cwd: projectRoot,
@@ -386,7 +388,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 		}
 
 		// -- Go -------------------------------------------------------------
-		if (existsSync(join(projectRoot, "go.mod"))) {
+		if (languages.includes("go")) {
 			try {
 				execFileSync("go", ["vet", "./..."], {
 					cwd: projectRoot,
@@ -401,7 +403,7 @@ export function runPreCommitVerify(projectRoot: string): { verdict: "PASS" | "FA
 		}
 
 		// -- Python ---------------------------------------------------------
-		if (existsSync(join(projectRoot, "pyproject.toml")) || existsSync(join(projectRoot, "setup.py"))) {
+		if (languages.includes("python")) {
 			// Try pyright first, then mypy
 			let pyrightAvailable = false;
 			try {

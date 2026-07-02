@@ -17,6 +17,7 @@ import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { _logWarn, getNextForTool, formatNextSection, truncateOutput } from "../core/output.js";
 import { isNonSourceFile } from "../core/filter.js";
+import { PRETTIER_CONFIG_FILES } from "../core/formatters.js";
 import { detectFormatters } from "../core/formatters.js";
 
 export function registerFormat(pi: ExtensionAPI): void {
@@ -339,9 +340,7 @@ async function detectIndentationStyle(files: string[], projectRoot: string): Pro
  * Check if prettierrc has useTabs setting.
  */
 function hasUseTabsInConfig(projectRoot: string): boolean {
-	const configFiles = [".prettierrc", ".prettierrc.json", "prettier.config.js", "prettier.config.mjs"];
-
-	for (const configFile of configFiles) {
+	for (const configFile of PRETTIER_CONFIG_FILES) {
 		const configPath = join(projectRoot, configFile);
 		if (existsSync(configPath)) {
 			try {

@@ -18,18 +18,7 @@ import type { RepoGraph } from "../core/graph.js";
 import { getGraphEdgeCount } from "../core/graph.js";
 import { diffFromBaseline } from "../core/baseline.js";
 import { assessRisk } from "../core/risk.js";
-import { isNonSourceFile, findOrphans } from "../core/filter.js";
-
-// Test file patterns for preCommit LSP diagnostic filtering.
-// Matches common test file naming conventions across languages.
-const TEST_FILE_PATTERNS: readonly RegExp[] = [
-	/\.(test|spec|e2e)\.(ts|js|tsx|jsx|mts|mjs)$/,
-	/(?:^|\/)(?:test_[^/]+\.py|[^/]+_test\.py)$/,
-	/(?:^|\/)[^/]+_test\.go$/,
-	/(?:^|\/)(?:test_[^/]+\.rs|[^/]+_test\.rs)$/,
-];
-
-const TEST_DIRS = new Set(["__tests__", "test", "tests", "__test__", "spec"]);
+import { isNonSourceFile, findOrphans, isTestFile } from "../core/filter.js";
 
 // Infrastructure error patterns — when >50% of diagnostics match these,
 // LSP is likely in a broken state (e.g., node_modules not accessible).
@@ -45,13 +34,9 @@ export const INFRASTRUCTURE_ERROR_PATTERNS: readonly RegExp[] = [
 // are saved to .shazam/last-verify.json for agent inspection.
 export const MAX_DISPLAY_ERRORS = 10;
 
-function isTestFile(filePath: string): boolean {
-	if (TEST_FILE_PATTERNS.some((p) => p.test(filePath))) return true;
-	const parts = filePath.replace(/\\/g, "/").split("/");
-	return parts.some((p) => TEST_DIRS.has(p));
-}
 import { execFile } from "node:child_process";
 import { getGitChangedFiles } from "../core/git-utils.js";
+import { detectProjectLanguages } from "../core/formatters.js";
 import { getEffectiveRoot } from "../core/scanner.js";
 import { promisify } from "node:util";
 
@@ -776,13 +761,12 @@ async function runLspDiagnostics(
 // -- Subprocess fallback diagnostics -----------------------------------------
 
 function detectProjectType(projectRoot: string): string | null {
-	if (existsSync(resolve(projectRoot, "tsconfig.json"))) return "typescript";
-	if (existsSync(resolve(projectRoot, "Cargo.toml"))) return "rust";
-	if (existsSync(resolve(projectRoot, "go.mod"))) return "go";
-	if (existsSync(resolve(projectRoot, "pyproject.toml"))) return "python";
-	if (existsSync(resolve(projectRoot, "setup.py"))) return "python";
-	if (existsSync(resolve(projectRoot, "package.json"))) return "node";
-	return null;
+	const languages = detectProjectLanguages(projectRoot);
+	// Return the first detected language as the primary project type.
+	// detectProjectLanguages returns them in precedence order (tsconfig > Cargo > etc.).
+	if (languages.length === 0) return null;
+	// Map "node" back to the expected "node" project type for subprocess dispatch.
+	return languages[0];
 }
 
 async function runSubprocessDiagnostics(projectRoot: string): Promise<LspDiagResult> {

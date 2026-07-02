@@ -78,13 +78,21 @@ export function shouldSkipPath(filePath: string): boolean {
 
 /**
  * Walk project root and detect languages from file extensions.
- * Checks root markers first for fast detection, then falls back to directory walk.
+ * Checks root markers first for fast detection, then falls back to
+ * deriving languages from file paths (when provided, e.g. from
+ * graph.fileSymbols) or directory walk as a last resort.
+ *
+ * When filePaths is provided, languages are derived from file extensions
+ * without walking the filesystem, eliminating the duplicate walk that
+ * scanner's collectSourceFiles already performs (issue #571 step 7).
+ *
+ * @param projectRoot - Absolute path to the project root
+ * @param maxFiles - Max files to scan during directory walk fallback
+ * @param filePaths - Optional pre-collected file paths (e.g. from
+ *   graph.fileSymbols.keys()). When provided, skips the directory walk.
  */
-export function detectProjectLanguages(projectRoot: string, maxFiles: number = 5000): string[] {
+export function detectProjectLanguages(projectRoot: string, maxFiles: number = 5000, filePaths?: Iterable<string>): string[] {
 	const langs = new Set<string>();
-	let seen = 0;
-	const MAX_DEPTH = 50;
-	const visited = new Map<string, true>();
 	const root = resolve(projectRoot);
 
 	// Fast path: check root markers before doing a full directory walk.
@@ -98,6 +106,25 @@ export function detectProjectLanguages(projectRoot: string, maxFiles: number = 5
 			}
 		}
 	}
+
+	// Derive languages from pre-collected file paths (e.g. graph.fileSymbols).
+	// This eliminates the duplicate directory walk when a graph is available
+	// (issue #571 step 7).
+	if (filePaths) {
+		for (const filePath of filePaths) {
+			const dotIdx = filePath.lastIndexOf(".");
+			if (dotIdx < 0) continue;
+			const ext = filePath.substring(dotIdx).toLowerCase();
+			const lang = languageForSuffix(ext);
+			if (lang) langs.add(lang);
+		}
+		return [...langs].sort();
+	}
+
+	// Fallback: directory walk to detect languages from file extensions.
+	let seen = 0;
+	const MAX_DEPTH = 50;
+	const visited = new Map<string, true>();
 
 	function walk(dir: string, depth: number = 0): void {
 		if (seen >= maxFiles || depth > MAX_DEPTH) return;
@@ -483,9 +510,11 @@ export class LspManager {
 
 	/**
 	 * Auto-detect languages in the project and return what was found.
+	 * When filePaths is provided (e.g. from graph.fileSymbols.keys()),
+	 * skips the directory walk and derives languages from extensions.
 	 */
-	detectLanguages(): string[] {
-		return detectProjectLanguages(this.projectRoot);
+	detectLanguages(filePaths?: Iterable<string>): string[] {
+		return detectProjectLanguages(this.projectRoot, 5000, filePaths);
 	}
 
 	/**

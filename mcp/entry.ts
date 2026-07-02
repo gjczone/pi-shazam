@@ -105,7 +105,11 @@ function getGraph(): RepoGraph {
 async function main(): Promise<void> {
 	// Initialize LSP servers for richer analysis (hover, diagnostics, etc.)
 	const lspManager = new LspManager(PROJECT_ROOT);
-	const languages = detectProjectLanguages(PROJECT_ROOT);
+	// Scan project early so we can derive languages from the graph
+	// instead of walking the directory twice (issue #571 step 7).
+	const graph = scanProject(PROJECT_ROOT);
+	cachedGraph = graph;
+	const languages = detectProjectLanguages(PROJECT_ROOT, 5000, graph.fileSymbols.keys());
 	if (languages.length > 0) {
 		try {
 			await lspManager.initializeAll();

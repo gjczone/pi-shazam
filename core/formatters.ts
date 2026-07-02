@@ -11,6 +11,62 @@ import { readFileAdaptive } from "./encoding.js";
 import { _logWarn } from "./output.js";
 
 /**
+ * Standard Prettier config file names, in conventional precedence order.
+ * Single source of truth for Prettier config detection (issue #571 step 5).
+ * tools/format.ts was missing .prettierrc.js before consolidation.
+ */
+export const PRETTIER_CONFIG_FILES = [
+	".prettierrc",
+	".prettierrc.json",
+	".prettierrc.js",
+	"prettier.config.js",
+	"prettier.config.mjs",
+] as const;
+
+/**
+ * Language marker files and their associated language names.
+ * Used by detectProjectLanguages to determine which languages
+ * a project uses. Single source of truth (issue #571 step 6).
+ */
+const LANGUAGE_MARKERS: readonly (readonly [string, string])[] = [
+	["tsconfig.json", "typescript"],
+	["Cargo.toml", "rust"],
+	["go.mod", "go"],
+	["pyproject.toml", "python"],
+	["setup.py", "python"],
+	["requirements.txt", "python"],
+	["package.json", "node"],
+	["pom.xml", "java"],
+	["build.gradle", "java"],
+	["pubspec.yaml", "dart"],
+];
+
+/**
+ * Detect which programming languages a project uses,
+ * based on the presence of language marker files.
+ *
+ * Returns an array of language names (e.g., ["typescript", "python"]).
+ * Languages are returned in marker precedence order (tsconfig.json
+ * before package.json, etc.). Deduplicated -- "python" appears at most
+ * once even if both pyproject.toml and setup.py exist.
+ *
+ * Single source of truth for project language detection (issue #571 step 6).
+ * Replaces inline detection in verify.ts, git-hooks.ts, and git-utils.ts.
+ */
+export function detectProjectLanguages(projectRoot: string): string[] {
+	const seen = new Set<string>();
+	const languages: string[] = [];
+	for (const [marker, lang] of LANGUAGE_MARKERS) {
+		if (seen.has(lang)) continue;
+		if (existsSync(join(projectRoot, marker))) {
+			seen.add(lang);
+			languages.push(lang);
+		}
+	}
+	return languages;
+}
+
+/**
  * Detect available formatters from project config files.
  * Returns a deduplicated list of formatter names.
  */
@@ -18,13 +74,7 @@ export function detectFormatters(projectRoot: string): string[] {
 	const formatters: string[] = [];
 
 	// Prettier (standalone config files)
-	if (
-		existsSync(join(projectRoot, ".prettierrc")) ||
-		existsSync(join(projectRoot, ".prettierrc.json")) ||
-		existsSync(join(projectRoot, ".prettierrc.js")) ||
-		existsSync(join(projectRoot, "prettier.config.js")) ||
-		existsSync(join(projectRoot, "prettier.config.mjs"))
-	) {
+	if (PRETTIER_CONFIG_FILES.some((f) => existsSync(join(projectRoot, f)))) {
 		formatters.push("prettier");
 	}
 

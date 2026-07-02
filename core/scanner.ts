@@ -7,8 +7,8 @@
  * This is the main entry point that all tools compose from.
  */
 
-import { readdirSync, statSync, existsSync, realpathSync } from "node:fs";
-import { join, relative, resolve, dirname, isAbsolute } from "node:path";
+import { readdirSync, statSync, realpathSync } from "node:fs";
+import { join, relative, resolve, isAbsolute } from "node:path";
 import { TreeSitterAdapter, EXT_TO_LANG } from "./treesitter.js";
 import { createRepoGraph, createEdge } from "./graph.js";
 import type { RepoGraph, Symbol, Edge } from "./graph.js";
@@ -16,6 +16,7 @@ import { calculatePageRank } from "./pagerank.js";
 import { readFileAdaptive, FileTooLargeError } from "./encoding.js";
 import { getProjectCacheDir, saveGraphCache, loadGraphCache } from "./cache.js";
 import { SKIP_DIRS } from "./filter.js";
+import { resolveImport, clearExistsCache } from "./resolve-import.js";
 import { _logWarn } from "./output.js";
 
 // -- Constants ----------------------------------------------------------------
@@ -30,26 +31,6 @@ const SOURCE_EXTS = new Set(Object.keys(EXT_TO_LANG));
 
 let cachedGraph: RepoGraph | null = null;
 
-/**
- * Cache for existsSync results to avoid repeated syscalls during import resolution.
- * Keyed by absolute path; cleared when scanProject starts fresh.
- */
-let _existsCache: Map<string, boolean> | null = null;
-
-function existsCached(absPath: string): boolean {
-	if (!_existsCache) {
-		_existsCache = new Map();
-	}
-	const cached = _existsCache.get(absPath);
-	if (cached !== undefined) return cached;
-	const result = existsSync(absPath);
-	_existsCache.set(absPath, result);
-	return result;
-}
-
-function clearExistsCache(): void {
-	_existsCache = null;
-}
 let cachedProjectPath: string = "";
 
 let _scannerAdapter: TreeSitterAdapter | null = null;
@@ -199,18 +180,28 @@ export function findDependentFiles(graph: RepoGraph, changedFiles: string[]): Se
 }
 
 /**
- * Remove only the edges for a single file (not symbols).
- * Used during incremental edge rebuild to clear old edges before
- * rebuilding only what changed.
+ * Internal helper to clean edges for a set of symbols being removed.
  *
- * @param preserveIncoming - When true, skip deleting this file's own incoming
- *   entries and cross-file source->B edges. Used for dependent (unchanged)
- *   files whose incoming edges are still valid -- only outgoing edges need
- *   rebuilding (issue #448).
+ * Handles the shared ~70 lines of edge cleanup that both removeEdgesForFile
+ * and removeFileData perform:
+ *   1. Clean incoming entries on targets of outgoing edges (Bug #4)
+ *   2. Clean targetToSources entries (Issue #471 Finding C)
+ *   3. Delete outgoing edges for each symbol
+ *   4. Optionally delete incoming edges and symbols themselves
+ *   5. Optionally clean cross-file references via reverse edge index
+ *
+ * Extracted to eliminate diverged duplicate between removeEdgesForFile
+ * and removeFileData (issue #571 step 2).
+ *
+ * @param graph - The repo graph to mutate
+ * @param symIds - Set of symbol IDs to clean edges for
+ * @param preserveIncoming - When true, skip deleting incoming edges and
+ *   cross-file source->B edges. Used for dependent (unchanged) files
+ *   whose incoming edges are still valid (issue #448).
+ * @param deleteSymbols - When true, also delete symbols from graph.symbols.
+ *   Used by removeFileData which removes the file entirely.
  */
-export function removeEdgesForFile(graph: RepoGraph, relPath: string, preserveIncoming = false): void {
-	const symIds = new Set(graph.fileSymbols.get(relPath) ?? []);
-
+function _cleanEdgesForSymbols(graph: RepoGraph, symIds: Set<string>, preserveIncoming = false, deleteSymbols = false): void {
 	// Clean incoming entries on targets of this file's outgoing edges
 	// before deleting the outgoing map (Bug #4: prevent stale incoming refs)
 	for (const id of symIds) {
@@ -239,22 +230,10 @@ export function removeEdgesForFile(graph: RepoGraph, relPath: string, preserveIn
 				}
 			}
 		}
+		if (deleteSymbols) graph.symbols.delete(id);
 		graph.outgoing.delete(id);
+		if (!preserveIncoming) graph.incoming.delete(id);
 	}
-	// Remove incoming edges to this file's symbols from other files.
-	// Skip when preserveIncoming is true -- dependent files are unchanged,
-	// so their incoming edges remain valid (issue #448).
-	if (!preserveIncoming) {
-		for (const id of symIds) {
-			graph.incoming.delete(id);
-		}
-	}
-	// Remove file-level import/call data for this file
-	graph.fileImports.delete(relPath);
-	graph.fileCalls.delete(relPath);
-	graph.fileImportBindings.delete(relPath);
-	graph.fileRefs.delete(relPath);
-	graph.fileTypeRefs.delete(relPath);
 
 	// Use reverse edge index to clean cross-file references: O(K) not O(E).
 	// Skip when preserveIncoming is true -- the cross-file source->B edges
@@ -290,6 +269,27 @@ export function removeEdgesForFile(graph: RepoGraph, relPath: string, preserveIn
 	}
 }
 
+/**
+ * Remove only the edges for a single file (not symbols).
+ * Used during incremental edge rebuild to clear old edges before
+ * rebuilding only what changed.
+ *
+ * @param preserveIncoming - When true, skip deleting this file's own incoming
+ *   entries and cross-file source->B edges. Used for dependent (unchanged)
+ *   files whose incoming edges are still valid -- only outgoing edges need
+ *   rebuilding (issue #448).
+ */
+export function removeEdgesForFile(graph: RepoGraph, relPath: string, preserveIncoming = false): void {
+	const symIds = new Set(graph.fileSymbols.get(relPath) ?? []);
+	_cleanEdgesForSymbols(graph, symIds, preserveIncoming);
+	// Remove file-level import/call data for this file
+	graph.fileImports.delete(relPath);
+	graph.fileCalls.delete(relPath);
+	graph.fileImportBindings.delete(relPath);
+	graph.fileRefs.delete(relPath);
+	graph.fileTypeRefs.delete(relPath);
+}
+
 export function removeFileData(graph: RepoGraph, relPath: string): void {
 	const symIds = graph.fileSymbols.get(relPath) || [];
 	const symIdSet = new Set(symIds);
@@ -304,71 +304,13 @@ export function removeFileData(graph: RepoGraph, relPath: string): void {
 		if (sym) symNames.add(sym.name);
 	}
 
-	// Clean incoming entries on targets of this file's outgoing edges
-	// before deleting the outgoing map (Bug #4: prevent stale incoming refs)
-	for (const id of symIds) {
-		const outEdges = graph.outgoing.get(id);
-		if (outEdges) {
-			for (const edge of outEdges) {
-				const targetIncoming = graph.incoming.get(edge.target);
-				if (targetIncoming) {
-					const filtered = targetIncoming.filter((e) => e.source !== id);
-					if (filtered.length > 0) {
-						graph.incoming.set(edge.target, filtered);
-					} else {
-						graph.incoming.delete(edge.target);
-					}
-				}
-				// Issue #471 Finding C: also clean targetToSources on the SOURCE
-				// side. When a source symbol in this file is deleted, we must
-				// remove it from every target's targetToSources set to avoid
-				// stale entries pointing to a non-existent source.
-				const targetSources = graph.targetToSources.get(edge.target);
-				if (targetSources) {
-					targetSources.delete(id);
-					if (targetSources.size === 0) {
-						graph.targetToSources.delete(edge.target);
-					}
-				}
-			}
-		}
-		graph.symbols.delete(id);
-		graph.outgoing.delete(id);
-		graph.incoming.delete(id);
-	}
+	_cleanEdgesForSymbols(graph, symIdSet, false, true);
 	graph.fileSymbols.delete(relPath);
 	graph.fileImports.delete(relPath);
 	graph.fileCalls.delete(relPath);
 	graph.fileImportBindings.delete(relPath);
 	graph.fileRefs.delete(relPath);
 	graph.fileTypeRefs.delete(relPath);
-
-	// Use reverse edge index to clean cross-file references: O(K) not O(E)
-	for (const targetId of symIdSet) {
-		const sourceIds = graph.targetToSources.get(targetId);
-		if (!sourceIds) continue;
-		for (const sourceId of sourceIds) {
-			const edges = graph.outgoing.get(sourceId);
-			if (edges) {
-				const filtered = edges.filter((e) => e.target !== targetId);
-				if (filtered.length > 0) {
-					graph.outgoing.set(sourceId, filtered);
-				} else {
-					graph.outgoing.delete(sourceId);
-				}
-			}
-			const incomingEdges = graph.incoming.get(sourceId);
-			if (incomingEdges) {
-				const filtered = incomingEdges.filter((e) => e.source !== targetId);
-				if (filtered.length > 0) {
-					graph.incoming.set(sourceId, filtered);
-				} else {
-					graph.incoming.delete(sourceId);
-				}
-			}
-		}
-		graph.targetToSources.delete(targetId);
-	}
 
 	// Remove this file's symbols from nameIndex.
 	// Iterating the deduplicated name Set avoids re-filtering the same
@@ -1120,186 +1062,11 @@ function addEdge(graph: RepoGraph, edge: Edge): void {
 	}
 }
 
-// -- Import resolution ---------------------------------------------------------
+// -- Import resolution (delegated to core/resolve-import.ts) -------------------
 
-/**
- * Check if any candidate path exists, using graph lookup first then cached disk check.
- */
-function tryCandidate(graph: RepoGraph | undefined, root: string, relCandidate: string): string | null {
-	if (graph && graph.fileSymbols.has(relCandidate)) return relCandidate;
-	if (existsCached(join(root, relCandidate))) return relCandidate;
-	return null;
-}
-
-/**
- * Resolve a relative or language-specific import path to a file path that matches fileSymbols keys.
- * Handles JS/TS extensionless imports, Python dotted modules, Rust mod declarations,
- * Go relative imports, and Dart package/relative imports.
- */
-function resolveImport(importPath: string, fromFile: string, root: string, graph?: RepoGraph): string | null {
-	const fromDir = dirname(fromFile);
-	const fromExt = fromFile.slice(fromFile.lastIndexOf(".")).toLowerCase();
-	const absRoot = resolve(root);
-
-	// Dart: package: imports map to lib/ directory (standard Dart layout)
-	if (importPath.startsWith("package:")) {
-		const pkgPath = importPath.slice("package:".length);
-		const slashIdx = pkgPath.indexOf("/");
-		if (slashIdx > 0) {
-			const libRel = `lib/${pkgPath.slice(slashIdx + 1)}`;
-			const candidates = [libRel, `${libRel}.dart`];
-			for (const c of candidates) {
-				const found = tryCandidate(graph, root, c);
-				if (found) return found;
-			}
-		}
-		return importPath;
-	}
-
-	// Relative imports (./ or ../) - cross-language handling
-	if (importPath.startsWith(".")) {
-		const resolved = join(fromDir, importPath);
-
-		// JS/TS candidates
-		if ([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"].includes(fromExt) || fromExt === "") {
-			const jsCandidates = [
-				resolved,
-				`${resolved}.ts`,
-				`${resolved}.tsx`,
-				`${resolved}.js`,
-				`${resolved}.jsx`,
-				`${resolved}.mjs`,
-				`${resolved}.cjs`,
-				`${resolved}.mts`,
-				`${resolved}.cts`,
-				`${resolved}/index.ts`,
-				`${resolved}/index.tsx`,
-				`${resolved}/index.js`,
-			];
-			for (const c of jsCandidates) {
-				const found = tryCandidate(graph, root, c);
-				if (found) return found;
-			}
-			return null;
-		}
-
-		// Python relative import: from .foo import bar or from .. import baz
-		if (fromExt === ".py") {
-			const pyCandidates = [`${resolved}.py`, join(resolved, "__init__.py")];
-			for (const c of pyCandidates) {
-				const found = tryCandidate(graph, root, c);
-				if (found) return found;
-			}
-			return null;
-		}
-
-		// Rust relative mod/use: typically resolved through module system,
-		// but `super::` paths are parent-relative. Try direct file match.
-		if (fromExt === ".rs") {
-			const rsCandidates = [`${resolved}.rs`, join(resolved, "mod.rs")];
-			for (const c of rsCandidates) {
-				const found = tryCandidate(graph, root, c);
-				if (found) return found;
-			}
-			return null;
-		}
-
-		// Go relative imports
-		if (fromExt === ".go") {
-			const goFile = `${resolved}.go`;
-			const found = tryCandidate(graph, root, goFile);
-			if (found) return found;
-			// Directory-based package (look for .go files in dir)
-			if (existsCached(join(absRoot, resolved))) {
-				return resolved;
-			}
-			return null;
-		}
-
-		// Dart relative imports
-		if (fromExt === ".dart") {
-			const dartCandidates = [resolved, `${resolved}.dart`];
-			for (const c of dartCandidates) {
-				const found = tryCandidate(graph, root, c);
-				if (found) return found;
-			}
-			return null;
-		}
-
-		return null;
-	}
-
-	// Python dotted import: foo.bar.baz -> foo/bar/baz.py or foo/bar/baz/__init__.py
-	if (fromExt === ".py" && /^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$/.test(importPath)) {
-		const relPath = importPath.replace(/\./g, "/");
-		// Check if we're in a src/ layout by looking for src/ or the import from project root
-		const pyCandidates = [
-			`${relPath}.py`,
-			join(relPath, "__init__.py"),
-			join("src", `${relPath}.py`),
-			join("src", relPath, "__init__.py"),
-		];
-		for (const c of pyCandidates) {
-			const found = tryCandidate(graph, root, c);
-			if (found) return found;
-		}
-		return null;
-	}
-
-	// Rust mod X; -> X.rs or X/mod.rs (sibling to current file's directory)
-	// Rust crate:: paths: crate::foo::bar -> src/foo/bar.rs relative to crate root
-	if (fromExt === ".rs") {
-		if (importPath.startsWith("crate::")) {
-			// Find crate root (directory containing Cargo.toml) by walking up
-			const cratePath = importPath.slice("crate::".length).replace(/::/g, "/");
-			let crateRoot = fromDir;
-			while (crateRoot !== ".") {
-				if (existsCached(join(root, crateRoot, "Cargo.toml"))) break;
-				const parent = dirname(crateRoot);
-				if (parent === crateRoot) break;
-				crateRoot = parent;
-			}
-			const candidates = [`${crateRoot}/${cratePath}.rs`, `${crateRoot}/${cratePath}/mod.rs`];
-			for (const c of candidates) {
-				const found = tryCandidate(graph, root, c);
-				if (found) return found;
-			}
-			return null;
-		}
-		// mod X; or use X::Y without crate:: - try sibling module (X.rs or X/mod.rs)
-		if (!importPath.includes("::") && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(importPath)) {
-			const candidates = [join(fromDir, `${importPath}.rs`), join(fromDir, importPath, "mod.rs")];
-			for (const c of candidates) {
-				const found = tryCandidate(graph, root, c);
-				if (found) return found;
-			}
-			return null;
-		}
-		// super:: paths
-		if (importPath.startsWith("super::")) {
-			const parentPath = importPath.slice("super::".length).replace(/::/g, "/");
-			const candidates = [join(dirname(fromDir), `${parentPath}.rs`), join(dirname(fromDir), parentPath, "mod.rs")];
-			for (const c of candidates) {
-				const found = tryCandidate(graph, root, c);
-				if (found) return found;
-			}
-			return null;
-		}
-	}
-
-	// Go standard library or external package imports (non-relative) - return as-is
-	if (fromExt === ".go") {
-		return importPath;
-	}
-
-	// Dart non-relative, non-package imports - return as-is
-	if (fromExt === ".dart") {
-		return importPath;
-	}
-
-	// Default: return the import path unchanged (JS/TS bare specifiers, external crates, etc.)
-	return importPath;
-}
+// tryCandidate and resolveImport are now imported from core/resolve-import.js.
+// They were moved there to share import resolution logic with filter.ts
+// (issue #571 step 8).
 
 // -- Symbol lookup helpers ----------------------------------------------------
 
