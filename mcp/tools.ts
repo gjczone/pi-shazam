@@ -27,7 +27,7 @@ import {
 	_executeSymbolJson,
 } from "../tools/lookup.js";
 import { executeFormat, executeFormatJson } from "../tools/format.js";
-import { executeVerifyTextAsync, executeVerifyJsonAsync } from "../tools/verify.js";
+import { executeVerifyTextAsync, executeVerifyJsonAsync, capVerifyDiagnostics } from "../tools/verify.js";
 import { executeChanges, executeChangesJson } from "../tools/changes.js";
 import { executeRenameSymbol, formatRenameResult } from "../tools/rename_symbol.js";
 import { hasCallChainChecked, recordCallChain } from "../tools/rename-state.js";
@@ -134,9 +134,11 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 				/\.(ts|tsx|js|jsx|py|go|rs|dart|json|yaml|yml|mjs|cjs|rb|java|cs|c|cpp|h|hpp|css|scss|less|sh|bash|toml|html|htm|md)$/.test(
 					nameStr,
 				);
-			// Path traversal guard: reject file paths outside project root (issue #395)
-			// M9: Use configured projectRoot instead of process.cwd()
-			if (isFilePath && !validatePathInProject(nameStr, projectRoot)) {
+			// Path traversal guard: reject file paths outside project root (issue #395).
+			// #616: check nameIndex before validatePathInProject — symbols that
+			// look like file paths (e.g. "config.json") must not be rejected when
+			// they exist in the graph (matching Pi native behavior, issue #497).
+			if (isFilePath && !getGraph().nameIndex?.has(nameStr) && !validatePathInProject(nameStr, projectRoot)) {
 				return {
 					content: [{ type: "text", text: `Error: Path '${nameStr}' is outside the project root and cannot be read.` }],
 					isError: true,
@@ -155,7 +157,10 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 			// but is not a real file on disk -- it must fall through to
 			// symbol-lookup mode instead of returning a misleading
 			// "file not found" from executeFileDetailAsync.
-			if (isFilePath && existsSync(join(projectRoot, nameStr))) {
+			// #616: also check nameIndex first — when a name exists both as
+			// a symbol in the graph AND as a file on disk, Pi native routes to
+			// symbol mode (symbol-first heuristic). Match that behavior.
+			if (isFilePath && !getGraph().nameIndex?.has(nameStr) && existsSync(join(projectRoot, nameStr))) {
 				text = json ? executeFileDetailJson(getGraph(), nameStr) : await executeFileDetailAsync(getGraph(), nameStr);
 			} else if (mode === "state") {
 				text = executeStateMap(getGraph(), nameStr);
@@ -217,6 +222,22 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 				const dir = (direction as "incoming" | "outgoing" | "both") ?? "both";
 				const d = Math.min(Math.max((depth as number) ?? 3, 1), 10);
 
+				// #616: reject when both --symbol and --files are provided.
+				// Pi native returns an explicit error; MCP previously silently
+				// took the --symbol path and discarded --files without warning.
+				const filesArr = files as string[] | undefined;
+				if (symbol && filesArr && filesArr.length > 0) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: "Error: --symbol and --files are mutually exclusive. Use --symbol for call chain analysis or --files for impact analysis, not both.",
+							},
+						],
+						isError: true,
+					};
+				}
+
 				// Symbol mode: call chain analysis
 				if (symbol) {
 					// #447: Record that impact --symbol was run so the rename gate is satisfied
@@ -239,7 +260,6 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 				}
 
 				// File mode: impact analysis
-				const filesArr = files as string[] | undefined;
 				if (!filesArr || filesArr.length === 0) {
 					return {
 						content: [
@@ -286,6 +306,11 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 		withLogging(
 			"shazam_verify",
 			async ({ quick, lspOnly, preCommit, maxFiles, noCascade, noSecrets, maxTokens, json }) => {
+				// #616: reset scanner cache before verify — Pi native forces a
+				// fresh scan because verify must always see current file state.
+				// MCP is long-lived; cache from prior tool calls would stale results.
+				const { resetCache } = await import("../core/scanner.js");
+				resetCache();
 				const opts = {
 					quick: quick as boolean,
 					lspOnly: lspOnly as boolean,
@@ -296,14 +321,21 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 				};
 				if (json) {
 					const result = await executeVerifyJsonAsync(projectRoot, opts);
-					const envelope = JSON.stringify(
-						{ schema_version: "1.0", command: "verify", project: projectRoot, status: "ok", result },
-						null,
-						2,
-					);
-					let text = envelope;
+					const envelope = {
+						schema_version: "1.0",
+						command: "verify",
+						project: projectRoot,
+						status: "ok",
+						result,
+					};
+					let text = JSON.stringify(envelope);
+					// #616: cap lspDiagnostics array when JSON output exceeds
+					// maxTokens, matching Pi native capVerifyDiagnostics behavior.
+					// This guarantees valid JSON output even with large diagnostic sets.
 					if (typeof maxTokens === "number" && maxTokens > 0) {
-						text = truncateOutput(envelope.split("\n"), maxTokens);
+						if (capVerifyDiagnostics(result, text, maxTokens)) {
+							text = JSON.stringify(envelope);
+						}
 					}
 					return { content: [{ type: "text", text }] };
 				}
@@ -352,7 +384,7 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 					content: [
 						{
 							type: "text",
-							text: `Error: file path '${file}' is outside the project root and cannot be accessed.`,
+							text: `Error: file path '${file}' escapes project root.`,
 						},
 					],
 					isError: true,

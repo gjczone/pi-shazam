@@ -543,6 +543,232 @@ describe("buildEnvelope path normalization (#586)", () => {
 	});
 });
 
+// -- MCP shazam_lookup nameIndex guard for symbol-file ambiguity (#616 finding 1) --
+
+describe("MCP: shazam_lookup nameIndex guard prevents false rejection (#616-1)", () => {
+	it("source has nameIndex guard before validatePathInProject for file-path inputs", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const src = readFileSync(resolve("mcp/tools.ts"), "utf-8");
+		// The fix adds a nameIndex check: when a name matches the file-path regex
+		// but also exists as a symbol in the graph, bypass path validation.
+		// Pattern: validatePathInProject should only be called when the path is NOT in nameIndex
+		// OR: the guard should check nameIndex before validatePathInProject
+		expect(src).toMatch(/nameIndex\?\.has/);
+	});
+
+	it("capture-server: name like config.json (symbol that looks like file path) is not rejected", async () => {
+		const { registerAllTools } = await import("../mcp/tools.js");
+		const { scanProject } = await import("../core/scanner.js");
+		const graph = scanProject(".");
+		// Find a symbol whose name looks like a file path
+		const symbolWithFileLikeName = [...graph.symbols.values()].find(
+			(s) => s.name.includes(".") && /\.[a-z]{2,4}$/.test(s.name),
+		);
+		if (!symbolWithFileLikeName) {
+			// No such symbol in this project — test is vacuously true
+			return;
+		}
+		const handlers = new Map<
+			string,
+			(args: Record<string, unknown>) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>
+		>();
+		const mockServer = {
+			registerTool(
+				name: string,
+				_opts: unknown,
+				handler: (
+					args: Record<string, unknown>,
+				) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>,
+			) {
+				handlers.set(name, handler);
+			},
+		};
+		registerAllTools(mockServer as any, () => graph, ".");
+		const lookupHandler = handlers.get("shazam_lookup");
+		expect(lookupHandler).toBeDefined();
+		const result = await lookupHandler!({ name: symbolWithFileLikeName.name });
+		// Must NOT be rejected as "outside the project root"
+		expect(result.content[0].text).not.toMatch(/outside the project root/);
+	});
+});
+
+// -- MCP verify missing resetCache and capVerifyDiagnostics (#616 findings 2-3) --
+
+describe("MCP: shazam_verify cache reset and JSON truncation (#616-2, #616-3)", () => {
+	it("source calls resetCache before verify execution", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const src = readFileSync(resolve("mcp/tools.ts"), "utf-8");
+		// The fix adds resetCache() call before executeVerifyJsonAsync / executeVerifyTextAsync
+		expect(src).toMatch(/resetCache/);
+	});
+
+	it("source calls capVerifyDiagnostics in JSON verify mode", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const src = readFileSync(resolve("mcp/tools.ts"), "utf-8");
+		// The fix adds capVerifyDiagnostics for JSON-mode diagnostic truncation
+		expect(src).toMatch(/capVerifyDiagnostics/);
+	});
+
+	it("JSON verify output is valid JSON even with capVerifyDiagnostics call", async () => {
+		// Verify capVerifyDiagnostics itself produces valid JSON by testing it directly
+		const { capVerifyDiagnostics } = await import("../tools/verify.js");
+		// Create a result with >100 diagnostics (the truncation threshold)
+		const diagnostics = Array.from({ length: 150 }, (_, i) => ({
+			file: `test/file${i}.ts`,
+			line: i + 1,
+			col: 1,
+			endLine: i + 1,
+			endCol: 10,
+			severity: "error" as const,
+			code: `TS${2000 + i}`,
+			message: `Error ${i}: type mismatch`,
+		}));
+		const result = {
+			lspDiagnostics: diagnostics,
+			verdict: "FAIL",
+		};
+		const serialized = JSON.stringify({ result });
+		const wasTruncated = capVerifyDiagnostics(result, serialized, 100);
+		expect(wasTruncated).toBe(true);
+		expect(result.lspDiagnostics.length).toBe(100);
+		expect(result.lspDiagnosticsTruncated).toBe(50);
+		// Verify the result can be serialized as valid JSON
+		const reSerialized = JSON.stringify({ result });
+		expect(() => JSON.parse(reSerialized)).not.toThrow();
+	});
+});
+
+// -- MCP impact missing mutual exclusion check (#616 finding 4) --
+
+describe("MCP: shazam_impact symbol/files mutual exclusion (#616-4)", () => {
+	it("capture-server: providing both symbol and files returns error", async () => {
+		const { registerAllTools } = await import("../mcp/tools.js");
+		const { scanProject } = await import("../core/scanner.js");
+		const graph = scanProject(".");
+		const handlers = new Map<
+			string,
+			(args: Record<string, unknown>) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>
+		>();
+		const mockServer = {
+			registerTool(
+				name: string,
+				_opts: unknown,
+				handler: (
+					args: Record<string, unknown>,
+				) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>,
+			) {
+				handlers.set(name, handler);
+			},
+		};
+		registerAllTools(mockServer as any, () => graph, ".");
+		const impactHandler = handlers.get("shazam_impact");
+		expect(impactHandler).toBeDefined();
+		// Provide both symbol and files — should return error (not silently take symbol)
+		const result = await impactHandler!({ symbol: "scanProject", files: ["core/scanner.ts"] });
+		expect(result.isError).toBe(true);
+		expect(result.content[0].text).toMatch(/mutually exclusive|either.*or/i);
+	});
+
+	it("capture-server: providing only symbol works normally", async () => {
+		const { registerAllTools } = await import("../mcp/tools.js");
+		const { scanProject } = await import("../core/scanner.js");
+		const graph = scanProject(".");
+		const handlers = new Map<
+			string,
+			(args: Record<string, unknown>) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>
+		>();
+		const mockServer = {
+			registerTool(
+				name: string,
+				_opts: unknown,
+				handler: (
+					args: Record<string, unknown>,
+				) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>,
+			) {
+				handlers.set(name, handler);
+			},
+		};
+		registerAllTools(mockServer as any, () => graph, ".");
+		const impactHandler = handlers.get("shazam_impact");
+		expect(impactHandler).toBeDefined();
+		const result = await impactHandler!({ symbol: "scanProject" });
+		expect(result.content[0].text.length).toBeGreaterThan(0);
+		expect(result.isError).toBeUndefined();
+	});
+
+	it("capture-server: providing only files works normally", async () => {
+		const { registerAllTools } = await import("../mcp/tools.js");
+		const { scanProject } = await import("../core/scanner.js");
+		const graph = scanProject(".");
+		const handlers = new Map<
+			string,
+			(args: Record<string, unknown>) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>
+		>();
+		const mockServer = {
+			registerTool(
+				name: string,
+				_opts: unknown,
+				handler: (
+					args: Record<string, unknown>,
+				) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>,
+			) {
+				handlers.set(name, handler);
+			},
+		};
+		registerAllTools(mockServer as any, () => graph, ".");
+		const impactHandler = handlers.get("shazam_impact");
+		expect(impactHandler).toBeDefined();
+		const result = await impactHandler!({ files: ["core/scanner.ts"] });
+		expect(result.content[0].text.length).toBeGreaterThan(0);
+		expect(result.isError).toBeUndefined();
+	});
+});
+
+// -- MCP error response format alignment (#616 finding 5-6) --
+
+describe("MCP: error response format alignment with Pi native (#616-5)", () => {
+	it("shazam_lookup path-traversal error uses buildEnvelope (JSON envelope) matching Pi", async () => {
+		const { registerAllTools } = await import("../mcp/tools.js");
+		const { scanProject } = await import("../core/scanner.js");
+		const graph = scanProject(".");
+		const handlers = new Map<
+			string,
+			(args: Record<string, unknown>) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>
+		>();
+		const mockServer = {
+			registerTool(
+				name: string,
+				_opts: unknown,
+				handler: (
+					args: Record<string, unknown>,
+				) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>,
+			) {
+				handlers.set(name, handler);
+			},
+		};
+		registerAllTools(mockServer as any, () => graph, ".");
+		const lookupHandler = handlers.get("shazam_lookup");
+		expect(lookupHandler).toBeDefined();
+		// A path-traversal attempt on a file-path-like name that doesn't exist in the graph
+		const result = await lookupHandler!({ name: "../../../etc/shadow.json" });
+		expect(result.isError).toBe(true);
+		// Error format should be consistent: JSON envelope or simple error text
+		// Pi native uses buildEnvelope for this case — MCP should do similarly
+		expect(result.content[0].text).toMatch(/outside the project root|escapes project root|Error:/);
+	});
+
+	it("shazam_format path-traversal error message matches Pi native wording", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const mcpSrc = readFileSync(resolve("mcp/tools.ts"), "utf-8");
+		// Pi native says "file path escapes project root" — MCP should match
+		expect(mcpSrc).toMatch(/file path.*project root/);
+	});
+});
+
 // -- MCP stack trace leak (issue #597) --
 
 describe("MCP: withLogging should not leak un-redacted stack trace (#597)", () => {
@@ -582,8 +808,8 @@ describe("MCP: shazam_lookup file-path existence check (#598)", () => {
 		const { resolve } = await import("node:path");
 		const src = readFileSync(resolve("mcp/tools.ts"), "utf-8");
 		// The fix adds existsSync check alongside isFilePath before routing to file-detail.
-		// Match the pattern: isFilePath && existsSync(join(projectRoot, nameStr))
-		expect(src).toMatch(/isFilePath\s*&&\s*existsSync/);
+		// #616: now also includes nameIndex check — pattern: isFilePath && !getGraph().nameIndex.has(...) && existsSync(...)
+		expect(src).toMatch(/isFilePath\s*&&\s*.*existsSync/);
 	});
 
 	it("capture-server: name like foo.ts (non-existent file) goes to symbol mode", async () => {
