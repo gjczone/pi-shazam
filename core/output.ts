@@ -15,7 +15,7 @@
 
 import type { RepoGraph } from "./graph.js";
 import { getGraphEdgeCount } from "./graph.js";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { INTERNAL_LOG_PATH, writeJsonl, ts } from "./audit-log.js";
 import { isTestFile } from "./filter.js";
 
@@ -307,8 +307,9 @@ export function buildToolOutput(
  */
 export function getGitChangeCount(): number {
 	try {
-		const output = execSync("git diff --stat 2>/dev/null | tail -1", { encoding: "utf-8", timeout: 3000 }).trim();
-		const match = output.match(/(\d+)\s+file/);
+		const output = execFileSync("git", ["diff", "--stat"], { encoding: "utf-8", timeout: 3000 });
+		const lastLine = output.trim().split(/\r?\n/).filter(Boolean).pop() ?? "";
+		const match = lastLine.match(/(\d+)\s+file/);
 		return match ? parseInt(match[1]!, 10) : 0;
 	} catch (err) {
 		_logWarn("getGitChangeCount", "git diff --stat failed", err);
