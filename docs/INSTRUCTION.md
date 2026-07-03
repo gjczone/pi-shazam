@@ -248,7 +248,7 @@ The `pi.typebox` property does NOT exist at runtime. The Pi runtime resolves
 ```
 index.ts                    <- Pi extension entry, default export(pi: ExtensionAPI)
   ├── core/                 <- Pure analysis logic, no Pi dependency
-  │   ├── treesitter.ts     <- AST parsing + symbol extraction (7 grammars, 8 extensions)
+  │   ├── treesitter.ts     <- AST parsing + symbol extraction (8 grammars, 14 extensions)
   │   ├── graph.ts          <- Symbol dependency graph (imports, calls, references, type refs)
   │   ├── pagerank.ts       <- PageRank symbol importance scoring
   │   ├── scanner.ts        <- Project file scanning + graph building
@@ -262,7 +262,7 @@ index.ts                    <- Pi extension entry, default export(pi: ExtensionA
   ├── lsp/                  <- Language server process management
   │   ├── manager.ts        <- Server lifecycle (spawn, stdio, health, shutdown)
   │   ├── client.ts         <- LSP protocol communication (JSON-RPC via vscode-jsonrpc)
-  │   ├── servers.ts        <- Language->server config table (7 servers)
+  │   ├── servers.ts        <- Language->server config table (7 languages, 8 server specs)
   │   └── setup.ts          <- LSP setup: detect + install guidance (auto-runs)
   ├── tools/                <- One file per registerTool call
   │   ├── _context.ts       <- Tool-level shared LspManager holder
@@ -288,7 +288,7 @@ index.ts                    <- Pi extension entry, default export(pi: ExtensionA
   │   └── agent-context-guard.ts <- Warn on review tasks without context
   └── mcp/                  <- MCP server for non-Pi clients
       ├── entry.ts          <- McpServer + StdioServerTransport init
-      └── tools.ts          <- 9 MCP tool registrations wrapping core
+      └── tools.ts          <- 7 MCP tool registrations wrapping core
 ```
 
 ### 2.2 Dependency Direction
@@ -507,16 +507,18 @@ function write(line: string) {
 
 **Existing hooks in pi-shazam:**
 
-| Hook                  | Event                       | Purpose                                              |
-| --------------------- | --------------------------- | ---------------------------------------------------- |
-| `before-start.ts`     | `before_agent_start`        | Inject project structure overview into system prompt |
-| `pre-edit.ts`         | `tool_call` + `tool_result` | Detect multi-file edits, warn about blast radius     |
-| `shazam-guide.ts`     | `tool_result` + `tool_call` | Auto-format + nudge agent to use shazam tools        |
-| `tool-logger.ts`      | `tool_call` + `tool_result` | Log shazam calls to audit dir                        |
-| `precommit-verify.ts` | `tool_call` (bash)          | Auto-run shazam_verify on git commit (non-blocking)  |
-| `stop-verify.ts`      | `tool_result` + `turn_end`  | Remind to verify before ending turn                  |
-| `failure-recovery.ts` | `tool_result`               | Detect consecutive failures, suggest alternatives    |
-| `verify-state.ts`     | (shared module)             | Shared verify tracking state for stop-verify         |
+| Hook                     | Event                       | Purpose                                              |
+| ------------------------ | --------------------------- | ---------------------------------------------------- |
+| `before-start.ts`        | `before_agent_start`        | Inject project structure overview into system prompt |
+| `pre-edit.ts`            | `tool_call` + `tool_result` | Detect multi-file edits, warn about blast radius     |
+| `shazam-guide.ts`        | `tool_result` + `tool_call` | Auto-format + nudge agent to use shazam tools        |
+| `tool-logger.ts`         | `tool_call` + `tool_result` | Log shazam calls to audit dir                        |
+| `precommit-verify.ts`    | `tool_call` (bash)          | Auto-run shazam_verify on git commit (non-blocking)  |
+| `stop-verify.ts`         | `tool_result` + `turn_end`  | Remind to verify before ending turn                  |
+| `failure-recovery.ts`    | `tool_result`               | Detect consecutive failures, suggest alternatives    |
+| `issue-guard.ts`         | `tool_call` + `tool_result` | Detect gh issue creation, prompt impact analysis     |
+| `agent-context-guard.ts` | `tool_call`                 | Warn on review tasks without structural context      |
+| `verify-state.ts`        | (shared module)             | Shared verify tracking state for stop-verify         |
 
 ### 3.10 MCP Server — Non-Pi Client Wrapping
 
@@ -554,7 +556,7 @@ server.registerTool(
 );
 ```
 
-**`withLogging` wrapper** — logs start/end/duration/error to `~/.kimi-code/audit/shazam-calls.log`.
+**`withLogging` wrapper** — logs start/end/duration/error to `~/.pi/hooks/audit/shazam-calls.log`.
 Every handler must be wrapped.
 
 **MCP client config:**
@@ -717,27 +719,21 @@ pi -p "call shazam_overview"      # smoke test
 | tree-sitter                    | ^0.22.4 (0.22.4) | 0.25.0 | Pinned       |
 | vscode-languageserver-protocol | ^3.18.0 (3.18.0) | 3.18.0 | Current      |
 | vscode-jsonrpc                 | ^9.0.0 (9.0.0)   | 9.0.0  | Current      |
-| typebox                        | ^1.2.1 (1.2.1)   | 1.2.1  | Current      |
+| typebox                        | ^1.0.0 (1.2.1)   | 1.2.1  | Current      |
 | iconv-lite                     | ^0.7.2 (0.7.2)   | 0.7.2  | Current      |
-| @types/node                    | ^22.0.0 (22.x)   | 25.9.2 | Behind major |
+| @types/node                    | ^26.0.1 (26.x)   | 25.9.2 | Behind major |
 
 ### 5.2 Tree-Sitter Grammars
 
-| Grammar                | Current | Latest | Status       |
-| ---------------------- | ------- | ------ | ------------ |
-| tree-sitter-c          | 0.23.4  | 0.24.1 | Behind minor |
-| tree-sitter-c-sharp    | 0.23.1  | 0.23.5 | Behind patch |
-| tree-sitter-cpp        | 0.23.4  | 0.23.4 | Current      |
-| tree-sitter-css        | 0.23.1  | 0.25.0 | Behind major |
-| tree-sitter-go         | 0.23.4  | 0.25.0 | Behind major |
-| tree-sitter-html       | 0.23.2  | 0.23.2 | Current      |
-| tree-sitter-java       | 0.23.5  | 0.23.5 | Current      |
-| tree-sitter-javascript | 0.23.1  | 0.25.0 | Behind major |
-| tree-sitter-json       | 0.24.8  | 0.24.8 | Current      |
-| tree-sitter-python     | 0.23.6  | 0.25.0 | Behind major |
-| tree-sitter-ruby       | 0.23.1  | 0.23.1 | Current      |
-| tree-sitter-rust       | 0.23.2  | 0.24.0 | Behind minor |
-| tree-sitter-typescript | 0.23.2  | 0.23.2 | Current      |
+| Grammar                  | Current | Latest | Status       |
+| ------------------------ | ------- | ------ | ------------ |
+| tree-sitter-go           | 0.23.4  | 0.25.0 | Behind major |
+| tree-sitter-javascript   | 0.23.1  | 0.25.0 | Behind major |
+| tree-sitter-json         | 0.24.8  | 0.24.8 | Current      |
+| tree-sitter-python       | 0.23.6  | 0.25.0 | Behind major |
+| tree-sitter-rust         | 0.23.2  | 0.24.0 | Behind minor |
+| tree-sitter-typescript   | 0.23.2  | 0.23.2 | Current      |
+| @sengac/tree-sitter-dart | 1.1.6   | 1.1.6  | Current      |
 
 ### 5.3 Upgrade Policy
 
@@ -819,7 +815,7 @@ printf '{"jsonrpc":"2.0","id":0,"method":"initialize",...}\n{"jsonrpc":"2.0","id
 
 ```bash
 # Verify hooks registered in built dist
-grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerSafetyHooks\|registerStopVerify\|registerPreEditGuard\|registerFailureRecovery\|registerIssueGuard\|registerAgentContextGuard" dist/index.js
+grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerPrecommitVerify\|registerStopVerify\|registerPreEditGuard\|registerFailureRecovery\|registerIssueGuard\|registerAgentContextGuard" dist/index.js
 # Should output: 9
 ```
 
@@ -873,3 +869,5 @@ grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerS
 | 2026-06-06 | 1.0     | Initial version. Merged Pi ExtensionAPI contract, project architecture, dev workflow, release process, tech stack baseline.                                                    |
 | 2026-06-06 | 1.1     | Upgraded iconv-lite (0.6.3 -> 0.7.2), typebox (1.1.39 -> 1.2.1), vscode-languageserver-protocol (3.17.0 -> 3.18.0).                                                            |
 | 2026-06-08 | 2.0     | Merged all individual SKILL.md files (pi-extension, pi-hooks, mcp-server, testing, release-publish, architecture, sync-discipline) and CONTRACT.md. Flattened docs/ directory. |
+| 2026-07-02 | 2.1     | v0.24.4: Cross-platform fixes (Windows CI, PATHEXT, cache dir, POSIX shell -> Node.js).                                                                                        |
+| 2026-07-03 | 2.2     | v0.25.0: Windows LSP discovery, pre-commit hook rewrite, getGraph fallback, MCP robustness fixes (#596-#610).                                                                  |

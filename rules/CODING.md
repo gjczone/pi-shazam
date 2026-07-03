@@ -28,14 +28,14 @@ export function _logWarn(tag: string, message: string, err?: unknown): void { ..
 export function _resetGitCache(): void { ... }
 ```
 
-Evidence: `grep "export function _" core/*.ts` -> 2 matches: `_logWarn` (`core/output.ts:462`), `_resetGitCache` (`core/git-utils.ts:160`). Also used extensively for un-exported module helpers.
+Evidence: `grep "export function _" core/*.ts` -> 3 matches: `_logWarn` (`core/output.ts:427`), `_logInternal` (`core/output.ts:441`), `_resetGitCache` (`core/git-utils.ts:160`). Also used extensively for un-exported module helpers.
 
 ---
 
 ## 3. File Organization
 
 - **One file = one business concept.** No generic `utils.ts` / `helpers.ts` files spanning multiple domains.
-- **File naming:** `tools/` files use `snake_case.ts` (`rename_symbol.ts`). All other layers use `kebab-case.ts` (`git-utils.ts`, `treesitter-queries.ts`, `agent-context-guard.ts`).
+- **File naming:** Tool entry files (the 7 registered tools) use single-word `snake_case.ts` (`rename_symbol.ts`). Internal/utility files in `tools/` may use kebab-case or snake_case as appropriate. All other layers use `kebab-case.ts` (`git-utils.ts`, `treesitter-queries.ts`, `agent-context-guard.ts`).
 - **No re-export barrel files.** Files that only forward symbols from another module should be inlined at call sites and deleted.
 - **When deleting:** grep all callers -> update them -> delete the old file. No compatibility wrappers or pass-through layers.
 
@@ -63,7 +63,7 @@ export function registerOverview(pi: ExtensionAPI): void {
 }
 ```
 
-**Factory** (`tools/_factory.ts:124` `createTool`) auto-handles: `json`/`maxTokens` param merging, `scanProject(".")`, JSON/text output toggle with standard envelope, `truncateOutput()`, and path traversal guard (`validatePathInProject`).
+**Factory** (`tools/_factory.ts:128` `createTool`) auto-handles: `json`/`maxTokens` param merging, `scanProject(".")`, JSON/text output toggle with standard envelope, `truncateOutput()`, and path traversal guard (`validatePathInProject`).
 
 **Two execution modes:**
 
@@ -72,7 +72,7 @@ export function registerOverview(pi: ExtensionAPI): void {
 
 **Registration in `index.ts`:** import and call all `register*` in default export.
 
-Evidence: `grep "export function register" tools/*.ts` -> 9 matches. `grep "createTool" tools/*.ts` -> 10 matches. `index.ts` lines 237-245 call each register.
+Evidence: `grep "export function register" tools/*.ts` -> 8 matches. `grep "createTool" tools/*.ts` -> 17 matches (7 call sites + imports). `index.ts` lines 276-283 call each register.
 
 ---
 
@@ -110,13 +110,13 @@ try {
 
 Behavior: ENOENT errors suppressed (expected for optional binaries); other errors print `[pi-shazam] tag: message - reason`. Evidence: 39 usages across 9 `core/` files.
 
-Hooks layer uses `pi.logger.info/warn/error` for Pi-visible logging.
+Hooks layer uses `_logWarn` (from `core/output.js`) for internal diagnostics and `pi.sendMessage()` for user-visible output.
 
 ### LSP Degradation
 
 When language server is unavailable, fall back to tree-sitter only. Annotate output with `(tree-sitter only, LSP unavailable)`. Never throw on missing LSP.
 
-Evidence: `tools/lookup.ts:236` `"(tree-sitter only)"`, `lsp/client.ts:20` "falling back to tree-sitter only (issue #441)".
+Evidence: `tools/lookup.ts:279` `"(tree-sitter only)"`, `lsp/client.ts:20` "falling back to tree-sitter only (issue #441)".
 
 ---
 

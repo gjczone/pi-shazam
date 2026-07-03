@@ -45,9 +45,9 @@ For Kimi Code, CodeBuddy, Qwen Code, Claude, Codex, Qoder, Trae, and any MCP-com
 
 Setup and hook installation run automatically on session start. No manual setup commands needed.
 
-| Command          | When                 | Purpose                                                            |
-| ---------------- | -------------------- | ------------------------------------------------------------------ |
-| `/shazam-doctor` | When troubleshooting | Health check: LSP status, recent errors, slow calls, safety status |
+| Command          | When                 | Purpose                                                                                    |
+| ---------------- | -------------------- | ------------------------------------------------------------------------------------------ |
+| `/shazam-doctor` | When troubleshooting | Health check: LSP status, recent errors, slow calls, tree-sitter grammars, cache integrity |
 
 ## Supported Languages
 

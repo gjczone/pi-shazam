@@ -196,7 +196,7 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 - **Platforms**: Linux, macOS, Windows — all tree-sitter grammars ship prebuilt binaries for linux/darwin/win32 (x64 + arm64). On Windows, all 4 shells (cmd, PowerShell 5/7, Git Bash) are supported; `npm run build` works everywhere, `bash scripts/ci.sh` requires Git Bash.
 - **Package manager**: npm (lockfile: `package-lock.json`)
 - **Deployment**: Pi extension (symlink dist/ into `~/.pi/agent/extensions/pi-shazam`) + MCP server (`npx pi-shazam-mcp`)
-- **Test framework**: vitest, 50 TypeScript source files, tests in `tests/`
+- **Test framework**: vitest, 48 TypeScript source files, tests in `tests/`
 - **Key boundaries**: `core/` must never import from `tools/`, `hooks/`, or `lsp/`. Zero HTTP framework, zero ORM, zero auth.
 - **Primary risk areas**: tree-sitter grammar version compatibility, LSP JSON-RPC frame parsing, encoding fallback (UTF-8/GBK/GB2312), MCP/Pi tool definition sync, Windows LSP server discovery (SAFE_PATH_DIRS)
 
@@ -302,8 +302,8 @@ Before committing or creating a PR, verify ALL of the following:
 - [ ] Kimi Code shell hooks checked via `docs/kimi-code-hooks.md` checklist if tool names/behaviors changed
 - [ ] `docs/kimi-code-hooks.md` version mapping table updated for this release
 - [ ] All code comments, JSDoc, commit messages in English (LANGUAGE RULE)
-- [ ] Address user as 老板 — user-system-rules.md
-- [ ] Completion report format — user-system-rules.md
-- [ ] No empty catch blocks — handle or propagate every error — user-system-rules.md
+- [ ] Address user as 老板 (user-level rules)
+- [ ] Completion report format (user-level rules)
+- [ ] No empty catch blocks — handle or propagate every error (user-level rules)
 
 </general-project-rules>

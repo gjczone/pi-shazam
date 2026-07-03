@@ -156,7 +156,7 @@ The MCP server shares the same `core/` and `lsp/` layers as the Pi extension. No
 
 ## Language Support
 
-- **Parsing (tree-sitter):** 8 file extensions (7 grammars) — Python, TypeScript/TSX, JavaScript/JSX, Go, Rust, Dart, JSON
+- **Parsing (tree-sitter):** 14 file extensions (8 grammars) — Python, TypeScript/TSX, JavaScript, Go, Rust, Dart, JSON
 - **LSP (didOpen):** 7 language servers — Python (pyright), TypeScript/JavaScript (typescript-language-server), Go (gopls), Rust (rust-analyzer), JSON (vscode-json), YAML (yaml-language-server, diagnostic-only), Dart
 
-> **Design note:** pi-shazam parses 8 file extensions (Python, TypeScript/TSX, JavaScript/JSX, Go, Rust, Dart, JSON) via 7 tree-sitter grammars and provides LSP diagnostics for all of them plus YAML. See `lsp/client.ts` `_detectLanguage` for the authoritative mapping.
+> **Design note:** pi-shazam parses 14 file extensions (Python, TypeScript/TSX, JavaScript, Go, Rust, Dart, JSON) via 8 tree-sitter grammars and provides LSP diagnostics for all of them plus YAML. See `lsp/client.ts` `_detectLanguage` for the authoritative mapping.

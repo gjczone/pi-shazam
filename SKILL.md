@@ -173,13 +173,15 @@ shazam_rename_symbol({ symbol: "oldName", newName: "newName" })                /
 
 ## Git Tools
 
+### shazam_changes
+
 Git change summary with risk level. Shows what changed in the working tree and assesses the risk of each change.
 
 **Parameters**: `{ json?, maxTokens? }`
 
 - No required parameters — uses the project root automatically.
 
-**Returns**: list of changed files with change type (added/modified/deleted), risk assessment, and summary of changes.
+**Returns**: list of changed files, risk assessment, orphan symbol summary, and summary of changes.
 
 **When to use**: before creating a commit, reviewing what you are about to push, understanding the scope of uncommitted changes.
 
@@ -228,6 +230,6 @@ pi-shazam reads source files with adaptive encoding: UTF-8 -> GBK -> GB2312. It 
 ## Environment
 
 - **Runtime**: Node.js >=18, TypeScript ES2022, ESM
-- **Grammar support**: 8 file extensions across 7 tree-sitter grammars (Python, TypeScript/TSX, JavaScript, Go, Rust, Dart, JSON)
-- **LSP**: 8 languages with auto-spawned language servers (Python, TypeScript/JavaScript, Go, Rust, Dart, JSON, YAML)
+- **Grammar support**: 14 file extensions across 8 tree-sitter grammars (Python, TypeScript/TSX, JavaScript, Go, Rust, Dart, JSON)
+- **LSP**: 7 languages with auto-spawned language servers (Python, TypeScript/JavaScript, Go, Rust, Dart, JSON, YAML)
 - **Install**: `npm install pi-shazam` in Pi extensions directory
