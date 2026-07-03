@@ -44,6 +44,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   path comparisons, URI construction, file separator handling, short-name paths,
   and log message assertions now work correctly on all platforms.
 
+### Bug Fixes
+
+- **Cross-platform build scripts (#581)**: Replaced POSIX shell commands (`rm -rf`,
+  `test -f`, `cp -r`) with Node.js built-ins (`fs.rmSync`, `fs.existsSync`,
+  `fs.cpSync`) in `package.json` scripts for cross-platform compatibility on
+  Windows (cmd, PowerShell).
+
+- **Pre-commit hook rewrite (#604)**: Replaced `pre-commit-guard.sh` (bash-only)
+  with `pre-commit-guard.js` — a cross-platform Node.js script that installs
+  correctly on Windows via `mklink`. The guard enforces the same 5-minute TTL
+  and single-edit-count policy.
+
+- **getGraph fallback on scanProject failure (#601)**: `getGraph()` in `mcp/entry.ts`
+  now falls back to the cached graph when `scanProject()` throws transiently
+  (disk I/O error, permission change during scan). Without this, a single
+  transient failure would crash the MCP server.
+
+- **LSP/mcp cross-platform robustness (#596, #600, #605, #606, #607, #609, #610)**:
+  Seven fixes in `lsp/manager.ts`, `lsp/client.ts`, `tools/_context.ts`, and
+  `mcp/entry.ts`: `shouldSkipPath` backslash normalization, `setLspManager(null)`
+  tree-sitter-only fallback, PATHEXT-aware LSP discovery, `go/bin/<cmd>.exe`
+  Windows candidate path, `pathToFileURL` for UNC/drive-letter URI construction,
+  symlink containment during language detection, and per-language timeout in
+  LSP initialize (replaces hardcoded 10000ms).
+
+- **MCP robustness — 4 review fixes (#597, #598, #599, #608)**:
+  `withLogging` no longer copies `err.stack` to the re-thrown Error (prevents
+  absolute-path leak to MCP clients). `shazam_lookup` verifies file-path mode
+  with `existsSync` so symbol names matching file extensions fall through to
+  symbol lookup. `onSignal` defers `process.exit` via `setImmediate` so LSP
+  shutdown I/O flushes before process termination. Added Windows-reliable
+  `stdin error`/`close` shutdown triggers alongside existing `stdin end` handler.
+
 ## [0.24.4] - 2026-07-02
 
 ### Bug Fixes

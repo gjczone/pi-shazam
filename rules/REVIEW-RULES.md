@@ -4,8 +4,8 @@ You are reviewing **pi-shazam**, a Pi coding agent native codebase awareness too
 
 ## Project Context
 
-- **What it is**: TypeScript/Node.js Pi extension providing 7 structural analysis tools (overview, lookup, impact, verify, changes, format, rename_symbol) plus 11 lifecycle hooks, and a standalone MCP server exposing the same 7 tools via stdio JSON-RPC.
-- **Size**: 48 TypeScript source files across 5 directories (core/, tools/, hooks/, lsp/, mcp/) + 50+ vitest test files. Approaching the "Mature" stage.
+- **What it is**: TypeScript/Node.js Pi extension providing 7 structural analysis tools (overview, lookup, impact, verify, changes, format, rename_symbol) plus 9 hook modules and 3 inline event handlers, and a standalone MCP server exposing the same 7 tools via stdio JSON-RPC.
+- **Size**: 46 TypeScript source files across 5 directories (core/, tools/, hooks/, lsp/, mcp/) + 63 vitest test files. Approaching the "Mature" stage.
 - **Runtime**: Node.js >= 18, ESM modules, runs as a Pi extension loaded into the Pi coding agent process.
 - **Dependencies**: tree-sitter (multi-language parsing), vscode-jsonrpc + vscode-languageserver-protocol (LSP JSON-RPC), iconv-lite (UTF-8/GBK encoding fallback), @modelcontextprotocol/sdk (MCP server), typebox (tool parameter schemas), zod (MCP validation).
 - **Key architecture facts**:
@@ -45,7 +45,7 @@ You are reviewing **pi-shazam**, a Pi coding agent native codebase awareness too
 10. **MCP error response inconsistency**: Some MCP handlers return `{ content: [...], isError: true }` for parameter validation errors, while others `throw` which the SDK converts to a JSON-RPC error. Verify error handling is consistent and user-facing error messages do not leak stack traces or absolute paths.
 11. **MCP LSP lifecycle on init failure**: When `lspManager.initializeAll()` throws in `mcp/entry.ts`, the server continues without LSP (graceful degradation). Verify that `setLspManager` receives either a working manager or null, and tools do not crash when LSP is unavailable (tree-sitter-only fallback).
 12. **MCP concurrent getGraph calls**: `getGraph()` calls `scanProject()` on every MCP tool invocation without a mutex. Concurrent MCP requests may trigger overlapping scans. `scanProject` has its own `_scanning` guard which throws on re-entry -- verify the throw is caught by `withLogging` and does not crash the MCP transport.
-13. **MCP layer violation**: `mcp/tools.ts` must not import from `hooks/`. Currently imports `hasCallChainChecked`/`recordCallChain` from `hooks/rename-state.ts` (a known layering issue -- the module is stateless and should be relocated to `tools/`). Report any new hooks imports added to `mcp/`.
+13. **MCP layer violation**: `mcp/tools.ts` must not import from `hooks/`. Currently imports `hasCallChainChecked`/`recordCallChain` from `tools/rename-state.ts` (relocated from `hooks/` — resolved in v0.22.0). Report any new hooks imports added to `mcp/`.
 
 ### DO NOT report these (ignore -- not useful)
 
