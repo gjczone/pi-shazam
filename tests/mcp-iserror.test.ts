@@ -21,6 +21,7 @@ vi.mock("node:fs/promises", () => ({
 }));
 vi.mock("../core/audit-log.js", () => ({
 	AUDIT_LOG_DIR: "/tmp/pi-shazam-test-audit",
+	INTERNAL_LOG_PATH: "/tmp/pi-shazam-test-audit/internal.log",
 	rotateAuditLog: vi.fn().mockResolvedValue(undefined),
 	writeJsonl: vi.fn(),
 	ts: () => new Date().toISOString(),
