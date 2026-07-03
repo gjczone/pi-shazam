@@ -9,7 +9,7 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { _logWarn } from "../core/output.js";
 import { createRequire } from "node:module";
 
@@ -121,18 +121,10 @@ export interface LspLocation {
 // -- Helpers ------------------------------------------------------------------
 
 export function pathToUri(filePath: string): string {
-	const resolved = path.resolve(filePath);
-	const parts = resolved.replace(/\\/g, "/").split("/");
-	let normalized: string;
-	if (/^[A-Za-z]:$/.test(parts[0] ?? "")) {
-		normalized = "/" + parts[0] + "/" + parts.slice(1).map(encodeURIComponent).join("/");
-	} else {
-		normalized = parts.map(encodeURIComponent).join("/");
-	}
-	if (normalized[0] !== "/") {
-		return `file:///${normalized}`;
-	}
-	return `file://${normalized}`;
+	// #607: Use pathToFileURL — the canonical Node API that handles
+	// drive letters, UNC paths, and long-path forms correctly on all
+	// platforms. Symmetric with uriToPath's use of fileURLToPath.
+	return pathToFileURL(filePath).href;
 }
 
 export function uriToPath(uri: string): string {
@@ -416,7 +408,7 @@ export class LspClient {
 			signal.addEventListener("abort", abortListener, { once: true });
 		}
 		try {
-			const result = await this._sendRequest<InitializeResult>("initialize", initParams, 10000, initCts.token);
+			const result = await this._sendRequest<InitializeResult>("initialize", initParams, this.timeout, initCts.token);
 			this._serverCapabilities = ((result as InitializeResult).capabilities as Record<string, unknown>) ?? {};
 			await conn.sendNotification("initialized", {});
 			this._initialized = true;

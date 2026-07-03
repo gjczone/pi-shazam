@@ -24,7 +24,7 @@ let _shutdownPromise: Promise<void> | null = null;
  * could read `_manager` mid-swap and initialize LSP servers against the
  * outgoing manager.
  */
-export async function setLspManager(mgr: LspManager): Promise<void> {
+export async function setLspManager(mgr: LspManager | null): Promise<void> {
 	// Serialize against any prior swap still in flight. With the bug fix,
 	// `_shutdownPromise` is non-null while a previous manager's shutdown is
 	// pending, so concurrent callers wait here instead of racing on `_manager`.

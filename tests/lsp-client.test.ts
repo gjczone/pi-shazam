@@ -794,3 +794,44 @@ describe("didClose source structure (#556)", () => {
 		expect(beforeTry).not.toMatch(/_openedFiles\.delete\s*\(/);
 	});
 });
+
+// -- pathToUri Windows path round-trip (issue #607) --
+
+describe("pathToUri Windows path round-trip (#607)", () => {
+	it("does not produce malformed UNC triple-slash URIs", () => {
+		// With the old manual encoding, UNC paths like \\server\share\foo.ts
+		// produced file:////server/share/foo.ts (quadruple slash). With
+		// pathToFileURL, they become proper file://server/share/foo.ts.
+		const uri = pathToUri("\\\\server\\share\\foo.ts");
+		expect(uri.startsWith("file://")).toBe(true);
+		// Must not have triple slashes after file: (malformed)
+		expect(uri).not.toMatch(/^file:\/\/\/\//);
+	});
+
+	it("round-trips Windows drive-letter paths through uriToPath", async () => {
+		const { uriToPath } = await import("../lsp/client.js");
+		const uri = pathToUri("C:\\proj\\foo.ts");
+		expect(uri.startsWith("file://")).toBe(true);
+		// Round-trip back to path (normalized to native separators)
+		const roundTripped = uriToPath(uri);
+		expect(roundTripped.endsWith("foo.ts")).toBe(true);
+	});
+
+	it("lsp/client.ts uses pathToFileURL for proper encoding", async () => {
+		const { readFileSync } = await import("node:fs");
+		const content = readFileSync("lsp/client.ts", "utf-8");
+		expect(content).toMatch(/pathToFileURL/);
+	});
+});
+
+// -- LSP initialize per-language timeout (issue #610) --
+
+describe("LSP initialize per-language timeout (#610)", () => {
+	it("_sendRequest initialize uses this.timeout not literal 10000", async () => {
+		const { readFileSync } = await import("node:fs");
+		const content = readFileSync("lsp/client.ts", "utf-8");
+		// The _sendRequest("initialize", ...) call must use this.timeout,
+		// not the hardcoded 10000. Check the whole file for this pattern.
+		expect(content).not.toMatch(/"initialize"\s*,\s*\w+\s*,\s*10000/);
+	});
+});

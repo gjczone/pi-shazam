@@ -69,7 +69,9 @@ export interface LspRunResult {
  * Used to avoid feeding vendored/generated files to LSP.
  */
 export function shouldSkipPath(filePath: string): boolean {
-	const segments = filePath.split("/");
+	// #596: Normalize backslashes to forward slashes so Windows path
+	// strings (e.g. src\node_modules\foo.ts) match SKIP_DIRS segments.
+	const segments = filePath.replace(/\\/g, "/").split("/");
 	for (const seg of segments) {
 		if (SKIP_DIRS.has(seg)) return true;
 	}
@@ -167,6 +169,20 @@ export function detectProjectLanguages(
 				continue;
 			}
 			if (st.isDirectory()) {
+				// #609: Resolve symlink targets before recursing to prevent
+				// cascading walks into out-of-project directories. Skip entries
+				// whose real path is outside projectRoot or whose resolved
+				// basename matches a skip directory.
+				let realTarget: string;
+				try {
+					realTarget = realpathSync(fullPath);
+				} catch (_err) {
+					// Broken symlink or inaccessible path — skip
+					continue;
+				}
+				const realBase = realTarget.split(/[\\/]/).pop() ?? "";
+				if (SKIP_DIRS.has(realBase)) continue;
+				if (!isPathInRoot(realTarget, root)) continue;
 				walk(fullPath, depth + 1);
 			} else if (st.isFile()) {
 				seen++;
@@ -387,12 +403,16 @@ function findInPath(command: string): string | null {
 		if (isExecutable(candidate)) return candidate;
 	}
 	// #582: On win32, npm global installs create .cmd shims (e.g.,
-	// typescript-language-server.cmd). Try the .cmd extension when the
-	// bare command name was not found.
-	if (process.platform === "win32" && !command.endsWith(".cmd") && !command.endsWith(".exe")) {
-		for (const dir of dirs) {
-			const candidate = join(dir, command + ".cmd");
-			if (isExecutable(candidate)) return candidate;
+	// typescript-language-server.cmd). #605: try the full PATHEXT list
+	// (COM;EXE;BAT;CMD;VBS;JS) so that .exe servers (gopls.exe,
+	// rust-analyzer.exe) and .bat shims are discoverable through PATH.
+	if (process.platform === "win32" && !command.includes(".")) {
+		const pathext = (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD;.VBS;.JS").toLowerCase().split(";").filter(Boolean);
+		for (const ext of pathext) {
+			for (const dir of dirs) {
+				const candidate = join(dir, command + ext);
+				if (isExecutable(candidate)) return candidate;
+			}
 		}
 	}
 	return null;
@@ -435,6 +455,8 @@ function trustedUserCandidates(commandName: string): string[] {
 			join(home, "scoop", "shims", commandName + ".cmd"),
 			// Cargo (Rust) global installs
 			join(home, ".cargo", "bin", commandName + ".exe"),
+			// Go global installs (gopls, staticcheck via `go install`) -- #606
+			join(home, "go", "bin", commandName + ".exe"),
 			// Neovim Mason LSP installs
 			join(localAppData, "nvim-data", "mason", "bin", commandName + ".cmd"),
 			join(localAppData, "nvim-data", "mason", "bin", commandName + ".exe"),

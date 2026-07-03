@@ -60,3 +60,28 @@ describe("Architecture: core/ has zero LSP imports", () => {
 		expect(exists).toBe(false);
 	});
 });
+
+// -- setLspManager accepts null for tree-sitter-only fallback (issue #600) --
+
+describe("setLspManager accepts null for tree-sitter-only fallback (#600)", () => {
+	it("getLspManager returns null after setLspManager(null)", async () => {
+		const { setLspManager, getLspManager } = await import("../tools/_context.js");
+		await setLspManager(null);
+		expect(getLspManager()).toBeNull();
+	});
+
+	it("setLspManager(null) does not throw", async () => {
+		const { setLspManager } = await import("../tools/_context.js");
+		await expect(setLspManager(null)).resolves.toBeUndefined();
+	});
+
+	it("setLspManager restores a real manager after null", async () => {
+		const { setLspManager, getLspManager } = await import("../tools/_context.js");
+		const { LspManager } = await import("../lsp/manager.js");
+		await setLspManager(null);
+		expect(getLspManager()).toBeNull();
+		const mgr = new LspManager("/tmp/test-project");
+		await setLspManager(mgr);
+		expect(getLspManager()).toBe(mgr);
+	});
+});

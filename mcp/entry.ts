@@ -118,11 +118,16 @@ async function main(): Promise<void> {
 	const graph = scanProject(PROJECT_ROOT);
 	cachedGraph = graph;
 	const languages = detectProjectLanguages(PROJECT_ROOT, 5000, graph.fileSymbols.keys());
-	if (languages.length > 0) {
+	// #600: Track whether LSP init succeeded so we can pass null to
+	// setLspManager when it fails, activating the tree-sitter-only
+	// fallback branches in tools.
+	let lspOk = languages.length > 0;
+	if (lspOk) {
 		try {
 			await lspManager.initializeAll();
 		} catch (err) {
 			_logWarn("lspInit", "lsp init failed", err);
+			lspOk = false;
 		}
 	}
 
@@ -131,8 +136,9 @@ async function main(): Promise<void> {
 		version: VERSION,
 	});
 
-	// Share LspManager with tools layer so LSP enrichment works in MCP mode
-	await setLspManager(lspManager);
+	// Share LspManager with tools layer so LSP enrichment works in MCP mode.
+	// Pass null on init failure so tool fallback branches activate (#600).
+	await setLspManager(lspOk ? lspManager : null);
 
 	// Register all analysis tools
 	registerAllTools(server, getGraph, PROJECT_ROOT);

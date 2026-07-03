@@ -370,6 +370,58 @@ describe("_trustedUserCandidates Windows paths (#582)", () => {
 		);
 		expect(hasWindowsPaths).toBe(false);
 	});
+
+	it("includes go/bin/<cmd>.exe candidate on win32 (#606)", async () => {
+		const { _trustedUserCandidates } = await import("../lsp/manager.js");
+		Object.defineProperty(process, "platform", { value: "win32" });
+		// Create a temp home dir with go/bin/gopls.exe so isExecutable finds it
+		const tmpHome = mkdtempSync(join(tmpdir(), "pi-shazam-606-"));
+		const goBinDir = join(tmpHome, "go", "bin");
+		mkdirSync(goBinDir, { recursive: true });
+		const goExePath = join(goBinDir, "gopls.exe");
+		writeFileSync(goExePath, "dummy");
+		chmodSync(goExePath, 0o755);
+		const origHome = process.env.HOME;
+		process.env.HOME = tmpHome;
+		try {
+			const candidates = _trustedUserCandidates("gopls");
+			const hasGoExe = candidates.some((c) => c.includes("go") && c.includes("bin") && c.endsWith("gopls.exe"));
+			expect(hasGoExe).toBe(true);
+		} finally {
+			rmSync(tmpHome, { recursive: true, force: true });
+			if (origHome !== undefined) process.env.HOME = origHome;
+			else delete process.env.HOME;
+		}
+	});
+});
+
+// -- detectProjectLanguages symlink containment (issue #609) --
+
+describe("detectProjectLanguages symlink containment (#609)", () => {
+	it("does not walk symlinks resolving outside project root", async () => {
+		const { detectProjectLanguages } = await import("../lsp/manager.js");
+		const { symlinkSync } = await import("node:fs");
+		const projectDir = mkdtempSync(join(tmpdir(), "pi-shazam-609-proj-"));
+		const externalDir = mkdtempSync(join(tmpdir(), "pi-shazam-609-ext-"));
+		try {
+			// Create a .ts file inside project root (should be detected)
+			writeFileSync(join(projectDir, "main.ts"), "const x = 1;");
+			// Create a .py file in the external dir (should NOT be detected)
+			writeFileSync(join(externalDir, "external.py"), "x = 1");
+			// Symlink from project root to external dir
+			const linkPath = join(projectDir, "ext-lib");
+			symlinkSync(externalDir, linkPath, "dir");
+
+			const languages = detectProjectLanguages(projectDir, 100);
+			// Typescript should be detected from main.ts
+			expect(languages).toContain("typescript");
+			// Python must NOT be detected (external file outside root)
+			expect(languages).not.toContain("python");
+		} finally {
+			rmSync(projectDir, { recursive: true, force: true });
+			rmSync(externalDir, { recursive: true, force: true });
+		}
+	});
 });
 
 // -- package.json os field (issue #585) --
@@ -384,5 +436,70 @@ describe("package.json os field (#585)", () => {
 		expect(pkg.os).toContain("linux");
 		expect(pkg.os).toContain("darwin");
 		expect(pkg.os).toContain("win32");
+	});
+});
+
+// -- shouldSkipPath backslash normalization (issue #596) --
+
+describe("shouldSkipPath backslash normalization (#596)", () => {
+	it("normalizes backslashes to forward slashes for SKIP_DIRS matching", async () => {
+		const { shouldSkipPath } = await import("../lsp/manager.js");
+		// Backslash-separated paths containing skip dirs
+		expect(shouldSkipPath("src\\node_modules\\foo.ts")).toBe(true);
+		expect(shouldSkipPath("project\\.git\\objects\\abc")).toBe(true);
+		expect(shouldSkipPath("dist\\bundle.js")).toBe(true);
+		// Forward slash still works
+		expect(shouldSkipPath("src/node_modules/foo.ts")).toBe(true);
+		// Non-skip path with backslashes
+		expect(shouldSkipPath("src\\utils\\helper.ts")).toBe(false);
+		// Mixed separators
+		expect(shouldSkipPath("src\\node_modules/lib\\util.ts")).toBe(true);
+	});
+});
+
+// -- findInPath PATHEXT iteration (issue #605) --
+
+describe("_findInPath PATHEXT iteration (#605)", () => {
+	const originalPlatform = process.platform;
+	const originalPathext = process.env.PATHEXT;
+
+	afterEach(() => {
+		Object.defineProperty(process, "platform", { value: originalPlatform });
+		if (originalPathext !== undefined) process.env.PATHEXT = originalPathext;
+		else delete process.env.PATHEXT;
+	});
+
+	it("finds .exe variant via PATHEXT when bare command not found on win32", async () => {
+		const { _findInPath } = await import("../lsp/manager.js");
+		Object.defineProperty(process, "platform", { value: "win32" });
+		process.env.PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.JS";
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-605-"));
+		const exePath = join(tmpDir, "gopls.exe");
+		try {
+			writeFileSync(exePath, "dummy");
+			chmodSync(exePath, 0o755);
+			process.env.PATH = tmpDir;
+			const found = _findInPath("gopls");
+			expect(found).toBe(exePath);
+		} finally {
+			rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("existing .cmd fallback still works after PATHEXT change", async () => {
+		const { _findInPath } = await import("../lsp/manager.js");
+		Object.defineProperty(process, "platform", { value: "win32" });
+		process.env.PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.JS";
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-605-"));
+		const cmdPath = join(tmpDir, "test-server.cmd");
+		try {
+			writeFileSync(cmdPath, "dummy");
+			chmodSync(cmdPath, 0o755);
+			process.env.PATH = tmpDir;
+			const found = _findInPath("test-server");
+			expect(found).toBe(cmdPath);
+		} finally {
+			rmSync(tmpDir, { recursive: true, force: true });
+		}
 	});
 });
