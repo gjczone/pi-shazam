@@ -32,7 +32,12 @@ fi
 echo "  tests passed"
 echo ""
 
-# Step 5: CI config check
+# Step 5: MCP-Pi parity check (warning only, non-blocking)
+echo "--- MCP-Pi parity check ---"
+bash scripts/check-mcp-parity.sh || echo "  (non-blocking warning -- see above)"
+echo ""
+
+# Step 6: CI config check
 echo "--- CI config check ---"
 node -e "require('fs').existsSync('.github/workflows/ci.yml')||(console.error('ci.yml missing'),process.exit(1))"
 echo "  ci.yml present"

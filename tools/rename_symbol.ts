@@ -17,10 +17,10 @@ import { getLspManager } from "./_context.js";
 import { ensureFileOpened } from "./lsp_enrich.js";
 import type { WorkspaceEdit, TextEdit } from "vscode-languageserver-protocol";
 import { uriToPath } from "../lsp/client.js";
-import { createTool, buildEnvelope, validatePathInProject } from "./_factory.js";
+import { createTool, validatePathInProject } from "./_factory.js";
+import { dispatchRenameSymbol } from "./_dispatchers.js";
 import { setLastToolTiming } from "./_context.js";
 import { scanProject, getEffectiveRoot } from "../core/scanner.js";
-import { hasCallChainChecked } from "./rename-state.js";
 
 /**
  * Atomic write: write to temp file then rename over target.
@@ -51,37 +51,8 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 		}),
 		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
-			const dryRun = (params.dryRun as boolean) ?? true;
-			const symbolName = typeof params.symbol === "string" ? params.symbol : "";
-			const newName = typeof params.newName === "string" ? params.newName : "";
-			if (!symbolName) {
-				return { content: [{ type: "text", text: "Error: symbol parameter is required" }], isError: true };
-			}
-			if (!newName) {
-				return { content: [{ type: "text", text: "Error: newName parameter is required" }], isError: true };
-			}
-			// Block non-dry-run unless shazam_impact --symbol was run for this symbol (issue #326)
-			if (!dryRun) {
-				if (!hasCallChainChecked(symbolName)) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: [
-									"[BLOCKED] Rename aborted - shazam_impact --symbol has not been run for this symbol.",
-									"",
-									`Before renaming \`${symbolName}\`, you MUST run:`,
-									`  shazam_impact --symbol "${symbolName}" --direction both`,
-									"",
-									"Review all callers and callees, then re-invoke shazam_rename_symbol with dryRun=false.",
-								].join("\n"),
-							},
-						],
-						isError: true,
-					};
-				}
-				// call_chain was checked -- proceed with actual rename below
-			}
+			const maxTokens = params.maxTokens as number | undefined;
+
 			// Scan project to get graph (fixes #209 -- customExecute must not rely on module-level variable)
 			const t0 = Date.now();
 			const projectRoot = getEffectiveRoot();
@@ -98,19 +69,13 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 					isError: true,
 				};
 			}
-			const result = await executeRenameSymbol(graph, symbolName, newName, dryRun, projectRoot);
-			let text = json
-				? buildEnvelope("shazam_rename_symbol", projectRoot, "ok", result)
-				: formatRenameResult(result, symbolName, newName, dryRun);
-			// Issue #470: customExecute bypasses factory auto-truncation, so
-			// honor maxTokens explicitly here. JSON mode is left intact to
-			// preserve valid JSON (mirrors tools/lookup.ts:136-138).
-			const maxTokens = params.maxTokens as number | undefined;
+			const result = await dispatchRenameSymbol(graph, params, projectRoot);
+			let text = result.text;
 			if (maxTokens && !json) {
 				text = truncateOutput(text.split("\n"), maxTokens);
 			}
 			setLastToolTiming({ scanProject: scanMs, execute: Date.now() - t0 });
-			return { content: [{ type: "text", text }] };
+			return { content: [{ type: "text", text }], isError: result.isError };
 		},
 	});
 }

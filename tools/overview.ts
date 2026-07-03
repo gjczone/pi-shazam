@@ -10,6 +10,7 @@ import { isNonSourceFile } from "../core/filter.js";
 import { getNextForTool, formatNextSection, _logWarn } from "../core/output.js";
 import { createTool } from "./_factory.js";
 import { buildEnvelope } from "./_factory.js";
+import { dispatchOverview } from "./_dispatchers.js";
 import { EXT_TO_LANG, getProjectParserWarnings } from "../core/treesitter.js";
 import { existsSync } from "node:fs";
 import { readFileAdaptive } from "../core/encoding.js";
@@ -70,10 +71,8 @@ export function registerOverview(pi: ExtensionAPI): void {
 			filter: Type.Optional(Type.String()),
 		}),
 		execute(graph, params) {
-			const filter = (params.filter as string) ?? "";
-			const json = params.json ?? false;
 			const projectRoot = (params.project as string) || ".";
-			return json ? executeOverviewJson(graph, projectRoot, filter) : executeOverview(graph, projectRoot, filter);
+			return dispatchOverview(graph, params, projectRoot).text;
 		},
 	});
 }

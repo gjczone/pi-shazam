@@ -549,11 +549,9 @@ describe("MCP: shazam_lookup nameIndex guard prevents false rejection (#616-1)",
 	it("source has nameIndex guard before validatePathInProject for file-path inputs", async () => {
 		const { readFileSync } = await import("node:fs");
 		const { resolve } = await import("node:path");
-		const src = readFileSync(resolve("mcp/tools.ts"), "utf-8");
-		// The fix adds a nameIndex check: when a name matches the file-path regex
-		// but also exists as a symbol in the graph, bypass path validation.
-		// Pattern: validatePathInProject should only be called when the path is NOT in nameIndex
-		// OR: the guard should check nameIndex before validatePathInProject
+		const src = readFileSync(resolve("tools/_dispatchers.ts"), "utf-8");
+		// The dispatcher is the single source of truth for the nameIndex guard.
+		// Pattern: nameIndex?.has appears before validatePathInProject in dispatchLookup.
 		expect(src).toMatch(/nameIndex\?\.has/);
 	});
 
@@ -599,16 +597,16 @@ describe("MCP: shazam_verify cache reset and JSON truncation (#616-2, #616-3)", 
 	it("source calls resetCache before verify execution", async () => {
 		const { readFileSync } = await import("node:fs");
 		const { resolve } = await import("node:path");
-		const src = readFileSync(resolve("mcp/tools.ts"), "utf-8");
-		// The fix adds resetCache() call before executeVerifyJsonAsync / executeVerifyTextAsync
+		const src = readFileSync(resolve("tools/_dispatchers.ts"), "utf-8");
+		// The dispatcher calls resetCache before executeVerifyJsonAsync / executeVerifyTextAsync
 		expect(src).toMatch(/resetCache/);
 	});
 
 	it("source calls capVerifyDiagnostics in JSON verify mode", async () => {
 		const { readFileSync } = await import("node:fs");
 		const { resolve } = await import("node:path");
-		const src = readFileSync(resolve("mcp/tools.ts"), "utf-8");
-		// The fix adds capVerifyDiagnostics for JSON-mode diagnostic truncation
+		const src = readFileSync(resolve("tools/_dispatchers.ts"), "utf-8");
+		// The dispatcher calls capVerifyDiagnostics for JSON-mode diagnostic truncation
 		expect(src).toMatch(/capVerifyDiagnostics/);
 	});
 
@@ -763,8 +761,8 @@ describe("MCP: error response format alignment with Pi native (#616-5)", () => {
 	it("shazam_format path-traversal error message matches Pi native wording", async () => {
 		const { readFileSync } = await import("node:fs");
 		const { resolve } = await import("node:path");
-		const mcpSrc = readFileSync(resolve("mcp/tools.ts"), "utf-8");
-		// Pi native says "file path escapes project root" — MCP should match
+		const mcpSrc = readFileSync(resolve("tools/_dispatchers.ts"), "utf-8");
+		// Pi native says "file path escapes project root" — dispatcher should match
 		expect(mcpSrc).toMatch(/file path.*project root/);
 	});
 });
@@ -803,13 +801,13 @@ describe("MCP: withLogging should not leak un-redacted stack trace (#597)", () =
 
 describe("MCP: shazam_lookup file-path existence check (#598)", () => {
 	it("routes name matching file extension but not existing to symbol mode", async () => {
-		// Read the source to verify existsSync is used in the file-path branch
+		// Read the dispatcher source to verify existsSync is used in the file-path branch
 		const { readFileSync } = await import("node:fs");
 		const { resolve } = await import("node:path");
-		const src = readFileSync(resolve("mcp/tools.ts"), "utf-8");
-		// The fix adds existsSync check alongside isFilePath before routing to file-detail.
-		// #616: now also includes nameIndex check — pattern: isFilePath && !getGraph().nameIndex.has(...) && existsSync(...)
-		expect(src).toMatch(/isFilePath\s*&&\s*.*existsSync/);
+		const src = readFileSync(resolve("tools/_dispatchers.ts"), "utf-8");
+		// The dispatcher includes existsSync check alongside _isFilePath before routing to file-detail.
+		// #616: now also includes nameIndex check — pattern: _isFilePath && !nameIndex?.has(...) && existsSync(...)
+		expect(src).toMatch(/_isFilePath.*&&.*existsSync/);
 	});
 
 	it("capture-server: name like foo.ts (non-existent file) goes to symbol mode", async () => {

@@ -8,7 +8,8 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
-import { createTool, buildEnvelope, validatePathInProject } from "./_factory.js";
+import { createTool, buildEnvelope } from "./_factory.js";
+import { dispatchImpact } from "./_dispatchers.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { assessRisk } from "../core/risk.js";
 import { recordCallChain } from "./rename-state.js";
@@ -38,47 +39,8 @@ export function registerImpact(pi: ExtensionAPI): void {
 			direction: Type.Optional(Type.Union([Type.Literal("incoming"), Type.Literal("outgoing"), Type.Literal("both")])),
 		}),
 		execute(graph, params) {
-			const json = params.json ?? false;
-			const depth = Math.min(Math.max((params.depth as number) ?? 3, 1), 10);
-			const symbolName = params.symbol as string | undefined;
-
-			// Symbol mode: call chain analysis (replaces shazam_call_chain)
-			if (symbolName) {
-				if (params.files && Array.isArray(params.files) && (params.files as string[]).length > 0) {
-					return "Error: --symbol and --files are mutually exclusive. Use --symbol for call chain analysis or --files for impact analysis, not both.";
-				}
-				recordCallChain(symbolName);
-				const flat = (params.flat as boolean) ?? false;
-				const direction = (params.direction as "incoming" | "outgoing" | "both") ?? "both";
-				if (flat) {
-					const refs = _getFlatReferences(graph, symbolName, direction);
-					return json
-						? buildEnvelope("shazam_impact", getEffectiveRoot(), "ok", refs)
-						: _formatFlatReferences(refs, symbolName);
-				}
-				return json
-					? _executeCallChainJson(graph, symbolName, depth, direction)
-					: _executeCallChain(graph, symbolName, depth, direction);
-			}
-
-			// File mode: impact analysis
-			if (!params.files || !Array.isArray(params.files) || (params.files as string[]).length === 0) {
-				return "Error: either --files (array of file paths) or --symbol (symbol name) is required";
-			}
-			const files = params.files as string[];
-			// M8: Validate user-supplied file paths against project root
-			for (const f of files) {
-				if (!validatePathInProject(f, getEffectiveRoot())) {
-					return `Error: File path '${f}' is outside the project root and cannot be accessed.`;
-				}
-			}
-			return json
-				? executeImpactJson(graph, files, depth)
-				: executeImpact(graph, files, {
-						withSymbols: (params.withSymbols as boolean) ?? false,
-						compact: (params.compact as boolean) ?? false,
-						depth,
-					});
+			const projectRoot = (params.project as string) || ".";
+			return dispatchImpact(graph, params, projectRoot).text;
 		},
 	});
 }

@@ -9,6 +9,7 @@ import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { createTool, validatePathInProject } from "./_factory.js";
+import { dispatchFormat } from "./_dispatchers.js";
 import { readFileAdaptive, readFileAdaptiveAsync } from "../core/encoding.js";
 import { scanProject, getEffectiveRoot } from "../core/scanner.js";
 import { existsSync } from "node:fs";
@@ -35,21 +36,15 @@ export function registerFormat(pi: ExtensionAPI): void {
 		}),
 		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
-			const dryRun = (params.dryRun as boolean) ?? true;
-			const file = params.file as string | undefined;
-			// Issue #470: customExecute bypasses factory auto-truncation, so
-			// honor maxTokens explicitly here. JSON mode is left intact to
-			// preserve valid JSON (mirrors tools/lookup.ts:136-138).
 			const maxTokens = params.maxTokens as number | undefined;
-			const graph = scanProject(getEffectiveRoot());
-			const effectiveRoot = getEffectiveRoot();
-			let text = json
-				? await executeFormatJson(graph, effectiveRoot, { dryRun, file })
-				: await executeFormat(graph, effectiveRoot, { dryRun, file });
+			const projectRoot = getEffectiveRoot();
+			const graph = scanProject(projectRoot);
+			const result = await dispatchFormat(graph, params, projectRoot);
+			let text = result.text;
 			if (maxTokens && !json) {
 				text = truncateOutput(text.split("\n"), maxTokens);
 			}
-			return { content: [{ type: "text", text }] };
+			return { content: [{ type: "text", text }], isError: result.isError };
 		},
 	});
 }
