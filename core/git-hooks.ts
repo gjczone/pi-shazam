@@ -17,152 +17,210 @@ import { _logWarn } from "./output.js";
 import { detectProjectLanguages } from "./formatters.js";
 
 /**
- * Pre-commit hook script content.
+ * Pre-commit hook script content. Cross-platform single Node script.
+ *
+ * One codebase runs on Linux, macOS, and Windows: no `chmod` dependency and no
+ * separate `.cmd` wrapper (git only launches a file strictly named
+ * `pre-commit` with no extension). pi-shazam itself is ESM (`type: "module"`),
+ * but the hook may be auto-installed into user projects that are CommonJS.
+ * The bootstrap below tries `require` first (CJS) and falls back to dynamic
+ * `import()` (ESM), avoiding top-level `await` and `import.meta` so the same
+ * source parses cleanly in both module kinds.
+ *
  * Detects project language and runs appropriate checks:
  *   - TypeScript/JavaScript: tsc --noEmit, eslint/biome
  *   - Rust: cargo check, cargo clippy
  *   - Go: go vet, golangci-lint
  *   - Python: pyright, ruff, mypy
  * Use 'git commit --no-verify' to bypass.
+ *
+ * Runs as an independent process (git spawns it); must not import any pi-shazam
+ * internal module because the dist path is not fixed across installs.
  */
-const PRE_COMMIT_HOOK_CONTENT = `#!/bin/bash
-# shazam pre-commit hook - auto-installed by pi-shazam
-# Detects project language and runs appropriate checks.
-# Use 'git commit --no-verify' to bypass.
+const PRE_COMMIT_HOOK_CONTENT = `#!/usr/bin/env node
+// shazam pre-commit hook - auto-installed by pi-shazam
+// Cross-platform Node implementation. Use 'git commit --no-verify' to bypass.
 
-set -e
+// ESM/CJS polyglot bootstrap. In CommonJS \`require\` is defined; in ESM it is
+// undefined and we use dynamic import(). Both branches use only syntax that
+// parses in either module kind (no top-level await, no import.meta).
+let execFileSync, existsSync, resolve;
+function bootstrap() {
+  try {
+    execFileSync = require("node:child_process").execFileSync;
+    existsSync = require("node:fs").existsSync;
+    resolve = require("node:path").resolve;
+    return Promise.resolve();
+  } catch (_e) {
+    return import("node:child_process")
+      .then((m) => { execFileSync = m.execFileSync; })
+      .then(() => import("node:fs"))
+      .then((m) => { existsSync = m.existsSync; })
+      .then(() => import("node:path"))
+      .then((m) => { resolve = m.resolve; });
+  }
+}
 
-# Skip verification on non-main branches (feature branches, worktrees).
-# Only main/master commits get full pre-commit checks. Automated subagents
-# (Swarm, workflow phases) commit on feature branches and are blocked by
-# checks that require human interaction (type errors, lint failures).
-BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-if [ "$BRANCH" != "main" ] && [ "$BRANCH" != "master" ]; then
-  echo "[shazam] Skipping pre-commit verification on branch '$BRANCH' (only runs on main/master)."
-  exit 0
-fi
+bootstrap().then(main).catch((err) => {
+  console.error("[shazam] pre-commit hook bootstrap failed:", err);
+  process.exit(1);
+});
 
-echo "[shazam] Running pre-commit verification..."
+function main() {
+  function log(msg) { console.log("[shazam] " + msg); }
 
-HOOK_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-cd "$HOOK_DIR" || exit 1
+  // Resolve project root. Worktree-safe via rev-parse; the previous bash
+  // implementation used $(dirname $0)/../.. which pointed at .git, not the
+  // worktree root, on worktree checkouts.
+  let root;
+  try {
+    root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      encoding: "utf-8",
+      timeout: 5000,
+    }).trim();
+  } catch (_err) {
+    // Best-effort fallback when git invocation fails. git launches the hook
+    // with cwd set to the worktree root in normal cases.
+    root = process.cwd();
+  }
 
-# Check for staged changes
-CHANGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null | wc -l)
-if [ "$CHANGED_FILES" -eq 0 ]; then
-  echo "[shazam] No staged changes to verify."
-  exit 0
-fi
+  // Skip verification on non-main branches (feature branches, worktrees).
+  // Only main/master commits get full pre-commit checks. Automated subagents
+  // (Swarm, workflow phases) commit on feature branches and are blocked by
+  // checks that require human interaction (type errors, lint failures).
+  let branch = "";
+  try {
+    branch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      encoding: "utf-8",
+      timeout: 5000,
+    }).trim();
+  } catch (_err) {
+    // best effort; leave branch empty so the main/master check falls through
+  }
+  if (branch !== "main" && branch !== "master") {
+    log("Skipping pre-commit verification on branch '" + branch + "' (only runs on main/master).");
+    process.exit(0);
+  }
 
-echo "[shazam] Checking $CHANGED_FILES changed file(s)..."
+  log("Running pre-commit verification...");
 
-ERRORS=0
+  // Check for staged changes
+  let changedCount = 0;
+  try {
+    const out = execFileSync("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMR"], {
+      cwd: root,
+      encoding: "utf-8",
+      timeout: 5000,
+    }).trim();
+    changedCount = out ? out.split(/\\r?\\n/).filter(Boolean).length : 0;
+  } catch (err) {
+    log("Failed to read staged changes: " + (err && err.message ? err.message : String(err)));
+    process.exit(1);
+  }
+  if (changedCount === 0) {
+    log("No staged changes to verify.");
+    process.exit(0);
+  }
 
-# -- TypeScript/JavaScript ----------------------------------------------
-if [ -f "tsconfig.json" ] || [ -f "package.json" ]; then
-  # Type check
-  if command -v npx &>/dev/null; then
-    if [ -f "tsconfig.json" ]; then
-      echo "[shazam] Running TypeScript typecheck..."
-      if ! npx --no-install tsc --noEmit 2>&1; then
-        echo "[shazam] FAIL: TypeScript typecheck found errors."
-        ERRORS=$((ERRORS + 1))
-      fi
-    fi
-    
-    # Lint (eslint or biome)
-    if [ -f "eslint.config.js" ] || [ -f "eslint.config.mjs" ] || [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ]; then
-      echo "[shazam] Running eslint..."
-      if ! npx --no-install eslint . --max-warnings=0 2>&1; then
-        echo "[shazam] FAIL: eslint found issues."
-        ERRORS=$((ERRORS + 1))
-      fi
-    elif [ -f "biome.json" ] || [ -f "biome.jsonc" ]; then
-      echo "[shazam] Running biome check..."
-      if ! npx --no-install biome check . 2>&1; then
-        echo "[shazam] FAIL: biome found issues."
-        ERRORS=$((ERRORS + 1))
-      fi
-    fi
-  fi
-fi
+  log("Checking " + changedCount + " changed file(s)...");
 
-# -- Rust ---------------------------------------------------------------
-if [ -f "Cargo.toml" ]; then
-  if command -v cargo &>/dev/null; then
-    echo "[shazam] Running cargo check..."
-    if ! cargo check 2>&1; then
-      echo "[shazam] FAIL: cargo check found errors."
-      ERRORS=$((ERRORS + 1))
-    fi
-    
-    # Clippy (optional, only if installed)
-    if cargo clippy --version &>/dev/null 2>&1; then
-      echo "[shazam] Running cargo clippy..."
-      if ! cargo clippy -- -D warnings 2>&1; then
-        echo "[shazam] FAIL: clippy found warnings."
-        ERRORS=$((ERRORS + 1))
-      fi
-    fi
-  fi
-fi
+  // Probe whether a command is on PATH. Uses \`where\` on Windows and
+  // \`command -v\` on POSIX; both ship with the platform shell.
+  function hasCmd(cmd) {
+    try {
+      if (process.platform === "win32") {
+        execFileSync("where", [cmd], { encoding: "utf-8", timeout: 3000, stdio: "ignore" });
+      } else {
+        execFileSync("command", ["-v", cmd], { encoding: "utf-8", timeout: 3000, stdio: "ignore" });
+      }
+      return true;
+    } catch (_err) {
+      return false;
+    }
+  }
 
-# -- Go -----------------------------------------------------------------
-if [ -f "go.mod" ]; then
-  if command -v go &>/dev/null; then
-    echo "[shazam] Running go vet..."
-    if ! go vet ./... 2>&1; then
-      echo "[shazam] FAIL: go vet found errors."
-      ERRORS=$((ERRORS + 1))
-    fi
-    
-    # golangci-lint (optional)
-    if command -v golangci-lint &>/dev/null; then
-      echo "[shazam] Running golangci-lint..."
-      if ! golangci-lint run 2>&1; then
-        echo "[shazam] FAIL: golangci-lint found issues."
-        ERRORS=$((ERRORS + 1))
-      fi
-    fi
-  fi
-fi
+  // Run a single check command; returns true on success, false on failure.
+  // stdio pipes stdout/stderr to the inherited streams so users see the
+  // compiler/linter output inline.
+  function run(label, cmd, args, timeoutMs) {
+    log("Running " + label + "...");
+    try {
+      execFileSync(cmd, args, {
+        cwd: root,
+        encoding: "utf-8",
+        timeout: timeoutMs,
+        stdio: ["ignore", "inherit", "inherit"],
+      });
+      return true;
+    } catch (_err) {
+      log("FAIL: " + label + " found issues.");
+      return false;
+    }
+  }
 
-# -- Python -------------------------------------------------------------
-if [ -f "pyproject.toml" ] || [ -f "setup.py" ] || [ -f "requirements.txt" ]; then
-  # Type check (pyright or mypy)
-  if command -v pyright &>/dev/null; then
-    echo "[shazam] Running pyright..."
-    if ! pyright . 2>&1; then
-      echo "[shazam] FAIL: pyright found errors."
-      ERRORS=$((ERRORS + 1))
-    fi
-  elif command -v mypy &>/dev/null; then
-    echo "[shazam] Running mypy..."
-    if ! mypy . 2>&1; then
-      echo "[shazam] FAIL: mypy found errors."
-      ERRORS=$((ERRORS + 1))
-    fi
-  fi
-  
-  # Lint (ruff)
-  if command -v ruff &>/dev/null; then
-    echo "[shazam] Running ruff check..."
-    if ! ruff check . 2>&1; then
-      echo "[shazam] FAIL: ruff found issues."
-      ERRORS=$((ERRORS + 1))
-    fi
-  fi
-fi
+  let errors = 0;
 
-# -- Summary ------------------------------------------------------------
-if [ $ERRORS -gt 0 ]; then
-  echo "[shazam] FAIL: $ERRORS check(s) failed."
-  echo "[shazam] Fix errors or use 'git commit --no-verify' to bypass."
-  exit 1
-fi
+  // -- TypeScript/JavaScript ----------------------------------------------
+  if (existsSync(resolve(root, "tsconfig.json")) || existsSync(resolve(root, "package.json"))) {
+    if (hasCmd("npx")) {
+      if (existsSync(resolve(root, "tsconfig.json"))) {
+        if (!run("tsc --noEmit", "npx", ["--no-install", "tsc", "--noEmit"], 60000)) errors++;
+      }
+      if (
+        existsSync(resolve(root, "eslint.config.js")) ||
+        existsSync(resolve(root, "eslint.config.mjs")) ||
+        existsSync(resolve(root, ".eslintrc.js")) ||
+        existsSync(resolve(root, ".eslintrc.json"))
+      ) {
+        if (!run("eslint", "npx", ["--no-install", "eslint", ".", "--max-warnings=0"], 60000)) errors++;
+      } else if (existsSync(resolve(root, "biome.json")) || existsSync(resolve(root, "biome.jsonc"))) {
+        if (!run("biome check", "npx", ["--no-install", "biome", "check", "."], 60000)) errors++;
+      }
+    }
+  }
 
-echo "[shazam] PASS: All checks passed."
-exit 0
+  // -- Rust ---------------------------------------------------------------
+  if (existsSync(resolve(root, "Cargo.toml")) && hasCmd("cargo")) {
+    if (!run("cargo check", "cargo", ["check"], 120000)) errors++;
+    let hasClippy = false;
+    try {
+      execFileSync("cargo", ["clippy", "--version"], { encoding: "utf-8", timeout: 5000, stdio: "ignore" });
+      hasClippy = true;
+    } catch (_err) {
+      // clippy not installed -- skip silently
+    }
+    if (hasClippy && !run("cargo clippy", "cargo", ["clippy", "--", "-D", "warnings"], 120000)) errors++;
+  }
+
+  // -- Go -----------------------------------------------------------------
+  if (existsSync(resolve(root, "go.mod")) && hasCmd("go")) {
+    if (!run("go vet", "go", ["vet", "./..."], 60000)) errors++;
+    if (hasCmd("golangci-lint") && !run("golangci-lint", "golangci-lint", ["run"], 60000)) errors++;
+  }
+
+  // -- Python -------------------------------------------------------------
+  if (
+    existsSync(resolve(root, "pyproject.toml")) ||
+    existsSync(resolve(root, "setup.py")) ||
+    existsSync(resolve(root, "requirements.txt"))
+  ) {
+    if (hasCmd("pyright")) {
+      if (!run("pyright", "pyright", ["."], 60000)) errors++;
+    } else if (hasCmd("mypy")) {
+      if (!run("mypy", "mypy", ["."], 60000)) errors++;
+    }
+    if (hasCmd("ruff") && !run("ruff check", "ruff", ["check", "."], 60000)) errors++;
+  }
+
+  // -- Summary ------------------------------------------------------------
+  if (errors > 0) {
+    log("FAIL: " + errors + " check(s) failed.");
+    log("Fix errors or use 'git commit --no-verify' to bypass.");
+    process.exit(1);
+  }
+  log("PASS: All checks passed.");
+  process.exit(0);
+}
 `;
 
 /**
@@ -255,7 +313,12 @@ export function installPreCommitHook(projectRoot: string): string {
 	}
 
 	writeFileSync(hookPath, PRE_COMMIT_HOOK_CONTENT, "utf-8");
-	chmodSync(hookPath, 0o755);
+	// Executable bit is meaningful only on POSIX. The Node hook on Windows is
+	// launched by git via the `#!/usr/bin/env node` shebang handler; skip the
+	// chmod (which is a silent no-op there) so the install path is unified.
+	if (process.platform !== "win32") {
+		chmodSync(hookPath, 0o755);
+	}
 
 	return hookPath;
 }

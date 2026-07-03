@@ -31,6 +31,11 @@ vi.mock("node:fs", async (importOriginal) => {
 			}
 			return actual.readFileSync(...args);
 		}),
+		// #604: Track chmodSync calls so the win32 guard can be asserted.
+		// installPreCommitHook's chmod call routes through this spy; the real
+		// chmod behavior is irrelevant for these tests (no assertions rely on
+		// the executable bit being set on the temp hook file).
+		chmodSync: vi.fn(),
 	};
 });
 
@@ -56,7 +61,7 @@ vi.mock("node:child_process", async (importOriginal) => {
 // Import AFTER mocks are set up.
 // readFileSync is mocked but passes through to real impl for non-race paths,
 // so it can be used to verify file contents in assertions.
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, chmodSync } from "node:fs";
 import { installPreCommitHook, isPreCommitHookInstalled, removePreCommitHook } from "../core/git-hooks.js";
 
 let tmpDir: string;
@@ -65,6 +70,7 @@ let hooksDir: string;
 beforeEach(() => {
 	racePaths.clear();
 	errorCodeMap.clear();
+	vi.mocked(chmodSync).mockClear();
 	tmpDir = mkdtempSync(join(tmpdir(), "pi-shazam-githooks-"));
 	hooksDir = join(tmpDir, ".git", "hooks");
 	mkdirSync(hooksDir, { recursive: true });
@@ -221,5 +227,55 @@ describe("non-ENOENT error handling (#534)", () => {
 		const result = removePreCommitHook(tmpDir);
 		expect(result).toBe(true);
 		expect(readFileSync(hookPath, "utf-8")).toContain("shazam hook");
+	});
+});
+
+describe("PRE_COMMIT_HOOK_CONTENT: cross-platform Node script (#604)", () => {
+	it("writes a #!/usr/bin/env node shebang, not bash", () => {
+		const hookPath = installPreCommitHook(tmpDir);
+		const content = readFileSync(hookPath, "utf-8");
+		expect(content.startsWith("#!/usr/bin/env node")).toBe(true);
+		expect(content).not.toContain("#!/bin/bash");
+	});
+
+	it("contains the shazam marker so isPreCommitHookInstalled still detects it", () => {
+		const hookPath = installPreCommitHook(tmpDir);
+		const content = readFileSync(hookPath, "utf-8");
+		expect(content).toContain("shazam");
+		expect(isPreCommitHookInstalled(tmpDir)).toBe(true);
+	});
+
+	it("resolves project root via `git rev-parse --show-toplevel` (worktree-safe)", () => {
+		const hookPath = installPreCommitHook(tmpDir);
+		const content = readFileSync(hookPath, "utf-8");
+		expect(content).toContain('"--show-toplevel"');
+		// The old bash version used `$(dirname "$0")/../..` which pointed at
+		// `.git`, not the worktree root, on worktree checkouts.
+		expect(content).not.toContain('dirname "$0"');
+	});
+
+	it("uses execFileSync for every child call, no shell pipelines", () => {
+		const hookPath = installPreCommitHook(tmpDir);
+		const content = readFileSync(hookPath, "utf-8");
+		expect(content).toContain("execFileSync(");
+		expect(content).not.toContain("| tail");
+		expect(content).not.toContain("2>/dev/null");
+	});
+
+	it("skips chmodSync on win32 (Node hook is launched via shebang, no exec bit needed)", () => {
+		const originalPlatform = process.platform;
+		Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+		try {
+			installPreCommitHook(tmpDir);
+			expect(chmodSync).not.toHaveBeenCalled();
+		} finally {
+			Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
+		}
+	});
+
+	it("applies chmodSync on POSIX platforms", () => {
+		if (process.platform === "win32") return; // skip on win32 hosts
+		installPreCommitHook(tmpDir);
+		expect(chmodSync).toHaveBeenCalled();
 	});
 });
