@@ -49,6 +49,7 @@ import { getNextForTool, formatNextSection, truncateOutput, estimateTokens, _log
 import { getLspManager } from "./_context.js";
 import { lspCodeActions } from "./lsp_enrich.js";
 import { createTool } from "./_factory.js";
+import { dispatchVerify } from "./_dispatchers.js";
 import { setLastToolTiming } from "./_context.js";
 import { uriToPath } from "../lsp/client.js";
 
@@ -73,45 +74,14 @@ export function registerVerify(pi: ExtensionAPI): void {
 		}),
 		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
-			const maxTokens = params.maxTokens;
+			const maxTokens = params.maxTokens as number | undefined;
 			const projectRoot = getEffectiveRoot();
-			// Force fresh graph for verify. Cache is useful for read tools
-			// but verify must always see the current file state.
-			const { resetCache } = await import("../core/scanner.js");
-			resetCache();
-			const options: VerifyOptions = {
-				quick: (params.quick as boolean) ?? false,
-				lspOnly: (params.lspOnly as boolean) ?? false,
-				preCommit: (params.preCommit as boolean) ?? false,
-				maxFiles: (params.maxFiles as number) ?? 100,
-				noCascade: (params.noCascade as boolean) ?? false,
-				noSecrets: (params.noSecrets as boolean) ?? false,
-			};
 
 			const t0 = Date.now();
-			let text: string;
-			if (json) {
-				const result = await executeVerifyJsonAsync(projectRoot, options);
-				const envelope = {
-					schema_version: "1.0",
-					command: "verify",
-					project: projectRoot,
-					status: "ok",
-					result,
-				};
-				text = JSON.stringify(envelope);
-				// Issue #470: verify JSON mode must honor maxTokens. customExecute
-				// bypasses factory auto-truncation, so cap lspDiagnostics here when
-				// the serialized JSON exceeds the token budget. Produces valid JSON
-				// (array slice, not string slice) with a lspDiagnosticsTruncated count.
-				if (capVerifyDiagnostics(result, text, maxTokens as number | undefined)) {
-					text = JSON.stringify(envelope);
-				}
-			} else {
-				text = await executeVerifyTextAsync(projectRoot, options);
-				if (maxTokens) {
-					text = truncateOutput(text.split("\n"), maxTokens as number);
-				}
+			const result = await dispatchVerify(undefined, params, projectRoot);
+			let text = result.text;
+			if (maxTokens && !json) {
+				text = truncateOutput(text.split("\n"), maxTokens);
 			}
 			const totalMs = Date.now() - t0;
 			setLastToolTiming({ execute: totalMs });

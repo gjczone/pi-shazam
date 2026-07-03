@@ -21,6 +21,7 @@ import { getLspManager } from "./_context.js";
 import { lspDocumentSymbols, lspCodeLens, lspImplementation, ensureFileOpened } from "./lsp_enrich.js";
 import type { DocumentSymbol } from "vscode-languageserver-protocol";
 import { createTool, buildEnvelope, validatePathInProject } from "./_factory.js";
+import { dispatchLookup } from "./_dispatchers.js";
 import { setLastToolTiming } from "./_context.js";
 import { statSync } from "node:fs";
 import { readFileAdaptive } from "../core/encoding.js";
@@ -91,8 +92,7 @@ export function registerLookup(pi: ExtensionAPI): void {
 		}),
 		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
-			const maxTokens = params.maxTokens;
-			const mode = (params.mode as string) ?? "default";
+			const maxTokens = params.maxTokens as number | undefined;
 			const name = typeof params.name === "string" ? params.name : "";
 			if (!name) {
 				return { content: [{ type: "text", text: "Error: name parameter is required" }] };
@@ -103,98 +103,22 @@ export function registerLookup(pi: ExtensionAPI): void {
 			const scanMs = Date.now() - tScan;
 			const laps: Record<string, number> = { scanProject: scanMs };
 
-			// Path traversal guard: reject file paths outside project root.
-			// Skip guard when the name matches a known symbol (fix #497) —
-			// symbols like "config.json" would fail realpathSync but are valid lookups.
 			const projectRoot = getEffectiveRoot();
-			if (_isFilePath(name) && !graph.nameIndex.has(name) && !validatePathInProject(name, projectRoot)) {
-				const text = buildEnvelope("shazam_lookup", projectRoot, "error", {
-					error: `Path '${name}' is outside the project root and cannot be read.`,
-				});
-				return { content: [{ type: "text", text }] };
-			}
-			const fileParam = params.file as string | undefined;
-			if (fileParam && !validatePathInProject(fileParam, projectRoot)) {
-				const text = buildEnvelope("shazam_lookup", projectRoot, "error", {
-					error: `File path '${fileParam}' is outside the project root.`,
-				});
-				return { content: [{ type: "text", text }] };
-			}
-
-			let text: string;
-
-			// When input looks like a file path, check if a matching symbol exists
-			// first. Symbols named like files (e.g., "config.json" as a const) should
-			// be looked up as symbols, not file paths (fix #497).
-			if (_isFilePath(name) && !graph.nameIndex.has(name)) {
-				text = json
-					? _executeFileDetailJson(graph, name)
-					: await _executeFileDetailAsync(graph, name, Boolean(json), maxTokens as number | undefined);
-			} else if (mode === "state") {
-				text = _executeStateMap(graph, name);
-				if (json) {
-					text = buildEnvelope("shazam_lookup", projectRoot, "ok", { symbol: name, mode: "state", text });
-				}
-			} else if (mode === "search") {
-				const results = _executeSearch(graph, name);
-				if (json) {
-					text = buildEnvelope("shazam_lookup", projectRoot, "ok", {
-						mode: "search",
-						query: name,
-						results,
-					});
-				} else {
-					text = _formatSearchResults(name, results);
-				}
-			} else {
-				// Default: symbol lookup. If not found and input looks like natural
-				// language (multi-word concept query), auto-fallback to search (#490).
-				const matches = _findSymbols(graph, name, params.file as string | undefined);
-				if (matches.length === 0 && _looksLikeNaturalLanguage(name)) {
-					const results = _executeSearch(graph, name);
-					if (json) {
-						text = buildEnvelope("shazam_lookup", projectRoot, "ok", {
-							mode: "search",
-							query: name,
-							results,
-						});
-					} else {
-						text = _formatSearchResults(name, results);
-					}
-				} else {
-					text = json
-						? _executeSymbolJson(graph, name, params.file as string | undefined)
-						: await _executeLookupAsync(
-								graph,
-								name,
-								params.file as string | undefined,
-								(params.direction as "both" | "supertypes" | "subtypes") ?? "both",
-								(params.showCallbacks as boolean) ?? false,
-							);
-				}
-			}
-
+			const result = await dispatchLookup(graph, params, projectRoot);
+			let text = result.text;
 			if (maxTokens && !json) {
-				text = truncateOutput(text.split("\n"), maxTokens as number);
+				text = truncateOutput(text.split("\n"), maxTokens);
 			}
 			laps.formatOutput = Date.now() - tScan - Object.values(laps).reduce((a, b) => a + b, 0);
 			setLastToolTiming(laps);
-			return { content: [{ type: "text", text }] };
+			return { content: [{ type: "text", text }], isError: result.isError };
 		},
 	});
 }
 
 // -- Dispatch helper ------------------------------------------------------
 
-function _isFilePath(name: string): boolean {
-	return (
-		name.includes("/") ||
-		name.includes("\\") ||
-		/\.(ts|tsx|js|jsx|py|go|rs|dart|json|yaml|yml|mjs|cjs|rb|java|cs|c|cpp|h|hpp|css|scss|less|sh|bash|toml|html|htm|md)$/.test(
-			name,
-		)
-	);
-}
+// _isFilePath moved to tools/_dispatchers.ts (shared between Pi and MCP).
 
 // -- Symbol lookup (from symbol.ts + hover.ts + type_hierarchy.ts) --------
 

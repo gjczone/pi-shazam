@@ -11,6 +11,7 @@ import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
 import { createTool } from "./_factory.js";
 import { buildEnvelope } from "./_factory.js";
+import { dispatchChanges } from "./_dispatchers.js";
 import { findOrphans } from "../core/filter.js";
 import { getGraphEdgeCount } from "../core/graph.js";
 import { diffFromBaseline } from "../core/baseline.js";
@@ -29,9 +30,8 @@ export function registerChanges(pi: ExtensionAPI): void {
 		the blast radius before running full verification.`,
 		params: Type.Object({}),
 		execute(graph, params) {
-			const json = params.json ?? false;
 			const projectRoot = (params.project as string) || ".";
-			return json ? executeChangesJson(graph, projectRoot) : executeChanges(graph, projectRoot);
+			return dispatchChanges(graph, params, projectRoot).text;
 		},
 	});
 }

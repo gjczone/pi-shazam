@@ -1,41 +1,28 @@
 /**
  * pi-shazam MCP tools -- register all analysis tools as MCP tools.
- * Each handler is wrapped with withLogging() for usage analytics.
  *
- * Updated for tool consolidation 14->7 (issues #362, #497 — removed find_tests, safe_delete).
+ * Each handler delegates to the shared dispatcher in tools/_dispatchers.ts.
+ * The dispatcher is the single source of truth for validation, routing,
+ * and mode dispatch. MCP handlers only handle: logging, truncation,
+ * and content envelope wrapping.
+ *
+ * Refactored from ~450 lines to ~100 lines (issue #618).
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RepoGraph } from "../core/graph.js";
-import { executeOverview, executeOverviewJson } from "../tools/overview.js";
 import {
-	executeImpact,
-	executeImpactJson,
-	executeCallChain,
-	executeCallChainJson,
-	getFlatReferences,
-	formatFlatReferences,
-} from "../tools/impact.js";
-import {
-	executeLookupAsync,
-	executeFileDetailAsync,
-	executeFileDetailJson,
-	executeStateMap,
-	_executeSearch,
-	_formatSearchResults,
-	_looksLikeNaturalLanguage,
-	_findSymbols,
-	_executeSymbolJson,
-} from "../tools/lookup.js";
-import { executeFormat, executeFormatJson } from "../tools/format.js";
-import { executeVerifyTextAsync, executeVerifyJsonAsync, capVerifyDiagnostics } from "../tools/verify.js";
-import { executeChanges, executeChangesJson } from "../tools/changes.js";
-import { executeRenameSymbol, formatRenameResult } from "../tools/rename_symbol.js";
-import { hasCallChainChecked, recordCallChain } from "../tools/rename-state.js";
+	dispatchOverview,
+	dispatchLookup,
+	dispatchImpact,
+	dispatchVerify,
+	dispatchChanges,
+	dispatchFormat,
+	dispatchRenameSymbol,
+	type DispatchResult,
+} from "../tools/_dispatchers.js";
 
 import { join } from "node:path";
-import { existsSync } from "node:fs";
 import { getToolDefinition } from "../tools/definitions.js";
-import { validatePathInProject, buildEnvelope } from "../tools/_factory.js";
 import { truncateOutput } from "../core/output.js";
 import { redact } from "../core/redact.js";
 import { AUDIT_LOG_DIR, ts, writeJsonl } from "../core/audit-log.js";
@@ -95,356 +82,54 @@ function withLogging(
 	};
 }
 
+// -- Thin MCP wrapper -------------------------------------------------
+
+type DispatcherFn = (
+	graph: RepoGraph,
+	params: Record<string, unknown>,
+	projectRoot: string,
+) => DispatchResult | Promise<DispatchResult>;
+
+/**
+ * Register a tool on the MCP server using a shared dispatcher.
+ * The dispatcher handles all validation and dispatch logic.
+ * This wrapper handles: logging, truncation, and content envelope wrapping.
+ */
+function registerMcpTool(
+	server: McpServer,
+	name: string,
+	dispatch: DispatcherFn,
+	getGraph: () => RepoGraph,
+	projectRoot: string,
+): void {
+	const def = getToolDefinition(name)!;
+	server.registerTool(
+		name,
+		{
+			description: def.description,
+			inputSchema: def.zodParams,
+		},
+		withLogging(name, async (args) => {
+			const result = await dispatch(getGraph(), args, projectRoot);
+			let text = result.text;
+			if (typeof args.maxTokens === "number" && (args.maxTokens as number) > 0 && !args.json) {
+				text = truncateOutput(text.split("\n"), args.maxTokens as number);
+			}
+			const out: Record<string, unknown> = { content: [{ type: "text" as const, text }] };
+			if (result.isError) out.isError = true;
+			return out as Content;
+		}),
+	);
+}
+
 // -- Registration -------------------------------------------------
 
 export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, projectRoot: string): void {
-	// shazam_overview (includes hotspots)
-	const overviewDef = getToolDefinition("shazam_overview")!;
-	server.registerTool(
-		"shazam_overview",
-		{
-			description: overviewDef.description,
-			inputSchema: overviewDef.zodParams,
-		},
-		withLogging("shazam_overview", async ({ filter, maxTokens, json }) => {
-			let text = json
-				? executeOverviewJson(getGraph(), projectRoot, filter as string | undefined)
-				: executeOverview(getGraph(), projectRoot, filter as string | undefined);
-			if (typeof maxTokens === "number" && maxTokens > 0 && !json) text = truncateOutput(text.split("\n"), maxTokens);
-			return { content: [{ type: "text", text }] };
-		}),
-	);
-
-	// shazam_lookup (replaces symbol, file_detail, hover, type_hierarchy)
-	const lookupDef = getToolDefinition("shazam_lookup")!;
-	server.registerTool(
-		"shazam_lookup",
-		{
-			description: lookupDef.description,
-			inputSchema: lookupDef.zodParams,
-		},
-		withLogging("shazam_lookup", async ({ name, mode, file, showCallbacks, direction, maxTokens, json }) => {
-			const nameStr = name as string;
-			if (!nameStr) {
-				return { content: [{ type: "text", text: "Error: name parameter is required" }], isError: true };
-			}
-			const isFilePath =
-				nameStr.includes("/") ||
-				nameStr.includes("\\") ||
-				/\.(ts|tsx|js|jsx|py|go|rs|dart|json|yaml|yml|mjs|cjs|rb|java|cs|c|cpp|h|hpp|css|scss|less|sh|bash|toml|html|htm|md)$/.test(
-					nameStr,
-				);
-			// Path traversal guard: reject file paths outside project root (issue #395).
-			// #616: check nameIndex before validatePathInProject — symbols that
-			// look like file paths (e.g. "config.json") must not be rejected when
-			// they exist in the graph (matching Pi native behavior, issue #497).
-			if (isFilePath && !getGraph().nameIndex?.has(nameStr) && !validatePathInProject(nameStr, projectRoot)) {
-				return {
-					content: [{ type: "text", text: `Error: Path '${nameStr}' is outside the project root and cannot be read.` }],
-					isError: true,
-				};
-			}
-			const fileParam = file as string | undefined;
-			if (fileParam && !validatePathInProject(fileParam, projectRoot)) {
-				return {
-					content: [{ type: "text", text: `Error: File path '${fileParam}' is outside the project root.` }],
-					isError: true,
-				};
-			}
-			let text: string;
-			// #598: Verify file-path mode with existsSync, not just regex.
-			// A symbol name like "foo.ts" matches the file-extension regex
-			// but is not a real file on disk -- it must fall through to
-			// symbol-lookup mode instead of returning a misleading
-			// "file not found" from executeFileDetailAsync.
-			// #616: also check nameIndex first — when a name exists both as
-			// a symbol in the graph AND as a file on disk, Pi native routes to
-			// symbol mode (symbol-first heuristic). Match that behavior.
-			if (isFilePath && !getGraph().nameIndex?.has(nameStr) && existsSync(join(projectRoot, nameStr))) {
-				text = json ? executeFileDetailJson(getGraph(), nameStr) : await executeFileDetailAsync(getGraph(), nameStr);
-			} else if (mode === "state") {
-				text = executeStateMap(getGraph(), nameStr);
-				if (json) {
-					text = buildEnvelope("shazam_lookup", projectRoot, "ok", { symbol: nameStr, mode: "state", text });
-				}
-			} else if (mode === "search") {
-				const results = _executeSearch(getGraph(), nameStr);
-				if (json) {
-					text = buildEnvelope("shazam_lookup", projectRoot, "ok", {
-						mode: "search",
-						query: nameStr,
-						results,
-					});
-				} else {
-					text = _formatSearchResults(nameStr, results);
-				}
-			} else {
-				const matches = _findSymbols(getGraph(), nameStr, fileParam);
-				if (matches.length === 0 && _looksLikeNaturalLanguage(nameStr)) {
-					const results = _executeSearch(getGraph(), nameStr);
-					if (json) {
-						text = buildEnvelope("shazam_lookup", projectRoot, "ok", {
-							mode: "search",
-							query: nameStr,
-							results,
-						});
-					} else {
-						text = _formatSearchResults(nameStr, results);
-					}
-				} else {
-					text = json
-						? _executeSymbolJson(getGraph(), nameStr, fileParam)
-						: await executeLookupAsync(
-								getGraph(),
-								nameStr,
-								file as string | undefined,
-								(direction as "both" | "supertypes" | "subtypes") ?? "both",
-								(showCallbacks as boolean) ?? false,
-							);
-				}
-			}
-			if (typeof maxTokens === "number" && maxTokens > 0 && !json) text = truncateOutput(text.split("\n"), maxTokens);
-			return { content: [{ type: "text", text }] };
-		}),
-	);
-
-	// shazam_impact (includes call_chain)
-	const impactDef = getToolDefinition("shazam_impact")!;
-	server.registerTool(
-		"shazam_impact",
-		{
-			description: impactDef.description,
-			inputSchema: impactDef.zodParams,
-		},
-		withLogging(
-			"shazam_impact",
-			async ({ files, symbol, withSymbols, compact, depth, flat, direction, maxTokens, json }) => {
-				const dir = (direction as "incoming" | "outgoing" | "both") ?? "both";
-				const d = Math.min(Math.max((depth as number) ?? 3, 1), 10);
-
-				// #616: reject when both --symbol and --files are provided.
-				// Pi native returns an explicit error; MCP previously silently
-				// took the --symbol path and discarded --files without warning.
-				const filesArr = files as string[] | undefined;
-				if (symbol && filesArr && filesArr.length > 0) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: "Error: --symbol and --files are mutually exclusive. Use --symbol for call chain analysis or --files for impact analysis, not both.",
-							},
-						],
-						isError: true,
-					};
-				}
-
-				// Symbol mode: call chain analysis
-				if (symbol) {
-					// #447: Record that impact --symbol was run so the rename gate is satisfied
-					recordCallChain(symbol as string);
-					if (flat) {
-						const refs = getFlatReferences(getGraph(), symbol as string, dir);
-						let text = json
-							? buildEnvelope("shazam_impact", projectRoot, "ok", refs)
-							: formatFlatReferences(refs, symbol as string);
-						if (typeof maxTokens === "number" && maxTokens > 0 && !json)
-							text = truncateOutput(text.split("\n"), maxTokens);
-						return { content: [{ type: "text", text }] };
-					}
-					let text = json
-						? executeCallChainJson(getGraph(), symbol as string, Math.min(d, 10), dir)
-						: executeCallChain(getGraph(), symbol as string, Math.min(d, 10), dir);
-					if (typeof maxTokens === "number" && maxTokens > 0 && !json)
-						text = truncateOutput(text.split("\n"), maxTokens);
-					return { content: [{ type: "text", text }] };
-				}
-
-				// File mode: impact analysis
-				if (!filesArr || filesArr.length === 0) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: "Error: either --symbol (for call chain) or --files (for impact analysis) is required",
-							},
-						],
-						isError: true,
-					};
-				}
-				// #445: Validate user-supplied file paths against project root (path-traversal guard)
-				for (const f of filesArr) {
-					if (!validatePathInProject(f, projectRoot)) {
-						return {
-							content: [
-								{ type: "text", text: `Error: File path '${f}' is outside the project root and cannot be accessed.` },
-							],
-							isError: true,
-						};
-					}
-				}
-				let text = json
-					? executeImpactJson(getGraph(), filesArr, d)
-					: executeImpact(getGraph(), filesArr, {
-							withSymbols: (withSymbols as boolean) ?? false,
-							compact: (compact as boolean) ?? false,
-							depth: d,
-						});
-				if (typeof maxTokens === "number" && maxTokens > 0 && !json) text = truncateOutput(text.split("\n"), maxTokens);
-				return { content: [{ type: "text", text }] };
-			},
-		),
-	);
-
-	// shazam_verify
-	const verifyDef = getToolDefinition("shazam_verify")!;
-	server.registerTool(
-		"shazam_verify",
-		{
-			description: verifyDef.description,
-			inputSchema: verifyDef.zodParams,
-		},
-		withLogging(
-			"shazam_verify",
-			async ({ quick, lspOnly, preCommit, maxFiles, noCascade, noSecrets, maxTokens, json }) => {
-				// #616: reset scanner cache before verify — Pi native forces a
-				// fresh scan because verify must always see current file state.
-				// MCP is long-lived; cache from prior tool calls would stale results.
-				const { resetCache } = await import("../core/scanner.js");
-				resetCache();
-				const opts = {
-					quick: quick as boolean,
-					lspOnly: lspOnly as boolean,
-					preCommit: preCommit as boolean,
-					maxFiles: (maxFiles as number | undefined) ?? 100,
-					noCascade: noCascade as boolean,
-					noSecrets: noSecrets as boolean,
-				};
-				if (json) {
-					const result = await executeVerifyJsonAsync(projectRoot, opts);
-					const envelope = {
-						schema_version: "1.0",
-						command: "verify",
-						project: projectRoot,
-						status: "ok",
-						result,
-					};
-					let text = JSON.stringify(envelope);
-					// #616: cap lspDiagnostics array when JSON output exceeds
-					// maxTokens, matching Pi native capVerifyDiagnostics behavior.
-					// This guarantees valid JSON output even with large diagnostic sets.
-					if (typeof maxTokens === "number" && maxTokens > 0) {
-						if (capVerifyDiagnostics(result, text, maxTokens)) {
-							text = JSON.stringify(envelope);
-						}
-					}
-					return { content: [{ type: "text", text }] };
-				}
-				let text = await executeVerifyTextAsync(projectRoot, opts);
-				if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
-				return { content: [{ type: "text", text }] };
-			},
-		),
-	);
-
-	// shazam_changes (new)
-	const changesDef = getToolDefinition("shazam_changes")!;
-	server.registerTool(
-		"shazam_changes",
-		{
-			description: changesDef.description,
-			inputSchema: changesDef.zodParams,
-		},
-		withLogging("shazam_changes", async ({ maxTokens, json }) => {
-			let text: string;
-			if (json) {
-				text = executeChangesJson(getGraph(), projectRoot);
-			} else {
-				text = executeChanges(getGraph(), projectRoot);
-			}
-			if (typeof maxTokens === "number" && maxTokens > 0) text = truncateOutput(text.split("\n"), maxTokens);
-			return { content: [{ type: "text", text }] };
-		}),
-	);
-
-	// shazam_format (replaces shazam_fix)
-	const formatDef = getToolDefinition("shazam_format")!;
-	server.registerTool(
-		"shazam_format",
-		{
-			description: formatDef.description,
-			inputSchema: formatDef.zodParams,
-		},
-		withLogging("shazam_format", async ({ dryRun, file, maxTokens, json }) => {
-			// #465: validate user-supplied file path against project root.
-			// shazam_format was the only file-accepting MCP handler that
-			// skipped validatePathInProject, allowing formatters (--write)
-			// to modify files outside the configured project root.
-			if (file && !validatePathInProject(file as string, projectRoot)) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error: file path '${file}' escapes project root.`,
-						},
-					],
-					isError: true,
-				};
-			}
-			let text = json
-				? await executeFormatJson(getGraph(), projectRoot, {
-						dryRun: (dryRun as boolean) ?? true,
-						file: file as string | undefined,
-					})
-				: await executeFormat(getGraph(), projectRoot, {
-						dryRun: (dryRun as boolean) ?? true,
-						file: file as string | undefined,
-					});
-			if (typeof maxTokens === "number" && maxTokens > 0 && !json) text = truncateOutput(text.split("\n"), maxTokens);
-			return { content: [{ type: "text", text }] };
-		}),
-	);
-
-	// shazam_rename_symbol
-	const renameSymbolDef = getToolDefinition("shazam_rename_symbol")!;
-	server.registerTool(
-		"shazam_rename_symbol",
-		{
-			description: renameSymbolDef.description,
-			inputSchema: renameSymbolDef.zodParams,
-		},
-		withLogging("shazam_rename_symbol", async ({ symbol, newName, dryRun, maxTokens, json }) => {
-			const effectiveDryRun = (dryRun as boolean) ?? true;
-			// Enforce impact-check safety gate: block non-dry-run unless shazam_impact --symbol was run
-			if (!effectiveDryRun && !hasCallChainChecked(symbol as string)) {
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: [
-								"[BLOCKED] Rename aborted - shazam_impact --symbol has not been run for this symbol.",
-								"",
-								`Before renaming \`${symbol as string}\`, you MUST run:`,
-								`  shazam_impact --symbol "${symbol as string}" --direction both`,
-								"",
-								"Review all callers and callees, then re-invoke shazam_rename_symbol with dryRun=false.",
-							].join("\n"),
-						},
-					],
-					isError: true,
-				};
-			}
-			const result = await executeRenameSymbol(
-				getGraph(),
-				symbol as string,
-				newName as string,
-				effectiveDryRun,
-				projectRoot,
-			);
-			let text = json
-				? buildEnvelope("shazam_rename_symbol", projectRoot, "ok", result)
-				: formatRenameResult(result, symbol as string, newName as string, effectiveDryRun);
-			if (typeof maxTokens === "number" && maxTokens > 0 && !json) text = truncateOutput(text.split("\n"), maxTokens);
-			return { content: [{ type: "text", text }] };
-		}),
-	);
+	registerMcpTool(server, "shazam_overview", dispatchOverview, getGraph, projectRoot);
+	registerMcpTool(server, "shazam_lookup", dispatchLookup, getGraph, projectRoot);
+	registerMcpTool(server, "shazam_impact", dispatchImpact, getGraph, projectRoot);
+	registerMcpTool(server, "shazam_verify", dispatchVerify as DispatcherFn, getGraph, projectRoot);
+	registerMcpTool(server, "shazam_changes", dispatchChanges, getGraph, projectRoot);
+	registerMcpTool(server, "shazam_format", dispatchFormat as DispatcherFn, getGraph, projectRoot);
+	registerMcpTool(server, "shazam_rename_symbol", dispatchRenameSymbol as DispatcherFn, getGraph, projectRoot);
 }

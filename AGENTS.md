@@ -255,6 +255,7 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 ## Change Map
 
 - **Adding a new tool**: Create `tools/<name>.ts` with `register*` function using `createTool()` from `tools/_factory.ts` -> import and call in `index.ts` -> append Next recommendation rules to `NEXT_RULES` in `core/output.ts` -> sync in `mcp/tools.ts` and `mcp/README.md` -> add docs to `SKILL.md` -> update `README.md` if user-facing tool list changed.
+- **Modifying an existing tool handler**: When you change the dispatch logic, parameter validation, path guards, error handling, or routing in any `tools/*.ts` `register*` or `execute*` function, you MUST mirror the change in the corresponding MCP handler in `mcp/tools.ts`. After both sides are updated, run `bash scripts/check-mcp-parity.sh` to confirm parity. See #616 and #618 for the root cause of drift.
 - **Adding a new hook**: Create `hooks/<name>.ts` with `register*` calling `pi.on(...)` -> import and call in `index.ts`. Hooks listen to lifecycle events (`tool_execution_start`, `before_agent_start`, etc.); they do not return tools to LLM.
 - **Adding a new language**: Add grammar to `core/treesitter.ts` EXT_TO_LANG map -> add tree-sitter query in `core/treesitter-queries.ts` -> add LSP server config in `lsp/servers.ts`.
 - **Wiring a shared utility**: Add function to appropriate `core/*.ts` -> export -> import in consumers from `../core/<file>.js`. `core/` is the only valid home for cross-layer utilities.
