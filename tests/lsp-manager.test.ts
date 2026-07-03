@@ -374,7 +374,9 @@ describe("_trustedUserCandidates Windows paths (#582)", () => {
 	it("includes go/bin/<cmd>.exe candidate on win32 (#606)", async () => {
 		const { _trustedUserCandidates } = await import("../lsp/manager.js");
 		Object.defineProperty(process, "platform", { value: "win32" });
-		// Create a temp home dir with go/bin/gopls.exe so isExecutable finds it
+		// Create a temp home dir with go/bin/gopls.exe so isExecutable finds it.
+		// Set both HOME (POSIX) and USERPROFILE (win32) — homedir() uses the
+		// native-platform env var regardless of process.platform mock.
 		const tmpHome = mkdtempSync(join(tmpdir(), "pi-shazam-606-"));
 		const goBinDir = join(tmpHome, "go", "bin");
 		mkdirSync(goBinDir, { recursive: true });
@@ -382,7 +384,9 @@ describe("_trustedUserCandidates Windows paths (#582)", () => {
 		writeFileSync(goExePath, "dummy");
 		chmodSync(goExePath, 0o755);
 		const origHome = process.env.HOME;
+		const origUserProfile = process.env.USERPROFILE;
 		process.env.HOME = tmpHome;
+		process.env.USERPROFILE = tmpHome;
 		try {
 			const candidates = _trustedUserCandidates("gopls");
 			const hasGoExe = candidates.some((c) => c.includes("go") && c.includes("bin") && c.endsWith("gopls.exe"));
@@ -391,6 +395,8 @@ describe("_trustedUserCandidates Windows paths (#582)", () => {
 			rmSync(tmpHome, { recursive: true, force: true });
 			if (origHome !== undefined) process.env.HOME = origHome;
 			else delete process.env.HOME;
+			if (origUserProfile !== undefined) process.env.USERPROFILE = origUserProfile;
+			else delete process.env.USERPROFILE;
 		}
 	});
 });
