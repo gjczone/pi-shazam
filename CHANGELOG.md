@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] - 2026-07-03
+
+### Added
+
+- **Shared MCP/Pi dispatch layer (#618)**: All 7 tools now share a single dispatch
+  implementation in `tools/_dispatchers.ts`. Pi and MCP handlers call the same
+  dispatcher functions, eliminating the dual-maintenance that caused 8 behavioral
+  differences in #616. `mcp/tools.ts` reduced from ~450 lines to ~100 lines.
+
+- **MCP-Pi parity contract tests (#619)**: 19 contract tests verify that Pi and
+  MCP tool handlers produce identical output for the same input. Covers all 7
+  tools with key scenarios: known symbols, file paths, error paths, JSON mode,
+  path traversal rejection, and mutual exclusion.
+
+- **Static parity check script (#620)**: `scripts/check-mcp-parity.sh` runs 10
+  grep-based heuristic checks to detect MCP-Pi drift. Wired into `scripts/ci.sh`
+  as a non-blocking warning.
+
+- **AGENTS.md sync rule**: Change Map now includes "Modifying an existing tool
+  handler" — when Pi dispatch logic changes, the MCP handler must be mirrored.
+
+### Changed
+
+- **Pi tools refactored**: `tools/overview.ts`, `lookup.ts`, `impact.ts`,
+  `verify.ts`, `changes.ts`, `format.ts`, `rename_symbol.ts` now delegate
+  dispatch logic to `tools/_dispatchers.ts`.
+
+- **Tests updated**: Source-code pattern checks in `tests/mcp.test.ts` now
+  verify the dispatcher file instead of the MCP file.
+
 ## [0.25.0] - 2026-07-03
 
 ### Added
