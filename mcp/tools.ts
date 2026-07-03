@@ -33,6 +33,7 @@ import { executeRenameSymbol, formatRenameResult } from "../tools/rename_symbol.
 import { hasCallChainChecked, recordCallChain } from "../tools/rename-state.js";
 
 import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { getToolDefinition } from "../tools/definitions.js";
 import { validatePathInProject, buildEnvelope } from "../tools/_factory.js";
 import { truncateOutput } from "../core/output.js";
@@ -81,9 +82,15 @@ function withLogging(
 				error: redact(String(err)).slice(0, 300),
 			});
 			const redactedMsg = redact(err instanceof Error ? err.message : String(err)).slice(0, 500);
-			const wrapped = new Error(redactedMsg);
-			if (err instanceof Error && err.stack) wrapped.stack = err.stack;
-			throw wrapped;
+			// #597: Do NOT copy err.stack onto the re-thrown Error -- the
+			// original stack trace contains absolute project paths and host
+			// layout details that must never leak to MCP clients.
+			// Log the original stack server-side for debugging, then throw
+			// a sanitized Error that gets its own fresh stack at this site.
+			if (err instanceof Error && err.stack) {
+				void logMCP({ tool, event: "error_stack", stack: redact(err.stack).slice(0, 1000) });
+			}
+			throw new Error(redactedMsg);
 		}
 	};
 }
@@ -143,7 +150,12 @@ export function registerAllTools(server: McpServer, getGraph: () => RepoGraph, p
 				};
 			}
 			let text: string;
-			if (isFilePath) {
+			// #598: Verify file-path mode with existsSync, not just regex.
+			// A symbol name like "foo.ts" matches the file-extension regex
+			// but is not a real file on disk -- it must fall through to
+			// symbol-lookup mode instead of returning a misleading
+			// "file not found" from executeFileDetailAsync.
+			if (isFilePath && existsSync(join(projectRoot, nameStr))) {
 				text = json ? executeFileDetailJson(getGraph(), nameStr) : await executeFileDetailAsync(getGraph(), nameStr);
 			} else if (mode === "state") {
 				text = executeStateMap(getGraph(), nameStr);

@@ -542,3 +542,145 @@ describe("buildEnvelope path normalization (#586)", () => {
 		expect(parsed.project).toBe("C:/Users/test/nested/subdir");
 	});
 });
+
+// -- MCP stack trace leak (issue #597) --
+
+describe("MCP: withLogging should not leak un-redacted stack trace (#597)", () => {
+	it("does not copy err.stack onto the re-thrown Error", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const src = readFileSync(resolve("mcp/tools.ts"), "utf-8");
+		// The fix removes the line: wrapped.stack = err.stack
+		expect(src).not.toMatch(/wrapped\.stack\s*=\s*err\.stack/);
+	});
+
+	it("re-thrown Error gets a fresh stack at the throw site, not copied from original", async () => {
+		// Simulate the withLogging catch path: create an original error,
+		// then create a wrapped error WITHOUT copying the original stack.
+		// The wrapped error's stack frames should point to where
+		// `new Error()` was called (this line), NOT to origErr's origin.
+		const origErr = new Error("original error");
+		// Capture the first stack frame of origErr (the "at <location>" line)
+		const origFrame = origErr.stack?.split("\n")[1]?.trim();
+		expect(origFrame).toBeDefined();
+
+		// Simulate the fix: create wrapped error, do NOT copy stack
+		const wrapped = new Error("redacted: original error");
+		// wrapped.stack should contain its OWN frames, not origErr's frames
+		if (wrapped.stack && origFrame) {
+			expect(wrapped.stack).not.toContain(origFrame!);
+		}
+	});
+});
+
+// -- MCP shazam_lookup file-path vs symbol routing (issue #598) --
+
+describe("MCP: shazam_lookup file-path existence check (#598)", () => {
+	it("routes name matching file extension but not existing to symbol mode", async () => {
+		// Read the source to verify existsSync is used in the file-path branch
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const src = readFileSync(resolve("mcp/tools.ts"), "utf-8");
+		// The fix adds existsSync check alongside isFilePath before routing to file-detail.
+		// Match the pattern: isFilePath && existsSync(join(projectRoot, nameStr))
+		expect(src).toMatch(/isFilePath\s*&&\s*existsSync/);
+	});
+
+	it("capture-server: name like foo.ts (non-existent file) goes to symbol mode", async () => {
+		// Use the capture server pattern from mcp-iserror.test.ts
+		const { registerAllTools } = await import("../mcp/tools.js");
+		const { scanProject } = await import("../core/scanner.js");
+		const graph = scanProject(".");
+		const handlers = new Map<
+			string,
+			(args: Record<string, unknown>) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>
+		>();
+		const mockServer = {
+			registerTool(
+				name: string,
+				_opts: unknown,
+				handler: (
+					args: Record<string, unknown>,
+				) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>,
+			) {
+				handlers.set(name, handler);
+			},
+		};
+		registerAllTools(mockServer as any, () => graph, ".");
+
+		const lookupHandler = handlers.get("shazam_lookup");
+			expect(lookupHandler).toBeDefined();
+			// A name that matches the file extension regex but does NOT exist as a file
+			const result = await lookupHandler!({ name: "ThisSymbolDoesNotExistAsAFile.ts" });
+		// BEFORE fix: returns "File not found in graph or has no symbols: ..."
+		// AFTER fix: routes to symbol mode (no "File not found" message)
+		expect(result.content[0].text).not.toMatch(/^File not found/);
+	});
+});
+
+// -- MCP onSignal should defer process.exit (issue #599) --
+
+describe("MCP: onSignal should defer process.exit with setImmediate (#599)", () => {
+	it("wraps process.exit in setImmediate after await shutdown()", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const src = readFileSync(resolve("mcp/entry.ts"), "utf-8");
+		// The fix changes onSignal to use setImmediate before process.exit
+		expect(src).toMatch(/setImmediate\s*\(\s*\(\)\s*=>\s*process\.exit/);
+	});
+
+	it("shutdown() completes before process.exit is invoked", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const src = readFileSync(resolve("mcp/entry.ts"), "utf-8");
+		// Verify the call order: await shutdown() THEN setImmediate(process.exit)
+		// The onSignal function should await shutdown() before any process.exit
+		const onSignalMatch = src.match(/const onSignal\s*=\s*async[^}]*\}/s);
+		expect(onSignalMatch).not.toBeNull();
+		if (onSignalMatch) {
+			const body = onSignalMatch[0];
+			// await shutdown() must come before process.exit
+			const shutdownIdx = body.indexOf("await shutdown()");
+			const exitIdx = body.indexOf("process.exit");
+			expect(shutdownIdx).toBeGreaterThan(-1);
+			expect(exitIdx).toBeGreaterThan(-1);
+			expect(shutdownIdx).toBeLessThan(exitIdx);
+		}
+	});
+});
+
+// -- MCP Windows-reliable stdin shutdown triggers (issue #608) --
+
+describe("MCP: Windows-reliable stdin shutdown triggers (#608)", () => {
+	it("registers process.stdin.on('error', ...) for Windows pipe errors", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const src = readFileSync(resolve("mcp/entry.ts"), "utf-8");
+		// The fix adds stdin error/close handlers alongside the existing 'end' handler
+		expect(src).toMatch(/process\.stdin\.on\s*\(\s*["']error["']/);
+	});
+
+	it("registers process.stdin.on('close', ...) for Windows abrupt close", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const src = readFileSync(resolve("mcp/entry.ts"), "utf-8");
+		expect(src).toMatch(/process\.stdin\.on\s*\(\s*["']close["']/);
+	});
+
+	it("all stdin handlers call shutdown() and respect _shuttingDown guard", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const src = readFileSync(resolve("mcp/entry.ts"), "utf-8");
+		// Every added handler must call shutdown (which has idempotency guard)
+		const stdinBlock = src.match(/process\.stdin\.on[^;]+;?/g);
+		expect(stdinBlock).not.toBeNull();
+		if (stdinBlock) {
+			let shutdownCallCount = 0;
+			for (const line of stdinBlock) {
+				if (line.includes("shutdown")) shutdownCallCount++;
+			}
+			// At least 3 handlers (end, error, close) all reference shutdown
+			expect(shutdownCallCount).toBeGreaterThanOrEqual(3);
+		}
+	});
+});

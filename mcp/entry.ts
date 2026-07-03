@@ -157,7 +157,12 @@ async function main(): Promise<void> {
 	};
 	const onSignal = async (): Promise<void> => {
 		await shutdown();
-		process.exit(0);
+		// #599: Defer process.exit via setImmediate so the event loop
+		// flushes pending I/O from lspManager.shutdown() (LSP shutdown/exit
+		// JSON-RPC round-trips) before the process terminates. Without this,
+		// process.exit(0) tears down mid-handshake, leaving language-server
+		// child processes orphaned.
+		setImmediate(() => process.exit(0));
 	};
 	process.on("SIGTERM", onSignal);
 	process.on("SIGINT", onSignal);
@@ -167,9 +172,24 @@ async function main(): Promise<void> {
 	transport.onclose = () => {
 		shutdown().catch((err) => _logWarn("mcpShutdown", "shutdown failed on transport close", err));
 	};
+	const shutdownSignal = () => {
+		shutdown().catch((err) => _logWarn("mcpShutdown", "shutdown failed", err));
+	};
 	process.stdin.on("end", () => {
 		shutdown().catch((err) => _logWarn("mcpShutdown", "shutdown failed on stdin end", err));
 	});
+	// #608: Windows-reliable shutdown triggers. On Windows, when an
+	// MCP client exits abruptly without orderly stdin close, the OS
+	// delivers a pipe 'error' or 'close' event instead of 'end'.
+	// SIGTERM is also not reliably delivered to Windows processes.
+	// These additional handlers ensure lspManager.shutdown() runs
+	// and LSP child processes are cleaned up regardless of platform.
+	// All handlers are idempotent (protected by _shuttingDown latch).
+	process.stdin.on("error", (e) => {
+		_logWarn("mcpShutdown", "stdin error, initiating shutdown", e);
+		shutdownSignal();
+	});
+	process.stdin.on("close", shutdownSignal);
 	await server.connect(transport);
 }
 
