@@ -100,9 +100,14 @@ if (VERSION === "0.0.0") {
 // No TTL needed; scanProject already handles per-file change detection.
 let cachedGraph: RepoGraph | null = null;
 
-function getGraph(): RepoGraph {
-	cachedGraph = scanProject(PROJECT_ROOT);
-	return cachedGraph;
+export function getGraph(): RepoGraph {
+	try {
+		cachedGraph = scanProject(PROJECT_ROOT);
+	} catch (err) {
+		_logWarn("getGraph", "scanProject failed, falling back to cached graph", err);
+		if (!cachedGraph) throw err;
+	}
+	return cachedGraph!;
 }
 
 async function main(): Promise<void> {

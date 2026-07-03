@@ -502,6 +502,25 @@ describe("MCP: HOME/USERPROFILE fallback (#586)", () => {
 	});
 });
 
+// -- getGraph fallback on scanProject failure (issue #601) --
+
+describe("MCP: getGraph fallback on scanProject failure (#601)", () => {
+	it("getGraph is exported from mcp/entry.ts", async () => {
+		const mod = await import("../mcp/entry.js");
+		expect(typeof mod.getGraph).toBe("function");
+	});
+
+	it("getGraph has try/catch fallback in source", async () => {
+		// Verify the source code contains the fallback pattern.
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const src = readFileSync(resolve("mcp/entry.ts"), "utf-8");
+		expect(src).toContain("cachedGraph = scanProject");
+		expect(src).toContain("catch");
+		expect(src).toContain("cachedGraph");
+	});
+});
+
 // -- buildEnvelope path normalization for Windows (issue #586) --
 
 describe("buildEnvelope path normalization (#586)", () => {

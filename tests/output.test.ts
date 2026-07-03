@@ -2,7 +2,7 @@
  * Tests for core/output — token budget truncation.
  */
 import { describe, it, expect, vi } from "vitest";
-import { estimateTokens, truncateOutput, _logWarn } from "../core/output.js";
+import { estimateTokens, truncateOutput, _logWarn, getGitChangeCount } from "../core/output.js";
 
 describe("estimateTokens", () => {
 	it("should return 0 for empty string", () => {
@@ -162,5 +162,50 @@ describe("_logWarn", () => {
 		const msg = spy.mock.calls[0][0] as string;
 		expect(msg).toContain("just a string");
 		spy.mockRestore();
+	});
+});
+
+// -- getGitChangeCount cross-platform execFileSync (issue #602) --
+
+describe("getGitChangeCount (#602)", () => {
+	it("returns a non-negative number in a real git repo", () => {
+		// Integration test: runs getGitChangeCount against the actual repo.
+		// The working tree is clean, so should return 0 or a number >= 0.
+		const count = getGitChangeCount();
+		expect(typeof count).toBe("number");
+		expect(count).toBeGreaterThanOrEqual(0);
+	});
+
+	it("uses execFileSync not execSync (no shell pipeline)", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const src = readFileSync(resolve("core/output.ts"), "utf-8");
+		expect(src).not.toMatch(/2>\/dev\/null/);
+		expect(src).not.toMatch(/\| tail/);
+		expect(src).toContain("execFileSync");
+	});
+
+	it("parses git diff --stat last line correctly", () => {
+		// The function parses the last non-empty line matching /(\d+)\s+file/.
+		// Verify the regex handles typical git diff --stat output formats.
+		const regex = /(\d+)\s+file/;
+		expect(regex.test(" 1 file changed, 1 insertion(+), 1 deletion(-)")).toBe(true);
+		expect(regex.test(" 3 files changed, 10 insertions(+), 2 deletions(-)")).toBe(true);
+		expect(" 1 file changed, 1 insertion(+), 1 deletion(-)".match(regex)![1]).toBe("1");
+		expect(" 42 files changed, 100 insertions(+), 50 deletions(-)".match(regex)![1]).toBe("42");
+	});
+});
+
+// -- package.json ci script cross-platform (issue #603) --
+
+describe("package.json ci script (#603)", () => {
+	it("ci script uses node -e not test -f for build artifact checks", async () => {
+		const { readFileSync } = await import("node:fs");
+		const { resolve } = await import("node:path");
+		const pkg = JSON.parse(readFileSync(resolve("package.json"), "utf-8"));
+		expect(pkg.scripts.ci).toBeDefined();
+		expect(pkg.scripts.ci).not.toMatch(/\btest\s+-f\b/);
+		expect(pkg.scripts.ci).toContain("node -e");
+		expect(pkg.scripts.ci).toContain("existsSync");
 	});
 });

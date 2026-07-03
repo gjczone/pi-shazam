@@ -19,7 +19,7 @@
 		"prepublishOnly": "npm run build",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"ci": "npm run typecheck && npm test && npm run build && test -f dist/index.js && test -f dist/index.d.ts && npx vitest run tests/mcp-integration.test.ts && npx vitest run tests/benchmark.test.ts && npm audit --omit=dev"
+		"ci": "npm run typecheck && npm test && npm run build && node -e \"const fs=require('fs');for(const f of ['dist/index.js','dist/index.d.ts']){if(!fs.existsSync(f)){console.error('missing '+f);process.exit(1);}}\" && npx vitest run tests/mcp-integration.test.ts && npx vitest run tests/benchmark.test.ts && npm audit --omit=dev"
 	},
 	"keywords": [
 		"pi-package",
