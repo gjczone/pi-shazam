@@ -609,9 +609,9 @@ describe("MCP: shazam_lookup file-path existence check (#598)", () => {
 		registerAllTools(mockServer as any, () => graph, ".");
 
 		const lookupHandler = handlers.get("shazam_lookup");
-			expect(lookupHandler).toBeDefined();
-			// A name that matches the file extension regex but does NOT exist as a file
-			const result = await lookupHandler!({ name: "ThisSymbolDoesNotExistAsAFile.ts" });
+		expect(lookupHandler).toBeDefined();
+		// A name that matches the file extension regex but does NOT exist as a file
+		const result = await lookupHandler!({ name: "ThisSymbolDoesNotExistAsAFile.ts" });
 		// BEFORE fix: returns "File not found in graph or has no symbols: ..."
 		// AFTER fix: routes to symbol mode (no "File not found" message)
 		expect(result.content[0].text).not.toMatch(/^File not found/);
