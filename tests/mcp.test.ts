@@ -29,14 +29,16 @@ describe("MCP: tool schemas", () => {
 		expect(() => schema.parse({})).toThrow();
 	});
 
-	it("lookup schema should accept name with optional mode and file", () => {
+	it("lookup schema should accept name with optional mode=search and file", () => {
 		const schema = z.object({
 			name: z.string(),
-			mode: z.enum(["state"]).optional(),
+			mode: z.enum(["search"]).optional(),
 			file: z.string().optional(),
 		});
 		expect(() => schema.parse({ name: "myFunc" })).not.toThrow();
-		expect(() => schema.parse({ name: "Status", mode: "state" })).not.toThrow();
+		expect(() => schema.parse({ name: "auth", mode: "search" })).not.toThrow();
+		// mode=state is no longer in the schema (#630 cleanup)
+		expect(() => schema.parse({ name: "Status", mode: "state" })).toThrow();
 	});
 
 	it("lookup file_detail schema should require file path", () => {

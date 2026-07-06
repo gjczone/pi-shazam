@@ -13,7 +13,7 @@
  */
 import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
-import type { RepoGraph, Symbol } from "../core/graph.js";
+import type { RepoGraph, Symbol, Provenance } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { getEffectiveRoot } from "../core/scanner.js";
 import { getNextForTool, formatNextSection, truncateOutput, _logWarn } from "../core/output.js";
@@ -42,10 +42,6 @@ function _sanitizeMarkdown(s: string): string {
 	// renders as ` in markdown).
 	return s.replace(/\\/g, "\\\\").replace(/`/g, "\\`");
 }
-
-// -- State map kinds (from symbol.ts) -------------------------------------
-
-const STATE_MAP_KINDS = new Set(["enum", "class", "interface", "type_alias", "const"]);
 
 // -- File detail cache (from file_detail.ts) -----------------------------
 
@@ -77,10 +73,9 @@ export function registerLookup(pi: ExtensionAPI): void {
 		description: `\
 		Look up anything in the codebase - a symbol by name or a file by path.
 		Auto-detects whether the input is a file path or symbol name and returns
-		the most relevant information: definition, kind, signature, type hierarchy,
-		file structure, PageRank, callers/callees. Use mode=state for enum/state
-		analysis. Use mode=search for fuzzy concept search, or just ask in natural language (auto-detected).
-		Pass showCallbacks=true to expand anonymous functions.`,
+			the most relevant information: definition, kind, signature, type hierarchy,
+			file structure, PageRank, callers/callees. Use mode=search for fuzzy concept search, or just ask in natural language (auto-detected).
+			Pass showCallbacks=true to expand anonymous functions.`,
 		params: Type.Object({
 			name: Type.String(),
 			file: Type.Optional(Type.String()),
@@ -268,12 +263,92 @@ async function _executeLookupAsync(
 }
 
 export function _executeSymbolJson(graph: RepoGraph, name: string, file?: string): string {
-	const matches = _findSymbols(graph, name, file);
-	return buildEnvelope(
-		"shazam_lookup",
-		getEffectiveRoot(),
-		"ok",
-		matches.map((s) => ({
+	return buildEnvelope("shazam_lookup", getEffectiveRoot(), "ok", _buildSymbolLookupResult(graph, name, file));
+}
+
+/**
+ * #631 A: typed symbol-lookup result. One entry per matching
+ * symbol; the dispatcher wraps the array in buildEnvelope.
+ *
+ * #643: incomingEdges and outgoingEdges expose the edge
+ * provenance classification (`Provenance` from core/graph.ts) so
+ * consumers can tell at a glance which call sites are LSP-resolved
+ * vs tree-sitter-heuristic. `provenanceCounts` is a precomputed
+ * summary across both edge sets.
+ */
+export interface SymbolLookupEdge {
+	target?: string; // for incoming: source symbol id; for outgoing: target symbol id
+	symbolName: string;
+	file: string;
+	line: number;
+	kind: string;
+	provenance: "resolved" | "name_match" | "heuristic" | "unresolved";
+}
+
+export interface SymbolLookupProvenanceCounts {
+	resolved: number;
+	name_match: number;
+	heuristic: number;
+	unresolved: number;
+}
+
+export interface SymbolLookupEntry {
+	id: string;
+	name: string;
+	kind: string;
+	file: string;
+	line: number;
+	endLine: number;
+	visibility: string;
+	pagerank: number;
+	signature: string;
+	container: string | null;
+	source: "lsp" | "tree-sitter";
+	incomingEdges: SymbolLookupEdge[];
+	outgoingEdges: SymbolLookupEdge[];
+	provenanceCounts: SymbolLookupProvenanceCounts;
+}
+
+/**
+ * #631 A: build the typed symbol-lookup result. Single source of
+ * truth for the JSON envelope; previously the shape was inlined
+ * inside _executeSymbolJson.
+ */
+export function _buildSymbolLookupResult(graph: RepoGraph, name: string, file?: string): SymbolLookupEntry[] {
+	return _findSymbols(graph, name, file).map((s) => {
+		// #643: expose per-edge provenance so JSON consumers can tell
+		// which call sites are LSP-resolved vs tree-sitter-heuristic.
+		// Capped at 20 per direction to bound the payload size for
+		// high-fanout symbols.
+		const incomingEdges: SymbolLookupEdge[] = [];
+		const incoming = graph.incoming.get(s.id) || [];
+		for (const e of incoming.slice(0, 20)) {
+			const srcSym = graph.symbols.get(e.source);
+			incomingEdges.push({
+				symbolName: srcSym?.name ?? e.source,
+				file: srcSym?.file ?? "",
+				line: srcSym?.line ?? 0,
+				kind: e.kind,
+				provenance: (e.provenance ?? "heuristic") as Provenance,
+			});
+		}
+		const outgoingEdges: SymbolLookupEdge[] = [];
+		const outgoing = graph.outgoing.get(s.id) || [];
+		for (const e of outgoing.slice(0, 20)) {
+			const tgtSym = graph.symbols.get(e.target);
+			outgoingEdges.push({
+				symbolName: tgtSym?.name ?? e.target,
+				file: tgtSym?.file ?? "",
+				line: tgtSym?.line ?? 0,
+				kind: e.kind,
+				provenance: (e.provenance ?? "heuristic") as Provenance,
+			});
+		}
+		const provenanceCounts: SymbolLookupProvenanceCounts = { resolved: 0, name_match: 0, heuristic: 0, unresolved: 0 };
+		for (const e of [...incomingEdges, ...outgoingEdges]) {
+			provenanceCounts[e.provenance]++;
+		}
+		return {
 			id: s.id,
 			name: s.name,
 			kind: s.kind,
@@ -284,9 +359,12 @@ export function _executeSymbolJson(graph: RepoGraph, name: string, file?: string
 			pagerank: s.pagerank,
 			signature: s.signature,
 			container: null,
-			source: "tree-sitter",
-		})),
-	);
+			source: "tree-sitter" as const,
+			incomingEdges,
+			outgoingEdges,
+			provenanceCounts,
+		};
+	});
 }
 
 // -- Hover info extraction (from hover.ts) --------------------------------
@@ -932,11 +1010,39 @@ export function _executeFileDetail(graph: RepoGraph, file: string): string {
 	return lines.join("\n");
 }
 
-function _executeFileDetailJson(graph: RepoGraph, file: string): string {
+/**
+ * #631 A: typed file-detail result. The dispatcher wraps this
+ * in buildEnvelope for JSON mode.
+ */
+export interface FileDetailJsonSymbol {
+	id: string;
+	name: string;
+	kind: string;
+	line: number;
+	endLine: number;
+	visibility: string;
+	pagerank: number;
+	signature: string;
+	incomingCount: number;
+	outgoingCount: number;
+}
+
+export interface FileDetailJsonResult {
+	file: string;
+	symbolCount: number;
+	symbols: FileDetailJsonSymbol[];
+}
+
+/**
+ * #631 A: build the typed file-detail result. Single source of
+ * truth for the JSON envelope; previously the shape was inlined
+ * inside _executeFileDetailJson.
+ */
+export function _buildFileDetailJsonResult(graph: RepoGraph, file: string): FileDetailJsonResult {
 	const symIds = graph.fileSymbols.get(file) || [];
 	const symbols = symIds.map((id) => graph.symbols.get(id)).filter((s): s is NonNullable<typeof s> => s !== undefined);
 
-	return buildEnvelope("shazam_lookup", getEffectiveRoot(), "ok", {
+	return {
 		file,
 		symbolCount: symbols.length,
 		symbols: symbols.map((s) => ({
@@ -951,7 +1057,11 @@ function _executeFileDetailJson(graph: RepoGraph, file: string): string {
 			incomingCount: (graph.incoming.get(s.id) || []).length,
 			outgoingCount: (graph.outgoing.get(s.id) || []).length,
 		})),
-	});
+	};
+}
+
+function _executeFileDetailJson(graph: RepoGraph, file: string): string {
+	return buildEnvelope("shazam_lookup", getEffectiveRoot(), "ok", _buildFileDetailJsonResult(graph, file));
 }
 
 /**
@@ -986,6 +1096,23 @@ export function _looksLikeNaturalLanguage(query: string): boolean {
 interface SearchResult {
 	sym: Symbol;
 	score: number;
+}
+
+/**
+ * #631 A: typed concept-search result. The dispatcher wraps this
+ * in buildEnvelope for JSON mode; the existing _formatSearchResults
+ * produces the human-readable text.
+ */
+export interface LookupSearchResult {
+	kind: "search";
+	query: string;
+	hits: Array<{
+		name: string;
+		kind: string;
+		file: string;
+		line: number;
+		score: number;
+	}>;
 }
 
 /**
@@ -1030,6 +1157,26 @@ export function _executeSearch(graph: RepoGraph, query: string): SearchResult[] 
 }
 
 /**
+ * #631 A: build the typed LookupSearchResult from raw search hits.
+ * Single source of truth for the JSON envelope; the dispatcher
+ * (tools/_dispatchers.ts) wraps this via buildEnvelope.
+ */
+export function buildSearchResult(graph: RepoGraph, query: string): LookupSearchResult {
+	const raw = _executeSearch(graph, query);
+	return {
+		kind: "search",
+		query,
+		hits: raw.map((r) => ({
+			name: r.sym.name,
+			kind: r.sym.kind,
+			file: r.sym.file,
+			line: r.sym.line,
+			score: Number(r.score.toFixed(4)),
+		})),
+	};
+}
+
+/**
  * Format search results as readable text output.
  */
 export function _formatSearchResults(query: string, results: SearchResult[]): string {
@@ -1058,79 +1205,7 @@ export function _formatSearchResults(query: string, results: SearchResult[]): st
 	return lines.join("\n").trim();
 }
 
-// -- State map (from symbol.ts) -------------------------------------------
-
-export function _executeStateMap(graph: RepoGraph, symbolName: string): string {
-	const targets: Symbol[] = [];
-	for (const sym of graph.symbols.values()) {
-		if (sym.name === symbolName) targets.push(sym);
-	}
-
-	if (targets.length === 0) return `Symbol not found: ${_sanitizeMarkdown(symbolName)}`;
-
-	const lines: string[] = [];
-	for (const target of targets) {
-		if (!STATE_MAP_KINDS.has(target.kind)) {
-			lines.push(`## ${target.kind} \`${_sanitizeMarkdown(target.name)}\` - cannot generate state map`);
-			lines.push("");
-			lines.push(
-				`Symbol \`${_sanitizeMarkdown(target.name)}\` is a ${target.kind}, not an enum, const group, or state machine.`,
-			);
-			lines.push("State map analysis requires: enum, class, interface, type_alias, or const.");
-			lines.push("");
-			lines.push(`Use \`shazam_lookup --name ${_sanitizeMarkdown(target.name)}\` instead.`);
-			continue;
-		}
-
-		lines.push(`## State Map: ${target.kind} \`${_sanitizeMarkdown(target.name)}\` (${target.file}:${target.line})`);
-		lines.push("");
-
-		const incoming = graph.incoming.get(target.id) || [];
-		const outgoing = graph.outgoing.get(target.id) || [];
-
-		if (incoming.length > 0) {
-			lines.push(`### Usages (${incoming.length} references from other symbols)`);
-			const byFile = new Map<string, Symbol[]>();
-			for (const edge of incoming) {
-				const sym = graph.symbols.get(edge.source);
-				if (sym) {
-					const arr = byFile.get(sym.file) || [];
-					arr.push(sym);
-					byFile.set(sym.file, arr);
-				}
-			}
-			for (const [file, syms] of [...byFile.entries()].sort()) {
-				lines.push(`  **${file}**: ${syms.map((s) => _sanitizeMarkdown(s.name)).join(", ")}`);
-			}
-		}
-
-		if (outgoing.length > 0) {
-			lines.push("");
-			lines.push(`### Dependencies (${outgoing.length} symbols this depends on)`);
-			for (const edge of outgoing) {
-				const sym = graph.symbols.get(edge.target);
-				if (sym) lines.push(`- ${sym.kind} \`${_sanitizeMarkdown(sym.name)}\` - ${sym.file}:${sym.line}`);
-			}
-		}
-
-		lines.push("");
-		lines.push(`Visibility: ${target.visibility}`);
-		lines.push(`PageRank: ${target.pagerank.toFixed(4)}`);
-		lines.push(`Signature: ${target.signature}`);
-	}
-
-	const nextItems = getNextForTool("lookup", { usageFile: targets[0]?.file });
-	if (nextItems.length > 0) {
-		lines.push("");
-		lines.push(formatNextSection(nextItems));
-	}
-
-	return lines.join("\n");
-}
-
-export function executeStateMap(graph: RepoGraph, symbolName: string): string {
-	return _executeStateMap(graph, symbolName);
-}
+// -- File detail (from file_detail.ts) ------------------------------------
 
 export function executeFileDetailJson(graph: RepoGraph, file: string): string {
 	return _executeFileDetailJson(graph, file);

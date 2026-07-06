@@ -15,6 +15,7 @@ import { getNextForTool, formatNextSection, truncateOutput, _logWarn } from "../
 import { readFileAdaptive } from "../core/encoding.js";
 import { getLspManager } from "./_context.js";
 import { ensureFileOpened } from "./lsp_enrich.js";
+import { buildEnvelope } from "./_factory.js";
 import type { WorkspaceEdit, TextEdit } from "vscode-languageserver-protocol";
 import { uriToPath } from "../lsp/client.js";
 import { createTool, validatePathInProject } from "./_factory.js";
@@ -82,7 +83,18 @@ export function registerRenameSymbol(pi: ExtensionAPI): void {
 
 // registerRenameSymbolWithGraph removed -- customExecute now scans project directly (fixes #209)
 
-interface RenameResult {
+/**
+ * #631 A: RenameResult is the typed return value of `executeRenameSymbol`.
+ * The dispatcher (tools/_dispatchers.ts) decides whether to render it as
+ * markdown (text mode) or wrap it in a JSON envelope (json mode).
+ *
+ * `kind` is the discriminator used by the dispatcher to detect non-success
+ * outcomes and surface `isError: true` to the agent. `status` is kept as
+ * a legacy alias for backward compatibility with existing tests; the next
+ * major release can drop it.
+ */
+export interface RenameResult {
+	kind: "rename" | "not_found" | "error" | "lsp_unavailable";
 	status: "ok" | "not_found" | "error" | "lsp_unavailable";
 	symbol: string;
 	newName: string;
@@ -139,6 +151,7 @@ export async function executeRenameSymbol(
 
 	if (matchingSymbols.length === 0) {
 		return {
+			kind: "not_found",
 			status: "not_found",
 			symbol: symbolName,
 			newName,
@@ -192,6 +205,7 @@ export async function executeRenameSymbol(
 		}
 		msg += `\n\n**Recommendation:** Run \`shazam_impact --symbol "${symbolName}"\` to manually verify ALL references before attempting rename.`;
 		return {
+			kind: "lsp_unavailable",
 			status: "lsp_unavailable",
 			symbol: symbolName,
 			newName,
@@ -216,6 +230,7 @@ export async function executeRenameSymbol(
 		}
 		msg += `\n\n**Recommendation:** Run \`shazam_impact --symbol "${symbolName}"\` to manually verify ALL references before attempting rename.`;
 		return {
+			kind: "lsp_unavailable",
 			status: "lsp_unavailable",
 			symbol: symbolName,
 			newName,
@@ -240,6 +255,7 @@ export async function executeRenameSymbol(
 		}
 		msg += `\n\n**Recommendation:** Run \`shazam_impact --symbol "${symbolName}"\` to manually verify ALL references before attempting rename.`;
 		return {
+			kind: "lsp_unavailable",
 			status: "lsp_unavailable",
 			symbol: symbolName,
 			newName,
@@ -255,6 +271,7 @@ export async function executeRenameSymbol(
 
 	if (!workspaceEdit) {
 		return {
+			kind: "error",
 			status: "error",
 			symbol: symbolName,
 			newName,
@@ -268,6 +285,7 @@ export async function executeRenameSymbol(
 	const applied = await applyWorkspaceEdit(workspaceEdit, dryRun, projectRoot);
 
 	return {
+		kind: "rename",
 		status: "ok",
 		symbol: symbolName,
 		newName,
@@ -450,4 +468,13 @@ export function formatRenameResult(result: RenameResult, symbolName: string, new
 	}
 
 	return lines.join("\n");
+}
+
+/**
+ * #631 A: Wrap a RenameResult in the standard JSON envelope. Thin
+ * dispatcher-side helper; the result itself is the typed return value
+ * of executeRenameSymbol.
+ */
+export function executeRenameSymbolJson(result: RenameResult, projectRoot: string): string {
+	return buildEnvelope("shazam_rename_symbol", projectRoot, "ok", result);
 }

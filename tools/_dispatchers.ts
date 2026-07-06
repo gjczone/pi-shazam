@@ -32,24 +32,23 @@ import {
 	executeLookupAsync,
 	executeFileDetailAsync,
 	executeFileDetailJson,
-	executeStateMap,
 	_executeSearch,
 	_formatSearchResults,
 	_looksLikeNaturalLanguage,
 	_findSymbols,
 	_executeSymbolJson,
+	buildSearchResult,
 } from "./lookup.js";
 import { executeFormat, executeFormatJson } from "./format.js";
 import { executeVerifyTextAsync, executeVerifyJsonAsync, capVerifyDiagnostics } from "./verify.js";
 import { executeChanges, executeChangesJson } from "./changes.js";
-import { executeRenameSymbol, formatRenameResult } from "./rename_symbol.js";
+import { executeRenameSymbol, formatRenameResult, executeRenameSymbolJson } from "./rename_symbol.js";
 import { hasCallChainChecked, recordCallChain } from "./rename-state.js";
 import { validatePathInProject, buildEnvelope } from "./_factory.js";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { classifyFilePath, suggestSimilarFile } from "../core/path-utils.js";
 import { loadConfig } from "../core/config.js";
-import { _logWarn } from "../core/output.js";
 
 // -- Dispatcher result type -----------------------------------------------
 
@@ -149,50 +148,30 @@ export async function dispatchLookup(
 	if (_isFilePath(nameStr) && !graph.nameIndex?.has(nameStr) && existsSync(join(projectRoot, nameStr))) {
 		text = json ? executeFileDetailJson(graph, nameStr) : await executeFileDetailAsync(graph, nameStr);
 	} else if (mode === "state") {
-		// #630: mode=state is deprecated. The function still works for
-		// backward compatibility, but a warning is logged so users and
-		// automated tests can see the migration signal. The replacement
-		// is `shazam_lookup --name <symbol>` which already surfaces the
-		// symbol's full detail block; the dedicated state-map view adds
-		// little value over that.
-		_logWarn(
-			"shazam_lookup",
-			"mode=state is deprecated; use shazam_lookup --name for symbol detail. Will be removed in a future release.",
-			new Error("deprecated"),
-		);
-		text = executeStateMap(graph, nameStr);
-		if (json) {
-			text = buildEnvelope("shazam_lookup", projectRoot, "ok", {
-				symbol: nameStr,
-				mode: "state",
-				text,
-			});
-		}
+		// mode=state was deprecated in #630 (PR-E) and is now removed.
+		// The dedicated state-map view added little value over the regular
+		// symbol lookup, so the cleanest path is to return a clear error
+		// so callers know to drop the flag rather than silently doing the
+		// wrong thing.
+		const message =
+			"shazam_lookup mode=state has been removed. Use `shazam_lookup --name <symbol>` for symbol detail, or `shazam_lookup --name <symbol> --direction supertypes|subtypes` for type hierarchy.";
+		text = json ? buildEnvelope("shazam_lookup", projectRoot, "error", { error: message }) : `Error: ${message}`;
+		return { text, isError: true };
 	} else if (mode === "search") {
-		const results = _executeSearch(graph, nameStr);
 		if (json) {
-			text = buildEnvelope("shazam_lookup", projectRoot, "ok", {
-				mode: "search",
-				query: nameStr,
-				results,
-			});
+			text = buildEnvelope("shazam_lookup", projectRoot, "ok", buildSearchResult(graph, nameStr));
 		} else {
-			text = _formatSearchResults(nameStr, results);
+			text = _formatSearchResults(nameStr, _executeSearch(graph, nameStr));
 		}
 	} else {
 		// Default: symbol lookup. If not found and input looks like natural
 		// language (multi-word concept query), auto-fallback to search (#490).
 		const matches = _findSymbols(graph, nameStr, fileParam);
 		if (matches.length === 0 && _looksLikeNaturalLanguage(nameStr)) {
-			const results = _executeSearch(graph, nameStr);
 			if (json) {
-				text = buildEnvelope("shazam_lookup", projectRoot, "ok", {
-					mode: "search",
-					query: nameStr,
-					results,
-				});
+				text = buildEnvelope("shazam_lookup", projectRoot, "ok", buildSearchResult(graph, nameStr));
 			} else {
-				text = _formatSearchResults(nameStr, results);
+				text = _formatSearchResults(nameStr, _executeSearch(graph, nameStr));
 			}
 		} else {
 			text = json
@@ -492,7 +471,8 @@ export async function dispatchRenameSymbol(
 
 	const result = await executeRenameSymbol(graph, symbolName, newName, dryRun, projectRoot);
 	const text = json
-		? buildEnvelope("shazam_rename_symbol", projectRoot, "ok", result)
+		? executeRenameSymbolJson(result, projectRoot)
 		: formatRenameResult(result, symbolName, newName, dryRun);
-	return { text };
+	const isError = result.kind === "error" || result.kind === "not_found";
+	return { text, isError };
 }

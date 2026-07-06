@@ -42,7 +42,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_lookup",
 		label: "Lookup Symbol or File",
 		description:
-			"Look up anything in the codebase - a symbol by name or a file by path. Auto-detects whether the input is a file path or symbol name and returns the most relevant information: definition, kind, signature, type hierarchy, file structure, PageRank, callers/callees. Use mode=state for enum/state analysis. Pass showCallbacks=true to expand anonymous functions.",
+			"Look up anything in the codebase - a symbol by name or a file by path. Auto-detects whether the input is a file path or symbol name and returns the most relevant information: definition, kind, signature, type hierarchy, file structure, PageRank, callers/callees. Use mode=search for fuzzy concept search, or just ask in natural language (auto-detected). Pass showCallbacks=true to expand anonymous functions.",
 		typeboxParams: Type.Object({
 			name: Type.String(),
 			file: Type.Optional(Type.String()),
@@ -56,9 +56,9 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			name: z.string().describe("Symbol name or file path to look up"),
 			file: z.string().optional().describe("Optional file path to scope the search"),
 			mode: z
-				.enum(["state", "search"])
+				.enum(["search"])
 				.optional()
-				.describe("Use 'state' for enum/state map analysis, or 'search' for concept/fuzzy search"),
+				.describe("Use 'search' for concept/fuzzy search (default mode is symbol lookup)"),
 			showCallbacks: z.boolean().optional().describe("Expand anonymous functions (default: collapsed)"),
 			direction: z
 				.enum(["both", "supertypes", "subtypes"])
