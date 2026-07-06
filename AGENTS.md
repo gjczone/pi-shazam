@@ -230,12 +230,14 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 | LSP client connections           | Process                     | Spawned language server processes per language              | Session end, server crash, or explicit shutdown       |
 | Audit log                        | File (`~/.pi/hooks/audit/`) | All tool invocations                                        | Log rotation (10 MB cap)                              |
 | Graph cache                      | In-memory                   | RepoGraph built from tree-sitter parse                      | File change detected, or session end                  |
+| LSP per-file mtime cache (#641)  | In-memory                   | `LspManager._openedFileMtimes` records mtimeMs at didOpen   | Invalidate on mtime change, server restart, or shutdown |
+| Project config cache (#630)      | In-memory                   | `core/config.ts` parses `.pi-shazam/config.json` once       | Process restart (no hot-reload); reset via test helper |
 
 ## Security
 
 - **Project root validation**: `core/scanner.ts` `getEffectiveRoot()` validates project root; never trust user-supplied paths blindly.
 - **File path sanitization**: All file paths resolved against project root; path traversal (`../`) outside root is rejected.
-- **Secrets detection**: `shazam_verify` includes secrets detection (`noSecrets: false` by default). Never commit files containing detected secrets.
+- **Secrets detection**: `shazam_verify` includes secrets detection. Never commit files containing detected secrets.
 - **Audit logging**: All tool invocations logged to audit file with timestamp, tool name, and parameters. Sensitive parameter values are redacted.
 - **LSP processes**: Auto-spawned language servers run as child processes; stdin/stdout communication only, no network exposure.
 
@@ -263,6 +265,7 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 - **Changing tool output format**: Update the specific `tools/*.ts` formatter -> verify JSON envelope schema (all tools support `{ json: true }`).
 - **Changing tool names, adding/removing tools, or changing tool behaviors**: After the code change, read `docs/kimi-code-hooks.md` -> run through the checklist -> update version mapping table -> sync Kimi Code shell hooks if needed. Kimi Code uses MCP format (`mcp__pi-shazam__shazam_<name>`); old tool names in shell hooks will silently fail on Kimi Code.
 - **Adding platform support**: Check `process.platform` branches in `lsp/manager.ts` (isExecutable, findInPath, SAFE_PATH_DIRS, trustedUserCandidates). Ensure all shell commands in `package.json` scripts use Node.js built-ins (no `rm -rf`, `test -f`). Add platform-specific paths to `lsp/servers.ts` LSP server specs if needed. Verify `mcp/entry.ts` env var fallbacks (HOME vs USERPROFILE). Add `windows-latest` to CI matrix.
+- **Migrating a flag to config file (#630)**: Drop the flag from `tools/definitions.ts` schema (both TypeBox and Zod), add a reader in `core/config.ts` if one does not exist, update the dispatcher resolution chain (call value > config value > hard-coded default), update `hooks/precommit-verify.ts` if it set the flag literally, document in `SKILL.md` and `docs/INSTRUCTION.md`. Verify `bash scripts/check-mcp-parity.sh` stays at 10/10.
 
 ## First Places to Inspect
 
@@ -271,8 +274,13 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 - `core/graph.ts` — dependency graph construction
 - `core/output.ts` — shared utilities: `_logWarn`, `NEXT_RULES`, `truncateOutput`
 - `core/scanner.ts` — project scanning, `getEffectiveRoot()`
+- `core/config.ts` — `.pi-shazam/config.json` loader (#630)
+- `core/risk.ts` — risk-level assessment for verify and pre-commit
+- `core/baseline.ts` — graph-baseline diff for risk and orphan tracking
 - `lsp/client.ts` — LSP JSON-RPC communication
+- `lsp/manager.ts` — LSP server lifecycle + per-file mtime cache (#641)
 - `tools/_factory.ts` — tool registration factory
+- `tools/_dispatchers.ts` — shared MCP/Pi dispatch layer (#618)
 - `vitest.config.ts` — test runner config (suppresses pre-existing stream errors)
 - `docs/INSTRUCTION.md` — single source of truth for contracts and conventions
 

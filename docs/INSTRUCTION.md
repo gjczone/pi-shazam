@@ -258,15 +258,19 @@ index.ts                    <- Pi extension entry, default export(pi: ExtensionA
   │   ├── redact.ts         <- Shared secret redaction
   │   ├── formatters.ts     <- Shared formatter/linter detection
   │   ├── audit-log.ts      <- Unified audit log rotation policy
-  │   └── cache.ts          <- Graph baseline save/diff + persistent V2 graph cache
+  │   ├── cache.ts          <- Graph baseline save/diff + persistent V2 graph cache
+  │   ├── config.ts         <- .pi-shazam/config.json loader (#630)
+  │   ├── risk.ts           <- Risk-level assessment (verify + pre-commit)
+  │   └── baseline.ts       <- Graph-baseline diff for risk + orphan tracking
   ├── lsp/                  <- Language server process management
-  │   ├── manager.ts        <- Server lifecycle (spawn, stdio, health, shutdown)
+  │   ├── manager.ts        <- Server lifecycle (spawn, stdio, health, shutdown, mtime cache)
   │   ├── client.ts         <- LSP protocol communication (JSON-RPC via vscode-jsonrpc)
   │   ├── servers.ts        <- Language->server config table (7 languages, 8 server specs)
   │   └── setup.ts          <- LSP setup: detect + install guidance (auto-runs)
   ├── tools/                <- One file per registerTool call
   │   ├── _context.ts       <- Tool-level shared LspManager holder
   │   ├── _factory.ts       <- createTool() registration factory
+  │   ├── _dispatchers.ts   <- Shared MCP/Pi dispatch layer (#618) - single source of truth
   │   ├── lsp_enrich.ts     <- Tool-layer LSP enrichment wrappers
   │   ├── definitions.ts   <- Shared tool definitions (names, descriptions, schemas)
   │   ├── overview.ts       <- Project structure summary + hotspot ranking
@@ -867,9 +871,14 @@ grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerP
 | `core/treesitter.ts`      | Language support, symbol extraction         |
 | `core/graph.ts`           | Symbol dependency graph                     |
 | `core/scanner.ts`         | Project scanning + graph building           |
+| `core/config.ts`          | `.pi-shazam/config.json` loader (#630)      |
+| `core/risk.ts`            | Risk-level assessment (verify + pre-commit) |
+| `core/baseline.ts`        | Graph-baseline diff (risk + orphan tracking) |
 | `lsp/client.ts`           | LSP JSON-RPC implementation                 |
+| `lsp/manager.ts`          | LSP server lifecycle + per-file mtime cache (#641) |
 | `tools/_factory.ts`       | Tool registration factory                   |
 | `tools/_context.ts`       | Shared LspManager holder                    |
+| `tools/_dispatchers.ts`   | Shared MCP/Pi dispatch layer (#618)         |
 | `hooks/before-start.ts`   | System prompt injection                     |
 
 ---
@@ -883,3 +892,5 @@ grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerP
 | 2026-06-08 | 2.0     | Merged all individual SKILL.md files (pi-extension, pi-hooks, mcp-server, testing, release-publish, architecture, sync-discipline) and CONTRACT.md. Flattened docs/ directory. |
 | 2026-07-02 | 2.1     | v0.24.4: Cross-platform fixes (Windows CI, PATHEXT, cache dir, POSIX shell -> Node.js).                                                                                        |
 | 2026-07-03 | 2.2     | v0.25.0: Windows LSP discovery, pre-commit hook rewrite, getGraph fallback, MCP robustness fixes (#596-#610).                                                                  |
+| 2026-07-03 | 2.2.1   | v0.26.0: Shared MCP/Pi dispatch layer (#618), MCP-Pi parity contract tests (#619), check-mcp-parity.sh (#620).                                                                |
+| 2026-07-06 | 2.3     | v0.27.0: LSP per-file mtime cache invalidation (#641), .pi-shazam/config.json (#630), doc sync (#645). shazam_lookup mode=state deprecated.                                       |

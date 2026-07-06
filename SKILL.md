@@ -54,7 +54,7 @@ Unified symbol and file lookup. Combines symbol definition, type signature, docu
 
 - `name`: symbol name to look up, or a file path to analyze file structure
 - `file`: optional file path to scope the symbol search
-- `mode`: `"state"` for enum/class/interface state map analysis; `"search"` for fuzzy concept search (e.g., "how does authentication work"); if omitted and the symbol is not found, automatically falls back to search when the query looks like natural language
+- `mode`: `"search"` for fuzzy concept search (e.g., "how does authentication work"); `"state"` (deprecated, will be removed in a future release) for enum/class/interface state map analysis — use plain `shazam_lookup --name <symbol>` for symbol detail; if omitted and the symbol is not found, automatically falls back to search when the query looks like natural language
 - `showCallbacks`: expand anonymous functions in call graph
 - `direction`: type hierarchy traversal — `"both"` (default), `"supertypes"`, or `"subtypes"`
 
@@ -109,14 +109,12 @@ These tools modify files or verify changes.
 
 After every write or edit, run this to confirm no errors were introduced. When diagnostics are found, fetches LSP codeAction suggested fixes.
 
-**Parameters**: `{ quick?, lspOnly?, preCommit?, maxFiles?, noCascade?, noSecrets?, json?, maxTokens? }`
+**Parameters**: `{ quick?, lspOnly?, preCommit?, json?, maxTokens? }`
 
 - `quick`: git changes + risk only (~2s)
 - `lspOnly`: LSP diagnostics only, skip graph analysis
 - `preCommit`: stricter thresholds for pre-commit gate
-- `maxFiles`: max files to check
-- `noCascade`: skip cascade analysis
-- `noSecrets`: skip secrets detection
+- `maxFiles` is no longer a per-call flag (#630). Configure it in `.pi-shazam/config.json` under `verify.maxFiles` (default 100). The dispatcher reads the config and merges it into the VerifyOptions.
 
 **Returns**: Verdict (PASS / WARN / FAIL), LSP diagnostics with suggested fixes, risk level, orphan detection, graph diffs.
 
@@ -220,6 +218,24 @@ All tools support `{ "json": true }` for structured output:
 	"project": "<absolute_path>",
 	"status": "ok",
 	"result": {}
+}
+```
+
+## Configuration
+
+Optional project config file at `.pi-shazam/config.json` (relative to the project root). Missing file = silent defaults; malformed JSON = a single warning, then defaults. Cached on first read — restart the extension to pick up edits.
+
+Currently consumed fields:
+
+- `verify.maxFiles` — max files passed to the LSP server for diagnostics in a single `shazam_verify` call (default 100). Must be a positive integer.
+
+Example:
+
+```json
+{
+	"verify": {
+		"maxFiles": 50
+	}
 }
 ```
 
