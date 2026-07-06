@@ -6,7 +6,7 @@
  */
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
-import type { RepoGraph, Symbol } from "../core/graph.js";
+import type { Edge, Provenance, RepoGraph, Symbol } from "../core/graph.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool, buildEnvelope } from "./_factory.js";
 import { dispatchImpact } from "./_dispatchers.js";
@@ -15,6 +15,50 @@ import { assessRisk } from "../core/risk.js";
 import { recordCallChain } from "./rename-state.js";
 import { getEffectiveRoot } from "../core/scanner.js";
 import { isTestFile, filterTestFiles } from "../core/test-patterns.js";
+import type { SymbolLookupProvenanceCounts } from "./lookup.js";
+
+/**
+ * Default zeroed provenance counts, used as the initial accumulator
+ * when summarizing edge provenance for an affected symbol.
+ */
+const ZERO_PROVENANCE_COUNTS: SymbolLookupProvenanceCounts = {
+	resolved: 0,
+	name_match: 0,
+	heuristic: 0,
+	unresolved: 0,
+};
+
+/**
+ * Count edges by provenance for a single symbol. Iterates both the
+ * incoming and outgoing edge lists of the symbol and tallies each
+ * `Edge.provenance` value. Edges without a provenance field default
+ * to "heuristic" to match `DEFAULT_PROVENANCE` in core/graph.ts.
+ */
+function _countProvenance(graph: RepoGraph, symbolId: string): SymbolLookupProvenanceCounts {
+	const counts: SymbolLookupProvenanceCounts = { ...ZERO_PROVENANCE_COUNTS };
+	for (const list of [graph.incoming.get(symbolId), graph.outgoing.get(symbolId)]) {
+		if (!list) continue;
+		for (const edge of list) {
+			const p: Provenance = (edge.provenance ?? "heuristic") as Provenance;
+			counts[p]++;
+		}
+	}
+	return counts;
+}
+
+/**
+ * Render a compact provenance summary for markdown output, e.g.
+ * "R:1 H:1 N:1" for one edge in each category. Categories with
+ * zero count are omitted so the output stays tight.
+ */
+function _renderProvenanceBadge(counts: SymbolLookupProvenanceCounts): string {
+	const parts: string[] = [];
+	if (counts.resolved > 0) parts.push(`R:${counts.resolved}`);
+	if (counts.name_match > 0) parts.push(`N:${counts.name_match}`);
+	if (counts.heuristic > 0) parts.push(`H:${counts.heuristic}`);
+	if (counts.unresolved > 0) parts.push(`U:${counts.unresolved}`);
+	return parts.length > 0 ? ` (${parts.join(" ")})` : "";
+}
 
 export function registerImpact(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -192,7 +236,19 @@ export function executeImpact(
 				const upstreamCount = syms.filter((s) => s.direction === "upstream").length;
 				const downstreamCount = syms.filter((s) => s.direction === "downstream").length;
 				const direction = upstreamCount > downstreamCount ? "upstream caller" : "downstream callee";
-				lines.push(`#### \`${f}\` (${direction})`);
+				// #631 B: aggregate provenance counts across all affected
+				// symbols in this file so the markdown line shows a single
+				// compact summary of how much of the blast radius is
+				// LSP-resolved vs tree-sitter-heuristic.
+				const fileCounts: SymbolLookupProvenanceCounts = { ...ZERO_PROVENANCE_COUNTS };
+				for (const s of syms) {
+					const c = _countProvenance(graph, s.symbol.id);
+					fileCounts.resolved += c.resolved;
+					fileCounts.name_match += c.name_match;
+					fileCounts.heuristic += c.heuristic;
+					fileCounts.unresolved += c.unresolved;
+				}
+				lines.push(`#### \`${f}\` (${direction})${_renderProvenanceBadge(fileCounts)}`);
 				for (const affected of syms.slice(0, 5)) {
 					lines.push(`- ${affected.symbol.kind} \`${affected.symbol.name}\` - line ${affected.symbol.line}`);
 				}
@@ -240,6 +296,14 @@ export interface ImpactAffectedSymbol {
 	file: string;
 	line: number;
 	direction: "upstream" | "downstream";
+	/**
+	 * Edge provenance breakdown (issue #631 B). Counts how many of the
+	 * symbol's incoming + outgoing edges fall into each provenance
+	 * category ("resolved", "name_match", "heuristic", "unresolved").
+	 * Lets JSON consumers tell at a glance which call sites are
+	 * LSP-resolved vs tree-sitter-heuristic.
+	 */
+	provenanceCounts: SymbolLookupProvenanceCounts;
 }
 
 export interface ImpactResult {
@@ -279,6 +343,8 @@ export function buildImpactResult(graph: RepoGraph, files: string[], depth: numb
 			file: a.symbol.file,
 			line: a.symbol.line,
 			direction: a.direction,
+			// #631 B: per-affected-symbol edge provenance summary
+			provenanceCounts: _countProvenance(graph, a.symbol.id),
 		})),
 		affectedTests,
 		risk,
@@ -387,6 +453,15 @@ export interface CallChainEdge {
 	symbol: string;
 	file: string;
 	kind: string;
+	/**
+	 * Edge provenance (issue #631 B). The classification of how this
+	 * edge was resolved: "resolved" for LSP-confirmed calls,
+	 * "name_match" for symbol-name lookups, "heuristic" for
+	 * tree-sitter-inferred references, or "unresolved" when the
+	 * target could not be located. Defaulted to "heuristic" when the
+	 * in-memory edge carries no provenance field.
+	 */
+	provenance: Provenance;
 }
 
 export interface CallChainEntry {
@@ -425,6 +500,12 @@ function _buildCallChainResult(
 							symbol: sym.name,
 							file: sym.file,
 							kind: edge.kind,
+							// #631 B: surface per-edge provenance so the
+							// consumer can tell LSP-resolved callers apart
+							// from tree-sitter heuristics. Edges without a
+							// provenance field default to "heuristic" (see
+							// DEFAULT_PROVENANCE in core/graph.ts).
+							provenance: (edge.provenance ?? "heuristic") as Provenance,
 						};
 					})
 				: [];
@@ -437,6 +518,7 @@ function _buildCallChainResult(
 							symbol: sym.name,
 							file: sym.file,
 							kind: edge.kind,
+							provenance: (edge.provenance ?? "heuristic") as Provenance,
 						};
 					})
 				: [];
@@ -465,9 +547,9 @@ function _executeCallChainJson(
 	);
 }
 
-function _traceIncoming(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, { kind: string }][] {
+function _traceIncoming(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, Edge][] {
 	const visited = new Set<string>();
-	const result: [number, Symbol, { kind: string }][] = [];
+	const result: [number, Symbol, Edge][] = [];
 	const queue: { id: string; depth: number }[] = [{ id: startId, depth: 0 }];
 	visited.add(startId);
 
@@ -489,9 +571,9 @@ function _traceIncoming(graph: RepoGraph, startId: string, maxDepth: number): [n
 	return result;
 }
 
-function _traceOutgoing(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, { kind: string }][] {
+function _traceOutgoing(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, Edge][] {
 	const visited = new Set<string>();
-	const result: [number, Symbol, { kind: string }][] = [];
+	const result: [number, Symbol, Edge][] = [];
 	const queue: { id: string; depth: number }[] = [{ id: startId, depth: 0 }];
 	visited.add(startId);
 
