@@ -26,8 +26,7 @@ import { createRepoGraph, createSymbol, createEdge, type RepoGraph } from "../co
  */
 function buildProvenanceFixture(): RepoGraph {
 	const graph = createRepoGraph();
-	const sym = (id: string, name: string, file: string, line: number) =>
-		createSymbol(id, name, "function", file, line);
+	const sym = (id: string, name: string, file: string, line: number) => createSymbol(id, name, "function", file, line);
 
 	const target = sym("src/target.ts::target::10", "target", "src/target.ts", 10);
 	const a = sym("src/a.ts::a::1", "a", "src/a.ts", 1);

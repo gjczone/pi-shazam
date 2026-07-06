@@ -83,7 +83,7 @@ export function buildChangesResult(graph: RepoGraph, projectRoot: string): Chang
 	// structural change magnitude without re-parsing the diff.
 	// Only meaningful when there are actual changes to report.
 	const structuralChanges =
-		changedFiles.length > 0 && changedFiles.length <= 20 ? getGitNumstat(projectRoot) ?? undefined : undefined;
+		changedFiles.length > 0 && changedFiles.length <= 20 ? (getGitNumstat(projectRoot) ?? undefined) : undefined;
 
 	const nextItems = getNextForTool("changes", { riskLevel: risk.level });
 	return {

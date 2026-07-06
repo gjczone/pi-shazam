@@ -9,13 +9,7 @@
  * text-mode consumers).
  */
 import { describe, it, expect } from "vitest";
-import {
-	createRepoGraph,
-	createSymbol,
-	createEdge,
-	type RepoGraph,
-	type Provenance,
-} from "../core/graph.js";
+import { createRepoGraph, createSymbol, createEdge, type RepoGraph, type Provenance } from "../core/graph.js";
 import { _buildSymbolLookupResult } from "../tools/lookup.js";
 
 /**
@@ -25,8 +19,7 @@ import { _buildSymbolLookupResult } from "../tools/lookup.js";
  */
 function buildProvenanceRankFixture(): RepoGraph {
 	const graph = createRepoGraph();
-	const sym = (id: string, name: string, file: string, line: number) =>
-		createSymbol(id, name, "function", file, line);
+	const sym = (id: string, name: string, file: string, line: number) => createSymbol(id, name, "function", file, line);
 
 	const high = sym("src/high.ts::target::10", "target", "src/high.ts", 10);
 	const low = sym("src/low.ts::target::20", "target", "src/low.ts", 20);

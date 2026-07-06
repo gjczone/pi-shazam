@@ -10,7 +10,13 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync, renameSyn
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
-import { serializeGraphV2 as _serializeGraphV2, deserializeGraphV2, createRepoGraph, type Edge, type Provenance } from "./graph.js";
+import {
+	serializeGraphV2 as _serializeGraphV2,
+	deserializeGraphV2,
+	createRepoGraph,
+	type Edge,
+	type Provenance,
+} from "./graph.js";
 import type { RepoGraph, GraphCacheData as GraphCacheDataExport } from "./graph.js";
 import { _logWarn } from "./output.js";
 import {
@@ -231,9 +237,7 @@ export function serializeGraphV3(graph: RepoGraph, fileMtimes?: Map<string, numb
 		})),
 		fileSymbols: Object.fromEntries(graph.fileSymbols),
 		fileImports: Object.fromEntries(graph.fileImports),
-		fileImportBindings: Object.fromEntries(
-			[...graph.fileImportBindings].map(([k, v]) => [k, v]),
-		),
+		fileImportBindings: Object.fromEntries([...graph.fileImportBindings].map(([k, v]) => [k, v])),
 		// Carry the fileMtimes through to the loader so the
 		// mtime-based cache invalidation in scanProject() can run
 		// against V3 caches as well.

@@ -7,23 +7,13 @@
  * covers the round-trip and magic-byte detection paths.
  */
 import { describe, it, expect } from "vitest";
-import {
-	createRepoGraph,
-	createSymbol,
-	createEdge,
-	type RepoGraph,
-} from "../core/graph.js";
-import {
-	serializeGraphV3,
-	deserializeGraphV3,
-	CACHE_V3_MAGIC,
-} from "../core/cache.js";
+import { createRepoGraph, createSymbol, createEdge, type RepoGraph } from "../core/graph.js";
+import { serializeGraphV3, deserializeGraphV3, CACHE_V3_MAGIC } from "../core/cache.js";
 
 /** Build a small graph fixture with all five edge maps populated. */
 function buildV3Fixture(): RepoGraph {
 	const graph = createRepoGraph();
-	const sym = (id: string, name: string, file: string, line: number) =>
-		createSymbol(id, name, "function", file, line);
+	const sym = (id: string, name: string, file: string, line: number) => createSymbol(id, name, "function", file, line);
 
 	const a = sym("src/a.ts::a::1", "a", "src/a.ts", 1);
 	const b = sym("src/b.ts::b::1", "b", "src/b.ts", 1);

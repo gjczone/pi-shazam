@@ -22,8 +22,7 @@ import { createRepoGraph, createSymbol, createEdge, type RepoGraph } from "../co
  */
 function buildMermaidFixture(): RepoGraph {
 	const graph = createRepoGraph();
-	const sym = (id: string, name: string, file: string, line: number) =>
-		createSymbol(id, name, "function", file, line);
+	const sym = (id: string, name: string, file: string, line: number) => createSymbol(id, name, "function", file, line);
 
 	const target = sym("src/target.ts::target::10", "target", "src/target.ts", 10);
 	const foo = sym("src/foo.ts::foo::1", "foo", "src/foo.ts", 1);

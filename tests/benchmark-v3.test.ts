@@ -15,13 +15,7 @@
  * is identical between V2 and V3.
  */
 import { describe, it, expect } from "vitest";
-import {
-	createRepoGraph,
-	createSymbol,
-	createEdge,
-	serializeGraphV2,
-	type RepoGraph,
-} from "../core/graph.js";
+import { createRepoGraph, createSymbol, createEdge, serializeGraphV2, type RepoGraph } from "../core/graph.js";
 import { serializeGraphV3, deserializeGraphV3 } from "../core/cache.js";
 
 /**
