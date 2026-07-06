@@ -34,6 +34,11 @@ function emptyGraph(): RepoGraph {
 		incoming: new Map(),
 		outgoing: new Map(),
 		fileImports: new Map(),
+		fileCalls: new Map(),
+		fileRefs: new Map(),
+		fileTypeRefs: new Map(),
+		fileImportBindings: new Map(),
+		targetToSources: new Map(),
 	};
 }
 
