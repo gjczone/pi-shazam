@@ -41,7 +41,7 @@ import {
 import { executeFormat, executeFormatJson } from "./format.js";
 import { executeVerifyTextAsync, executeVerifyJsonAsync, capVerifyDiagnostics } from "./verify.js";
 import { executeChanges, executeChangesJson } from "./changes.js";
-import { executeRenameSymbol, formatRenameResult } from "./rename_symbol.js";
+import { executeRenameSymbol, formatRenameResult, executeRenameSymbolJson } from "./rename_symbol.js";
 import { hasCallChainChecked, recordCallChain } from "./rename-state.js";
 import { validatePathInProject, buildEnvelope } from "./_factory.js";
 import { existsSync } from "node:fs";
@@ -475,8 +475,7 @@ export async function dispatchRenameSymbol(
 	}
 
 	const result = await executeRenameSymbol(graph, symbolName, newName, dryRun, projectRoot);
-	const text = json
-		? buildEnvelope("shazam_rename_symbol", projectRoot, "ok", result)
-		: formatRenameResult(result, symbolName, newName, dryRun);
-	return { text };
+	const text = json ? executeRenameSymbolJson(result, projectRoot) : formatRenameResult(result, symbolName, newName, dryRun);
+	const isError = result.kind === "error" || result.kind === "not_found";
+	return { text, isError };
 }
