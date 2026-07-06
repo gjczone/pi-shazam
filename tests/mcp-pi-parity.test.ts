@@ -235,10 +235,14 @@ describe("MCP-Pi parity contract tests", () => {
 			const mcpText = await invokeMcpTool("shazam_changes", {});
 			// File counts may differ due to scan timing (Pi re-scans, MCP uses cached graph).
 			// Verify that key sections and structure match instead of exact equality.
+			// Both compact no-op (issue #634) and full output share the
+			// `## Change Summary` header. The full output additionally
+			// includes `### Risk Level`; the compact no-op short-circuits
+			// to a single summary line.
 			expect(piText).toContain("## Change Summary");
 			expect(mcpText).toContain("## Change Summary");
-			expect(piText).toContain("### Risk Level");
-			expect(mcpText).toContain("### Risk Level");
+			expect(piText).toMatch(/### Risk Level|No uncommitted changes/);
+			expect(mcpText).toMatch(/### Risk Level|No uncommitted changes/);
 		});
 
 		it("produces equivalent JSON output", async () => {
