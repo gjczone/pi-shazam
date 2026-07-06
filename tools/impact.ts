@@ -6,7 +6,7 @@
  */
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import { Type } from "typebox";
-import type { RepoGraph, Symbol } from "../core/graph.js";
+import type { Edge, Provenance, RepoGraph, Symbol } from "../core/graph.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 import { createTool, buildEnvelope } from "./_factory.js";
 import { dispatchImpact } from "./_dispatchers.js";
@@ -15,6 +15,50 @@ import { assessRisk } from "../core/risk.js";
 import { recordCallChain } from "./rename-state.js";
 import { getEffectiveRoot } from "../core/scanner.js";
 import { isTestFile, filterTestFiles } from "../core/test-patterns.js";
+import type { SymbolLookupProvenanceCounts } from "./lookup.js";
+
+/**
+ * Default zeroed provenance counts, used as the initial accumulator
+ * when summarizing edge provenance for an affected symbol.
+ */
+const ZERO_PROVENANCE_COUNTS: SymbolLookupProvenanceCounts = {
+	resolved: 0,
+	name_match: 0,
+	heuristic: 0,
+	unresolved: 0,
+};
+
+/**
+ * Count edges by provenance for a single symbol. Iterates both the
+ * incoming and outgoing edge lists of the symbol and tallies each
+ * `Edge.provenance` value. Edges without a provenance field default
+ * to "heuristic" to match `DEFAULT_PROVENANCE` in core/graph.ts.
+ */
+function _countProvenance(graph: RepoGraph, symbolId: string): SymbolLookupProvenanceCounts {
+	const counts: SymbolLookupProvenanceCounts = { ...ZERO_PROVENANCE_COUNTS };
+	for (const list of [graph.incoming.get(symbolId), graph.outgoing.get(symbolId)]) {
+		if (!list) continue;
+		for (const edge of list) {
+			const p: Provenance = (edge.provenance ?? "heuristic") as Provenance;
+			counts[p]++;
+		}
+	}
+	return counts;
+}
+
+/**
+ * Render a compact provenance summary for markdown output, e.g.
+ * "R:1 H:1 N:1" for one edge in each category. Categories with
+ * zero count are omitted so the output stays tight.
+ */
+function _renderProvenanceBadge(counts: SymbolLookupProvenanceCounts): string {
+	const parts: string[] = [];
+	if (counts.resolved > 0) parts.push(`R:${counts.resolved}`);
+	if (counts.name_match > 0) parts.push(`N:${counts.name_match}`);
+	if (counts.heuristic > 0) parts.push(`H:${counts.heuristic}`);
+	if (counts.unresolved > 0) parts.push(`U:${counts.unresolved}`);
+	return parts.length > 0 ? ` (${parts.join(" ")})` : "";
+}
 
 export function registerImpact(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -192,7 +236,19 @@ export function executeImpact(
 				const upstreamCount = syms.filter((s) => s.direction === "upstream").length;
 				const downstreamCount = syms.filter((s) => s.direction === "downstream").length;
 				const direction = upstreamCount > downstreamCount ? "upstream caller" : "downstream callee";
-				lines.push(`#### \`${f}\` (${direction})`);
+				// #631 B: aggregate provenance counts across all affected
+				// symbols in this file so the markdown line shows a single
+				// compact summary of how much of the blast radius is
+				// LSP-resolved vs tree-sitter-heuristic.
+				const fileCounts: SymbolLookupProvenanceCounts = { ...ZERO_PROVENANCE_COUNTS };
+				for (const s of syms) {
+					const c = _countProvenance(graph, s.symbol.id);
+					fileCounts.resolved += c.resolved;
+					fileCounts.name_match += c.name_match;
+					fileCounts.heuristic += c.heuristic;
+					fileCounts.unresolved += c.unresolved;
+				}
+				lines.push(`#### \`${f}\` (${direction})${_renderProvenanceBadge(fileCounts)}`);
 				for (const affected of syms.slice(0, 5)) {
 					lines.push(`- ${affected.symbol.kind} \`${affected.symbol.name}\` - line ${affected.symbol.line}`);
 				}
@@ -240,6 +296,14 @@ export interface ImpactAffectedSymbol {
 	file: string;
 	line: number;
 	direction: "upstream" | "downstream";
+	/**
+	 * Edge provenance breakdown (issue #631 B). Counts how many of the
+	 * symbol's incoming + outgoing edges fall into each provenance
+	 * category ("resolved", "name_match", "heuristic", "unresolved").
+	 * Lets JSON consumers tell at a glance which call sites are
+	 * LSP-resolved vs tree-sitter-heuristic.
+	 */
+	provenanceCounts: SymbolLookupProvenanceCounts;
 }
 
 export interface ImpactResult {
@@ -279,6 +343,8 @@ export function buildImpactResult(graph: RepoGraph, files: string[], depth: numb
 			file: a.symbol.file,
 			line: a.symbol.line,
 			direction: a.direction,
+			// #631 B: per-affected-symbol edge provenance summary
+			provenanceCounts: _countProvenance(graph, a.symbol.id),
 		})),
 		affectedTests,
 		risk,
@@ -387,6 +453,15 @@ export interface CallChainEdge {
 	symbol: string;
 	file: string;
 	kind: string;
+	/**
+	 * Edge provenance (issue #631 B). The classification of how this
+	 * edge was resolved: "resolved" for LSP-confirmed calls,
+	 * "name_match" for symbol-name lookups, "heuristic" for
+	 * tree-sitter-inferred references, or "unresolved" when the
+	 * target could not be located. Defaulted to "heuristic" when the
+	 * in-memory edge carries no provenance field.
+	 */
+	provenance: Provenance;
 }
 
 export interface CallChainEntry {
@@ -395,6 +470,13 @@ export interface CallChainEntry {
 	outgoing: CallChainEdge[];
 	affectedTests: string[];
 	referencedFiles: string[];
+	/**
+	 * Mermaid `flowchart TD` block (issue #631 B). LLM agents can
+	 * embed the block directly in chat responses or docs. Limited
+	 * to a small node count so the diagram stays readable; for
+	 * larger graphs the field may be undefined.
+	 */
+	mermaid?: string;
 }
 
 export type CallChainResult = CallChainEntry[];
@@ -404,7 +486,7 @@ export type CallChainResult = CallChainEntry[];
  * for the call-chain JSON envelope; previously the shape was
  * inlined inside _executeCallChainJson.
  */
-function _buildCallChainResult(
+export function _buildCallChainResult(
 	graph: RepoGraph,
 	symbolName: string,
 	depth: number,
@@ -425,6 +507,12 @@ function _buildCallChainResult(
 							symbol: sym.name,
 							file: sym.file,
 							kind: edge.kind,
+							// #631 B: surface per-edge provenance so the
+							// consumer can tell LSP-resolved callers apart
+							// from tree-sitter heuristics. Edges without a
+							// provenance field default to "heuristic" (see
+							// DEFAULT_PROVENANCE in core/graph.ts).
+							provenance: (edge.provenance ?? "heuristic") as Provenance,
 						};
 					})
 				: [];
@@ -437,17 +525,24 @@ function _buildCallChainResult(
 							symbol: sym.name,
 							file: sym.file,
 							kind: edge.kind,
+							provenance: (edge.provenance ?? "heuristic") as Provenance,
 						};
 					})
 				: [];
 		const { tests: affectedTests } = filterTestFiles([...referencedFiles]);
-		return {
+		const entry: CallChainEntry = {
 			symbol: { id: target.id, name: target.name, kind: target.kind, file: target.file, line: target.line },
 			incoming,
 			outgoing,
 			affectedTests,
 			referencedFiles: [...referencedFiles],
 		};
+		// #631 B: attach a Mermaid call graph to each entry. The
+		// generator is a pure function over the entry's edges, so we
+		// build it once per entry and let the dispatcher emit it as
+		// part of the JSON envelope.
+		entry.mermaid = buildMermaidCallGraph(entry);
+		return entry;
 	});
 }
 
@@ -465,9 +560,9 @@ function _executeCallChainJson(
 	);
 }
 
-function _traceIncoming(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, { kind: string }][] {
+function _traceIncoming(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, Edge][] {
 	const visited = new Set<string>();
-	const result: [number, Symbol, { kind: string }][] = [];
+	const result: [number, Symbol, Edge][] = [];
 	const queue: { id: string; depth: number }[] = [{ id: startId, depth: 0 }];
 	visited.add(startId);
 
@@ -489,9 +584,9 @@ function _traceIncoming(graph: RepoGraph, startId: string, maxDepth: number): [n
 	return result;
 }
 
-function _traceOutgoing(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, { kind: string }][] {
+function _traceOutgoing(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, Edge][] {
 	const visited = new Set<string>();
-	const result: [number, Symbol, { kind: string }][] = [];
+	const result: [number, Symbol, Edge][] = [];
 	const queue: { id: string; depth: number }[] = [{ id: startId, depth: 0 }];
 	visited.add(startId);
 
@@ -609,6 +704,114 @@ function _formatFlatReferences(refs: FlatReference[], symbolName: string): strin
 	}
 
 	return lines.join("\n");
+}
+
+// -- Mermaid call graph (issue #631 B, slice 3.2) -------------------------
+
+/**
+ * Maximum number of nodes rendered in a single Mermaid call graph.
+ * Keeps the diagram readable and bounded in size. Edges beyond the
+ * cap are silently dropped (callers and callees are ranked first).
+ */
+const MAX_MERMAID_NODES = 30;
+
+/**
+ * Sanitize a symbol name for use as a Mermaid node identifier. Mermaid
+ * is sensitive to a handful of characters in node labels, so we keep
+ * the displayed label friendly and use a separate sanitized key in
+ * the node declaration. Returns `{ id, label }` where `id` is a
+ * Mermaid-safe token and `label` is the human-readable display text.
+ */
+function _mermaidSafeName(rawName: string): { id: string; label: string } {
+	const id = rawName.replace(/[^A-Za-z0-9_]/g, "_");
+	const label = rawName.replace(/"/g, '\\"');
+	return { id, label };
+}
+
+/**
+ * Build a Mermaid `flowchart TD` block for one CallChainEntry. Edges
+ * are annotated with their provenance: `resolved` shows a solid line
+ * `-->`, `heuristic` shows a thin line `-->` (Mermaid's default),
+ * `name_match` and `unresolved` show dashed lines `-.->`. The block
+ * is capped at MAX_MERMAID_NODES symbols to keep the diagram
+ * readable; larger graphs are truncated with a trailing comment.
+ *
+ * Pure function: no side effects, no graph mutation.
+ */
+export function buildMermaidCallGraph(entry: CallChainEntry): string {
+	// Collect unique symbol names from incoming + outgoing edges plus
+	// the entry's own symbol. Cap at MAX_MERMAID_NODES by picking the
+	// most-connected symbols first.
+	const neighborNames = new Set<string>();
+	for (const e of entry.incoming) neighborNames.add(e.symbol);
+	for (const e of entry.outgoing) neighborNames.add(e.symbol);
+	neighborNames.add(entry.symbol.name);
+
+	let names = [...neighborNames];
+	// Always keep the entry's own symbol in the rendered set even
+	// when neighbor count exceeds the cap, so the entry is never
+	// dropped from its own call graph.
+	if (names.length > MAX_MERMAID_NODES) {
+		const own = entry.symbol.name;
+		const trimmed = names.slice(0, MAX_MERMAID_NODES);
+		if (!trimmed.includes(own)) {
+			trimmed[trimmed.length - 1] = own;
+		}
+		names = trimmed;
+	}
+
+	// Map raw symbol name -> { mermaidId, label } for de-duplicated
+	// node declarations. We also build a label map for the entry's
+	// own symbol so its file can be rendered as a tooltip-style hint.
+	const idFor = new Map<string, { id: string; label: string }>();
+	for (const n of names) idFor.set(n, _mermaidSafeName(n));
+
+	const lines: string[] = ["flowchart TD"];
+
+	// Node declarations
+	for (const n of names) {
+		const { id, label } = idFor.get(n)!;
+		lines.push(`  ${id}["${label}"]`);
+	}
+
+	// Edges from the entry's own outgoing calls
+	for (const e of entry.outgoing) {
+		if (!idFor.has(e.symbol)) continue;
+		const { id: srcId } = idFor.get(entry.symbol.name)!;
+		const { id: tgtId } = idFor.get(e.symbol)!;
+		lines.push(`  ${_mermaidEdge(srcId, tgtId, e.provenance)}`);
+	}
+
+	// Edges from incoming calls -- invert direction so the diagram
+	// reads as "this symbol is called by ..."
+	for (const e of entry.incoming) {
+		if (!idFor.has(e.symbol)) continue;
+		const { id: srcId } = idFor.get(e.symbol)!;
+		const { id: tgtId } = idFor.get(entry.symbol.name)!;
+		lines.push(`  ${_mermaidEdge(srcId, tgtId, e.provenance)}`);
+	}
+
+	if (neighborNames.size > MAX_MERMAID_NODES) {
+		lines.push(`  %% truncated: ${neighborNames.size - MAX_MERMAID_NODES} more symbol(s) omitted`);
+	}
+
+	return lines.join("\n");
+}
+
+/**
+ * Pick the Mermaid arrow style + label for a given edge provenance.
+ * Returns the full `SRC -->|label| TGT` fragment as a tuple so the
+ * caller can drop it into a line. The label embeds the provenance
+ * word so consumers reading the raw text can see it without parsing
+ * Mermaid syntax.
+ * - resolved: solid arrow, label "resolved"
+ * - heuristic: solid arrow, label "heuristic"
+ * - name_match: dashed arrow, label "name_match"
+ * - unresolved: dashed arrow, label "unresolved"
+ */
+function _mermaidEdge(srcId: string, tgtId: string, provenance: Provenance): string {
+	const arrow = provenance === "name_match" || provenance === "unresolved" ? "-.->" : "-->";
+	return `${srcId} ${arrow}|${provenance}| ${tgtId}`;
 }
 
 // -- Backward-compatible exports (for call_chain tests) -----------------

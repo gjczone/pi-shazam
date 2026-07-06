@@ -155,6 +155,45 @@ export function getGitChangedFiles(projectRoot: string): string[] {
 }
 
 /**
+ * #631 B (slice 3.5): structural view of working-tree changes.
+ *
+ * Runs `git diff --numstat` (staged + unstaged) and tallies the
+ * added and removed line counts. Returns null when the project is
+ * not a git repo, when there are no changes, or when the numstat
+ * output cannot be parsed.
+ *
+ * The `modified` count is the number of distinct files that
+ * appear in the numstat output (any line with non-zero added or
+ * removed counts). Pure binary additions (e.g. new files with 0
+ * deletions) are counted as added; pure deletions count as removed.
+ */
+export function getGitNumstat(projectRoot: string): { added: number; removed: number; modified: number } | null {
+	const gitDir = resolveGitWorkdir(projectRoot);
+	const unstaged = safeGitExec(["diff", "--numstat", "--diff-filter=ACMR"], gitDir, 5000);
+	const staged = safeGitExec(["diff", "--cached", "--numstat", "--diff-filter=ACMR"], gitDir, 5000);
+	const combined = [unstaged, staged].filter(Boolean).join("\n").trim();
+	if (!combined) return null;
+
+	let added = 0;
+	let removed = 0;
+	let modified = 0;
+	for (const line of combined.split("\n")) {
+		if (!line) continue;
+		// numstat format: "<added>\t<removed>\t<path>"
+		// Binary files show as "-\t-\t<path>" -- skip those.
+		const [aRaw, rRaw] = line.split("\t");
+		if (!aRaw || !rRaw || aRaw === "-" || rRaw === "-") continue;
+		const a = Number(aRaw);
+		const r = Number(rRaw);
+		if (!Number.isFinite(a) || !Number.isFinite(r)) continue;
+		added += a;
+		removed += r;
+		modified += 1;
+	}
+	return { added, removed, modified };
+}
+
+/**
  * Reset git cache. Used only in tests.
  */
 export function _resetGitCache(): void {

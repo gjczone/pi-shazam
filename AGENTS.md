@@ -198,7 +198,8 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 - **Deployment**: Pi extension (symlink dist/ into `~/.pi/agent/extensions/pi-shazam`) + MCP server (`npx pi-shazam-mcp`)
 - **Test framework**: vitest, 48 TypeScript source files, tests in `tests/`
 - **Key boundaries**: `core/` must never import from `tools/`, `hooks/`, or `lsp/`. Zero HTTP framework, zero ORM, zero auth.
-- **Primary risk areas**: tree-sitter grammar version compatibility, LSP JSON-RPC frame parsing, encoding fallback (UTF-8/GBK/GB2312), MCP/Pi tool definition sync, Windows LSP server discovery (SAFE_PATH_DIRS)
+- **On-disk cache**: V3 (ProtoBuf columnar) format by default since #628, magic header `SHA\3`. V2 (JSON) cache is still readable for backward compat — see `core/cache.ts` and `core/graph.proto`.
+- **Primary risk areas**: tree-sitter grammar version compatibility, LSP JSON-RPC frame parsing, encoding fallback (UTF-8/GBK/GB2312), MCP/Pi tool definition sync, Windows LSP server discovery (SAFE_PATH_DIRS), V3 cache magic byte routing
 
 ## Commands
 
@@ -259,6 +260,8 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 - **Adding a new tool**: Create `tools/<name>.ts` with `register*` function using `createTool()` from `tools/_factory.ts` -> import and call in `index.ts` -> append Next recommendation rules to `NEXT_RULES` in `core/output.ts` -> sync in `mcp/tools.ts` and `mcp/README.md` -> add docs to `SKILL.md` -> update `README.md` if user-facing tool list changed.
 - **Modifying an existing tool handler**: When you change the dispatch logic, parameter validation, path guards, error handling, or routing in any `tools/*.ts` `register*` or `execute*` function, you MUST mirror the change in the corresponding MCP handler in `mcp/tools.ts`. After both sides are updated, run `bash scripts/check-mcp-parity.sh` to confirm parity. See #616 and #618 for the root cause of drift.
 - **Adding a typed result to a tool (#631 A)**: Each tool file should expose `buildXxxResult(graph, projectRoot, options?): XxxResult` (the typed data) and `executeXxxJson(result, projectRoot): string` (thin `buildEnvelope` wrapper). The existing `executeXxx` keeps its string-returning signature for backward compat with the 52 tests; it internally calls `renderXxxMarkdown(buildXxxResult(...))`. Dispatcher pattern: `result = buildXxxResult(...); text = json ? executeXxxJson(result, projectRoot) : renderXxxMarkdown(result)`. The XxxResult interface is exported so PR-G enrichment can extend it.
+- **Extending a typed result with provenance / density / structural data (#631 B)**: New fields go onto the existing `XxxResult` interface; compute them inside `buildXxxResult` (single source of truth). For per-affected-symbol provenance summaries add a `provenanceCounts: SymbolLookupProvenanceCounts` field; for per-edge provenance on call chains add `provenance: Provenance` to each edge; for directory density add a `topByDensity: OverviewModuleDensity[]` field; for line-count structural changes add a `structuralChanges?: { added, removed, modified }` field. Markdown renderers may add a compact badge; JSON surfaces the full data. New types are exported so future tests can import them.
+- **Adding a V3 (ProtoBuf) cache field (#628)**: Define a columnar ProtoBuf message in `core/graph.proto` (source of truth) and mirror the schema as JSON in `core/proto-schema.ts` (runtime). New serialize / deserialize functions go in `core/cache.ts`; they must be guarded by a 4-byte magic header so `loadGraphCache` can route to the right deserializer. Wire `saveGraphCache` to write the new format and `loadGraphCache` to detect it and fall back to the previous format. Never break the on-disk backward-compat path.
 - **Adding a new hook**: Create `hooks/<name>.ts` with `register*` calling `pi.on(...)` -> import and call in `index.ts`. Hooks listen to lifecycle events (`tool_execution_start`, `before_agent_start`, etc.); they do not return tools to LLM.
 - **Adding a new language**: Add grammar to `core/treesitter.ts` EXT_TO_LANG map -> add tree-sitter query in `core/treesitter-queries.ts` -> add LSP server config in `lsp/servers.ts`.
 - **Wiring a shared utility**: Add function to appropriate `core/*.ts` -> export -> import in consumers from `../core/<file>.js`. `core/` is the only valid home for cross-layer utilities.
@@ -278,6 +281,9 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 - `core/config.ts` — `.pi-shazam/config.json` loader (#630)
 - `core/risk.ts` — risk-level assessment for verify and pre-commit
 - `core/baseline.ts` — graph-baseline diff for risk and orphan tracking
+- `core/cache.ts` — on-disk graph cache (V2 JSON + V3 ProtoBuf, #628)
+- `core/proto-schema.ts` — JSON mirror of `core/graph.proto` (ProtoBuf runtime)
+- `core/graph.proto` — columnar ProtoBuf schema for the V3 cache (source of truth)
 - `lsp/client.ts` — LSP JSON-RPC communication
 - `lsp/manager.ts` — LSP server lifecycle + per-file mtime cache (#641)
 - `tools/_factory.ts` — tool registration factory

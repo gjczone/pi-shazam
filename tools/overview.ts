@@ -272,6 +272,22 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 		lines.push(`- \`${label}\` - ${count} ${fileWord}`);
 	}
 
+	// #631 B: per-directory symbol density. The Module Density list
+	// shows the top 10 directories by symbols-per-file ratio so an
+	// LLM agent can spot "god modules" without paging through the
+	// source tree.
+	if (!filter) {
+		const densities = _buildTopByDensity(graph, files, 10);
+		if (densities.length > 0) {
+			lines.push("");
+			lines.push("### Module Density (Top 10 by symbols-per-file)");
+			lines.push("");
+			for (const d of densities) {
+				lines.push(`- \`${d.dir}\` - ${d.symbols} symbols / ${d.files} files = ${d.ratio}`);
+			}
+		}
+	}
+
 	// Issue #632: when the default test-exclusion policy filtered out files,
 	// surface the count here so LLM agents see the gap. Only render when the
 	// count is non-zero -- a no-op footnote adds noise. Information follows
@@ -403,6 +419,19 @@ export interface OverviewResult {
 	recentChanges?: string;
 	topFiles: OverviewTopFile[];
 	hotspots?: { byPageRank: OverviewHotspot[]; byComplexity: OverviewHotspot[] };
+	/**
+	 * Module density ranking (issue #631 B, slice 3.3). Top 10
+	 * directories by symbols-per-file ratio -- surfaces "god
+	 * module" candidates without paging through the source tree.
+	 */
+	topByDensity?: OverviewModuleDensity[];
+}
+
+export interface OverviewModuleDensity {
+	dir: string;
+	files: number;
+	symbols: number;
+	ratio: number;
 }
 
 /**
@@ -440,6 +469,13 @@ export function buildOverviewResult(graph: RepoGraph, projectRoot: string, filte
 				byComplexity: topByComplexity(graph, projectRoot, HOTSPOTS_TOP_N),
 			};
 
+	// #631 B (slice 3.3): compute per-directory symbol density
+	// (symbols / files). Surfaces "god module" candidates without
+	// having to scan the full source tree. The directory is the
+	// first two path segments, matching the "Module Structure" view
+	// in the markdown output. Skipped when a filter is active.
+	const topByDensity = filter ? undefined : _buildTopByDensity(graph, files, 10);
+
 	return {
 		kind: files.length === 0 ? "empty" : "overview",
 		filter,
@@ -457,7 +493,38 @@ export function buildOverviewResult(graph: RepoGraph, projectRoot: string, filte
 			pagerank: Number(stats.pagerank.toFixed(4)),
 		})),
 		hotspots,
+		topByDensity,
 	};
+}
+
+/**
+ * #631 B: rank directories by symbols-per-file ratio. The directory
+ * for a file is its first two path segments ("(root)" for top-level
+ * files); this matches the grouping used in the markdown "Module
+ * Structure" section so the JSON field and the text view agree.
+ */
+function _buildTopByDensity(graph: RepoGraph, files: string[], topN: number): OverviewModuleDensity[] {
+	const dirStats = new Map<string, { files: number; symbols: number }>();
+	for (const file of files) {
+		const dir = file.includes("/") ? file.split("/").slice(0, 2).join("/") : "(root)";
+		const symCount = graph.fileSymbols.get(file)?.length ?? 0;
+		const existing = dirStats.get(dir) ?? { files: 0, symbols: 0 };
+		existing.files += 1;
+		existing.symbols += symCount;
+		dirStats.set(dir, existing);
+	}
+	const result: OverviewModuleDensity[] = [];
+	for (const [dir, stats] of dirStats) {
+		if (stats.files === 0) continue;
+		result.push({
+			dir,
+			files: stats.files,
+			symbols: stats.symbols,
+			ratio: Number((stats.symbols / stats.files).toFixed(2)),
+		});
+	}
+	result.sort((a, b) => b.ratio - a.ratio);
+	return result.slice(0, topN);
 }
 
 // -- Entry point detection (#489) ---------------------------------------

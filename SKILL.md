@@ -35,7 +35,7 @@ When you first enter a project or return after changes — use this to understan
 - `json`: set `true` for structured output
 - `maxTokens`: limit output size
 
-**Returns**: module dependency map, top-10 PageRank files (hotspots), key dependencies (from package.json), recent git commits, entry points (auto-detected CLI/HTTP/event handlers), key data structures (classes/interfaces/structs sorted by PageRank), reading order, HTTP routes (web projects). Key Dependencies and Recent Changes sections are suppressed in filter mode.
+**Returns**: module dependency map, top-10 PageRank files (hotspots), key dependencies (from package.json), recent git commits, entry points (auto-detected CLI/HTTP/event handlers), key data structures (classes/interfaces/structs sorted by PageRank), reading order, HTTP routes (web projects), and a "Module Density" list ranking directories by symbols-per-file ratio (#631 B). The JSON envelope adds a `topByDensity: OverviewModuleDensity[]` field. Key Dependencies, Recent Changes, and Module Density sections are suppressed in filter mode.
 
 **When to use**: first turn in a new repo, after git clone, after switching to an unfamiliar project, deciding where to focus code review (hotspots show highest blast-radius files).
 
@@ -58,7 +58,7 @@ Unified symbol and file lookup. Combines symbol definition, type signature, docu
 - `showCallbacks`: expand anonymous functions in call graph
 - `direction`: type hierarchy traversal — `"both"` (default), `"supertypes"`, or `"subtypes"`
 
-**Returns**: When `name` is a symbol: definition, kind, signature, file location, PageRank score, callers, callees, type signatures, documentation comments, and type hierarchy. When `name` is a file path: all symbols in the file with signatures, visibility, line ranges, incoming call count, PageRank score, and document symbol hierarchy.
+**Returns**: When `name` is a symbol: definition, kind, signature, file location, PageRank score, callers, callees, type signatures, documentation comments, and type hierarchy. The JSON envelope attaches a `provenanceCounts` summary (resolved | name_match | heuristic | unresolved counts across incoming+outgoing edges) and sorts matches by provenance weight so the most-trustworthy symbols come first (#631 B). When `name` is a file path: all symbols in the file with signatures, visibility, line ranges, incoming call count, PageRank score, and document symbol hierarchy.
 
 **When to use**: before importing a module, before calling a function, checking symbol visibility, understanding a symbol's type signature, getting API documentation, before editing a file for the first time (pass file path), understanding class inheritance (`direction` param), finding all interface implementations, searching for a concept across the codebase (`mode=search` or natural language query like "how is X implemented").
 
@@ -87,7 +87,7 @@ Required before editing 2+ files or any shared/exported module. Also performs ca
 - `flat`: return simple flat list of all references
 - `direction`: call chain direction — `"incoming"`, `"outgoing"`, or `"both"` (default)
 
-**Returns**: When `files` is provided: every file, symbol, and test affected by your planned changes. When `symbol` is provided: incoming calls, outgoing calls, and full reference list for the symbol.
+**Returns**: When `files` is provided: every file, symbol, and test affected by your planned changes. The JSON envelope includes a `provenanceCounts` summary on every affected symbol so consumers can tell LSP-resolved callers apart from tree-sitter-heuristic ones (#631 B); the markdown output adds a compact `R:N H:M` badge to the affected-file line. When `symbol` is provided: incoming calls, outgoing calls, and full reference list for the symbol. The call-chain JSON entries also carry a per-edge `provenance` field and a `mermaid` string with a `flowchart TD` block (LLM-embeddable Mermaid call graph, capped at 30 nodes).
 
 **When to use**: refactoring, adding a parameter to a shared function, changing a type definition, before any PR touching >1 file. Use `--symbol` when changing parameter order, removing a function, renaming an exported symbol, or changing return type.
 
@@ -178,7 +178,7 @@ Git change summary with risk level. Shows what changed in the working tree and a
 
 - No required parameters — uses the project root automatically.
 
-**Returns**: list of changed files, risk assessment, orphan symbol summary, and summary of changes.
+**Returns**: list of changed files, risk assessment, orphan symbol summary, and summary of changes. The JSON envelope adds a `structuralChanges: { added, removed, modified }` field tallying line counts from `git diff --numstat` (#631 B); the markdown output adds a compact `(+N -M lines across K files)` badge under the file list.
 
 **When to use**: before creating a commit, reviewing what you are about to push, understanding the scope of uncommitted changes.
 

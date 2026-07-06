@@ -1,0 +1,60 @@
+// pi-shazam graph.proto
+//
+// Issue #628: compact columnar ProtoBuf encoding for the on-disk
+// graph cache. The `serializeGraphV2` JSON format is dense and
+// produces ~800KB files for a 1000-symbol project; this schema
+// represents the same edge data in a struct-of-arrays layout that
+// ProtoBuf's binary wire format compresses by 50-70%.
+//
+// The schema is intentionally narrow: only the edge maps
+// (incoming / outgoing / fileCalls / fileRefs / fileTypeRefs)
+// are encoded in ProtoBuf. Symbols and fileSymbols are still
+// written as JSON in the same payload -- those are few and
+// cheap, and proto's per-string overhead would dominate them.
+
+syntax = "proto3";
+
+package shazam.graph.v3;
+
+// Edges connecting symbols to other symbols (incoming / outgoing).
+message EdgeColumn {
+  // All edges are flattened into parallel arrays. Index i across
+  // each field describes the i-th edge. The length of every
+  // repeated field is identical (= total edge count).
+  repeated string source = 1;     // symbol id
+  repeated string target = 2;     // symbol id
+  repeated double weight = 3;
+  repeated string kind = 4;       // "call" | "type" | "import" | ...
+  repeated double confidence = 5;
+  // Provenance int mapping (matches `Provenance` in core/graph.ts):
+  //   0 = resolved, 1 = name_match, 2 = heuristic, 3 = unresolved
+  // Varint-encoded so the most-common case ("heuristic" = 2) costs
+  // a single byte per edge.
+  repeated int32 provenance = 6;
+}
+
+// Per-file edge maps: fileCalls, fileRefs, fileTypeRefs. Each entry
+// is a (file, symbolId, count) triple flattened across three columns.
+// The `kind` field distinguishes which map the row belongs to
+// ("call" | "ref" | "typeRef"); rows from all three maps are
+// concatenated into a single message per cache file.
+message FileEdgeColumn {
+  repeated string file = 1;        // file path
+  repeated string symbol_id = 2;   // referenced symbol id
+  repeated int32 count = 3;        // number of references
+  repeated string kind = 4;        // "call" | "ref" | "typeRef"
+}
+
+// Top-level payload: the ProtoBuf-encoded view of the graph.
+message GraphPayload {
+  // JSON-encoded metadata blob: the symbol table, fileSymbol
+  // index, fileImports, fileImportBindings, fileMtimes, and
+  // timestamp. Stored as a `bytes` field so ProtoBuf length-
+  // prefixes it; the contents are still JSON so the JSON parser
+  // does not have to learn a new format for those small maps.
+  bytes metadata = 1;
+  // The four parallel edge lists.
+  EdgeColumn edges = 2;
+  // The concatenated file-level edge maps.
+  FileEdgeColumn file_edges = 3;
+}

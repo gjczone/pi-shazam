@@ -315,7 +315,14 @@ export interface SymbolLookupEntry {
  * inside _executeSymbolJson.
  */
 export function _buildSymbolLookupResult(graph: RepoGraph, name: string, file?: string): SymbolLookupEntry[] {
-	return _findSymbols(graph, name, file).map((s) => {
+	// #631 B (slice 3.4): JSON consumers want the most-trustworthy
+	// (most LSP-resolved) matches first so they can act on them
+	// without re-ranking. Sort by provenance weight -- resolved
+	// edges are most trustworthy, name_match next, heuristic next,
+	// unresolved last -- with PageRank as a tiebreaker so the
+	// existing top-by-connection ordering is preserved when
+	// provenance mixes are equal.
+	const entries = _findSymbols(graph, name, file).map((s) => {
 		// #643: expose per-edge provenance so JSON consumers can tell
 		// which call sites are LSP-resolved vs tree-sitter-heuristic.
 		// Capped at 20 per direction to bound the payload size for
@@ -365,6 +372,20 @@ export function _buildSymbolLookupResult(graph: RepoGraph, name: string, file?: 
 			provenanceCounts,
 		};
 	});
+	// Sort by provenance weight (resolved > name_match > heuristic >
+	// unresolved), then by PageRank desc, then by name asc for
+	// stable, deterministic output.
+	entries.sort((a, b) => {
+		const pa = a.provenanceCounts;
+		const pb = b.provenanceCounts;
+		if (pa.resolved !== pb.resolved) return pb.resolved - pa.resolved;
+		if (pa.name_match !== pb.name_match) return pb.name_match - pa.name_match;
+		if (pa.heuristic !== pb.heuristic) return pb.heuristic - pa.heuristic;
+		if (pa.unresolved !== pb.unresolved) return pa.unresolved - pb.unresolved;
+		if (a.pagerank !== b.pagerank) return b.pagerank - a.pagerank;
+		return a.name.localeCompare(b.name);
+	});
+	return entries;
 }
 
 // -- Hover info extraction (from hover.ts) --------------------------------
