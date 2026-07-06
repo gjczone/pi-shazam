@@ -101,9 +101,7 @@ export function renderChangesMarkdown(result: ChangesResult): string {
 	lines.push("## Change Summary");
 	lines.push("");
 
-	lines.push(
-		`**Symbols:** ${result.symbolCount} | **Files:** ${result.fileCount} | **Edges:** ${result.edgeCount}`,
-	);
+	lines.push(`**Symbols:** ${result.symbolCount} | **Files:** ${result.fileCount} | **Edges:** ${result.edgeCount}`);
 	lines.push("");
 
 	if (result.gitChangedFiles.length > 0) {

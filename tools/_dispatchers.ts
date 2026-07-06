@@ -154,9 +154,7 @@ export async function dispatchLookup(
 		// wrong thing.
 		const message =
 			"shazam_lookup mode=state has been removed. Use `shazam_lookup --name <symbol>` for symbol detail, or `shazam_lookup --name <symbol> --direction supertypes|subtypes` for type hierarchy.";
-		text = json
-			? buildEnvelope("shazam_lookup", projectRoot, "error", { error: message })
-			: `Error: ${message}`;
+		text = json ? buildEnvelope("shazam_lookup", projectRoot, "error", { error: message }) : `Error: ${message}`;
 		return { text, isError: true };
 	} else if (mode === "search") {
 		if (json) {
@@ -466,7 +464,9 @@ export async function dispatchRenameSymbol(
 	}
 
 	const result = await executeRenameSymbol(graph, symbolName, newName, dryRun, projectRoot);
-	const text = json ? executeRenameSymbolJson(result, projectRoot) : formatRenameResult(result, symbolName, newName, dryRun);
+	const text = json
+		? executeRenameSymbolJson(result, projectRoot)
+		: formatRenameResult(result, symbolName, newName, dryRun);
 	const isError = result.kind === "error" || result.kind === "not_found";
 	return { text, isError };
 }

@@ -21,7 +21,10 @@ function emptyGraph(): RepoGraph {
 	};
 }
 
-function makeSymbol(graph: RepoGraph, opts: { id: string; name: string; file: string; line: number; kind?: string }): Symbol {
+function makeSymbol(
+	graph: RepoGraph,
+	opts: { id: string; name: string; file: string; line: number; kind?: string },
+): Symbol {
 	return {
 		id: opts.id,
 		name: opts.name,
@@ -99,9 +102,7 @@ describe("shazam_lookup provenance visibility (#643)", () => {
 		graph.symbols.set(caller.id, caller);
 		graph.nameIndex.set("foo", [target]);
 		// Edge WITHOUT a provenance field
-		graph.incoming.set(target.id, [
-			{ source: caller.id, target: target.id, weight: 1, kind: "calls", confidence: 1 },
-		]);
+		graph.incoming.set(target.id, [{ source: caller.id, target: target.id, weight: 1, kind: "calls", confidence: 1 }]);
 
 		const result = _buildSymbolLookupResult(graph, "foo");
 		expect(result[0]?.incomingEdges[0]?.provenance).toBe("heuristic");

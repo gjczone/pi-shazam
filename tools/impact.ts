@@ -258,11 +258,7 @@ export interface ImpactResult {
  * the JSON envelope; previously the shape was inlined inside
  * executeImpactJson.
  */
-export function buildImpactResult(
-	graph: RepoGraph,
-	files: string[],
-	depth: number = 3,
-): ImpactResult {
+export function buildImpactResult(graph: RepoGraph, files: string[], depth: number = 3): ImpactResult {
 	const bfs = computeImpactBfs(graph, files, depth);
 	const risk = assessImpactRisk(bfs.affectedFiles.size, bfs.affectedSymbols.length);
 	// #635: collect test paths from the affected file set (unified with

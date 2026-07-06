@@ -34,7 +34,7 @@ function emptyGraph(): RepoGraph {
 		incoming: new Map(),
 		outgoing: new Map(),
 		fileImports: new Map(),
-	}
+	};
 }
 
 describe("shazam_lookup mode=state removal (#630 cleanup)", () => {
@@ -46,7 +46,9 @@ describe("shazam_lookup mode=state removal (#630 cleanup)", () => {
 		const graph = emptyGraph();
 		const result = await dispatchLookup(graph, { name: "Status", mode: "state" }, "/tmp");
 		expect(result.isError).toBe(true);
-		expect(result.text).toMatch(/mode=state.*removed|mode=state.*no longer supported|state map analysis is not available/i);
+		expect(result.text).toMatch(
+			/mode=state.*removed|mode=state.*no longer supported|state map analysis is not available/i,
+		);
 	});
 
 	it("does NOT call any state-map function on mode=state (no executeStateMap side effects)", async () => {
