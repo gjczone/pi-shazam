@@ -61,6 +61,7 @@ describe("Hook: before-start (overview injection)", () => {
 			fileCalls: new Map(),
 			fileImportBindings: new Map(),
 			fileRefs: new Map(),
+			fileTypeRefs: new Map(),
 			nameIndex: new Map(),
 			targetToSources: new Map(),
 		};
