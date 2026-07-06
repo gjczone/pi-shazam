@@ -367,41 +367,8 @@ describe("Tool: overview — routes section", () => {
 	});
 });
 
-describe("Tool: symbol — state mode", () => {
-	it("should explore enum/state symbols via state mode", async () => {
-		const { executeStateMap } = await import("../tools/lookup.js");
-		const graph = getGraph();
-		const enumSym = [...graph.symbols.values()].find((s) => s.kind === "class" || s.kind === "enum");
-		if (enumSym) {
-			const result = executeStateMap(graph, enumSym.name);
-			expect(result).toBeDefined();
-			expect(typeof result).toBe("string");
-		}
-	});
-
-	it("should reject non-enum/non-const symbols with a clear message", async () => {
-		const { executeStateMap } = await import("../tools/lookup.js");
-		const graph = getGraph();
-		// Find a function symbol (not enum/const/state-machine)
-		const funcSym = [...graph.symbols.values()].find((s) => s.kind === "function");
-		if (funcSym) {
-			const result = executeStateMap(graph, funcSym.name);
-			// Should indicate this is not a state-map-able symbol
-			expect(result).toMatch(/not.*enum|not.*const|not.*state|no.*state.*map|cannot.*generate/i);
-		}
-	});
-
-	it("should return state map output when mode=state via executeSymbol", async () => {
-		const { executeStateMap } = await import("../tools/lookup.js");
-		const graph = getGraph();
-		const enumSym = [...graph.symbols.values()].find((s) => s.kind === "class" || s.kind === "enum");
-		if (enumSym) {
-			const result = executeStateMap(graph, enumSym.name);
-			expect(result).toBeDefined();
-			expect(typeof result).toBe("string");
-		}
-	});
-});
+// mode=state was removed (#630 cleanup, see tests/lookup-state-removed.test.ts).
+// The 3 historical "state mode" tests above are gone with the function.
 
 describe("Tool: verify", () => {
 	it("should return verification results with risk level", async () => {

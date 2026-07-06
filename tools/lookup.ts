@@ -43,10 +43,6 @@ function _sanitizeMarkdown(s: string): string {
 	return s.replace(/\\/g, "\\\\").replace(/`/g, "\\`");
 }
 
-// -- State map kinds (from symbol.ts) -------------------------------------
-
-const STATE_MAP_KINDS = new Set(["enum", "class", "interface", "type_alias", "const"]);
-
 // -- File detail cache (from file_detail.ts) -----------------------------
 
 const MAX_DETAIL_CACHE_SIZE = 200;
@@ -77,10 +73,9 @@ export function registerLookup(pi: ExtensionAPI): void {
 		description: `\
 		Look up anything in the codebase - a symbol by name or a file by path.
 		Auto-detects whether the input is a file path or symbol name and returns
-		the most relevant information: definition, kind, signature, type hierarchy,
-		file structure, PageRank, callers/callees. Use mode=state for enum/state
-		analysis. Use mode=search for fuzzy concept search, or just ask in natural language (auto-detected).
-		Pass showCallbacks=true to expand anonymous functions.`,
+			the most relevant information: definition, kind, signature, type hierarchy,
+			file structure, PageRank, callers/callees. Use mode=search for fuzzy concept search, or just ask in natural language (auto-detected).
+			Pass showCallbacks=true to expand anonymous functions.`,
 		params: Type.Object({
 			name: Type.String(),
 			file: Type.Optional(Type.String()),
@@ -1058,79 +1053,7 @@ export function _formatSearchResults(query: string, results: SearchResult[]): st
 	return lines.join("\n").trim();
 }
 
-// -- State map (from symbol.ts) -------------------------------------------
-
-export function _executeStateMap(graph: RepoGraph, symbolName: string): string {
-	const targets: Symbol[] = [];
-	for (const sym of graph.symbols.values()) {
-		if (sym.name === symbolName) targets.push(sym);
-	}
-
-	if (targets.length === 0) return `Symbol not found: ${_sanitizeMarkdown(symbolName)}`;
-
-	const lines: string[] = [];
-	for (const target of targets) {
-		if (!STATE_MAP_KINDS.has(target.kind)) {
-			lines.push(`## ${target.kind} \`${_sanitizeMarkdown(target.name)}\` - cannot generate state map`);
-			lines.push("");
-			lines.push(
-				`Symbol \`${_sanitizeMarkdown(target.name)}\` is a ${target.kind}, not an enum, const group, or state machine.`,
-			);
-			lines.push("State map analysis requires: enum, class, interface, type_alias, or const.");
-			lines.push("");
-			lines.push(`Use \`shazam_lookup --name ${_sanitizeMarkdown(target.name)}\` instead.`);
-			continue;
-		}
-
-		lines.push(`## State Map: ${target.kind} \`${_sanitizeMarkdown(target.name)}\` (${target.file}:${target.line})`);
-		lines.push("");
-
-		const incoming = graph.incoming.get(target.id) || [];
-		const outgoing = graph.outgoing.get(target.id) || [];
-
-		if (incoming.length > 0) {
-			lines.push(`### Usages (${incoming.length} references from other symbols)`);
-			const byFile = new Map<string, Symbol[]>();
-			for (const edge of incoming) {
-				const sym = graph.symbols.get(edge.source);
-				if (sym) {
-					const arr = byFile.get(sym.file) || [];
-					arr.push(sym);
-					byFile.set(sym.file, arr);
-				}
-			}
-			for (const [file, syms] of [...byFile.entries()].sort()) {
-				lines.push(`  **${file}**: ${syms.map((s) => _sanitizeMarkdown(s.name)).join(", ")}`);
-			}
-		}
-
-		if (outgoing.length > 0) {
-			lines.push("");
-			lines.push(`### Dependencies (${outgoing.length} symbols this depends on)`);
-			for (const edge of outgoing) {
-				const sym = graph.symbols.get(edge.target);
-				if (sym) lines.push(`- ${sym.kind} \`${_sanitizeMarkdown(sym.name)}\` - ${sym.file}:${sym.line}`);
-			}
-		}
-
-		lines.push("");
-		lines.push(`Visibility: ${target.visibility}`);
-		lines.push(`PageRank: ${target.pagerank.toFixed(4)}`);
-		lines.push(`Signature: ${target.signature}`);
-	}
-
-	const nextItems = getNextForTool("lookup", { usageFile: targets[0]?.file });
-	if (nextItems.length > 0) {
-		lines.push("");
-		lines.push(formatNextSection(nextItems));
-	}
-
-	return lines.join("\n");
-}
-
-export function executeStateMap(graph: RepoGraph, symbolName: string): string {
-	return _executeStateMap(graph, symbolName);
-}
+// -- File detail (from file_detail.ts) ------------------------------------
 
 export function executeFileDetailJson(graph: RepoGraph, file: string): string {
 	return _executeFileDetailJson(graph, file);

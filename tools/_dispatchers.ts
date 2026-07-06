@@ -32,7 +32,6 @@ import {
 	executeLookupAsync,
 	executeFileDetailAsync,
 	executeFileDetailJson,
-	executeStateMap,
 	_executeSearch,
 	_formatSearchResults,
 	_looksLikeNaturalLanguage,
@@ -147,14 +146,17 @@ export async function dispatchLookup(
 	if (_isFilePath(nameStr) && !graph.nameIndex?.has(nameStr) && existsSync(join(projectRoot, nameStr))) {
 		text = json ? executeFileDetailJson(graph, nameStr) : await executeFileDetailAsync(graph, nameStr);
 	} else if (mode === "state") {
-		text = executeStateMap(graph, nameStr);
-		if (json) {
-			text = buildEnvelope("shazam_lookup", projectRoot, "ok", {
-				symbol: nameStr,
-				mode: "state",
-				text,
-			});
-		}
+		// mode=state was deprecated in #630 (PR-E) and is now removed.
+		// The dedicated state-map view added little value over the regular
+		// symbol lookup, so the cleanest path is to return a clear error
+		// so callers know to drop the flag rather than silently doing the
+		// wrong thing.
+		const message =
+			"shazam_lookup mode=state has been removed. Use `shazam_lookup --name <symbol>` for symbol detail, or `shazam_lookup --name <symbol> --direction supertypes|subtypes` for type hierarchy.";
+		text = json
+			? buildEnvelope("shazam_lookup", projectRoot, "error", { error: message })
+			: `Error: ${message}`;
+		return { text, isError: true };
 	} else if (mode === "search") {
 		const results = _executeSearch(graph, nameStr);
 		if (json) {
