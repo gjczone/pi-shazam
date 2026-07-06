@@ -16,7 +16,7 @@ import { findOrphans } from "../core/filter.js";
 import { getGraphEdgeCount } from "../core/graph.js";
 import { diffFromBaseline } from "../core/baseline.js";
 import { assessRisk } from "../core/risk.js";
-import { getGitChangedFiles } from "../core/git-utils.js";
+import { getGitChangedFiles, getGitNumstat } from "../core/git-utils.js";
 import { getNextForTool, formatNextSection } from "../core/output.js";
 
 export function registerChanges(pi: ExtensionAPI): void {
@@ -53,6 +53,14 @@ export interface ChangesResult {
 	risk: { level: string; reason: string };
 	isCompact: boolean;
 	nextSteps?: string[];
+	/**
+	 * Structural view of the working-tree changes (issue #631 B,
+	 * slice 3.5). Tallies added / removed / modified line counts
+	 * across the changed files using `git diff --numstat`.
+	 * Undefined when the project is not a git repo, when there
+	 * are no changes, or when numstat cannot be parsed.
+	 */
+	structuralChanges?: { added: number; removed: number; modified: number };
 }
 
 /**
@@ -70,6 +78,13 @@ export function buildChangesResult(graph: RepoGraph, projectRoot: string): Chang
 	const risk = _assessChangeRisk(graph, internalOrphans, changedFiles);
 	const isCompact = changedFiles.length === 0 && orphanCount === 0;
 
+	// #631 B (slice 3.5): compute added / removed / modified line
+	// counts via `git diff --numstat` so JSON consumers can see
+	// structural change magnitude without re-parsing the diff.
+	// Only meaningful when there are actual changes to report.
+	const structuralChanges =
+		changedFiles.length > 0 && changedFiles.length <= 20 ? getGitNumstat(projectRoot) ?? undefined : undefined;
+
 	const nextItems = getNextForTool("changes", { riskLevel: risk.level });
 	return {
 		kind: "changes",
@@ -82,6 +97,7 @@ export function buildChangesResult(graph: RepoGraph, projectRoot: string): Chang
 		risk,
 		isCompact,
 		nextSteps: nextItems.length > 0 ? nextItems.map((n) => `${n.level}: ${n.label} -> ${n.tool}`) : undefined,
+		structuralChanges,
 	};
 }
 
@@ -106,6 +122,14 @@ export function renderChangesMarkdown(result: ChangesResult): string {
 
 	if (result.gitChangedFiles.length > 0) {
 		lines.push(`### Git Working Tree Changes (${result.gitChangedFiles.length} files)`);
+		// #631 B: surface the structural (line-count) view alongside
+		// the file list. The +N / -N badge gives the reader a
+		// quick sense of the change magnitude before paging through
+		// the per-file list.
+		if (result.structuralChanges) {
+			const sc = result.structuralChanges;
+			lines.push(`  (+${sc.added} -${sc.removed} lines across ${sc.modified} files)`);
+		}
 		for (const f of result.gitChangedFiles.slice(0, 30)) lines.push(`  - ${f}`);
 		if (result.gitChangedFiles.length > 30) lines.push(`  ... and ${result.gitChangedFiles.length - 30} more`);
 		lines.push("");
