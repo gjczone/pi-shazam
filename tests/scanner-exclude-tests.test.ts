@@ -101,14 +101,7 @@ describe("scanProject test exclusion (issue #632)", () => {
 		const files = [...graph.fileSymbols.keys()]
 			.map((f) => f.split(/[\\/]/).join("/")) // normalize to POSIX for cross-platform assertions
 			.sort();
-		expect(files).toEqual([
-			"app.test.ts",
-			"app.ts",
-			"math.test.ts",
-			"math.ts",
-			"tests/smoke.test.ts",
-			"utils.ts",
-		]);
+		expect(files).toEqual(["app.test.ts", "app.ts", "math.test.ts", "math.ts", "tests/smoke.test.ts", "utils.ts"]);
 		// Production symbols are present
 		expect([...graph.symbols.values()].find((s) => s.name === "prod_one")).toBeDefined();
 		// Test-file symbols are also present
