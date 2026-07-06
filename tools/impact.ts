@@ -227,13 +227,53 @@ function assessImpactRisk(affectedFileCount: number, affectedSymbolCount: number
 	});
 }
 
-export function executeImpactJson(graph: RepoGraph, files: string[], depth: number = 3): string {
+/**
+ * #631 A: typed return value of shazam_impact (files mode). The
+ * dispatcher wraps this in buildEnvelope for JSON mode; the
+ * existing executeImpact text path is unchanged for backward
+ * compat with the test suite.
+ */
+export interface ImpactAffectedSymbol {
+	id: string;
+	name: string;
+	kind: string;
+	file: string;
+	line: number;
+	direction: "upstream" | "downstream";
+}
+
+export interface ImpactResult {
+	kind: "impact";
+	targetFiles: string[];
+	depth: number;
+	affectedFileCount: number;
+	affectedFiles: string[];
+	affectedSymbols: ImpactAffectedSymbol[];
+	affectedTests: string[];
+	risk: { level: string; reason: string };
+}
+
+/**
+ * #631 A: build the typed ImpactResult. Single source of truth for
+ * the JSON envelope; previously the shape was inlined inside
+ * executeImpactJson.
+ */
+export function buildImpactResult(
+	graph: RepoGraph,
+	files: string[],
+	depth: number = 3,
+): ImpactResult {
 	const bfs = computeImpactBfs(graph, files, depth);
-
 	const risk = assessImpactRisk(bfs.affectedFiles.size, bfs.affectedSymbols.length);
-
-	return buildEnvelope("shazam_impact", getEffectiveRoot(), "ok", {
+	// #635: collect test paths from the affected file set (unified with
+	// call-chain). The text-mode executeImpact uses appendAffectedTests;
+	// the JSON envelope mirrors that.
+	const allFiles = [...bfs.affectedFiles, ...files];
+	const affectedTests = allFiles.filter((f) => isTestFile(f));
+	return {
+		kind: "impact",
 		targetFiles: files,
+		depth,
 		affectedFileCount: bfs.affectedFiles.size,
 		affectedFiles: [...bfs.affectedFiles].sort(),
 		affectedSymbols: bfs.affectedSymbols.slice(0, 50).map((a) => ({
@@ -244,8 +284,13 @@ export function executeImpactJson(graph: RepoGraph, files: string[], depth: numb
 			line: a.symbol.line,
 			direction: a.direction,
 		})),
-		risk: risk,
-	});
+		affectedTests,
+		risk,
+	};
+}
+
+export function executeImpactJson(graph: RepoGraph, files: string[], depth: number = 3): string {
+	return buildEnvelope("shazam_impact", getEffectiveRoot(), "ok", buildImpactResult(graph, files, depth));
 }
 
 // -- Call chain (absorbed from tools/call_chain.ts) ----------------------
@@ -336,14 +381,41 @@ function _executeCallChain(
 	return lines.join("\n").trim();
 }
 
-function _executeCallChainJson(
+/**
+ * #631 A: typed return value of shazam_impact (symbol/call-chain mode).
+ * One CallChainEntry per matching symbol name; the dispatcher
+ * (tools/_dispatchers.ts) wraps the whole array in buildEnvelope.
+ */
+export interface CallChainEdge {
+	level: number;
+	symbol: string;
+	file: string;
+	kind: string;
+}
+
+export interface CallChainEntry {
+	symbol: { id: string; name: string; kind: string; file: string; line: number };
+	incoming: CallChainEdge[];
+	outgoing: CallChainEdge[];
+	affectedTests: string[];
+	referencedFiles: string[];
+}
+
+export type CallChainResult = CallChainEntry[];
+
+/**
+ * #631 A: build the typed CallChainResult. Single source of truth
+ * for the call-chain JSON envelope; previously the shape was
+ * inlined inside _executeCallChainJson.
+ */
+function _buildCallChainResult(
 	graph: RepoGraph,
 	symbolName: string,
 	depth: number,
 	direction: "incoming" | "outgoing" | "both" = "both",
-): string {
+): CallChainResult {
 	const targets = graph.nameIndex.get(symbolName) ?? [];
-	const result = targets.map((target) => {
+	return targets.map((target) => {
 		// Collect every file touched by the call chain so we can surface
 		// tests in JSON output. Mirrors the text-mode collection in
 		// `_executeCallChain`; see issue #635.
@@ -378,10 +450,23 @@ function _executeCallChainJson(
 			incoming,
 			outgoing,
 			affectedTests,
+			referencedFiles: [...referencedFiles],
 		};
 	});
+}
 
-	return buildEnvelope("shazam_impact", getEffectiveRoot(), "ok", result);
+function _executeCallChainJson(
+	graph: RepoGraph,
+	symbolName: string,
+	depth: number,
+	direction: "incoming" | "outgoing" | "both" = "both",
+): string {
+	return buildEnvelope(
+		"shazam_impact",
+		getEffectiveRoot(),
+		"ok",
+		_buildCallChainResult(graph, symbolName, depth, direction),
+	);
 }
 
 function _traceIncoming(graph: RepoGraph, startId: string, maxDepth: number): [number, Symbol, { kind: string }][] {
