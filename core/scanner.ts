@@ -15,7 +15,7 @@ import type { RepoGraph, Symbol, Edge } from "./graph.js";
 import { calculatePageRank } from "./pagerank.js";
 import { readFileAdaptive, FileTooLargeError } from "./encoding.js";
 import { getProjectCacheDir, saveGraphCache, loadGraphCache } from "./cache.js";
-import { SKIP_DIRS } from "./filter.js";
+import { SKIP_DIRS, isTestFile } from "./filter.js";
 import { resolveImport, clearExistsCache } from "./resolve-import.js";
 import { _logWarn } from "./output.js";
 
@@ -32,6 +32,12 @@ const SOURCE_EXTS = new Set(Object.keys(EXT_TO_LANG));
 let cachedGraph: RepoGraph | null = null;
 
 let cachedProjectPath: string = "";
+
+// Per-graph test-exclusion count, indexed by the RepoGraph reference (issue #632).
+// Tying the count to the graph (via WeakMap) avoids leaking values across cache
+// hits, different project roots, or test fixtures -- each graph carries its own
+// count, and the entry is GC'd with the graph itself. REVIEW-RULES P1 #5 / #14.
+const excludedTestCountByGraph: WeakMap<RepoGraph, number> = new WeakMap();
 
 let _scannerAdapter: TreeSitterAdapter | null = null;
 
@@ -117,6 +123,24 @@ export function resetCache(): void {
 }
 
 /**
+ * Record the number of test files excluded for a given graph (issue #632).
+ * Tied to the graph instance via WeakMap so the count is GC'd with the graph
+ * and cannot leak across cache hits or different project roots.
+ */
+function recordExcludedTestCount(graph: RepoGraph, count: number): void {
+	if (count > 0) excludedTestCountByGraph.set(graph, count);
+}
+
+/**
+ * Return the number of test files excluded when this graph was built.
+ * Returns 0 when the graph was built with `includeTests: true` or when
+ * the graph came from cache and the count was never recorded (older caches).
+ */
+export function getExcludedTestCount(graph: RepoGraph): number {
+	return excludedTestCountByGraph.get(graph) ?? 0;
+}
+
+/**
  * Get per-file modification times for all source files in the project.
  */
 function getFileMtimes(root: string, files: string[]): Map<string, number> {
@@ -135,13 +159,51 @@ function getFileMtimes(root: string, files: string[]): Map<string, number> {
 }
 
 /**
+ * Options for `scanProject` that control graph construction policy.
+ *
+ * `includeTests` defaults to `false` to keep the main source graph
+ * product-code-only. Tests are excluded via `isTestFile()` (defined in
+ * `core/filter.ts`), which matches `tests/`, `__tests__/`, `*.test.*`,
+ * `*.spec.*`, `test_*.py`, `*_test.go`, `*_test.rs`, etc.
+ *
+ * Opt-in: pass `{ includeTests: true }` or set the env var
+ * `PI_SHAZAM_INCLUDE_TESTS=1`. The override is intended for callers who
+ * explicitly need to inspect test code (e.g., `shazam_impact` "Affected
+ * Tests" reporting) — not a default behavior.
+ *
+ * Issue #632: ~56% of pi-shazam's own source files are test files; their
+ * presence polluted every downstream tool. Default-exclude ensures LLM
+ * agents never have to disambiguate real symbols from test mocks.
+ */
+export interface ScanOptions {
+	includeTests?: boolean;
+}
+
+/**
+ * Read the `PI_SHAZAM_INCLUDE_TESTS` environment variable. Returns `true`
+ * only when set to `"1"` — any other value (`"0"`, `"false"`, undefined)
+ * leaves the default-exclude behavior in effect.
+ *
+ * Env-var read happens at scan time so process-state changes (e.g., tests
+ * resetting env) take effect on the next `scanProject` call without
+ * requiring a process restart.
+ */
+export function shouldIncludeTestsFromEnv(): boolean {
+	return process.env.PI_SHAZAM_INCLUDE_TESTS === "1";
+}
+
+/**
  * Get (or build) the project graph with caching.
  * Returns a cached graph if no files have been modified since the last scan.
  * The cache is per-process (not persisted to disk).
  */
-export function getProjectGraph(projectRoot: string = ".", log?: (msg: string) => void): RepoGraph {
+export function getProjectGraph(
+	projectRoot: string = ".",
+	log?: (msg: string) => void,
+	options: ScanOptions = {},
+): RepoGraph {
 	const root = resolve(projectRoot);
-	return scanProject(root, log);
+	return scanProject(root, log, options);
 }
 
 // -- Scanner ------------------------------------------------------------------
@@ -569,16 +631,19 @@ function getGraphCachePath(projectRoot: string): string {
  *
  * @param projectPath - Absolute or relative path to the project root
  * @param log - Optional logger
+ * @param options - Scan policy. `includeTests` defaults to `false` (excludes test
+ *   files via `isTestFile()`). Override per-call with `{ includeTests: true }`
+ *   or globally via env var `PI_SHAZAM_INCLUDE_TESTS=1`. See issue #632.
  * @returns The fully built RepoGraph with PageRank scores set
  */
-export function scanProject(projectPath: string, log?: (msg: string) => void): RepoGraph {
+export function scanProject(projectPath: string, log?: (msg: string) => void, options: ScanOptions = {}): RepoGraph {
 	enterScan();
 	try {
 		// C3: When caller passes "." (default project path), use the configured
 		// project root override if one was set by index.ts from Pi's ctx.cwd.
 		// This ensures scanner and LSP use the same project root.
 		const effectivePath = projectPath === "." && _projectRootOverride ? _projectRootOverride : projectPath;
-		return _scanProject(effectivePath, log);
+		return _scanProject(effectivePath, log, options);
 	} finally {
 		exitScan();
 		// M11: Reset _scanSeenEdges in finally block so it doesn't leak across scans
@@ -586,7 +651,7 @@ export function scanProject(projectPath: string, log?: (msg: string) => void): R
 	}
 }
 
-function _scanProject(projectPath: string, log?: (msg: string) => void): RepoGraph {
+function _scanProject(projectPath: string, log?: (msg: string) => void, options: ScanOptions = {}): RepoGraph {
 	const root = resolve(projectPath);
 	const logger = log ?? (() => {});
 
@@ -594,7 +659,11 @@ function _scanProject(projectPath: string, log?: (msg: string) => void): RepoGra
 	clearExistsCache();
 
 	const adapter = getScannerAdapter();
-	const { files, truncated } = collectSourceFiles(root, MAX_FILES);
+	// Issue #632: tests are excluded from the default graph. Callers opt in
+	// via `options.includeTests` or the `PI_SHAZAM_INCLUDE_TESTS=1` env var.
+	const includeTests = options.includeTests ?? shouldIncludeTestsFromEnv();
+	const collected = collectSourceFiles(root, MAX_FILES, includeTests);
+	const { files, truncated, excludedTestCount } = collected;
 	logger(`Scanned ${files.length} source files`);
 	// Issue #471 Finding A: warn when the file cap was hit so the agent is
 	// incomplete, instead of silently returning a truncated graph with no indication.
@@ -604,11 +673,22 @@ function _scanProject(projectPath: string, log?: (msg: string) => void): RepoGra
 			`MAX_FILES limit reached (${MAX_FILES}) — additional source files skipped. Graph may be incomplete`,
 		);
 	}
+	// Issue #632: observable signal that tests were excluded by default. Only
+	// logs once per scan (here), not on every tool call. Opt-in via env var
+	// disables the warning by including the files.
+	if (!includeTests && excludedTestCount > 0) {
+		_logWarn(
+			"scanProject",
+			`Excluded ${excludedTestCount} test files from graph. Set PI_SHAZAM_INCLUDE_TESTS=1 to include them.`,
+		);
+	}
 
 	// Check in-memory cache first (same process, fastest path)
 	const isInMemory = cachedGraph !== null && cachedProjectPath === root && cachedFiles.size > 0;
 	if (isInMemory) {
-		return scanIncremental(root, files, adapter, logger);
+		const incremental = scanIncremental(root, files, adapter, logger);
+		recordExcludedTestCount(incremental, excludedTestCount);
+		return incremental;
 	}
 
 	// Try persistent disk cache
@@ -647,6 +727,7 @@ function _scanProject(projectPath: string, log?: (msg: string) => void): RepoGra
 			cachedGraph = diskCache.graph;
 			cachedProjectPath = root;
 			cachedFiles = reconstructFileCache(diskCache.graph, diskCache.fileMtimes);
+			recordExcludedTestCount(cachedGraph, excludedTestCount);
 			return cachedGraph;
 		}
 
@@ -666,11 +747,13 @@ function _scanProject(projectPath: string, log?: (msg: string) => void): RepoGra
 			logger(`Failed to save graph cache: ${err}`);
 		}
 
+		recordExcludedTestCount(updatedGraph, excludedTestCount);
 		return updatedGraph;
 	}
 
 	// No cache -- full scan
 	const graph = scanFull(root, files, adapter, logger);
+	recordExcludedTestCount(graph, excludedTestCount);
 
 	// Save to persistent cache
 	try {
@@ -937,7 +1020,17 @@ function scanIncremental(
 
 // -- File collection ----------------------------------------------------------
 
-export function collectSourceFiles(root: string, maxFiles: number): { files: string[]; truncated: boolean } {
+/**
+ * Walk a project tree and return source files. When `includeTests` is false
+ * (the default), test files matching `isTestFile()` are excluded from the
+ * returned list — but the count is tracked in `excludedTestCount` so the
+ * caller can surface it as a footnote (issue #632).
+ */
+export function collectSourceFiles(
+	root: string,
+	maxFiles: number,
+	includeTests: boolean = shouldIncludeTestsFromEnv(),
+): { files: string[]; truncated: boolean; excludedTestCount: number } {
 	const options = {
 		root,
 		maxFiles,
@@ -945,9 +1038,11 @@ export function collectSourceFiles(root: string, maxFiles: number): { files: str
 		files: [] as string[],
 		visitedSymlinks: new Set<string>(),
 		truncated: false,
+		includeTests,
+		excludedTestCount: 0,
 	};
 	_walkDirectory(root, 0, options);
-	return { files: options.files, truncated: options.truncated };
+	return { files: options.files, truncated: options.truncated, excludedTestCount: options.excludedTestCount };
 }
 
 function _walkDirectory(
@@ -960,6 +1055,8 @@ function _walkDirectory(
 		files: string[];
 		visitedSymlinks: Set<string>;
 		truncated: boolean;
+		includeTests: boolean;
+		excludedTestCount: number;
 	},
 ): void {
 	const { root, maxFiles, maxDepth, files, visitedSymlinks } = options;
@@ -1028,21 +1125,39 @@ function _walkDirectory(
 					_logWarn("_walkDirectory", `symlink target outside project root, skipping: ${relPath} -> ${realPath}`);
 					continue;
 				}
-				const ext = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();
-				if (SOURCE_EXTS.has(ext)) {
-					files.push(relPath);
-				}
+				tryAddSourceFile(options, relPath, entry.name);
 			} catch (err) {
 				_logWarn("_walkDirectory", `broken symlink: ${relPath}`, err);
 				continue; // broken symlink, skip
 			}
 		} else if (entry.isFile()) {
-			const ext = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();
-			if (SOURCE_EXTS.has(ext)) {
-				files.push(relPath);
-			}
+			tryAddSourceFile(options, relPath, entry.name);
 		}
 	}
+}
+
+/**
+ * Apply SOURCE_EXTS filtering and (when `includeTests` is false) the
+ * `isTestFile` policy to one entry. Issue #632: keeps the test-exclusion
+ * policy in one place so future expansions (e.g. exclude docs) only need
+ * to change one branch instead of two identical inline blocks.
+ */
+function tryAddSourceFile(
+	options: {
+		files: string[];
+		excludedTestCount: number;
+		includeTests: boolean;
+	},
+	relPath: string,
+	entryName: string,
+): void {
+	const ext = entryName.slice(entryName.lastIndexOf(".")).toLowerCase();
+	if (!SOURCE_EXTS.has(ext)) return;
+	if (!options.includeTests && isTestFile(relPath)) {
+		options.excludedTestCount++;
+		return;
+	}
+	options.files.push(relPath);
 }
 
 // -- Edge helpers -------------------------------------------------------------

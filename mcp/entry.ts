@@ -76,6 +76,14 @@ const PROJECT_ROOT = rootValidation.realRoot!;
 
 setProjectRoot(PROJECT_ROOT);
 
+// Issue #632: the scanner excludes test files from the default graph to
+// prevent ~56% noise in pi-shazam-sized projects. We do NOT pass
+// `includeTests` explicitly here because `scanProject()` re-reads the
+// `PI_SHAZAM_INCLUDE_TESTS` env var on every call (see
+// `core/scanner.ts:shouldIncludeTestsFromEnv`). Freezing the decision at
+// module load would break env-var changes after MCP startup -- which is
+// a documented test ergonomics requirement.
+
 // Read version from package.json to keep it in sync automatically.
 // #485: entry.js lives at dist/mcp/ (compiled) or mcp/ (vitest source).
 // Search upward to handle both layouts.

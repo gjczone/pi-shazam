@@ -8,6 +8,7 @@ import { Type } from "typebox";
 import type { RepoGraph, Symbol } from "../core/graph.js";
 import { isNonSourceFile } from "../core/filter.js";
 import { getNextForTool, formatNextSection, _logWarn } from "../core/output.js";
+import { getExcludedTestCount } from "../core/scanner.js";
 import { createTool } from "./_factory.js";
 import { buildEnvelope } from "./_factory.js";
 import { dispatchOverview } from "./_dispatchers.js";
@@ -264,6 +265,18 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 		lines.push(`- \`${label}\` - ${count} files`);
 	}
 
+	// Issue #632: when the default test-exclusion policy filtered out files,
+	// surface the count here so LLM agents see the gap. Only render when the
+	// count is non-zero -- a no-op footnote adds noise. Information follows
+	// the same prefix conventions as other sections.
+	const excludedCount = getExcludedTestCount(graph);
+	if (excludedCount > 0) {
+		lines.push("");
+		lines.push(
+			`Note: ${excludedCount} test file(s) excluded from graph (default policy). Set \`PI_SHAZAM_INCLUDE_TESTS=1\` to include them.`,
+		);
+	}
+
 	// HTTP Routes section (absorbed from tools/routes.ts)
 	// Only shown when no filter is active (routes are project-level)
 	if (!filter) {
@@ -330,9 +343,12 @@ export function executeOverviewJson(graph: RepoGraph, projectRoot: string, filte
 
 	const topFiles = [...fileStats.entries()].sort((a, b) => b[1].pagerank - a[1].pagerank).slice(0, 10);
 
+	const excludedTests = getExcludedTestCount(graph);
+
 	return buildEnvelope("shazam_overview", projectRoot, "ok", {
 		totalSymbols: graph.symbols.size,
 		totalFiles: graph.fileSymbols.size,
+		excludedTests: excludedTests > 0 ? excludedTests : undefined,
 		keyDependencies: filter ? undefined : buildKeyDependenciesSection(projectRoot),
 		pythonDependencies: filter ? undefined : buildPythonDepsSection(projectRoot),
 		rustDependencies: filter ? undefined : buildRustDepsSection(projectRoot),
