@@ -69,9 +69,9 @@ export function registerVerify(pi: ExtensionAPI): void {
 			quick: Type.Optional(Type.Boolean()),
 			lspOnly: Type.Optional(Type.Boolean()),
 			preCommit: Type.Optional(Type.Boolean()),
-			maxFiles: Type.Optional(Type.Number()),
-			noCascade: Type.Optional(Type.Boolean()),
-			noSecrets: Type.Optional(Type.Boolean()),
+			// maxFiles is no longer a per-call parameter (#630) -- it now
+			// lives in `.pi-shazam/config.json` under `verify.maxFiles`.
+			// The dispatcher reads the config and merges it into VerifyOptions.
 		}),
 		customExecute: async (_toolCallId, params, _signal, _onUpdate, _ctx): Promise<AgentToolResult> => {
 			const json = params.json ?? false;
@@ -97,9 +97,19 @@ export interface VerifyOptions {
 	quick?: boolean;
 	lspOnly?: boolean;
 	preCommit?: boolean;
+	/**
+	 * Max files to pass to the LSP server for diagnostics. Resolved by
+	 * the dispatcher from the per-call value (none) > the
+	 * `.pi-shazam/config.json` `verify.maxFiles` value > the hard-coded
+	 * default of 100 (#630). Direct callers of `executeVerifyTextAsync`
+	 * / `executeVerifyJsonAsync` can still pass an explicit value here.
+	 */
 	maxFiles?: number;
-	noCascade?: boolean;
-	noSecrets?: boolean;
+	// noCascade and noSecrets were never read anywhere in the codebase
+	// (dead options from an earlier migration). Dropped in #630 along
+	// with the per-call flag. If cascade analysis or secrets detection
+	// are reintroduced they should re-appear in `.pi-shazam/config.json`
+	// as boolean fields, not as per-call flags.
 }
 
 // -- JSON maxTokens truncation (issue #470) ----------------------------------

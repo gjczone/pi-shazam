@@ -48,6 +48,8 @@ import { validatePathInProject, buildEnvelope } from "./_factory.js";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { classifyFilePath, suggestSimilarFile } from "../core/path-utils.js";
+import { loadConfig } from "../core/config.js";
+import { _logWarn } from "../core/output.js";
 
 // -- Dispatcher result type -----------------------------------------------
 
@@ -147,6 +149,17 @@ export async function dispatchLookup(
 	if (_isFilePath(nameStr) && !graph.nameIndex?.has(nameStr) && existsSync(join(projectRoot, nameStr))) {
 		text = json ? executeFileDetailJson(graph, nameStr) : await executeFileDetailAsync(graph, nameStr);
 	} else if (mode === "state") {
+		// #630: mode=state is deprecated. The function still works for
+		// backward compatibility, but a warning is logged so users and
+		// automated tests can see the migration signal. The replacement
+		// is `shazam_lookup --name <symbol>` which already surfaces the
+		// symbol's full detail block; the dedicated state-map view adds
+		// little value over that.
+		_logWarn(
+			"shazam_lookup",
+			"mode=state is deprecated; use shazam_lookup --name for symbol detail. Will be removed in a future release.",
+			new Error("deprecated"),
+		);
 		text = executeStateMap(graph, nameStr);
 		if (json) {
 			text = buildEnvelope("shazam_lookup", projectRoot, "ok", {
@@ -339,13 +352,19 @@ export async function dispatchVerify(
 	// every call, so a stale-cache concern is unfounded — file changes
 	// are detected and applied automatically.
 
+	// #630: maxFiles is no longer a per-call flag. It now lives in
+	// `.pi-shazam/config.json` under `verify.maxFiles`. Resolution
+	// chain: per-call value (none, since the schema dropped it) > config
+	// value > hard-coded default of 100.
+	const configMaxFiles = loadConfig().verify?.maxFiles;
+	const resolvedMaxFiles =
+		typeof configMaxFiles === "number" && configMaxFiles > 0 ? configMaxFiles : 100;
+
 	const opts = {
 		quick: (params.quick as boolean) ?? false,
 		lspOnly: (params.lspOnly as boolean) ?? false,
 		preCommit: (params.preCommit as boolean) ?? false,
-		maxFiles: (params.maxFiles as number | undefined) ?? 100,
-		noCascade: (params.noCascade as boolean) ?? false,
-		noSecrets: (params.noSecrets as boolean) ?? false,
+		maxFiles: resolvedMaxFiles,
 	};
 
 	if (json) {

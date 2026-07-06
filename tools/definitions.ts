@@ -109,14 +109,13 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_verify",
 		label: "Verify Changes",
 		description:
-			"After every write or edit, run this to confirm no errors were introduced. Runs LSP diagnostics (type errors, warnings), then graph analysis (git diff, risk level, orphan detection, graph diffs). Verdict: PASS / WARN / FAIL. Use --quick for a fast git-change-only check (~2s). Use --lspOnly for diagnostics only. Use --preCommit for stricter thresholds.",
+			"After every write or edit, run this to confirm no errors were introduced. Runs LSP diagnostics (type errors, warnings), then graph analysis (git diff, risk level, orphan detection, graph diffs). Verdict: PASS / WARN / FAIL. Use --quick for a fast git-change-only check (~2s). Use --lspOnly for diagnostics only. Use --preCommit for stricter thresholds. The `maxFiles` cap is configured in `.pi-shazam/config.json` under `verify.maxFiles` (default 100).",
 		typeboxParams: Type.Object({
 			quick: Type.Optional(Type.Boolean()),
 			lspOnly: Type.Optional(Type.Boolean()),
 			preCommit: Type.Optional(Type.Boolean()),
-			maxFiles: Type.Optional(Type.Number()),
-			noCascade: Type.Optional(Type.Boolean()),
-			noSecrets: Type.Optional(Type.Boolean()),
+			// #630: maxFiles, noCascade, noSecrets moved to .pi-shazam/config.json.
+			// noCascade and noSecrets were never read anywhere (dead options).
 			maxTokens: Type.Optional(Type.Number()),
 			json: Type.Optional(Type.Boolean()),
 		}),
@@ -124,9 +123,6 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			quick: z.boolean().optional().default(false).describe("Fast git-change-only check (~2s)"),
 			lspOnly: z.boolean().optional().default(false).describe("LSP diagnostics only, skip graph analysis"),
 			preCommit: z.boolean().optional().default(false).describe("Stricter thresholds for pre-commit gate"),
-			maxFiles: z.number().optional().describe("Max files to check"),
-			noCascade: z.boolean().optional().default(false).describe("Skip cascade analysis"),
-			noSecrets: z.boolean().optional().default(false).describe("Skip secrets detection"),
 			maxTokens: z.number().int().positive().optional().describe("Max tokens in output"),
 			json: z.boolean().optional().describe("Return structured JSON output"),
 		}),
