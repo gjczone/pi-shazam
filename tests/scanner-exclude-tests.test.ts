@@ -98,8 +98,17 @@ describe("scanProject test exclusion (issue #632)", () => {
 
 	it("scanProject with includeTests=true includes test files (6 files)", () => {
 		const graph = scanProject(projectRoot, undefined, { includeTests: true });
-		const files = [...graph.fileSymbols.keys()].sort();
-		expect(files).toEqual(["app.test.ts", "app.ts", "math.test.ts", "math.ts", "tests/smoke.test.ts", "utils.ts"]);
+		const files = [...graph.fileSymbols.keys()]
+			.map((f) => f.split(/[\\/]/).join("/")) // normalize to POSIX for cross-platform assertions
+			.sort();
+		expect(files).toEqual([
+			"app.test.ts",
+			"app.ts",
+			"math.test.ts",
+			"math.ts",
+			"tests/smoke.test.ts",
+			"utils.ts",
+		]);
 		// Production symbols are present
 		expect([...graph.symbols.values()].find((s) => s.name === "prod_one")).toBeDefined();
 		// Test-file symbols are also present
@@ -125,8 +134,8 @@ describe("scanProject test exclusion (issue #632)", () => {
 	it("PI_SHAZAM_INCLUDE_TESTS=1 environment variable opts in to test inclusion", () => {
 		process.env.PI_SHAZAM_INCLUDE_TESTS = "1";
 		const graph = scanProject(projectRoot);
-		const files = [...graph.fileSymbols.keys()].sort();
-		// Should include test files because env var is set
+		const files = [...graph.fileSymbols.keys()].map((f) => f.split(/[\\/]/).join("/"));
+		// Should include test files because env var is set (paths normalized for cross-platform)
 		expect(files).toContain("app.test.ts");
 		expect(files).toContain("tests/smoke.test.ts");
 	});
