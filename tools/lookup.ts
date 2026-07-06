@@ -263,25 +263,46 @@ async function _executeLookupAsync(
 }
 
 export function _executeSymbolJson(graph: RepoGraph, name: string, file?: string): string {
-	const matches = _findSymbols(graph, name, file);
-	return buildEnvelope(
-		"shazam_lookup",
-		getEffectiveRoot(),
-		"ok",
-		matches.map((s) => ({
-			id: s.id,
-			name: s.name,
-			kind: s.kind,
-			file: s.file,
-			line: s.line,
-			endLine: s.endLine,
-			visibility: s.visibility,
-			pagerank: s.pagerank,
-			signature: s.signature,
-			container: null,
-			source: "tree-sitter",
-		})),
-	);
+	return buildEnvelope("shazam_lookup", getEffectiveRoot(), "ok", _buildSymbolLookupResult(graph, name, file));
+}
+
+/**
+ * #631 A: typed symbol-lookup result. One entry per matching
+ * symbol; the dispatcher wraps the array in buildEnvelope.
+ */
+export interface SymbolLookupEntry {
+	id: string;
+	name: string;
+	kind: string;
+	file: string;
+	line: number;
+	endLine: number;
+	visibility: string;
+	pagerank: number;
+	signature: string;
+	container: string | null;
+	source: "lsp" | "tree-sitter";
+}
+
+/**
+ * #631 A: build the typed symbol-lookup result. Single source of
+ * truth for the JSON envelope; previously the shape was inlined
+ * inside _executeSymbolJson.
+ */
+export function _buildSymbolLookupResult(graph: RepoGraph, name: string, file?: string): SymbolLookupEntry[] {
+	return _findSymbols(graph, name, file).map((s) => ({
+		id: s.id,
+		name: s.name,
+		kind: s.kind,
+		file: s.file,
+		line: s.line,
+		endLine: s.endLine,
+		visibility: s.visibility,
+		pagerank: s.pagerank,
+		signature: s.signature,
+		container: null,
+		source: "tree-sitter" as const,
+	}));
 }
 
 // -- Hover info extraction (from hover.ts) --------------------------------
@@ -927,11 +948,39 @@ export function _executeFileDetail(graph: RepoGraph, file: string): string {
 	return lines.join("\n");
 }
 
-function _executeFileDetailJson(graph: RepoGraph, file: string): string {
+/**
+ * #631 A: typed file-detail result. The dispatcher wraps this
+ * in buildEnvelope for JSON mode.
+ */
+export interface FileDetailJsonSymbol {
+	id: string;
+	name: string;
+	kind: string;
+	line: number;
+	endLine: number;
+	visibility: string;
+	pagerank: number;
+	signature: string;
+	incomingCount: number;
+	outgoingCount: number;
+}
+
+export interface FileDetailJsonResult {
+	file: string;
+	symbolCount: number;
+	symbols: FileDetailJsonSymbol[];
+}
+
+/**
+ * #631 A: build the typed file-detail result. Single source of
+ * truth for the JSON envelope; previously the shape was inlined
+ * inside _executeFileDetailJson.
+ */
+export function _buildFileDetailJsonResult(graph: RepoGraph, file: string): FileDetailJsonResult {
 	const symIds = graph.fileSymbols.get(file) || [];
 	const symbols = symIds.map((id) => graph.symbols.get(id)).filter((s): s is NonNullable<typeof s> => s !== undefined);
 
-	return buildEnvelope("shazam_lookup", getEffectiveRoot(), "ok", {
+	return {
 		file,
 		symbolCount: symbols.length,
 		symbols: symbols.map((s) => ({
@@ -946,7 +995,11 @@ function _executeFileDetailJson(graph: RepoGraph, file: string): string {
 			incomingCount: (graph.incoming.get(s.id) || []).length,
 			outgoingCount: (graph.outgoing.get(s.id) || []).length,
 		})),
-	});
+	};
+}
+
+function _executeFileDetailJson(graph: RepoGraph, file: string): string {
+	return buildEnvelope("shazam_lookup", getEffectiveRoot(), "ok", _buildFileDetailJsonResult(graph, file));
 }
 
 /**
@@ -981,6 +1034,23 @@ export function _looksLikeNaturalLanguage(query: string): boolean {
 interface SearchResult {
 	sym: Symbol;
 	score: number;
+}
+
+/**
+ * #631 A: typed concept-search result. The dispatcher wraps this
+ * in buildEnvelope for JSON mode; the existing _formatSearchResults
+ * produces the human-readable text.
+ */
+export interface LookupSearchResult {
+	kind: "search";
+	query: string;
+	hits: Array<{
+		name: string;
+		kind: string;
+		file: string;
+		line: number;
+		score: number;
+	}>;
 }
 
 /**
@@ -1022,6 +1092,26 @@ export function _executeSearch(graph: RepoGraph, query: string): SearchResult[] 
 
 	// Sort by score descending, take top 15
 	return results.sort((a, b) => b.score - a.score).slice(0, 15);
+}
+
+/**
+ * #631 A: build the typed LookupSearchResult from raw search hits.
+ * Single source of truth for the JSON envelope; the dispatcher
+ * (tools/_dispatchers.ts) wraps this via buildEnvelope.
+ */
+export function buildSearchResult(graph: RepoGraph, query: string): LookupSearchResult {
+	const raw = _executeSearch(graph, query);
+	return {
+		kind: "search",
+		query,
+		hits: raw.map((r) => ({
+			name: r.sym.name,
+			kind: r.sym.kind,
+			file: r.sym.file,
+			line: r.sym.line,
+			score: Number(r.score.toFixed(4)),
+		})),
+	};
 }
 
 /**

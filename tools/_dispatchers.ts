@@ -37,6 +37,7 @@ import {
 	_looksLikeNaturalLanguage,
 	_findSymbols,
 	_executeSymbolJson,
+	buildSearchResult,
 } from "./lookup.js";
 import { executeFormat, executeFormatJson } from "./format.js";
 import { executeVerifyTextAsync, executeVerifyJsonAsync, capVerifyDiagnostics } from "./verify.js";
@@ -158,30 +159,20 @@ export async function dispatchLookup(
 			: `Error: ${message}`;
 		return { text, isError: true };
 	} else if (mode === "search") {
-		const results = _executeSearch(graph, nameStr);
 		if (json) {
-			text = buildEnvelope("shazam_lookup", projectRoot, "ok", {
-				mode: "search",
-				query: nameStr,
-				results,
-			});
+			text = buildEnvelope("shazam_lookup", projectRoot, "ok", buildSearchResult(graph, nameStr));
 		} else {
-			text = _formatSearchResults(nameStr, results);
+			text = _formatSearchResults(nameStr, _executeSearch(graph, nameStr));
 		}
 	} else {
 		// Default: symbol lookup. If not found and input looks like natural
 		// language (multi-word concept query), auto-fallback to search (#490).
 		const matches = _findSymbols(graph, nameStr, fileParam);
 		if (matches.length === 0 && _looksLikeNaturalLanguage(nameStr)) {
-			const results = _executeSearch(graph, nameStr);
 			if (json) {
-				text = buildEnvelope("shazam_lookup", projectRoot, "ok", {
-					mode: "search",
-					query: nameStr,
-					results,
-				});
+				text = buildEnvelope("shazam_lookup", projectRoot, "ok", buildSearchResult(graph, nameStr));
 			} else {
-				text = _formatSearchResults(nameStr, results);
+				text = _formatSearchResults(nameStr, _executeSearch(graph, nameStr));
 			}
 		} else {
 			text = json
