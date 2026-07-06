@@ -74,13 +74,15 @@ check \
   "grep -q 'capVerifyDiagnostics' '$ROOT/tools/_dispatchers.ts'" \
   "The verify dispatcher must call capVerifyDiagnostics for JSON truncation."
 
-# 4. symbol/files mutual exclusion in dispatcher
+# 4. symbol/files mode inference (#629 replaced the strict mutual-exclusion
+#    error with an inferImpactMode helper that picks the mode from input
+#    shape). We assert the new contract instead of the old one.
 echo ""
-echo "--- shazam_impact: symbol/files mutual exclusion ---"
+echo "--- shazam_impact: symbol/files mode inference ---"
 check \
-  "dispatchImpact has mutual exclusion check" \
-  "grep -q 'mutually exclusive' '$ROOT/tools/_dispatchers.ts'" \
-  "The impact dispatcher must reject when both --symbol and --files are provided."
+  "dispatchImpact uses inferImpactMode" \
+  "grep -q 'inferImpactMode' '$ROOT/tools/_dispatchers.ts'" \
+  "The impact dispatcher must call inferImpactMode to pick symbol vs files mode."
 
 # 5. Tool registration consistency
 echo ""

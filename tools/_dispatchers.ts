@@ -47,6 +47,7 @@ import { hasCallChainChecked, recordCallChain } from "./rename-state.js";
 import { validatePathInProject, buildEnvelope } from "./_factory.js";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { classifyFilePath, suggestSimilarFile } from "../core/path-utils.js";
 
 // -- Dispatcher result type -----------------------------------------------
 
@@ -111,13 +112,27 @@ export async function dispatchLookup(
 	}
 
 	const fileParam = params.file as string | undefined;
-	if (fileParam && !validatePathInProject(fileParam, projectRoot)) {
-		return {
-			text: buildEnvelope("shazam_lookup", projectRoot, "error", {
-				error: `File path '${fileParam}' is outside the project root.`,
-			}),
-			isError: true,
-		};
+	if (fileParam) {
+		const classification = classifyFilePath(fileParam, projectRoot);
+		if (classification.kind === "traversal") {
+			return {
+				text: buildEnvelope("shazam_lookup", projectRoot, "error", {
+					error: classification.message,
+				}),
+				isError: true,
+			};
+		}
+		if (classification.kind === "missing") {
+			const knownFiles = graph.fileSymbols ? graph.fileSymbols.keys() : [];
+			const suggestion = suggestSimilarFile(fileParam, knownFiles);
+			const hint = suggestion ? ` Did you mean '${suggestion}'?` : "";
+			return {
+				text: buildEnvelope("shazam_lookup", projectRoot, "error", {
+					error: `File '${fileParam}' is not in the project.${hint}`,
+				}),
+				isError: true,
+			};
+		}
 	}
 
 	let text: string;
@@ -190,60 +205,119 @@ export function dispatchImpact(graph: RepoGraph, params: Record<string, unknown>
 	const direction = (params.direction as "incoming" | "outgoing" | "both") ?? "both";
 	const symbolName = params.symbol as string | undefined;
 
-	// #616: reject when both --symbol and --files are provided.
-	// Pi native returns an explicit error; MCP previously silently
-	// took the --symbol path and discarded --files without warning.
 	const filesArr = params.files as string[] | undefined;
-	if (symbolName && filesArr && filesArr.length > 0) {
-		return {
-			text: "Error: --symbol and --files are mutually exclusive. Use --symbol for call chain analysis or --files for impact analysis, not both.",
-			isError: true,
-		};
-	}
 
-	// Symbol mode: call chain analysis
-	if (symbolName) {
-		// #447: Record that impact --symbol was run so the rename gate is satisfied
-		recordCallChain(symbolName);
-		const flat = (params.flat as boolean) ?? false;
-		if (flat) {
-			const refs = getFlatReferences(graph, symbolName, direction);
-			const text = json
-				? buildEnvelope("shazam_impact", projectRoot, "ok", refs)
-				: formatFlatReferences(refs, symbolName);
-			return { text };
-		}
-		const text = json
-			? executeCallChainJson(graph, symbolName, depth, direction)
-			: executeCallChain(graph, symbolName, depth, direction);
-		return { text };
-	}
+	// #629: infer symbol vs files from input shape. The previous strict
+	// mutual-exclusion error (#616) is gone -- inference removes the
+	// wasted round-trip when an LLM agent passes both flags.
+	const inferred = inferImpactMode(symbolName, filesArr, graph, projectRoot);
 
-	// File mode: impact analysis
-	if (!filesArr || filesArr.length === 0) {
+	if (inferred.mode === "error") {
 		return {
 			text: "Error: either --files (array of file paths) or --symbol (symbol name) is required",
 			isError: true,
 		};
 	}
-	// #445: Validate user-supplied file paths against project root (path-traversal guard)
-	for (const f of filesArr) {
-		if (!validatePathInProject(f, projectRoot)) {
+
+	// Symbol mode: call chain analysis
+	if (inferred.mode === "symbol") {
+		// #447: Record that impact --symbol was run so the rename gate is satisfied
+		recordCallChain(symbolName!);
+		const flat = (params.flat as boolean) ?? false;
+		if (flat) {
+			const refs = getFlatReferences(graph, symbolName!, direction);
+			const text = json
+				? buildEnvelope("shazam_impact", projectRoot, "ok", refs)
+				: formatFlatReferences(refs, symbolName!);
+			return { text };
+		}
+		const text = json
+			? executeCallChainJson(graph, symbolName!, depth, direction)
+			: executeCallChain(graph, symbolName!, depth, direction);
+		return { text };
+	}
+
+	// Files mode: impact analysis
+	const resolvedFiles = inferred.resolvedFiles!;
+	// #445: Validate user-supplied file paths against project root (path-traversal guard).
+	// #636: distinguish "file missing" from "path traversal" so the agent can
+	// self-correct without guessing; suggest the closest known file when missing.
+	for (const f of resolvedFiles) {
+		const classification = classifyFilePath(f, projectRoot);
+		if (classification.kind === "traversal") {
 			return {
-				text: `Error: File path '${f}' is outside the project root and cannot be accessed.`,
+				text: `Error: ${classification.message}`,
+				isError: true,
+			};
+		}
+		if (classification.kind === "missing") {
+			const knownFiles = graph.fileSymbols ? graph.fileSymbols.keys() : [];
+			const suggestion = suggestSimilarFile(f, knownFiles);
+			const hint = suggestion ? ` Did you mean '${suggestion}'?` : "";
+			return {
+				text: `Error: File '${f}' is not in the project.${hint}`,
 				isError: true,
 			};
 		}
 	}
 
 	const text = json
-		? executeImpactJson(graph, filesArr, depth)
-		: executeImpact(graph, filesArr, {
+		? executeImpactJson(graph, resolvedFiles, depth)
+		: executeImpact(graph, resolvedFiles, {
 				withSymbols: (params.withSymbols as boolean) ?? false,
 				compact: (params.compact as boolean) ?? false,
 				depth,
 			});
 	return { text };
+}
+
+/**
+ * Decide whether an impact call is "symbol mode" (call chain) or "files mode"
+ * (blast radius), based on the shape of the input (#629).
+ *
+ * Inference rules, in order:
+ *   1. If neither `--symbol` nor `--files` is provided: error.
+ *   2. If `--files` is a non-empty array: files mode (explicit, skip inference).
+ *   3. If both are provided: symbol wins, files are ignored (no error -- the
+ *      previous strict-error behavior wasted an LLM round-trip when the agent
+ *      guessed wrong; #629 prefers inference over rejection).
+ *   4. If `--symbol` looks like a file path (slash/extension) AND a file with
+ *      that name exists on disk AND the name isn't in the graph's symbol
+ *      index: files mode (single file).
+ *   5. Otherwise: symbol mode. If the symbol doesn't exist, the downstream
+ *      call-chain code surfaces a clean "not found" error.
+ *
+ * Exported for unit tests.
+ */
+export function inferImpactMode(
+	symbolName: string | undefined,
+	filesArr: string[] | undefined,
+	graph: RepoGraph,
+	projectRoot: string,
+): { mode: "symbol" | "files" | "error"; resolvedFiles?: string[] } {
+	const hasFiles = filesArr !== undefined && filesArr.length > 0;
+	const hasSymbol = typeof symbolName === "string" && symbolName.length > 0;
+
+	if (!hasFiles && !hasSymbol) {
+		return { mode: "error" };
+	}
+	// Both set: symbol wins, files are silently ignored (#629). The previous
+	// strict-error behaviour (#616) was removed because inference removes the
+	// wasted round-trip when an LLM agent guesses both.
+	if (hasSymbol) {
+		// Path-like input that actually exists on disk -> files mode (single file).
+		if (
+			!hasFiles &&
+			_isFilePath(symbolName!) &&
+			!graph.nameIndex?.has(symbolName!) &&
+			existsSync(join(projectRoot, symbolName!))
+		) {
+			return { mode: "files", resolvedFiles: [symbolName!] };
+		}
+		return { mode: "symbol" };
+	}
+	// hasFiles only: explicit files mode.
+	return { mode: "files", resolvedFiles: filesArr };
 }
 
 // -- shazam_verify --------------------------------------------------------
@@ -320,19 +394,42 @@ export async function dispatchFormat(
 	const file = params.file as string | undefined;
 
 	// #465: validate user-supplied file path against project root.
-	if (file && !validatePathInProject(file, projectRoot)) {
-		return {
-			text: json
-				? JSON.stringify({
-						schema_version: "1.0",
-						command: "format",
-						project: projectRoot,
-						status: "error",
-						result: { error: "file path escapes project root" },
-					})
-				: "Error: file path escapes project root",
-			isError: true,
-		};
+	// #636: distinguish missing files from real traversal so the agent
+	// can self-correct with a did-you-mean suggestion when applicable.
+	if (file) {
+		const classification = classifyFilePath(file, projectRoot);
+		if (classification.kind === "traversal") {
+			return {
+				text: json
+					? JSON.stringify({
+							schema_version: "1.0",
+							command: "format",
+							project: projectRoot,
+							status: "error",
+							result: { error: classification.message },
+						})
+					: `Error: ${classification.message}`,
+				isError: true,
+			};
+		}
+		if (classification.kind === "missing") {
+			const knownFiles = graph.fileSymbols ? graph.fileSymbols.keys() : [];
+			const suggestion = suggestSimilarFile(file, knownFiles);
+			const hint = suggestion ? ` Did you mean '${suggestion}'?` : "";
+			const message = `File '${file}' is not in the project.${hint}`;
+			return {
+				text: json
+					? JSON.stringify({
+							schema_version: "1.0",
+							command: "format",
+							project: projectRoot,
+							status: "error",
+							result: { error: message },
+						})
+					: `Error: ${message}`,
+				isError: true,
+			};
+		}
 	}
 
 	const text = json

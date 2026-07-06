@@ -42,6 +42,14 @@ export function executeChanges(graph: RepoGraph, projectRoot: string): string {
 	const internalOrphans = orphanResult.internal;
 	const baselineDiff = diffFromBaseline(graph, 0, 0);
 
+	// Issue #634: compact 3-line output when there's nothing to report.
+	// Avoids the noisy "no changes / no orphans / no risk" 6-line block
+	// the agent has to skim past on a clean tree.
+	if (changedFiles.length === 0 && internalOrphans.length === 0) {
+		const risk = _assessChangeRisk(graph, internalOrphans, changedFiles);
+		return `No uncommitted changes. Risk: ${risk.level}.`;
+	}
+
 	const lines: string[] = [];
 	lines.push("## Change Summary");
 	lines.push("");
