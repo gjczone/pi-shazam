@@ -885,12 +885,12 @@ grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerP
 
 ## 8. Modification Log
 
-| Date       | Version | Change                                                                                                                                                                                           |
-| ---------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 2026-06-06 | 1.0     | Initial version. Merged Pi ExtensionAPI contract, project architecture, dev workflow, release process, tech stack baseline.                                                                      |
-| 2026-06-06 | 1.1     | Upgraded iconv-lite (0.6.3 -> 0.7.2), typebox (1.1.39 -> 1.2.1), vscode-languageserver-protocol (3.17.0 -> 3.18.0).                                                                              |
-| 2026-06-08 | 2.0     | Merged all individual SKILL.md files (pi-extension, pi-hooks, mcp-server, testing, release-publish, architecture, sync-discipline) and CONTRACT.md. Flattened docs/ directory.                   |
-| 2026-07-02 | 2.1     | v0.24.4: Cross-platform fixes (Windows CI, PATHEXT, cache dir, POSIX shell -> Node.js).                                                                                                          |
-| 2026-07-03 | 2.2     | v0.25.0: Windows LSP discovery, pre-commit hook rewrite, getGraph fallback, MCP robustness fixes (#596-#610).                                                                                    |
-| 2026-07-03 | 2.2.1   | v0.26.0: Shared MCP/Pi dispatch layer (#618), MCP-Pi parity contract tests (#619), check-mcp-parity.sh (#620).                                                                                   |
-| 2026-07-06 | 2.3     | v0.27.0: LSP per-file mtime cache invalidation (#641), .pi-shazam/config.json (#630), text -> JSON migration (#631 A), lookup JSON Edge.provenance (#643), shazam_lookup mode=state removed.      |
+| Date       | Version | Change                                                                                                                                                                                       |
+| ---------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-06-06 | 1.0     | Initial version. Merged Pi ExtensionAPI contract, project architecture, dev workflow, release process, tech stack baseline.                                                                  |
+| 2026-06-06 | 1.1     | Upgraded iconv-lite (0.6.3 -> 0.7.2), typebox (1.1.39 -> 1.2.1), vscode-languageserver-protocol (3.17.0 -> 3.18.0).                                                                          |
+| 2026-06-08 | 2.0     | Merged all individual SKILL.md files (pi-extension, pi-hooks, mcp-server, testing, release-publish, architecture, sync-discipline) and CONTRACT.md. Flattened docs/ directory.               |
+| 2026-07-02 | 2.1     | v0.24.4: Cross-platform fixes (Windows CI, PATHEXT, cache dir, POSIX shell -> Node.js).                                                                                                      |
+| 2026-07-03 | 2.2     | v0.25.0: Windows LSP discovery, pre-commit hook rewrite, getGraph fallback, MCP robustness fixes (#596-#610).                                                                                |
+| 2026-07-03 | 2.2.1   | v0.26.0: Shared MCP/Pi dispatch layer (#618), MCP-Pi parity contract tests (#619), check-mcp-parity.sh (#620).                                                                               |
+| 2026-07-06 | 2.3     | v0.27.0: LSP per-file mtime cache invalidation (#641), .pi-shazam/config.json (#630), text -> JSON migration (#631 A), lookup JSON Edge.provenance (#643), shazam_lookup mode=state removed. |
