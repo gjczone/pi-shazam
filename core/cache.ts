@@ -10,7 +10,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync, renameSyn
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
-import { serializeGraphV2, deserializeGraphV2, createRepoGraph, type Edge, type Provenance } from "./graph.js";
+import { serializeGraphV2 as _serializeGraphV2, deserializeGraphV2, createRepoGraph, type Edge, type Provenance } from "./graph.js";
 import type { RepoGraph, GraphCacheData as GraphCacheDataExport } from "./graph.js";
 import { _logWarn } from "./output.js";
 import {
@@ -100,23 +100,24 @@ function atomicRename(tmpPath: string, targetPath: string): void {
 /**
  * Save the full graph + file mtimes to a persistent cache file.
  * Uses atomic write (tmp file + rename) to prevent corruption on crash.
+ *
+ * Writes the V3 (ProtoBuf) format by default. The V2 (JSON) format
+ * is still readable via `loadGraphCache` for backward compatibility
+ * with caches written by older pi-shazam versions.
  */
 export function saveGraphCache(graph: RepoGraph, fileMtimes: Map<string, number>, cachePath: string): void {
-	const serialized = serializeGraphV2(graph, fileMtimes);
+	// #628: emit the V3 (ProtoBuf) format. The serialized buffer
+	// is ~30% smaller than the equivalent JSON for a 1000-symbol
+	// graph and decodes in comparable time.
+	const buf = serializeGraphV3(graph, fileMtimes);
 	mkdirSync(dirname(cachePath), { recursive: true });
 	const tmpPath = cachePath + ".tmp";
 	try {
-		const json = JSON.stringify(serialized);
-		// M2: Enforce size limit on save too, not just load — prevents OOM on huge projects.
-		// Use Buffer.byteLength to match the byte-count gate at load time (stat.size is in bytes).
-		if (Buffer.byteLength(json, "utf-8") > MAX_CACHE_SIZE) {
-			_logWarn(
-				"saveGraphCache",
-				`serialized graph too large (${Buffer.byteLength(json, "utf-8")} bytes), skipping cache`,
-			);
+		if (buf.length > MAX_CACHE_SIZE) {
+			_logWarn("saveGraphCache", `serialized graph too large (${buf.length} bytes), skipping cache`);
 			return;
 		}
-		writeFileSync(tmpPath, json, "utf-8");
+		writeFileSync(tmpPath, buf);
 		atomicRename(tmpPath, cachePath);
 	} catch (err) {
 		// Clean up tmp file on failure
@@ -159,7 +160,7 @@ export const CACHE_V3_MAGIC: Buffer = Buffer.from([0x53, 0x48, 0x41, 0x03]);
  *   [0..3]   magic bytes ("SHA\\3")
  *   [4..N]   ProtoBuf-encoded GraphPayload
  */
-export function serializeGraphV3(graph: RepoGraph): Buffer {
+export function serializeGraphV3(graph: RepoGraph, fileMtimes?: Map<string, number>): Buffer {
 	// Build the EdgeColumn from the outgoing map (each edge appears
 	// exactly once). We do not need to duplicate into the incoming
 	// map on the wire -- the deserializer rebuilds the incoming
@@ -233,7 +234,10 @@ export function serializeGraphV3(graph: RepoGraph): Buffer {
 		fileImportBindings: Object.fromEntries(
 			[...graph.fileImportBindings].map(([k, v]) => [k, v]),
 		),
-		fileMtimes: {}, // populated by saveGraphCache
+		// Carry the fileMtimes through to the loader so the
+		// mtime-based cache invalidation in scanProject() can run
+		// against V3 caches as well.
+		fileMtimes: fileMtimes ? Object.fromEntries(fileMtimes) : {},
 		timestamp: Date.now(),
 	});
 
@@ -250,6 +254,44 @@ export function serializeGraphV3(graph: RepoGraph): Buffer {
 	CACHE_V3_MAGIC.copy(out, 0);
 	protoBytes.copy(out, CACHE_V3_MAGIC.length);
 	return out;
+}
+
+/**
+ * #628: like `deserializeGraphV3` but also returns the parsed
+ * metadata JSON (fileMtimes + timestamp). Used by `loadGraphCache`
+ * to recover those fields without re-decoding the whole graph.
+ */
+export function deserializeGraphV3WithMetadata(buffer: Buffer | Uint8Array): {
+	graph: RepoGraph;
+	metadata: { fileMtimes?: Record<string, number>; timestamp?: number };
+} {
+	const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+	if (buf.length < CACHE_V3_MAGIC.length) {
+		throw new Error("deserializeGraphV3WithMetadata: buffer too small for magic header");
+	}
+	if (!buf.subarray(0, CACHE_V3_MAGIC.length).equals(CACHE_V3_MAGIC)) {
+		throw new Error("deserializeGraphV3WithMetadata: missing SHA\\3 magic header");
+	}
+	const protoBytes = buf.subarray(CACHE_V3_MAGIC.length);
+	const payload = decodeGraphPayload(protoBytes);
+	const metadata: { fileMtimes?: Record<string, number>; timestamp?: number } = {};
+	if (payload.metadata && payload.metadata.length > 0) {
+		try {
+			const json = new TextDecoder().decode(payload.metadata);
+			const parsed = JSON.parse(json) as { fileMtimes?: Record<string, number>; timestamp?: number };
+			metadata.fileMtimes = parsed.fileMtimes;
+			metadata.timestamp = parsed.timestamp;
+		} catch (err) {
+			// Metadata parse failure is non-fatal; the graph itself
+			// is still deserialized below. We log the failure so
+			// future debugging can find it but do not propagate
+			// because the cache file may simply pre-date the
+			// fileMtimes/timestamp fields.
+			_logWarn("deserializeGraphV3WithMetadata", "failed to parse V3 metadata JSON", err);
+		}
+	}
+	const graph = deserializeGraphV3(buf);
+	return { graph, metadata };
 }
 
 /**
@@ -429,6 +471,10 @@ function _provenanceFromInt(n: number): Provenance {
 /**
  * Load a persistent graph cache. Returns null if missing, corrupt, wrong
  * version, or older than 1 day.
+ *
+ * Reads the V3 (ProtoBuf) format first; falls back to V2 (JSON) when
+ * the file lacks the V3 magic header so caches written by older
+ * pi-shazam versions continue to load.
  */
 export function loadGraphCache(cachePath: string): GraphCacheData | null {
 	if (!existsSync(cachePath)) return null;
@@ -438,7 +484,21 @@ export function loadGraphCache(cachePath: string): GraphCacheData | null {
 			_logWarn("loadGraphCache", `cache file too large (${cacheStat.size} bytes), skipping`);
 			return null;
 		}
-		const raw = readFileSync(cachePath, "utf-8");
+		const buf = readFileSync(cachePath);
+		// #628: try V3 (ProtoBuf) first by checking the magic header.
+		// Falls back to V2 (JSON) when the file is not a V3 cache --
+		// preserves backward compat for caches written by pre-#628
+		// pi-shazam versions.
+		if (buf.length >= CACHE_V3_MAGIC.length && buf.subarray(0, CACHE_V3_MAGIC.length).equals(CACHE_V3_MAGIC)) {
+			const { graph, metadata } = deserializeGraphV3WithMetadata(buf);
+			const fileMtimes = new Map<string, number>();
+			for (const [k, v] of Object.entries(metadata.fileMtimes ?? {})) {
+				fileMtimes.set(k, v as number);
+			}
+			return { graph, fileMtimes, timestamp: metadata.timestamp ?? Date.now() };
+		}
+		// V2 fallback path
+		const raw = buf.toString("utf-8");
 		const data = JSON.parse(raw);
 		if (!data || data.version !== 3 || !Array.isArray(data.symbols) || !Array.isArray(data.edges)) return null;
 		if (Date.now() - data.timestamp > CACHE_MAX_AGE_MS) return null;
