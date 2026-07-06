@@ -858,28 +858,28 @@ grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerP
 
 ## 7. Key Files Reference
 
-| File                      | Role                                        |
-| ------------------------- | ------------------------------------------- |
-| `index.ts`                | Extension entry, all registrations          |
-| `types/pi-extension.d.ts` | Self-contained ExtensionAPI type stub       |
-| `AGENTS.md`               | Agent context and project rules             |
-| `SKILL.md`                | Pi agent skill file for LLM discovery       |
-| `package.json`            | npm manifest, dependencies, scripts         |
-| `tsconfig.json`           | TypeScript compiler configuration           |
-| `docs/INSTRUCTION.md`     | This file — development & maintenance guide |
-| `docs/kimi-code-hooks.md` | Kimi Code hook system reference (external)  |
-| `core/treesitter.ts`      | Language support, symbol extraction         |
-| `core/graph.ts`           | Symbol dependency graph                     |
-| `core/scanner.ts`         | Project scanning + graph building           |
-| `core/config.ts`          | `.pi-shazam/config.json` loader (#630)      |
-| `core/risk.ts`            | Risk-level assessment (verify + pre-commit) |
-| `core/baseline.ts`        | Graph-baseline diff (risk + orphan tracking) |
-| `lsp/client.ts`           | LSP JSON-RPC implementation                 |
+| File                      | Role                                               |
+| ------------------------- | -------------------------------------------------- |
+| `index.ts`                | Extension entry, all registrations                 |
+| `types/pi-extension.d.ts` | Self-contained ExtensionAPI type stub              |
+| `AGENTS.md`               | Agent context and project rules                    |
+| `SKILL.md`                | Pi agent skill file for LLM discovery              |
+| `package.json`            | npm manifest, dependencies, scripts                |
+| `tsconfig.json`           | TypeScript compiler configuration                  |
+| `docs/INSTRUCTION.md`     | This file — development & maintenance guide        |
+| `docs/kimi-code-hooks.md` | Kimi Code hook system reference (external)         |
+| `core/treesitter.ts`      | Language support, symbol extraction                |
+| `core/graph.ts`           | Symbol dependency graph                            |
+| `core/scanner.ts`         | Project scanning + graph building                  |
+| `core/config.ts`          | `.pi-shazam/config.json` loader (#630)             |
+| `core/risk.ts`            | Risk-level assessment (verify + pre-commit)        |
+| `core/baseline.ts`        | Graph-baseline diff (risk + orphan tracking)       |
+| `lsp/client.ts`           | LSP JSON-RPC implementation                        |
 | `lsp/manager.ts`          | LSP server lifecycle + per-file mtime cache (#641) |
-| `tools/_factory.ts`       | Tool registration factory                   |
-| `tools/_context.ts`       | Shared LspManager holder                    |
-| `tools/_dispatchers.ts`   | Shared MCP/Pi dispatch layer (#618)         |
-| `hooks/before-start.ts`   | System prompt injection                     |
+| `tools/_factory.ts`       | Tool registration factory                          |
+| `tools/_context.ts`       | Shared LspManager holder                           |
+| `tools/_dispatchers.ts`   | Shared MCP/Pi dispatch layer (#618)                |
+| `hooks/before-start.ts`   | System prompt injection                            |
 
 ---
 
@@ -892,5 +892,5 @@ grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerP
 | 2026-06-08 | 2.0     | Merged all individual SKILL.md files (pi-extension, pi-hooks, mcp-server, testing, release-publish, architecture, sync-discipline) and CONTRACT.md. Flattened docs/ directory. |
 | 2026-07-02 | 2.1     | v0.24.4: Cross-platform fixes (Windows CI, PATHEXT, cache dir, POSIX shell -> Node.js).                                                                                        |
 | 2026-07-03 | 2.2     | v0.25.0: Windows LSP discovery, pre-commit hook rewrite, getGraph fallback, MCP robustness fixes (#596-#610).                                                                  |
-| 2026-07-03 | 2.2.1   | v0.26.0: Shared MCP/Pi dispatch layer (#618), MCP-Pi parity contract tests (#619), check-mcp-parity.sh (#620).                                                                |
-| 2026-07-06 | 2.3     | v0.27.0: LSP per-file mtime cache invalidation (#641), .pi-shazam/config.json (#630), doc sync (#645). shazam_lookup mode=state deprecated.                                       |
+| 2026-07-03 | 2.2.1   | v0.26.0: Shared MCP/Pi dispatch layer (#618), MCP-Pi parity contract tests (#619), check-mcp-parity.sh (#620).                                                                 |
+| 2026-07-06 | 2.3     | v0.27.0: LSP per-file mtime cache invalidation (#641), .pi-shazam/config.json (#630), doc sync (#645). shazam_lookup mode=state deprecated.                                    |

@@ -357,8 +357,7 @@ export async function dispatchVerify(
 	// chain: per-call value (none, since the schema dropped it) > config
 	// value > hard-coded default of 100.
 	const configMaxFiles = loadConfig().verify?.maxFiles;
-	const resolvedMaxFiles =
-		typeof configMaxFiles === "number" && configMaxFiles > 0 ? configMaxFiles : 100;
+	const resolvedMaxFiles = typeof configMaxFiles === "number" && configMaxFiles > 0 ? configMaxFiles : 100;
 
 	const opts = {
 		quick: (params.quick as boolean) ?? false,

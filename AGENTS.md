@@ -224,14 +224,14 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 
 ## Data & State Flows
 
-| Variable / Cache                 | Type                        | Purpose                                                     | Reset trigger                                         |
-| -------------------------------- | --------------------------- | ----------------------------------------------------------- | ----------------------------------------------------- |
-| Module-level cached scan results | In-memory                   | `scanProject()` result reused across tools within a session | New tool call with `scanProject` flag, or session end |
-| LSP client connections           | Process                     | Spawned language server processes per language              | Session end, server crash, or explicit shutdown       |
-| Audit log                        | File (`~/.pi/hooks/audit/`) | All tool invocations                                        | Log rotation (10 MB cap)                              |
-| Graph cache                      | In-memory                   | RepoGraph built from tree-sitter parse                      | File change detected, or session end                  |
+| Variable / Cache                 | Type                        | Purpose                                                     | Reset trigger                                           |
+| -------------------------------- | --------------------------- | ----------------------------------------------------------- | ------------------------------------------------------- |
+| Module-level cached scan results | In-memory                   | `scanProject()` result reused across tools within a session | New tool call with `scanProject` flag, or session end   |
+| LSP client connections           | Process                     | Spawned language server processes per language              | Session end, server crash, or explicit shutdown         |
+| Audit log                        | File (`~/.pi/hooks/audit/`) | All tool invocations                                        | Log rotation (10 MB cap)                                |
+| Graph cache                      | In-memory                   | RepoGraph built from tree-sitter parse                      | File change detected, or session end                    |
 | LSP per-file mtime cache (#641)  | In-memory                   | `LspManager._openedFileMtimes` records mtimeMs at didOpen   | Invalidate on mtime change, server restart, or shutdown |
-| Project config cache (#630)      | In-memory                   | `core/config.ts` parses `.pi-shazam/config.json` once       | Process restart (no hot-reload); reset via test helper |
+| Project config cache (#630)      | In-memory                   | `core/config.ts` parses `.pi-shazam/config.json` once       | Process restart (no hot-reload); reset via test helper  |
 
 ## Security
 

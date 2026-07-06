@@ -781,40 +781,40 @@ export class LspManager {
 						return { filePath, content, skipped: false };
 					}),
 				);
-					await Promise.allSettled(
-						readResults.map(async (result) => {
-							if (result.status === "fulfilled") {
-								if (result.value.skipped || result.value.content === null) {
-									prevOpened.delete(result.value.filePath);
-									return;
-								}
-								try {
-									await client.didOpen(result.value.filePath, result.value.content);
-									// #641: re-open after a server restart re-uses
-									// the on-disk content we just read. Record its
-									// current mtime so a subsequent verify cycle can
-									// detect edits the same way it does for the
-									// primary didOpen path in runLspDiagnostics.
-									let mtime: number | undefined;
-									try {
-										mtime = statSync(resolve(detection.workspaceRoot, result.value.filePath)).mtimeMs;
-									} catch (_err) {
-										mtime = undefined;
-									}
-									this._openedFileMtimes.set(result.value.filePath, mtime ?? Date.now());
-								} catch (err) {
-									_logWarn("_initServerForLanguage", `re-open failed for ${result.value.filePath}`, err);
-									prevOpened.delete(result.value.filePath);
-									this._openedFileMtimes.delete(result.value.filePath);
-								}
-							} else {
-								const filePath = entries[readResults.indexOf(result)]!;
-								_logWarn("_initServerForLanguage", `read failed for ${filePath}`, result.reason);
-								prevOpened.delete(filePath);
-								this._openedFileMtimes.delete(filePath);
+				await Promise.allSettled(
+					readResults.map(async (result) => {
+						if (result.status === "fulfilled") {
+							if (result.value.skipped || result.value.content === null) {
+								prevOpened.delete(result.value.filePath);
+								return;
 							}
-						}),
-					);
+							try {
+								await client.didOpen(result.value.filePath, result.value.content);
+								// #641: re-open after a server restart re-uses
+								// the on-disk content we just read. Record its
+								// current mtime so a subsequent verify cycle can
+								// detect edits the same way it does for the
+								// primary didOpen path in runLspDiagnostics.
+								let mtime: number | undefined;
+								try {
+									mtime = statSync(resolve(detection.workspaceRoot, result.value.filePath)).mtimeMs;
+								} catch (_err) {
+									mtime = undefined;
+								}
+								this._openedFileMtimes.set(result.value.filePath, mtime ?? Date.now());
+							} catch (err) {
+								_logWarn("_initServerForLanguage", `re-open failed for ${result.value.filePath}`, err);
+								prevOpened.delete(result.value.filePath);
+								this._openedFileMtimes.delete(result.value.filePath);
+							}
+						} else {
+							const filePath = entries[readResults.indexOf(result)]!;
+							_logWarn("_initServerForLanguage", `read failed for ${filePath}`, result.reason);
+							prevOpened.delete(filePath);
+							this._openedFileMtimes.delete(filePath);
+						}
+					}),
+				);
 			}
 
 			return info;

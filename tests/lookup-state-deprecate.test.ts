@@ -100,10 +100,6 @@ describe("shazam_lookup mode=state deprecation (#630)", () => {
 		// State map output should be present in the result text
 		expect(result.text).toMatch(/State Map/);
 		// AND the deprecation warning is still emitted
-		expect(
-			hoisted.logWarnCalls.some(
-				(c) => c.tag === "shazam_lookup" && /deprecated/i.test(c.message),
-			),
-		).toBe(true);
+		expect(hoisted.logWarnCalls.some((c) => c.tag === "shazam_lookup" && /deprecated/i.test(c.message))).toBe(true);
 	});
 });
