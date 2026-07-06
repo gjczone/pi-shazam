@@ -87,7 +87,7 @@ export function executeChanges(graph: RepoGraph, projectRoot: string): string {
 	}
 
 	// Risk assessment (already computed for the compact shortcut above;
-// reuse the same object so we don't recompute).
+	// reuse the same object so we don't recompute).
 	lines.push("### Risk Level");
 	lines.push(`**${risk.level}** - ${risk.reason}`);
 	lines.push("");
