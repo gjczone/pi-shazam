@@ -42,6 +42,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { stat } from "node:fs/promises";
 import { redact } from "../core/redact.js";
 import { readFileAdaptiveAsync } from "../core/encoding.js";
 import { resolve, join } from "node:path";
@@ -628,10 +629,33 @@ async function runLspDiagnostics(
 			const serverInfo = await lspManager.getServerForFile(filePath);
 			if (!serverInfo) return { filePath, opened: false, serverName: "" };
 			try {
-				const content = await readFileAdaptiveAsync(resolve(projectRoot, filePath));
+				const absPath = resolve(projectRoot, filePath);
+				// #641: capture the on-disk mtime BEFORE reading the file so
+				// we can pass it to the manager for stale-cache detection.
+				// A stat failure here is non-fatal -- the file may have been
+				// deleted between scanProject and the LSP open; the
+				// readFileAdaptiveAsync below will surface the real error.
+				let mtime: number;
+				try {
+					mtime = (await stat(absPath)).mtimeMs;
+				} catch (_statErr) {
+					// Fall back to "now" so the manager's record still exists
+					// if the file reappears. invalidateIfStale's mtime check
+					// will not match Date.now() against a real mtime, so the
+					// next verify cycle will invalidate it correctly.
+					mtime = Date.now();
+				}
+				// #641: If the file was edited since the previous verify
+				// cycle, send didClose for the stale version so the LSP
+				// server drops its old per-document AST. Without this, the
+				// server returns diagnostics against the OLD content even
+				// though didOpen below sends the NEW content.
+				await lspManager.invalidateIfStale(filePath, mtime);
+				const content = await readFileAdaptiveAsync(absPath);
 				await serverInfo.client.didOpen(filePath, content);
-				// Track for crash recovery
-				lspManager.trackOpenedFile(serverInfo.language, filePath);
+				// Track for crash recovery AND for the next verify cycle's
+				// stale-cache check (#641).
+				lspManager.trackOpenedFile(serverInfo.language, filePath, mtime);
 				return { filePath, opened: true, serverName: serverInfo.serverName };
 			} catch (e) {
 				return { filePath, opened: false, serverName: serverInfo.serverName, error: e };

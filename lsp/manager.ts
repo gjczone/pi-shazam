@@ -572,6 +572,13 @@ export class LspManager {
 	private log: (msg: string) => void;
 	// Track opened file paths per language for re-open after server crash
 	private _openedFilePaths = new Map<string, Set<string>>();
+	// #641: Track the on-disk mtime (mtimeMs) at didOpen time so a later
+	// verify call can detect that a file was edited and send didClose for
+	// the stale version before the new content is didOpen'd. Without this
+	// the LSP server's per-document AST cache returns diagnostics against
+	// the OLD content, producing phantom type errors until the user
+	// manually `touch`es the file or restarts the language server.
+	private _openedFileMtimes = new Map<string, number>();
 	private _initPromises = new Map<string, Promise<LspServerInfo | null>>();
 	private _restartBudget = new Map<string, { failures: number; nextRetryAt: number }>();
 	private _shuttingDown = false;
@@ -593,6 +600,7 @@ export class LspManager {
 		if (resolved !== this.projectRoot) {
 			this.projectRoot = resolved;
 			this._openedFilePaths.clear();
+			this._openedFileMtimes.clear();
 			this.log?.(`Project root updated to ${this.projectRoot}`);
 		}
 	}
@@ -773,26 +781,40 @@ export class LspManager {
 						return { filePath, content, skipped: false };
 					}),
 				);
-				await Promise.allSettled(
-					readResults.map(async (result) => {
-						if (result.status === "fulfilled") {
-							if (result.value.skipped || result.value.content === null) {
-								prevOpened.delete(result.value.filePath);
-								return;
+					await Promise.allSettled(
+						readResults.map(async (result) => {
+							if (result.status === "fulfilled") {
+								if (result.value.skipped || result.value.content === null) {
+									prevOpened.delete(result.value.filePath);
+									return;
+								}
+								try {
+									await client.didOpen(result.value.filePath, result.value.content);
+									// #641: re-open after a server restart re-uses
+									// the on-disk content we just read. Record its
+									// current mtime so a subsequent verify cycle can
+									// detect edits the same way it does for the
+									// primary didOpen path in runLspDiagnostics.
+									let mtime: number | undefined;
+									try {
+										mtime = statSync(resolve(detection.workspaceRoot, result.value.filePath)).mtimeMs;
+									} catch (_err) {
+										mtime = undefined;
+									}
+									this._openedFileMtimes.set(result.value.filePath, mtime ?? Date.now());
+								} catch (err) {
+									_logWarn("_initServerForLanguage", `re-open failed for ${result.value.filePath}`, err);
+									prevOpened.delete(result.value.filePath);
+									this._openedFileMtimes.delete(result.value.filePath);
+								}
+							} else {
+								const filePath = entries[readResults.indexOf(result)]!;
+								_logWarn("_initServerForLanguage", `read failed for ${filePath}`, result.reason);
+								prevOpened.delete(filePath);
+								this._openedFileMtimes.delete(filePath);
 							}
-							try {
-								await client.didOpen(result.value.filePath, result.value.content);
-							} catch (err) {
-								_logWarn("_initServerForLanguage", `re-open failed for ${result.value.filePath}`, err);
-								prevOpened.delete(result.value.filePath);
-							}
-						} else {
-							const filePath = entries[readResults.indexOf(result)]!;
-							_logWarn("_initServerForLanguage", `read failed for ${filePath}`, result.reason);
-							prevOpened.delete(filePath);
-						}
-					}),
-				);
+						}),
+					);
 			}
 
 			return info;
@@ -836,14 +858,67 @@ export class LspManager {
 	 */
 	/**
 	 * Track a file as opened for a language (for crash recovery).
+	 *
+	 * When `mtime` is provided, also record the on-disk mtime in the
+	 * per-file cache so a later `invalidateIfStale` can detect that the
+	 * file was edited between two verify calls (#641). The mtime argument
+	 * is optional for backward compatibility: callers that do not have
+	 * a fresh mtime (e.g. the closeOpenedFiles re-open path that never
+	 * re-reads the file) can omit it.
 	 */
-	trackOpenedFile(language: string, filePath: string): void {
+	trackOpenedFile(language: string, filePath: string, mtime?: number): void {
 		let paths = this._openedFilePaths.get(language);
 		if (!paths) {
 			paths = new Set();
 			this._openedFilePaths.set(language, paths);
 		}
 		paths.add(filePath);
+		if (typeof mtime === "number") {
+			this._openedFileMtimes.set(filePath, mtime);
+		}
+	}
+
+	/**
+	 * #641: If the file's on-disk mtime is newer than the one recorded at
+	 * didOpen time, send `textDocument/didClose` to the LSP server so it
+	 * drops its stale per-document AST, and remove the cached mtime entry
+	 * so a subsequent `didOpen` is not short-circuited by the client's
+	 * own `_openedFiles` guard.
+	 *
+	 * Returns `true` when a didClose was sent, `false` when the file is
+	 * either not tracked or the mtime is unchanged. Best-effort: a didClose
+	 * failure is logged via _logWarn and swallowed so a single bad file
+	 * does not block the verify cycle.
+	 */
+	async invalidateIfStale(filePath: string, currentMtime: number): Promise<boolean> {
+		const recorded = this._openedFileMtimes.get(filePath);
+		// No record -> never opened through us (or was already closed).
+		if (recorded === undefined) return false;
+		// mtime unchanged -> cache is fresh.
+		if (currentMtime <= recorded) return false;
+
+		// Stale: drop the mtime entry first so a concurrent re-entry does
+		// not double-close. Then attempt didClose best-effort.
+		this._openedFileMtimes.delete(filePath);
+		try {
+			// Resolve the language server that owns this file. The file
+			// may have moved to a new language if the project language set
+			// changed; fall back to scanning all active servers.
+			let client: { didClose(filePath: string): Promise<void> } | null = null;
+			for (const info of this.servers.values()) {
+				if (info.client.isFileOpened(filePath)) {
+					client = info.client;
+					break;
+				}
+			}
+			if (client) {
+				await client.didClose(filePath);
+			}
+			return true;
+		} catch (err) {
+			_logWarn("invalidateIfStale", `didClose failed for ${filePath}`, err);
+			return true; // we still cleared the local entry, so the next didOpen will succeed
+		}
 	}
 
 	/**
@@ -872,6 +947,12 @@ export class LspManager {
 						await info.client.didClose(filePath);
 					} catch (err) {
 						_logWarn("closeOpenedFiles", `didClose failed for ${filePath}`, err);
+					} finally {
+						// #641: drop the cached mtime in lockstep with the
+						// path tracking entry. A subsequent verify cycle
+						// must re-stat the file and treat it as a fresh
+						// open, not a stale one.
+						this._openedFileMtimes.delete(filePath);
 					}
 				}),
 			);
@@ -885,6 +966,7 @@ export class LspManager {
 		const snapshot = [...this.servers.entries()];
 		this.servers.clear();
 		this._openedFilePaths.clear();
+		this._openedFileMtimes.clear();
 		this._initPromises.clear();
 
 		const SHUTDOWN_TIMEOUT_MS = 8000;
