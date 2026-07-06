@@ -1070,7 +1070,18 @@ export function executeVerify(graph: RepoGraph, projectRoot: string, options: Ve
 	return lines.join("\n");
 }
 
-export function executeVerifyJson(graph: RepoGraph, projectRoot: string, options: VerifyOptions = {}): string {
+/**
+ * #631 A: build the typed verify result (sync variant -- no LSP).
+ * Single source of truth for the JSON envelope; previously the
+ * shape was inlined inside executeVerifyJson. The async LSP-aware
+ * variant executeVerifyJsonAsync already returns a typed object
+ * and is the model for this sync counterpart.
+ */
+export function buildVerifyResult(
+	graph: RepoGraph,
+	projectRoot: string,
+	options: VerifyOptions = {},
+): Record<string, unknown> {
 	const orphanResult = findOrphans(graph);
 	const orphans = orphanResult.all;
 	const internalOrphans = orphanResult.internal;
@@ -1080,31 +1091,35 @@ export function executeVerifyJson(graph: RepoGraph, projectRoot: string, options
 
 	const edgeCount = getGraphEdgeCount(graph);
 
+	return {
+		symbolCount: graph.symbols.size,
+		fileCount: graph.fileSymbols.size,
+		edgeCount,
+		riskLevel: risk.level,
+		riskReason: risk.reason,
+		orphanCount: orphans.length,
+		orphans: orphans
+			.slice(0, 20)
+			.map((s) => ({ name: s.name, kind: s.kind, file: s.file, line: s.line, isExported: s.isExported })),
+		internalOrphanCount: internalOrphans.length,
+		exportedOrphanCount: exportedOrphans.length,
+		baselineDiff: null,
+		gitChangedFiles: gitChangedFiles.slice(0, 50),
+		lspDiagnostics: [],
+		lspAvailable: false,
+		verdict: risk.level === "high" ? "FAIL" : "PASS",
+		quickMode: options.quick ?? false,
+		lspOnlyMode: options.lspOnly ?? false,
+		preCommitMode: options.preCommit ?? false,
+	};
+}
+
+export function executeVerifyJson(graph: RepoGraph, projectRoot: string, options: VerifyOptions = {}): string {
 	return JSON.stringify({
 		schema_version: "1.0",
 		command: "verify",
 		project: projectRoot,
 		status: "ok",
-		result: {
-			symbolCount: graph.symbols.size,
-			fileCount: graph.fileSymbols.size,
-			edgeCount,
-			riskLevel: risk.level,
-			riskReason: risk.reason,
-			orphanCount: orphans.length,
-			orphans: orphans
-				.slice(0, 20)
-				.map((s) => ({ name: s.name, kind: s.kind, file: s.file, line: s.line, isExported: s.isExported })),
-			internalOrphanCount: internalOrphans.length,
-			exportedOrphanCount: exportedOrphans.length,
-			baselineDiff: null,
-			gitChangedFiles: gitChangedFiles.slice(0, 50),
-			lspDiagnostics: [],
-			lspAvailable: false,
-			verdict: risk.level === "high" ? "FAIL" : "PASS",
-			quickMode: options.quick ?? false,
-			lspOnlyMode: options.lspOnly ?? false,
-			preCommitMode: options.preCommit ?? false,
-		},
+		result: buildVerifyResult(graph, projectRoot, options),
 	});
 }
