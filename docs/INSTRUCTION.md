@@ -883,3 +883,4 @@ grep -c "registerShazamGuide\|registerToolLogger\|registerBeforeStart\|registerP
 | 2026-06-08 | 2.0     | Merged all individual SKILL.md files (pi-extension, pi-hooks, mcp-server, testing, release-publish, architecture, sync-discipline) and CONTRACT.md. Flattened docs/ directory. |
 | 2026-07-02 | 2.1     | v0.24.4: Cross-platform fixes (Windows CI, PATHEXT, cache dir, POSIX shell -> Node.js).                                                                                        |
 | 2026-07-03 | 2.2     | v0.25.0: Windows LSP discovery, pre-commit hook rewrite, getGraph fallback, MCP robustness fixes (#596-#610).                                                                  |
+| 2026-07-06 | 2.3     | v0.27.0: text -> JSON migration (#631 A) -- 7 tools now expose typed XxxResult via buildXxxResult. lookup JSON surfaces Edge.provenance (#643). shazam_lookup mode=state removed (#630 cleanup). |
