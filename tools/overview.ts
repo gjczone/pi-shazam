@@ -365,6 +365,52 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 }
 
 export function executeOverviewJson(graph: RepoGraph, projectRoot: string, filter?: string): string {
+	return buildEnvelope("shazam_overview", projectRoot, "ok", buildOverviewResult(graph, projectRoot, filter));
+}
+
+/**
+ * #631 A: typed return value of shazam_overview. The dispatcher
+ * (tools/_dispatchers.ts) wraps this object in buildEnvelope for
+ * JSON mode; the existing executeOverview text path is unchanged
+ * for backward compat with the test suite.
+ *
+ * `kind` discriminator for error / not_found cases (e.g. when a
+ * filter matches no files, the result.kind is "empty" and the
+ * renderer emits a friendly "no matching source files" message).
+ */
+export interface OverviewTopFile {
+	file: string;
+	symbolCount: number;
+	pagerank: number;
+}
+
+export interface OverviewHotspot {
+	file: string;
+	name: string;
+	score: number;
+}
+
+export interface OverviewResult {
+	kind: "overview" | "empty";
+	filter?: string;
+	totalSymbols: number;
+	totalFiles: number;
+	excludedTests?: number;
+	keyDependencies?: string;
+	pythonDependencies?: string;
+	rustDependencies?: string;
+	goDependencies?: string;
+	recentChanges?: string;
+	topFiles: OverviewTopFile[];
+	hotspots?: { byPageRank: OverviewHotspot[]; byComplexity: OverviewHotspot[] };
+}
+
+/**
+ * #631 A: build the typed OverviewResult. Single source of truth
+ * for the JSON envelope; previously the shape was inlined in
+ * executeOverviewJson.
+ */
+export function buildOverviewResult(graph: RepoGraph, projectRoot: string, filter?: string): OverviewResult {
 	const files = filter
 		? [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f) && f.includes(filter))
 		: [...graph.fileSymbols.keys()].filter((f) => !isNonSourceFile(f));
@@ -394,22 +440,24 @@ export function executeOverviewJson(graph: RepoGraph, projectRoot: string, filte
 				byComplexity: topByComplexity(graph, projectRoot, HOTSPOTS_TOP_N),
 			};
 
-	return buildEnvelope("shazam_overview", projectRoot, "ok", {
+	return {
+		kind: files.length === 0 ? "empty" : "overview",
+		filter,
 		totalSymbols: graph.symbols.size,
 		totalFiles: graph.fileSymbols.size,
 		excludedTests: excludedTests > 0 ? excludedTests : undefined,
-		keyDependencies: filter ? undefined : buildKeyDependenciesSection(projectRoot),
-		pythonDependencies: filter ? undefined : buildPythonDepsSection(projectRoot),
-		rustDependencies: filter ? undefined : buildRustDepsSection(projectRoot),
-		goDependencies: filter ? undefined : buildGoDepsSection(projectRoot),
-		recentChanges: filter ? undefined : buildRecentChangesSection(projectRoot),
+		keyDependencies: filter ? undefined : (buildKeyDependenciesSection(projectRoot) ?? undefined),
+		pythonDependencies: filter ? undefined : (buildPythonDepsSection(projectRoot) ?? undefined),
+		rustDependencies: filter ? undefined : (buildRustDepsSection(projectRoot) ?? undefined),
+		goDependencies: filter ? undefined : (buildGoDepsSection(projectRoot) ?? undefined),
+		recentChanges: filter ? undefined : (buildRecentChangesSection(projectRoot) ?? undefined),
 		topFiles: topFiles.map(([file, stats]) => ({
 			file,
 			symbolCount: stats.count,
 			pagerank: Number(stats.pagerank.toFixed(4)),
 		})),
 		hotspots,
-	});
+	};
 }
 
 // -- Entry point detection (#489) ---------------------------------------
