@@ -8,7 +8,7 @@
 import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
 import type { RepoGraph } from "../core/graph.js";
-import { createTool, validatePathInProject } from "./_factory.js";
+import { createTool, validatePathInProject, buildEnvelope } from "./_factory.js";
 import { dispatchFormat } from "./_dispatchers.js";
 import { readFileAdaptive, readFileAdaptiveAsync } from "../core/encoding.js";
 import { scanProject, getEffectiveRoot } from "../core/scanner.js";
@@ -179,24 +179,47 @@ export async function executeFormat(
 }
 
 /**
- * Run format analysis and return structured JSON.
+ * #631 A: typed return value of shazam_format. The dispatcher wraps
+ * this object in buildEnvelope for JSON mode. The existing
+ * executeFormat text path is unchanged for backward compat with the
+ * test suite.
+ *
+ * `kind: "error"` is used for the path-traversal guard (file path
+ * escapes project root). All other paths are kind: "format".
  */
-export async function executeFormatJson(
+export interface FormatResult {
+	kind: "format" | "error";
+	dryRun: boolean;
+	file?: string;
+	formatters: string[];
+	issueCount: number;
+	issues: FormatIssue[];
+	error?: string;
+}
+
+/**
+ * #631 A: build the typed FormatResult. Single source of truth for
+ * the analysis data; the existing executeFormatJson was a hand-rolled
+ * envelope around the same shape.
+ */
+export async function buildFormatResult(
 	graph: RepoGraph,
 	projectRoot: string,
 	options: FormatOptions = {},
-): Promise<string> {
+): Promise<FormatResult> {
 	const dryRun = options.dryRun ?? true;
 	const formatters = detectFormatters(projectRoot);
 
 	if (options.file && !validatePathInProject(options.file, getEffectiveRoot())) {
-		return JSON.stringify({
-			schema_version: "1.0",
-			command: "format",
-			project: projectRoot,
-			status: "error",
-			result: { error: "file path escapes project root" },
-		});
+		return {
+			kind: "error",
+			dryRun,
+			file: options.file,
+			formatters: [],
+			issueCount: 0,
+			issues: [],
+			error: "file path escapes project root",
+		};
 	}
 
 	const rawFiles = options.file ? [options.file] : [...graph.fileSymbols.keys()];
@@ -204,23 +227,33 @@ export async function executeFormatJson(
 
 	const issues = await scanFormatIssues(projectRoot, targetFiles, graph);
 
-	return JSON.stringify({
-		schema_version: "1.0",
-		command: "format",
-		project: projectRoot,
-		status: "ok",
-		result: {
-			dryRun,
-			formatters,
-			issueCount: issues.length,
-			issues: issues.slice(0, 50),
-		},
-	});
+	return {
+		kind: "format",
+		dryRun,
+		file: options.file,
+		formatters,
+		issueCount: issues.length,
+		issues: issues.slice(0, 50),
+	};
+}
+
+/**
+ * #631 A: wrap a FormatResult in the standard JSON envelope. The
+ * dispatcher and any external JSON consumer can use this.
+ */
+export async function executeFormatJson(
+	graph: RepoGraph,
+	projectRoot: string,
+	options: FormatOptions = {},
+): Promise<string> {
+	const result = await buildFormatResult(graph, projectRoot, options);
+	const status = result.kind === "error" ? "error" : "ok";
+	return buildEnvelope("shazam_format", projectRoot, status, result);
 }
 
 // -- Helpers -----------------------------------------------------------------
 
-interface FormatIssue {
+export interface FormatIssue {
 	file: string;
 	line: number;
 	kind: string;
