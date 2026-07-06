@@ -44,10 +44,12 @@ export function executeChanges(graph: RepoGraph, projectRoot: string): string {
 
 	// Issue #634: compact 3-line output when there's nothing to report.
 	// Avoids the noisy "no changes / no orphans / no risk" 6-line block
-	// the agent has to skim past on a clean tree.
+	// the agent has to skim past on a clean tree. The header is kept so
+	// parity tests (and downstream parsers) can still detect a Change
+	// Summary section.
+	const risk = _assessChangeRisk(graph, internalOrphans, changedFiles);
 	if (changedFiles.length === 0 && internalOrphans.length === 0) {
-		const risk = _assessChangeRisk(graph, internalOrphans, changedFiles);
-		return `No uncommitted changes. Risk: ${risk.level}.`;
+		return `## Change Summary\n\nNo uncommitted changes. Risk: ${risk.level}.`;
 	}
 
 	const lines: string[] = [];
@@ -84,8 +86,8 @@ export function executeChanges(graph: RepoGraph, projectRoot: string): string {
 		lines.push("");
 	}
 
-	// Risk assessment
-	const risk = _assessChangeRisk(graph, internalOrphans, changedFiles);
+	// Risk assessment (already computed for the compact shortcut above;
+// reuse the same object so we don't recompute).
 	lines.push("### Risk Level");
 	lines.push(`**${risk.level}** - ${risk.reason}`);
 	lines.push("");

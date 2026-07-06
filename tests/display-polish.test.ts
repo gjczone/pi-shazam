@@ -95,9 +95,16 @@ describe("issue #634 / 3: shazam_changes compact output on clean tree", () => {
 			const output = executeChanges(emptyGraph, tmpDir);
 
 			const lines = output.split("\n");
-			// 3 lines of content + 1 trailing newline = at most 4 elements.
+			// Compact path keeps the `## Change Summary` header so parity
+			// tests / downstream parsers can detect the section. The
+			// shortcut is the absence of all the other section headers
+			// (Risk Level, Git Working Tree Changes, etc.) -- only the
+			// "No uncommitted changes" summary line is emitted.
 			expect(lines.length).toBeLessThanOrEqual(4);
+			expect(output).toMatch(/## Change Summary/);
 			expect(output).toMatch(/No uncommitted changes\. Risk: /);
+			expect(output).not.toMatch(/### Risk Level/);
+			expect(output).not.toMatch(/### Git Working Tree Changes/);
 		} finally {
 			rmSync(tmpDir, { recursive: true, force: true });
 		}
