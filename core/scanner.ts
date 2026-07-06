@@ -99,13 +99,21 @@ let cachedFiles: Map<string, FileCacheEntry> = new Map();
 
 /**
  * Reset all in-memory caches. Used in tests and when cache may be stale.
+ *
+ * #626: TreeSitterAdapter is intentionally preserved across resetCache() to
+ * avoid rebuilding the underlying native C++ Parser/Language/Query objects.
+ * V8 cannot promptly reclaim those native objects, so every resetCache()
+ * that nulled the adapter caused a transient native-heap inflation of
+ * 100-300MB per verify cycle in long-lived MCP mode. The adapter is
+ * language-only (no per-file state), so reusing it across cache resets is
+ * safe — only the per-file analysis results need to be cleared.
  */
 export function resetCache(): void {
 	cachedGraph = null;
 	cachedProjectPath = "";
 	cachedFiles = new Map();
 	clearExistsCache();
-	_scannerAdapter = null;
+	// Intentionally NOT resetting _scannerAdapter — see #626.
 }
 
 /**

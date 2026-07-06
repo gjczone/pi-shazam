@@ -711,6 +711,10 @@ async function runLspDiagnostics(
 				"runLspDiagnostics",
 				reliability.message ?? "LSP diagnostics deemed unreliable, falling back to subprocess",
 			);
+			// #626: release LSP per-document AST before falling back. Even
+			// when the LSP result is unreliable, the documents we just
+			// didOpen still occupy memory on the language server.
+			await lspManager.closeOpenedFiles();
 			const subResult = await runSubprocessDiagnostics(projectRoot);
 			return {
 				...subResult,
@@ -719,6 +723,12 @@ async function runLspDiagnostics(
 			};
 		}
 	}
+
+	// #626: send didClose to every file we opened so the language server
+	// releases per-document AST. Without this, _openedFilePaths grows
+	// monotonically across the MCP process lifetime and the LSP child
+	// process consumes 1GB+ for large projects.
+	await lspManager.closeOpenedFiles();
 
 	return {
 		diagnostics,

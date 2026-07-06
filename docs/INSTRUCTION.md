@@ -538,6 +538,18 @@ await server.connect(new StdioServerTransport());
 
 `package.json` must have: `"bin": { "pi-shazam-mcp": "dist/mcp/entry.js" }`
 
+**Memory management (`mcp/entry.ts` getGraph TTL, #626):**
+
+The MCP server is long-lived. To release the cached `RepoGraph` during idle
+periods (large projects hold 500MB-1GB on V8 heap), `getGraph()` enforces a
+TTL: if no caller has invoked it for `GRAPH_TTL_MS` ms, the cache is nulled
+and the next call rebuilds from the persistent disk cache.
+
+- Default TTL: 10 minutes (`DEFAULT_GRAPH_TTL_MS` in `mcp/entry.ts`).
+- Override via env var `PI_SHAZAM_GRAPH_TTL_MS` (positive integer ms).
+- Set `PI_SHAZAM_GRAPH_TTL_MS=0` to disable (always retain cache).
+- CLI one-shot mode is unaffected — the process exits before the TTL elapses.
+
 **Tool registration (`mcp/tools.ts`) — Zod schemas (NOT TypeBox):**
 
 ```typescript

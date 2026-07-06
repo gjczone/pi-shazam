@@ -256,11 +256,14 @@ export async function dispatchVerify(
 	const json = (params.json as boolean) ?? false;
 	const maxTokens = params.maxTokens as number | undefined;
 
-	// #616: reset scanner cache before verify — Pi native forces a
-	// fresh scan because verify must always see current file state.
-	// MCP is long-lived; cache from prior tool calls would stale results.
-	const { resetCache } = await import("../core/scanner.js");
-	resetCache();
+	// #626: do NOT call resetCache here. The previous behavior forced a
+	// fresh scan by clearing the in-memory cache, but the factory
+	// closure (registerAllTools) still held a reference to the prior
+	// graph until this function returned, so OLD and NEW graphs co-existed
+	// in memory during verify, briefly doubling V8 heap usage.
+	// scanProject() already runs an mtime-based incremental update on
+	// every call, so a stale-cache concern is unfounded — file changes
+	// are detected and applied automatically.
 
 	const opts = {
 		quick: (params.quick as boolean) ?? false,
