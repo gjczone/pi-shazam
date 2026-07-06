@@ -65,9 +65,9 @@ check \
 echo ""
 echo "--- shazam_verify: resetCache and capVerifyDiagnostics ---"
 check \
-  "dispatchVerify calls resetCache" \
-  "grep -q 'resetCache' '$ROOT/tools/_dispatchers.ts'" \
-  "The verify dispatcher must call resetCache()."
+  "dispatchVerify does NOT call resetCache (#626)" \
+  "! grep -qE 'await import.*scanner.*resetCache|resetCache\\(\\)' '$ROOT/tools/_dispatchers.ts'" \
+  "Issue #626: dispatchVerify must NOT call resetCache() before verify. The previous behavior forced a fresh scan that briefly held two RepoGraphs in memory. scanProject's mtime-based incremental update handles cache freshness without resetCache()."
 
 check \
   "dispatchVerify calls capVerifyDiagnostics" \

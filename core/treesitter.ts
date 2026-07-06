@@ -142,12 +142,22 @@ export function getProjectParserWarnings(filePaths: Iterable<string>): [string, 
 }
 
 export class TreeSitterAdapter {
+	// #626: monotonic counter of all TreeSitterAdapter instances ever
+	// constructed. Tests use this to assert that resetCache() preserves
+	// the adapter singleton (so no new native objects are allocated).
+	private static _instanceCount = 0;
+
+	static getInstanceCount(): number {
+		return TreeSitterAdapter._instanceCount;
+	}
+
 	private parsers = new Map<string, ParserInstance>();
 	private queries = new Map<string, Map<string, QueryInstance>>();
 	private log: (msg: string) => void;
 
 	constructor(log?: (msg: string) => void) {
 		this.log = log ?? (() => {});
+		TreeSitterAdapter._instanceCount++;
 		this._initParsers();
 	}
 

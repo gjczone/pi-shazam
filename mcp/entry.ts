@@ -96,11 +96,40 @@ if (VERSION === "0.0.0") {
 	_logWarn("entry", "failed to read package.json version");
 }
 
-// Graph cache -- uses scanProject's built-in incremental mtime detection.
-// No TTL needed; scanProject already handles per-file change detection.
+// Graph cache -- uses scanProject's built-in incremental mtime detection
+// for per-file change detection. For long-lived MCP processes the cached
+// graph (~500MB-1GB for large projects) is held in module memory otherwise
+// forever; the TTL below releases it after a configurable idle period so
+// the next access rebuilds from the persistent disk cache (#626).
+//
+// Set PI_SHAZAM_GRAPH_TTL_MS=0 to disable (always retain the cache).
+// Default: 10 minutes.
+const DEFAULT_GRAPH_TTL_MS = 10 * 60 * 1000;
+const GRAPH_TTL_MS = (() => {
+	const raw = process.env.PI_SHAZAM_GRAPH_TTL_MS;
+	if (raw === undefined || raw === "") return DEFAULT_GRAPH_TTL_MS;
+	const parsed = Number.parseInt(raw, 10);
+	if (!Number.isFinite(parsed) || parsed < 0) return DEFAULT_GRAPH_TTL_MS;
+	return parsed;
+})();
 let cachedGraph: RepoGraph | null = null;
+let lastGraphAccess = 0;
 
 export function getGraph(): RepoGraph {
+	const now = Date.now();
+	// Release the cached graph when the TTL has elapsed since the last
+	// access. The next scanProject() call rebuilds from the persistent
+	// disk cache (fast, mtime-based) and assigns a fresh graph to
+	// cachedGraph, so the old graph becomes garbage once the caller of
+	// getGraph() drops its reference. CLI one-shot mode is unaffected
+	// because the process exits before the TTL elapses.
+	if (cachedGraph !== null && GRAPH_TTL_MS > 0 && lastGraphAccess > 0 && now - lastGraphAccess > GRAPH_TTL_MS) {
+		cachedGraph = null;
+	}
+	lastGraphAccess = now;
+	if (cachedGraph !== null) {
+		return cachedGraph;
+	}
 	try {
 		cachedGraph = scanProject(PROJECT_ROOT);
 	} catch (err) {

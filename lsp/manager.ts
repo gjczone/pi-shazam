@@ -846,6 +846,39 @@ export class LspManager {
 		paths.add(filePath);
 	}
 
+	/**
+	 * Send didClose to every file currently tracked in _openedFilePaths and
+	 * clear the tracking map. Called by verify after diagnostics collection
+	 * completes (#626) so the LSP server releases per-document AST memory
+	 * instead of accumulating it across the MCP process lifetime.
+	 *
+	 * Best-effort: a single didClose failure does not abort the loop. The
+	 * local tracking map is cleared regardless of remote success so the
+	 * next verify cycle re-opens a clean set.
+	 */
+	async closeOpenedFiles(): Promise<void> {
+		const entries = [...this._openedFilePaths.entries()];
+		for (const [language, paths] of entries) {
+			const info = this.servers.get(language);
+			if (!info) {
+				// Server gone — just clear the tracking entries
+				paths.clear();
+				continue;
+			}
+			const filePaths = [...paths];
+			await Promise.allSettled(
+				filePaths.map(async (filePath) => {
+					try {
+						await info.client.didClose(filePath);
+					} catch (err) {
+						_logWarn("closeOpenedFiles", `didClose failed for ${filePath}`, err);
+					}
+				}),
+			);
+			paths.clear();
+		}
+	}
+
 	async shutdown(): Promise<void> {
 		this._shuttingDown = true;
 		// Snapshot entries before clearing the map to avoid mutation during iteration
