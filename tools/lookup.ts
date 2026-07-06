@@ -13,7 +13,7 @@
  */
 import type { ExtensionAPI, AgentToolResult } from "../types/pi-extension.js";
 import { Type } from "typebox";
-import type { RepoGraph, Symbol } from "../core/graph.js";
+import type { RepoGraph, Symbol, Provenance } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { getEffectiveRoot } from "../core/scanner.js";
 import { getNextForTool, formatNextSection, truncateOutput, _logWarn } from "../core/output.js";
@@ -269,7 +269,29 @@ export function _executeSymbolJson(graph: RepoGraph, name: string, file?: string
 /**
  * #631 A: typed symbol-lookup result. One entry per matching
  * symbol; the dispatcher wraps the array in buildEnvelope.
+ *
+ * #643: incomingEdges and outgoingEdges expose the edge
+ * provenance classification (`Provenance` from core/graph.ts) so
+ * consumers can tell at a glance which call sites are LSP-resolved
+ * vs tree-sitter-heuristic. `provenanceCounts` is a precomputed
+ * summary across both edge sets.
  */
+export interface SymbolLookupEdge {
+	target?: string; // for incoming: source symbol id; for outgoing: target symbol id
+	symbolName: string;
+	file: string;
+	line: number;
+	kind: string;
+	provenance: "resolved" | "name_match" | "heuristic" | "unresolved";
+}
+
+export interface SymbolLookupProvenanceCounts {
+	resolved: number;
+	name_match: number;
+	heuristic: number;
+	unresolved: number;
+}
+
 export interface SymbolLookupEntry {
 	id: string;
 	name: string;
@@ -282,6 +304,9 @@ export interface SymbolLookupEntry {
 	signature: string;
 	container: string | null;
 	source: "lsp" | "tree-sitter";
+	incomingEdges: SymbolLookupEdge[];
+	outgoingEdges: SymbolLookupEdge[];
+	provenanceCounts: SymbolLookupProvenanceCounts;
 }
 
 /**
@@ -290,19 +315,56 @@ export interface SymbolLookupEntry {
  * inside _executeSymbolJson.
  */
 export function _buildSymbolLookupResult(graph: RepoGraph, name: string, file?: string): SymbolLookupEntry[] {
-	return _findSymbols(graph, name, file).map((s) => ({
-		id: s.id,
-		name: s.name,
-		kind: s.kind,
-		file: s.file,
-		line: s.line,
-		endLine: s.endLine,
-		visibility: s.visibility,
-		pagerank: s.pagerank,
-		signature: s.signature,
-		container: null,
-		source: "tree-sitter" as const,
-	}));
+	return _findSymbols(graph, name, file).map((s) => {
+		// #643: expose per-edge provenance so JSON consumers can tell
+		// which call sites are LSP-resolved vs tree-sitter-heuristic.
+		// Capped at 20 per direction to bound the payload size for
+		// high-fanout symbols.
+		const incomingEdges: SymbolLookupEdge[] = [];
+		const incoming = graph.incoming.get(s.id) || [];
+		for (const e of incoming.slice(0, 20)) {
+			const srcSym = graph.symbols.get(e.source);
+			incomingEdges.push({
+				symbolName: srcSym?.name ?? e.source,
+				file: srcSym?.file ?? "",
+				line: srcSym?.line ?? 0,
+				kind: e.kind,
+				provenance: (e.provenance ?? "heuristic") as Provenance,
+			});
+		}
+		const outgoingEdges: SymbolLookupEdge[] = [];
+		const outgoing = graph.outgoing.get(s.id) || [];
+		for (const e of outgoing.slice(0, 20)) {
+			const tgtSym = graph.symbols.get(e.target);
+			outgoingEdges.push({
+				symbolName: tgtSym?.name ?? e.target,
+				file: tgtSym?.file ?? "",
+				line: tgtSym?.line ?? 0,
+				kind: e.kind,
+				provenance: (e.provenance ?? "heuristic") as Provenance,
+			});
+		}
+		const provenanceCounts: SymbolLookupProvenanceCounts = { resolved: 0, name_match: 0, heuristic: 0, unresolved: 0 };
+		for (const e of [...incomingEdges, ...outgoingEdges]) {
+			provenanceCounts[e.provenance]++;
+		}
+		return {
+			id: s.id,
+			name: s.name,
+			kind: s.kind,
+			file: s.file,
+			line: s.line,
+			endLine: s.endLine,
+			visibility: s.visibility,
+			pagerank: s.pagerank,
+			signature: s.signature,
+			container: null,
+			source: "tree-sitter" as const,
+			incomingEdges,
+			outgoingEdges,
+			provenanceCounts,
+		};
+	});
 }
 
 // -- Hover info extraction (from hover.ts) --------------------------------
