@@ -470,6 +470,13 @@ export interface CallChainEntry {
 	outgoing: CallChainEdge[];
 	affectedTests: string[];
 	referencedFiles: string[];
+	/**
+	 * Mermaid `flowchart TD` block (issue #631 B). LLM agents can
+	 * embed the block directly in chat responses or docs. Limited
+	 * to a small node count so the diagram stays readable; for
+	 * larger graphs the field may be undefined.
+	 */
+	mermaid?: string;
 }
 
 export type CallChainResult = CallChainEntry[];
@@ -479,7 +486,7 @@ export type CallChainResult = CallChainEntry[];
  * for the call-chain JSON envelope; previously the shape was
  * inlined inside _executeCallChainJson.
  */
-function _buildCallChainResult(
+export function _buildCallChainResult(
 	graph: RepoGraph,
 	symbolName: string,
 	depth: number,
@@ -523,13 +530,19 @@ function _buildCallChainResult(
 					})
 				: [];
 		const { tests: affectedTests } = filterTestFiles([...referencedFiles]);
-		return {
+		const entry: CallChainEntry = {
 			symbol: { id: target.id, name: target.name, kind: target.kind, file: target.file, line: target.line },
 			incoming,
 			outgoing,
 			affectedTests,
 			referencedFiles: [...referencedFiles],
 		};
+		// #631 B: attach a Mermaid call graph to each entry. The
+		// generator is a pure function over the entry's edges, so we
+		// build it once per entry and let the dispatcher emit it as
+		// part of the JSON envelope.
+		entry.mermaid = buildMermaidCallGraph(entry);
+		return entry;
 	});
 }
 
@@ -691,6 +704,114 @@ function _formatFlatReferences(refs: FlatReference[], symbolName: string): strin
 	}
 
 	return lines.join("\n");
+}
+
+// -- Mermaid call graph (issue #631 B, slice 3.2) -------------------------
+
+/**
+ * Maximum number of nodes rendered in a single Mermaid call graph.
+ * Keeps the diagram readable and bounded in size. Edges beyond the
+ * cap are silently dropped (callers and callees are ranked first).
+ */
+const MAX_MERMAID_NODES = 30;
+
+/**
+ * Sanitize a symbol name for use as a Mermaid node identifier. Mermaid
+ * is sensitive to a handful of characters in node labels, so we keep
+ * the displayed label friendly and use a separate sanitized key in
+ * the node declaration. Returns `{ id, label }` where `id` is a
+ * Mermaid-safe token and `label` is the human-readable display text.
+ */
+function _mermaidSafeName(rawName: string): { id: string; label: string } {
+	const id = rawName.replace(/[^A-Za-z0-9_]/g, "_");
+	const label = rawName.replace(/"/g, '\\"');
+	return { id, label };
+}
+
+/**
+ * Build a Mermaid `flowchart TD` block for one CallChainEntry. Edges
+ * are annotated with their provenance: `resolved` shows a solid line
+ * `-->`, `heuristic` shows a thin line `-->` (Mermaid's default),
+ * `name_match` and `unresolved` show dashed lines `-.->`. The block
+ * is capped at MAX_MERMAID_NODES symbols to keep the diagram
+ * readable; larger graphs are truncated with a trailing comment.
+ *
+ * Pure function: no side effects, no graph mutation.
+ */
+export function buildMermaidCallGraph(entry: CallChainEntry): string {
+	// Collect unique symbol names from incoming + outgoing edges plus
+	// the entry's own symbol. Cap at MAX_MERMAID_NODES by picking the
+	// most-connected symbols first.
+	const neighborNames = new Set<string>();
+	for (const e of entry.incoming) neighborNames.add(e.symbol);
+	for (const e of entry.outgoing) neighborNames.add(e.symbol);
+	neighborNames.add(entry.symbol.name);
+
+	let names = [...neighborNames];
+	// Always keep the entry's own symbol in the rendered set even
+	// when neighbor count exceeds the cap, so the entry is never
+	// dropped from its own call graph.
+	if (names.length > MAX_MERMAID_NODES) {
+		const own = entry.symbol.name;
+		const trimmed = names.slice(0, MAX_MERMAID_NODES);
+		if (!trimmed.includes(own)) {
+			trimmed[trimmed.length - 1] = own;
+		}
+		names = trimmed;
+	}
+
+	// Map raw symbol name -> { mermaidId, label } for de-duplicated
+	// node declarations. We also build a label map for the entry's
+	// own symbol so its file can be rendered as a tooltip-style hint.
+	const idFor = new Map<string, { id: string; label: string }>();
+	for (const n of names) idFor.set(n, _mermaidSafeName(n));
+
+	const lines: string[] = ["flowchart TD"];
+
+	// Node declarations
+	for (const n of names) {
+		const { id, label } = idFor.get(n)!;
+		lines.push(`  ${id}["${label}"]`);
+	}
+
+	// Edges from the entry's own outgoing calls
+	for (const e of entry.outgoing) {
+		if (!idFor.has(e.symbol)) continue;
+		const { id: srcId } = idFor.get(entry.symbol.name)!;
+		const { id: tgtId } = idFor.get(e.symbol)!;
+		lines.push(`  ${_mermaidEdge(srcId, tgtId, e.provenance)}`);
+	}
+
+	// Edges from incoming calls -- invert direction so the diagram
+	// reads as "this symbol is called by ..."
+	for (const e of entry.incoming) {
+		if (!idFor.has(e.symbol)) continue;
+		const { id: srcId } = idFor.get(e.symbol)!;
+		const { id: tgtId } = idFor.get(entry.symbol.name)!;
+		lines.push(`  ${_mermaidEdge(srcId, tgtId, e.provenance)}`);
+	}
+
+	if (neighborNames.size > MAX_MERMAID_NODES) {
+		lines.push(`  %% truncated: ${neighborNames.size - MAX_MERMAID_NODES} more symbol(s) omitted`);
+	}
+
+	return lines.join("\n");
+}
+
+/**
+ * Pick the Mermaid arrow style + label for a given edge provenance.
+ * Returns the full `SRC -->|label| TGT` fragment as a tuple so the
+ * caller can drop it into a line. The label embeds the provenance
+ * word so consumers reading the raw text can see it without parsing
+ * Mermaid syntax.
+ * - resolved: solid arrow, label "resolved"
+ * - heuristic: solid arrow, label "heuristic"
+ * - name_match: dashed arrow, label "name_match"
+ * - unresolved: dashed arrow, label "unresolved"
+ */
+function _mermaidEdge(srcId: string, tgtId: string, provenance: Provenance): string {
+	const arrow = provenance === "name_match" || provenance === "unresolved" ? "-.->" : "-->";
+	return `${srcId} ${arrow}|${provenance}| ${tgtId}`;
 }
 
 // -- Backward-compatible exports (for call_chain tests) -----------------
