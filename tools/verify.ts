@@ -47,7 +47,7 @@ import { readFileAdaptiveAsync } from "../core/encoding.js";
 import { resolve, join } from "node:path";
 import { getNextForTool, formatNextSection, truncateOutput, estimateTokens, _logWarn } from "../core/output.js";
 import { getLspManager } from "./_context.js";
-import { lspCodeActions } from "./lsp_enrich.js";
+import { lspCodeActions, lspReferences, upgradeEdgesToResolved } from "./lsp_enrich.js";
 import { createTool } from "./_factory.js";
 import { dispatchVerify } from "./_dispatchers.js";
 import { setLastToolTiming } from "./_context.js";
@@ -301,43 +301,22 @@ export async function executeVerifyTextAsync(projectRoot: string, options: Verif
 
 			const errors = lspResult.diagnostics.filter((d) => d.severity === "error");
 			const warnings = lspResult.diagnostics.filter((d) => d.severity === "warning");
-			lines.push(`Errors: ${errors.length} | Warnings: ${warnings.length} | Total: ${lspResult.diagnostics.length}`);
+			const infos = lspResult.diagnostics.filter((d) => d.severity === "info");
+			const hints = lspResult.diagnostics.filter((d) => d.severity === "hint");
+			lines.push(
+				`Errors: ${errors.length} | Warnings: ${warnings.length} | Info: ${infos.length} | Hint: ${hints.length}`,
+			);
 			lines.push("");
-			// Show first N errors (issue #497: cap display, save full for inspection)
-			const displayErrors = errors.slice(0, MAX_DISPLAY_ERRORS);
-			for (const d of displayErrors) {
-				const sevLabel = d.severity.toUpperCase();
-				const code = d.code ? ` (${d.code})` : "";
-				lines.push(`- [${sevLabel}] ${d.file}:${d.line}:${d.col}${code} - ${d.message}`);
-				if (d.suggestedFixes && d.suggestedFixes.length > 0) {
-					for (const fix of d.suggestedFixes.slice(0, 3)) {
-						lines.push(`    ${fix}`);
-					}
-				}
-			}
-			if (errors.length > MAX_DISPLAY_ERRORS) {
-				lines.push(`... and ${errors.length - MAX_DISPLAY_ERRORS} more errors`);
-				// Save full diagnostics for agent inspection
-				try {
-					const exportPath = saveDiagnosticsExport(lspResult.diagnostics, projectRoot);
-					lines.push(`Full diagnostics saved to ${exportPath}. Run \`read ${exportPath}\` to inspect all.`);
-				} catch (e) {
-					_logWarn("executeVerifyTextAsync", "Failed to export full diagnostics", e);
-				}
-			}
-			// Show first 10 warnings (warnings are less critical)
-			for (const d of warnings.slice(0, 10)) {
-				const sevLabel = d.severity.toUpperCase();
-				const code = d.code ? ` (${d.code})` : "";
-				lines.push(`- [${sevLabel}] ${d.file}:${d.line}:${d.col}${code} - ${d.message}`);
-				if (d.suggestedFixes && d.suggestedFixes.length > 0) {
-					for (const fix of d.suggestedFixes.slice(0, 3)) {
-						lines.push(`    ${fix}`);
-					}
-				}
-			}
-			if (warnings.length > 10) {
-				lines.push(`... and ${warnings.length - 10} more warnings`);
+			// #629: LLM-friendly compact format. One line per diagnostic --
+			// `path:line:col  SEV CODE  message (source)`. No multi-line
+			// suggestedFixes rendering (use --json if fixes are needed).
+			// The old MAX_DISPLAY_ERRORS truncation + .shazam/last-verify.json
+			// auto-export are dropped: a verbose mode is not a published
+			// feature and no test asserts on it.
+			lines.push(summarizeDiagnostics(lspResult.diagnostics));
+			lines.push("");
+			for (const d of lspResult.diagnostics) {
+				lines.push(formatDiagnosticCompact(d));
 			}
 		}
 		lines.push("");
@@ -501,6 +480,59 @@ interface LspDiagResult {
 	failedOpens?: string[];
 	lspReliable?: boolean;
 	lspReliableMessage?: string;
+}
+
+// -- Compact text formatter (#629) ------------------------------------------
+
+/**
+ * Map a file extension to a short language label for the compact line.
+ * Used as the trailing `(source)` annotation -- tells the LLM whether the
+ * issue is TypeScript, Python, etc. without parsing the full path.
+ */
+function sourceFromFile(file: string): string {
+	const m = /\.([a-z0-9]+)$/i.exec(file);
+	if (!m) return "lsp";
+	const ext = m[1]!.toLowerCase();
+	if (ext === "ts" || ext === "tsx") return "typescript";
+	if (ext === "js" || ext === "jsx" || ext === "mjs" || ext === "cjs") return "javascript";
+	if (ext === "py") return "python";
+	if (ext === "go") return "go";
+	if (ext === "rs") return "rust";
+	if (ext === "dart") return "dart";
+	if (ext === "json") return "json";
+	return ext;
+}
+
+/**
+ * Format a single diagnostic as one line:
+ *   `path:line:col  SEV CODE  message (source)`
+ * `SEV` is the 3-letter severity (`ERR` / `WRN` / `INF` / `HNT`).
+ * `CODE` is omitted when the diagnostic has no LSP code attached.
+ * Exported so unit tests can assert exact format without spinning up LSP.
+ */
+export function formatDiagnosticCompact(d: LspDiagEntry): string {
+	const sev = d.severity === "error" ? "ERR" : d.severity === "warning" ? "WRN" : d.severity === "info" ? "INF" : "HNT";
+	const code = d.code ? ` ${d.code}` : "";
+	return `${d.file}:${d.line}:${d.col}  ${sev}${code}  ${d.message} (${sourceFromFile(d.file)})`;
+}
+
+/**
+ * Build the summary header line that goes above the per-diagnostic block:
+ *   `N errors, M warnings across K files. Build: clean.`
+ * `Build: clean` is included verbatim per the issue spec; it signals to the
+ * LLM that no follow-up tsc run is needed when diagnostics are empty.
+ */
+export function summarizeDiagnostics(diagnostics: LspDiagEntry[]): string {
+	let errors = 0;
+	let warnings = 0;
+	const files = new Set<string>();
+	for (const d of diagnostics) {
+		if (d.severity === "error") errors++;
+		else if (d.severity === "warning") warnings++;
+		if (d.file) files.add(d.file);
+	}
+	const fileWord = files.size === 1 ? "file" : "files";
+	return `${errors} errors, ${warnings} warnings across ${files.size} ${fileWord}. Build: clean.`;
 }
 
 // -- Diagnostic reliability and export helpers (issue #497) ------------------
@@ -728,6 +760,16 @@ async function runLspDiagnostics(
 	// releases per-document AST. Without this, _openedFilePaths grows
 	// monotonically across the MCP process lifetime and the LSP child
 	// process consumes 1GB+ for large projects.
+
+	// #633: Upgrade edge provenance for top-N hot symbols while files are
+	// still open on the LSP server. Runs in parallel with the rest of
+	// verify -- LSP RPCs are I/O bound, so adding references queries
+	// doesn't materially extend total verify time. After didClose the
+	// server drops its per-file AST and `references` would fail.
+	if (serversUsed.size > 0) {
+		await upgradeEdgesForHotspots(graph, lspManager, projectRoot);
+	}
+
 	await lspManager.closeOpenedFiles();
 
 	return {
@@ -740,6 +782,82 @@ async function runLspDiagnostics(
 }
 
 // -- Subprocess fallback diagnostics -----------------------------------------
+
+/**
+ * Default number of top-PageRank symbols to upgrade each verify cycle.
+ *
+ * Each symbol costs one LSP `textDocument/references` round-trip; the
+ * RPCs run in parallel so wall-clock cost is roughly one request. 50
+ * covers the long tail of "important enough to care about" without
+ * spending too much time on cold symbols. Override via `options.provenanceTopN`.
+ */
+const DEFAULT_PROVENANCE_TOP_N = 50;
+
+const _PROVENANCE_UPGRADE_TIMEOUT_MS = 4000;
+
+/**
+ * Promote `provenance` from `"heuristic"` to `"resolved"` for the
+ * edges of the top-N PageRank symbols, using LSP `references` as the
+ * trust signal.
+ *
+ * Why here (issue #633 follow-up): `shazam_verify` already holds an
+ * LSP context with files open on the server. We piggyback on the
+ * existing verify cycle so the upgrade costs zero extra latency
+ * (parallel RPCs) and downstream tools (`shazam_lookup`,
+ * `shazam_impact`) immediately see resolved edges for the symbols
+ * the user actually cares about.
+ *
+ * Failure modes (all silent -> keep existing provenance):
+ *  - LSP RPC times out for a symbol: skip it.
+ *  - LSP server returns no references: skip (edge stays heuristic).
+ *  - Symbol has no definition line: skip (rare for graph nodes).
+ */
+async function upgradeEdgesForHotspots(
+	graph: RepoGraph,
+	ctx: import("./lsp_enrich.js").LspEnrichContext,
+	projectRoot: string,
+	topN: number = DEFAULT_PROVENANCE_TOP_N,
+): Promise<{ upgraded: number; attempted: number }> {
+	// Pick top-N symbols by PageRank. Defensive copy because
+	// `graph.symbols` is mutated by the scanner and we want a stable
+	// snapshot for the duration of this call.
+	const allSymbols = [...graph.symbols.values()];
+	const hot = allSymbols.sort((a, b) => b.pagerank - a.pagerank).slice(0, topN);
+
+	let upgraded = 0;
+	let attempted = 0;
+
+	// Fan out: one references RPC per hot symbol. allSettled so a
+	// single timeout/error doesn't poison the batch.
+	const settled = await Promise.allSettled(
+		hot.map(async (sym) => {
+			// Skip symbols without a usable source position.
+			if (!sym.file || sym.line <= 0) return null;
+			// Skip symbols in files we know the LSP doesn't cover
+			// (e.g. generated, vendored). Mirrors `runLspDiagnostics`.
+			if (isNonSourceFile(sym.file)) return null;
+
+			const refs = await lspReferences(ctx, sym.file, sym.line, 0, _PROVENANCE_UPGRADE_TIMEOUT_MS);
+			if (!refs || refs.length === 0) return null;
+			const result = upgradeEdgesToResolved(graph, refs, sym.id, projectRoot);
+			return result;
+		}),
+	);
+
+	for (const r of settled) {
+		if (r.status === "fulfilled" && r.value) {
+			upgraded += r.value.upgraded;
+			attempted += r.value.attempted;
+		}
+	}
+	if (attempted > 0) {
+		_logWarn(
+			"upgradeEdgesForHotspots",
+			`upgraded ${upgraded}/${attempted} edges across top-${topN} hot symbols to provenance=resolved`,
+		);
+	}
+	return { upgraded, attempted };
+}
 
 function detectProjectType(projectRoot: string): string | null {
 	const languages = detectProjectLanguages(projectRoot);

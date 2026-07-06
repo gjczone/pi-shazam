@@ -664,10 +664,12 @@ describe("MCP: shazam_impact symbol/files mutual exclusion (#616-4)", () => {
 		registerAllTools(mockServer as any, () => graph, ".");
 		const impactHandler = handlers.get("shazam_impact");
 		expect(impactHandler).toBeDefined();
-		// Provide both symbol and files — should return error (not silently take symbol)
+		// Provide both symbol and files — #629 removes the strict mutual-exclusion
+		// error (#616) in favour of inference: symbol wins, files are silently
+		// dropped. The call should succeed as a symbol-mode call chain.
 		const result = await impactHandler!({ symbol: "scanProject", files: ["core/scanner.ts"] });
-		expect(result.isError).toBe(true);
-		expect(result.content[0].text).toMatch(/mutually exclusive|either.*or/i);
+		expect(result.isError).toBeFalsy();
+		expect(result.content[0].text).toMatch(/Call Chain|Flat References|Symbol not found/i);
 	});
 
 	it("capture-server: providing only symbol works normally", async () => {

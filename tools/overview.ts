@@ -17,6 +17,12 @@ import { existsSync } from "node:fs";
 import { readFileAdaptive } from "../core/encoding.js";
 import { safeGitExec } from "../core/git-utils.js";
 import { join } from "node:path";
+import { topByRank, topByComplexity } from "../core/complexity.js";
+
+// #629: symbol-level Hotspots (PageRank top-N + cyclomatic complexity top-N).
+// Both lists surface the same `name::file:line (score)` shape so an LLM agent
+// can scan either block uniformly.
+const HOTSPOTS_TOP_N = 5;
 
 // -- Route detection (absorbed from tools/routes.ts) ----------------------
 
@@ -261,8 +267,9 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 	}
 	const sortedDirs = [...dirs.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 	for (const [dir, count] of sortedDirs) {
-		const label = dir === "(root)" ? "(root)/" : `${dir}/`;
-		lines.push(`- \`${label}\` - ${count} files`);
+		const label = dir === "(root)" ? "(root)" : dir;
+		const fileWord = count === 1 ? "file" : "files";
+		lines.push(`- \`${label}\` - ${count} ${fileWord}`);
 	}
 
 	// Issue #632: when the default test-exclusion policy filtered out files,
@@ -306,6 +313,38 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 		}
 	}
 
+	// #629: symbol-level Hotspots -- always included so the LLM doesn't need
+	// a follow-up `shazam_impact` to find the riskiest individual symbols.
+	// Distinct from the file-level "Complexity Hotspots" above: this one
+	// ranks individual symbols by PageRank and cyclomatic complexity.
+	if (!filter) {
+		const byRank = topByRank(graph, HOTSPOTS_TOP_N);
+		const byComplexity = topByComplexity(graph, projectRoot, HOTSPOTS_TOP_N);
+		if (byRank.length > 0 || byComplexity.length > 0) {
+			lines.push("");
+			lines.push("### Hotspots");
+			lines.push("");
+			if (byRank.length > 0) {
+				lines.push(`#### By PageRank (top ${HOTSPOTS_TOP_N})`);
+				lines.push("");
+				for (let i = 0; i < byRank.length; i++) {
+					const e = byRank[i]!;
+					lines.push(`  ${i + 1}. \`${e.file}\`::${e.name} (${e.score})`);
+				}
+				lines.push("");
+			}
+			if (byComplexity.length > 0) {
+				lines.push(`#### By complexity (top ${HOTSPOTS_TOP_N}, cyclomatic)`);
+				lines.push("");
+				for (let i = 0; i < byComplexity.length; i++) {
+					const e = byComplexity[i]!;
+					lines.push(`  ${i + 1}. \`${e.file}\`::${e.name} (${e.score})`);
+				}
+				lines.push("");
+			}
+		}
+	}
+
 	lines.push("");
 	lines.push("### Suggested Reading Order");
 	lines.push("");
@@ -345,6 +384,16 @@ export function executeOverviewJson(graph: RepoGraph, projectRoot: string, filte
 
 	const excludedTests = getExcludedTestCount(graph);
 
+	// #629: symbol-level hotspots always present in JSON so agents get the
+	// data without parsing the text output. Skipped when a filter is active
+	// (filtered overview is scoped to a keyword, not project-wide hotspots).
+	const hotspots = filter
+		? undefined
+		: {
+				byPageRank: topByRank(graph, HOTSPOTS_TOP_N),
+				byComplexity: topByComplexity(graph, projectRoot, HOTSPOTS_TOP_N),
+			};
+
 	return buildEnvelope("shazam_overview", projectRoot, "ok", {
 		totalSymbols: graph.symbols.size,
 		totalFiles: graph.fileSymbols.size,
@@ -359,6 +408,7 @@ export function executeOverviewJson(graph: RepoGraph, projectRoot: string, filte
 			symbolCount: stats.count,
 			pagerank: Number(stats.pagerank.toFixed(4)),
 		})),
+		hotspots,
 	});
 }
 

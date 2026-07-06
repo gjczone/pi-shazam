@@ -14,6 +14,7 @@ import { isNonSourceFile } from "../core/filter.js";
 import { assessRisk } from "../core/risk.js";
 import { recordCallChain } from "./rename-state.js";
 import { getEffectiveRoot } from "../core/scanner.js";
+import { isTestFile, filterTestFiles } from "../core/test-patterns.js";
 
 export function registerImpact(pi: ExtensionAPI): void {
 	createTool(pi, {
@@ -205,16 +206,7 @@ export function executeImpact(
 	}
 
 	// Identify test files in affected set (include target files for test detection)
-	const testFiles = [...bfs.affectedFiles, ...files].filter(
-		(f) => f.includes(".test.") || f.includes(".spec.") || f.includes("__tests__") || f.startsWith("tests/"),
-	);
-	if (testFiles.length > 0) {
-		lines.push("");
-		lines.push("### Affected Tests (must re-run)");
-		for (const f of testFiles) {
-			lines.push(`- \`${f}\``);
-		}
-	}
+	appendAffectedTests(lines, [...bfs.affectedFiles, ...files]);
 
 	// Add Next recommendations
 	const nextItems = getNextForTool("impact", { topSymbol: files[0] });
@@ -258,6 +250,27 @@ export function executeImpactJson(graph: RepoGraph, files: string[], depth: numb
 
 // -- Call chain (absorbed from tools/call_chain.ts) ----------------------
 
+/**
+ * Append the "### Affected Tests (must re-run)" section to a markdown
+ * output buffer if any of the given paths look like test files.
+ *
+ * Shared between the file-mode path (`executeImpact`) and the symbol-mode
+ * call-chain path (`_executeCallChain`) so both modes surface the same
+ * "what tests to re-run" hint. See issue #635.
+ *
+ * Pure formatting helper: no side effects beyond mutating the caller's
+ * `lines` array (an empty leading line is appended before the section).
+ */
+export function appendAffectedTests(lines: string[], paths: string[]): void {
+	const tests = paths.filter(isTestFile);
+	if (tests.length === 0) return;
+	lines.push("");
+	lines.push("### Affected Tests (must re-run)");
+	for (const f of tests) {
+		lines.push(`- \`${f}\``);
+	}
+}
+
 const MAX_DISPLAY_REFS = 50;
 
 function _executeCallChain(
@@ -270,7 +283,11 @@ function _executeCallChain(
 	if (targets.length === 0) return `Symbol not found: ${symbolName}`;
 
 	const lines: string[] = [];
+	// Collect every file touched by the call chain so we can surface tests.
+	// Includes the target's own file plus every symbol seen during traversal.
+	const referencedFiles = new Set<string>();
 	for (const target of targets) {
+		referencedFiles.add(target.file);
 		lines.push(`## Call Chain for ${target.kind} \`${target.name}\` (${target.file}:${target.line})`);
 		lines.push("");
 
@@ -282,6 +299,7 @@ function _executeCallChain(
 				for (const [level, sym, edge] of shown) {
 					const indent = "  ".repeat(level);
 					lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` - ${sym.file}:${sym.line} (${edge.kind})`);
+					referencedFiles.add(sym.file);
 				}
 				if (chain.length > MAX_DISPLAY_REFS) lines.push(`  ... and ${chain.length - MAX_DISPLAY_REFS} more`);
 			}
@@ -296,6 +314,7 @@ function _executeCallChain(
 				for (const [level, sym, edge] of shown) {
 					const indent = "  ".repeat(level);
 					lines.push(`${indent}L${level}: ${sym.kind} \`${sym.name}\` - ${sym.file}:${sym.line} (${edge.kind})`);
+					referencedFiles.add(sym.file);
 				}
 				if (chain.length > MAX_DISPLAY_REFS) lines.push(`  ... and ${chain.length - MAX_DISPLAY_REFS} more`);
 			}
@@ -303,6 +322,11 @@ function _executeCallChain(
 
 		lines.push("");
 	}
+
+	// Surface test files touched by the call chain so the agent knows what
+	// to re-run. Unified with the file-mode output via `appendAffectedTests`
+	// (issue #635).
+	appendAffectedTests(lines, [...referencedFiles]);
 
 	const nextItems = getNextForTool("impact", { topSymbol: targets[0]?.name });
 	if (nextItems.length > 0) {
@@ -319,27 +343,43 @@ function _executeCallChainJson(
 	direction: "incoming" | "outgoing" | "both" = "both",
 ): string {
 	const targets = graph.nameIndex.get(symbolName) ?? [];
-	const result = targets.map((target) => ({
-		symbol: { id: target.id, name: target.name, kind: target.kind, file: target.file, line: target.line },
-		incoming:
+	const result = targets.map((target) => {
+		// Collect every file touched by the call chain so we can surface
+		// tests in JSON output. Mirrors the text-mode collection in
+		// `_executeCallChain`; see issue #635.
+		const referencedFiles = new Set<string>([target.file]);
+		const incoming =
 			direction !== "outgoing"
-				? _traceIncoming(graph, target.id, depth).map(([level, sym, edge]) => ({
-						level,
-						symbol: sym.name,
-						file: sym.file,
-						kind: edge.kind,
-					}))
-				: [],
-		outgoing:
+				? _traceIncoming(graph, target.id, depth).map(([level, sym, edge]) => {
+						referencedFiles.add(sym.file);
+						return {
+							level,
+							symbol: sym.name,
+							file: sym.file,
+							kind: edge.kind,
+						};
+					})
+				: [];
+		const outgoing =
 			direction !== "incoming"
-				? _traceOutgoing(graph, target.id, depth).map(([level, sym, edge]) => ({
-						level,
-						symbol: sym.name,
-						file: sym.file,
-						kind: edge.kind,
-					}))
-				: [],
-	}));
+				? _traceOutgoing(graph, target.id, depth).map(([level, sym, edge]) => {
+						referencedFiles.add(sym.file);
+						return {
+							level,
+							symbol: sym.name,
+							file: sym.file,
+							kind: edge.kind,
+						};
+					})
+				: [];
+		const { tests: affectedTests } = filterTestFiles([...referencedFiles]);
+		return {
+			symbol: { id: target.id, name: target.name, kind: target.kind, file: target.file, line: target.line },
+			incoming,
+			outgoing,
+			affectedTests,
+		};
+	});
 
 	return buildEnvelope("shazam_impact", getEffectiveRoot(), "ok", result);
 }
@@ -398,6 +438,13 @@ interface FlatReference {
 	line: number;
 	kind: string;
 	direction: string;
+	/**
+	 * Edge provenance: how this reference was resolved. Surfaced so the
+	 * LLM can tell LSP-confirmed calls apart from tree-sitter heuristics
+	 * (issue #633). Defaults to "heuristic" when an in-memory edge was
+	 * constructed without provenance.
+	 */
+	provenance: import("../core/graph.js").Provenance;
 }
 
 function _getFlatReferences(
@@ -421,7 +468,14 @@ function _getFlatReferences(
 					const key = `${src.name}:${src.file}:${src.line}`;
 					if (seen.has(key)) continue;
 					seen.add(key);
-					refs.push({ symbol: src.name, file: src.file, line: src.line, kind: src.kind, direction: "incoming" });
+					refs.push({
+						symbol: src.name,
+						file: src.file,
+						line: src.line,
+						kind: src.kind,
+						direction: "incoming",
+						provenance: edge.provenance ?? "heuristic",
+					});
 				}
 			}
 		}
@@ -434,7 +488,14 @@ function _getFlatReferences(
 					const key = `${tgt.name}:${tgt.file}:${tgt.line}`;
 					if (seen.has(key)) continue;
 					seen.add(key);
-					refs.push({ symbol: tgt.name, file: tgt.file, line: tgt.line, kind: tgt.kind, direction: "outgoing" });
+					refs.push({
+						symbol: tgt.name,
+						file: tgt.file,
+						line: tgt.line,
+						kind: tgt.kind,
+						direction: "outgoing",
+						provenance: edge.provenance ?? "heuristic",
+					});
 				}
 			}
 		}
@@ -453,7 +514,7 @@ function _formatFlatReferences(refs: FlatReference[], symbolName: string): strin
 	if (incoming.length > 0) {
 		lines.push(`### Incoming (${incoming.length})`);
 		for (const r of incoming.slice(0, MAX_DISPLAY_REFS))
-			lines.push(`- ${r.kind} \`${r.symbol}\` - ${r.file}:${r.line}`);
+			lines.push(`- ${r.kind} \`${r.symbol}\` - ${r.file}:${r.line} [${r.provenance}]`);
 		if (incoming.length > MAX_DISPLAY_REFS) lines.push(`  ... and ${incoming.length - MAX_DISPLAY_REFS} more`);
 		lines.push("");
 	}
@@ -461,7 +522,7 @@ function _formatFlatReferences(refs: FlatReference[], symbolName: string): strin
 	if (outgoing.length > 0) {
 		lines.push(`### Outgoing (${outgoing.length})`);
 		for (const r of outgoing.slice(0, MAX_DISPLAY_REFS))
-			lines.push(`- ${r.kind} \`${r.symbol}\` - ${r.file}:${r.line}`);
+			lines.push(`- ${r.kind} \`${r.symbol}\` - ${r.file}:${r.line} [${r.provenance}]`);
 		if (outgoing.length > MAX_DISPLAY_REFS) lines.push(`  ... and ${outgoing.length - MAX_DISPLAY_REFS} more`);
 		lines.push("");
 	}

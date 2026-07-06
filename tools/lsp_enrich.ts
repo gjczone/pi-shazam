@@ -574,3 +574,78 @@ export async function lspCodeLens(
 	).finally(() => cts?.dispose());
 	return result;
 }
+
+// -- Edge provenance upgrade (issue #633) --------------------------------
+
+import type { RepoGraph } from "../core/graph.js";
+import { relative } from "node:path";
+
+/**
+ * Upgrade the `provenance` of incoming edges on `targetSymbolId` from
+ * `"heuristic"` to `"resolved"` when an LSP `textDocument/references`
+ * confirms a reference at the source symbol's line range.
+ *
+ * Mirrors the call-chain confidence bump: when LSP can match a call site
+ * to a known edge source, we trust that edge more than a tree-sitter
+ * heuristic match.
+ *
+ * URI normalization: LSP returns absolute `file://` URIs while graph
+ * symbols store project-relative paths. We relativize via
+ * `relative(projectRoot, absPath)` and rewrite `\\` -> `/` for Windows
+ * parity.
+ *
+ * Line numbering: LSP is 0-based; symbols use 1-based lines. The match
+ * window is `[sym.line, sym.endLine]` inclusive on both ends.
+ *
+ * Skips edges already at `"resolved"` or `"name_match"` (no downgrade).
+ *
+ * Returns `{ upgraded, attempted }` counts so callers can log how many
+ * edges were promoted and how many were examined. Both are zero when
+ * the target has no incoming edges.
+ */
+export function upgradeEdgesToResolved(
+	graph: RepoGraph,
+	refs: Array<{ uri: string; range: { start: { line: number; character: number } } }>,
+	targetSymbolId: string,
+	projectRoot: string = process.cwd(),
+): { upgraded: number; attempted: number } {
+	const incoming = graph.incoming.get(targetSymbolId);
+	if (!incoming || incoming.length === 0) {
+		return { upgraded: 0, attempted: 0 };
+	}
+
+	// `attempted` counts edges that were *examined* -- skipped edges
+	// (already at high trust, or whose source symbol is missing) are
+	// not counted. The contract: attempted >= upgraded always.
+	const eligible = incoming.filter(
+		(edge) => edge.provenance !== "resolved" && edge.provenance !== "name_match" && graph.symbols.has(edge.source),
+	);
+	const attempted = eligible.length;
+	let upgraded = 0;
+
+	for (const ref of refs) {
+		// URI -> relative POSIX path. `uriToPath` strips the `file://`
+		// prefix; we then make it relative to projectRoot and normalise
+		// separators so it matches `Symbol.file` regardless of platform.
+		const absPath = uriToPath(ref.uri);
+		let relPath = relative(projectRoot, absPath);
+		if (process.platform === "win32") relPath = relPath.replace(/\\/g, "/");
+
+		// LSP `line` is 0-based; symbols use 1-based lines.
+		const refLine = ref.range.start.line + 1;
+
+		for (const edge of eligible) {
+			const sourceSym = graph.symbols.get(edge.source)!;
+			if (sourceSym.file !== relPath) continue;
+
+			// Match when the reference falls anywhere within the source
+			// symbol's body line range.
+			if (refLine >= sourceSym.line && refLine <= sourceSym.endLine) {
+				edge.provenance = "resolved";
+				upgraded++;
+			}
+		}
+	}
+
+	return { upgraded, attempted };
+}

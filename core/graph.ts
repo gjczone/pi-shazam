@@ -33,7 +33,31 @@ export interface Edge {
 	weight: number;
 	kind: string;
 	confidence: number;
+	/**
+	 * How this edge was resolved (issue #633). `"resolved"` means LSP
+	 * confirmed the link; `"name_match"` means import resolution by name;
+	 * `"heuristic"` means tree-sitter + heuristic matching; `"unresolved"`
+	 * is reserved for explicit "we couldn't link this" cases.
+	 *
+	 * Optional because older cache versions (v2) did not serialize this
+	 * field; `deserializeGraphV2` defaults missing values to `"heuristic"`.
+	 */
+	provenance?: Provenance;
 }
+
+/**
+ * Edge provenance classification -- how much we trust that this edge
+ * correctly models a real source-level call/import/reference (issue #633).
+ *
+ *   - `"resolved"`: LSP `textDocument/references` confirmed the call site.
+ *   - `"name_match"`: import resolution by module path + name.
+ *   - `"heuristic"`: tree-sitter capture + best-effort name matching.
+ *   - `"unresolved"`: explicit "we tried, no link found".
+ */
+export type Provenance = "resolved" | "name_match" | "heuristic" | "unresolved";
+
+/** Default provenance for newly created edges without a trust signal. */
+export const DEFAULT_PROVENANCE: Provenance = "heuristic";
 
 /** Full symbol dependency graph */
 export interface RepoGraph {
@@ -127,8 +151,9 @@ export function createEdge(
 	weight: number,
 	kind: string,
 	confidence: number = 1.0,
+	provenance: Provenance = DEFAULT_PROVENANCE,
 ): Edge {
-	return { source, target, weight, kind, confidence };
+	return { source, target, weight, kind, confidence, provenance };
 }
 
 export interface SerializedSymbol {
@@ -153,6 +178,13 @@ export interface SerializedEdge {
 	weight: number;
 	kind: string;
 	confidence?: number;
+	/**
+	 * Edge provenance (issue #633). Optional in the serialized form because
+	 * pre-#633 cache files (v2 schema) did not write this field; the
+	 * loader (`deserializeGraphV2`) defaults missing values to
+	 * `DEFAULT_PROVENANCE` ("heuristic") for backwards compatibility.
+	 */
+	provenance?: Provenance;
 }
 
 export function serializeSymbol(sym: Symbol): SerializedSymbol {
@@ -180,6 +212,10 @@ export function serializeEdge(edge: Edge): SerializedEdge {
 		weight: edge.weight,
 		kind: edge.kind,
 		confidence: edge.confidence,
+		// Default to "heuristic" when the in-memory edge was constructed
+		// without an explicit provenance (e.g. plain object literals or
+		// pre-#633 scanner code). The cache must never write `undefined`.
+		provenance: edge.provenance ?? DEFAULT_PROVENANCE,
 	};
 }
 
@@ -290,6 +326,9 @@ export function deserializeGraphV2(data: SerializedGraphV2): RepoGraph {
 			weight: e.weight,
 			kind: e.kind,
 			confidence: e.confidence ?? 1.0,
+			// Default missing provenance to "heuristic" so pre-#633 cache
+			// files (which never wrote this field) still load cleanly.
+			provenance: e.provenance ?? DEFAULT_PROVENANCE,
 		};
 		const outgoing = graph.outgoing.get(e.source) || [];
 		outgoing.push(edge);
