@@ -50,7 +50,7 @@ export function isPathInRoot(target: string, root: string): boolean {
  * (platform-agnostic; works on Windows backslash paths as well as POSIX).
  * Returns false for paths outside the project scope.
  */
-export function validatePathInProject(rawPath: string, projectRoot: string = process.cwd()): boolean {
+export function validatePathInProject(rawPath: string, projectRoot: string = getEffectiveRoot()): boolean {
 	const resolved = resolve(projectRoot, rawPath);
 	const rootResolved = resolve(projectRoot);
 	// Containment check: platform-agnostic via relative(), not startsWith(root + "/").

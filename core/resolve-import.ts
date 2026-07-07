@@ -225,7 +225,12 @@ export function resolveImport(importPath: string, fromFile: string, root: string
 		return importPath;
 	}
 
-	// Default: return the import path unchanged (JS/TS bare specifiers, external crates, etc.)
+	// Default: return the import path unchanged (JS/TS bare specifiers, etc.)
+	// Rust external crates (e.g. `use serde::Serialize`) are NOT file paths -
+	// returning the literal would pollute fileImports with phantom paths
+	// (#567 regression of #564). Mirror the JS/TS/Go/Python `return null`
+	// branches and treat unresolved Rust specifiers as external.
+	if (fromExt === ".rs") return null;
 	return importPath;
 }
 
@@ -255,6 +260,11 @@ export function resolveModulePath(importPath: string, fromFile: string): string 
  * Supports matches with or without file extensions.
  */
 export function moduleMatchesFile(resolvedModule: string, targetFile: string): boolean {
+	// Normalize path separators: on Windows graph keys use backslashes while
+	// resolvedModule uses forward slashes (resolveModulePath forces "/"), so
+	// the equality/extension checks below would never match (#660).
+	resolvedModule = resolvedModule.replace(/\\/g, "/");
+	targetFile = targetFile.replace(/\\/g, "/");
 	if (resolvedModule === targetFile) return true;
 	const EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs"];
 	for (const ext of EXTENSIONS) {

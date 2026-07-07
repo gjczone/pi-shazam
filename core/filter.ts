@@ -73,7 +73,11 @@ export const SKIP_DIRS = new Set([
 ]);
 
 export function isNonSourceFile(file: string): boolean {
-	return NON_SOURCE_FILE_PATTERNS.some((p) => p.test(file));
+	// Normalize Windows backslash separators to "/" so the POSIX-anchored
+	// patterns above match graph keys that use backslashes (#663). Mirrors
+	// the normalization already done in isTestFile.
+	const normalized = file.replace(/\\/g, "/");
+	return NON_SOURCE_FILE_PATTERNS.some((p) => p.test(normalized));
 }
 
 /**

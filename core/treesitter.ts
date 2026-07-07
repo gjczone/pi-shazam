@@ -41,16 +41,17 @@ interface ParserInstance {
 	parse(input: string, oldTree?: Tree | null, options?: Record<string, unknown>): Tree;
 }
 
-interface Tree {
+export interface Tree {
 	rootNode: SyntaxNode;
 	/** Release native memory; tree is unusable after calling. */
 	delete?(): void;
 }
 
-interface SyntaxNode {
+export interface SyntaxNode {
 	type: string;
 	text: string;
 	children: SyntaxNode[];
+	namedChildren?: SyntaxNode[];
 	parent: SyntaxNode | null;
 	startPosition: { row: number; column: number };
 	endPosition: { row: number; column: number };
