@@ -7,6 +7,7 @@ import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { validatePathInProject, buildEnvelope } from "../tools/_factory.js";
 import { clearRenameState, hasCallChainChecked, recordCallChain } from "../tools/rename-state.js";
+import type { VerifyJsonResult } from "../tools/verify.js";
 
 let _graph: RepoGraph | null = null;
 function getGraph(): RepoGraph {
@@ -626,7 +627,10 @@ describe("MCP: shazam_verify cache reset and JSON truncation (#616-2, #616-3)", 
 			code: `TS${2000 + i}`,
 			message: `Error ${i}: type mismatch`,
 		}));
-		const result = {
+		// Use the real `VerifyJsonResult` type so the optional
+		// `lspDiagnosticsTruncated` field set by `capVerifyDiagnostics`
+		// below is visible to the test's type checker.
+		const result: VerifyJsonResult = {
 			lspDiagnostics: diagnostics,
 			verdict: "FAIL",
 		};

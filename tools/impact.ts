@@ -721,10 +721,25 @@ const MAX_MERMAID_NODES = 30;
  * the displayed label friendly and use a separate sanitized key in
  * the node declaration. Returns `{ id, label }` where `id` is a
  * Mermaid-safe token and `label` is the human-readable display text.
+ *
+ * Exported (without the `_` prefix) so the sanitization can be
+ * unit-tested in isolation; see `tests/impact-mermaid.test.ts`.
+ *
+ * Security note (CodeQL `js/incomplete-sanitization`): the order
+ * of the two `replace` calls matters. Backslashes MUST be escaped
+ * before quotes, otherwise a raw name like `x\"y` would produce
+ * `x\\"y` -- Mermaid would see `x\` inside the string and `"y"`
+ * outside it, producing a malformed diagram (and, when embedded
+ * in HTML, a potential XSS sink for the dangling `"y` fragment).
  */
-function _mermaidSafeName(rawName: string): { id: string; label: string } {
+export function mermaidSafeName(rawName: string): { id: string; label: string } {
 	const id = rawName.replace(/[^A-Za-z0-9_]/g, "_");
-	const label = rawName.replace(/"/g, '\\"');
+	// Escape backslashes first, then double-quotes. The order is
+	// load-bearing: a backslash that precedes a quote must be
+	// doubled, otherwise the subsequent `\"` escape produces
+	// `\\"` (one literal backslash, one escaped quote) which
+	// Mermaid parses as `\` + end-of-string + `"y` outside.
+	const label = rawName.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 	return { id, label };
 }
 
@@ -764,7 +779,7 @@ export function buildMermaidCallGraph(entry: CallChainEntry): string {
 	// node declarations. We also build a label map for the entry's
 	// own symbol so its file can be rendered as a tooltip-style hint.
 	const idFor = new Map<string, { id: string; label: string }>();
-	for (const n of names) idFor.set(n, _mermaidSafeName(n));
+	for (const n of names) idFor.set(n, mermaidSafeName(n));
 
 	const lines: string[] = ["flowchart TD"];
 
