@@ -182,6 +182,40 @@ files)` markdown badge.
   so the compact no-op (#634) and full output are each verified for the exact
   sections they emit.
 
+- **Batch code-review fixes (Groups A-D, #656/#666/#658/#665/#664,
+  #667/#660/#663/#661/#659, #662, #668)**: Addresses the `code-review`
+  labelled findings across the tool surface. Highlights:
+  - **Impact direction naming (#656)**: `computeFileDirection` returns a
+    stable "upstream caller" / "downstream callee" / "both" label (tie ->
+    "both") so callers no longer infer direction from raw counts.
+  - **Impact rename-gate guard (#666)**: `recordCallChain` now resolves the
+    symbol through `graph.nameIndex` first; a non-existent symbol can no
+    longer satisfy the rename safety gate (reopens #569).
+  - **Format apply result (#658)**: `buildFormatResult` runs the formatters
+    when not in dry-run and exposes `formatResults` / `recommendedCommands`
+    on `FormatResult` (both text and JSON paths).
+  - **Verify description clean-up (#665)**: dropped stale "graph diffs" and
+    "cache bypassed" claims from the `shazam_verify` description.
+  - **Docstring cache stat logging (#664)**: `_extractDocstring` logs
+    non-ENOENT `statSync` failures via `_logWarn` instead of swallowing them;
+    ENOENT still falls back to mtime=0 silently.
+  - **Resolve-import Rust default + path normalization (#667, #660, #663)**:
+    `.rs` imports now return `null` by default; `moduleMatchesFile`,
+    `isNonSourceFile`, and `validatePathInProjectCore` normalize backslash
+    paths so Windows graph keys match forward-slash comparisons.
+  - **Project-root default (#661)**: `path-utils` / `_factory` default the
+    project root to `getEffectiveRoot()` instead of `process.cwd()`.
+  - **Tree-sitter types exported (#659)**: `Tree` / `SyntaxNode` interfaces
+    are exported from `core/treesitter.ts` for shared AST consumers.
+  - **Overview JSON exposes text-only sections (#662)**: `buildOverviewResult`
+    now surfaces `dataStructures`, `entryPoints`, `httpRoutes`,
+    `complexityHotspots`, `suggestedReadingOrder`, `parserWarnings`, and
+    `moduleStructure` (filter mode omits them, matching the text view);
+    module-structure / density grouping normalizes Windows backslash paths.
+  - **MCP `HOME_ONLY` accepts Windows projects (#668)**: `validateProjectRoot`
+    now treats a project under `USERPROFILE` (Windows) as in-home, not just
+    the POSIX `HOME`.
+
 ### Security
 
 - **Escape backslashes before quotes in Mermaid label sanitization (#2)**:
