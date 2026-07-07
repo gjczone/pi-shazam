@@ -186,6 +186,20 @@ function computeImpactBfs(graph: RepoGraph, files: string[], depth: number): Imp
 	return { affectedFiles, affectedSymbols };
 }
 
+/**
+ * Compute the per-file blast-radius direction label from the counts of
+ * affected upstream (caller) and downstream (callee) symbols.
+ *
+ * A strict `>` previously labeled every tie or zero/zero case as
+ * "downstream callee", which is misleading (issue #656). Ties are now
+ * labeled "both" so the direction is accurate or omitted.
+ */
+export function computeFileDirection(upstreamCount: number, downstreamCount: number): string {
+	if (upstreamCount > downstreamCount) return "upstream caller";
+	if (upstreamCount < downstreamCount) return "downstream callee";
+	return "both";
+}
+
 export function executeImpact(
 	graph: RepoGraph,
 	files: string[],
@@ -235,7 +249,7 @@ export function executeImpact(
 				// Determine direction (use majority)
 				const upstreamCount = syms.filter((s) => s.direction === "upstream").length;
 				const downstreamCount = syms.filter((s) => s.direction === "downstream").length;
-				const direction = upstreamCount > downstreamCount ? "upstream caller" : "downstream callee";
+				const direction = computeFileDirection(upstreamCount, downstreamCount);
 				// #631 B: aggregate provenance counts across all affected
 				// symbols in this file so the markdown line shows a single
 				// compact summary of how much of the blast radius is
