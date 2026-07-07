@@ -9,7 +9,7 @@
 
 import { readdirSync, statSync, realpathSync } from "node:fs";
 import { join, relative, resolve, isAbsolute } from "node:path";
-import { TreeSitterAdapter, EXT_TO_LANG } from "./treesitter.js";
+import { TreeSitterAdapter, EXT_TO_LANG, type Tree, type SyntaxNode } from "./treesitter.js";
 import { createRepoGraph, createEdge } from "./graph.js";
 import type { RepoGraph, Symbol, Edge } from "./graph.js";
 import { calculatePageRank } from "./pagerank.js";
@@ -411,26 +411,26 @@ export function removeFileData(graph: RepoGraph, relPath: string): void {
  * Returns an empty set when no __all__ is found or when the value cannot
  * be statically parsed (e.g. non-literal expressions).
  *
- * Tree types are `any` here because tree-sitter's Tree/SyntaxNode are
- * local to core/treesitter.ts and not re-exported.
+ * Tree/SyntaxNode are real types re-exported from core/treesitter.ts (#659),
+ * so no `as` casts are needed to read node shapes.
  */
-function extractPythonAllNames(tree: unknown): Set<string> {
+function extractPythonAllNames(tree: Tree): Set<string> {
 	const names = new Set<string>();
-	const rootNode = (tree as { rootNode: { namedChildren: { type: string; children: unknown[] }[] } }).rootNode;
+	const rootNode = tree.rootNode;
 	if (!rootNode) return names;
-	for (const top of rootNode.namedChildren) {
+	for (const top of rootNode.namedChildren ?? []) {
 		// Module-level statements are either `expression_statement`
 		// wrapping an `assignment`, or (in some grammar versions) a
 		// direct `assignment` node.
-		let assignment: { children: unknown[] } | null = null;
+		let assignment: SyntaxNode | null = null;
 		if (top.type === "expression_statement") {
-			assignment = (top.children[0] ?? null) as { children: unknown[] } | null;
+			assignment = top.children[0] ?? null;
 		} else if (top.type === "assignment") {
 			assignment = top;
 		}
 		if (!assignment) continue;
 
-		const children = assignment.children as { type: string; text: string; namedChildren: unknown[] }[];
+		const children = assignment.children;
 		const lhs = children.find((c) => c.type === "identifier" && c.text === "__all__");
 		if (!lhs) continue;
 
@@ -444,10 +444,7 @@ function extractPythonAllNames(tree: unknown): Set<string> {
 	return names;
 }
 
-function collectStringsFromNode(
-	node: { type: string; text: string; namedChildren?: unknown[] },
-	out: Set<string>,
-): void {
+function collectStringsFromNode(node: SyntaxNode, out: Set<string>): void {
 	if (node.type === "string") {
 		const text = node.text;
 		// Strip quotes: 'x', "x", '''x''', """x"""
@@ -457,7 +454,7 @@ function collectStringsFromNode(
 		return;
 	}
 	if (!node.namedChildren) return;
-	for (const child of node.namedChildren as { type: string; text: string; namedChildren?: unknown[] }[]) {
+	for (const child of node.namedChildren) {
 		collectStringsFromNode(child, out);
 	}
 }

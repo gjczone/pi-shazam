@@ -24,6 +24,7 @@
  */
 import { existsSync, realpathSync } from "node:fs";
 import { relative, resolve, isAbsolute } from "node:path";
+import { getEffectiveRoot } from "./scanner.js";
 
 export type FilePathError =
 	| { kind: "traversal"; path: string; message: string }
@@ -58,7 +59,7 @@ export function isPathInRoot(target: string, root: string): boolean {
  *      first check passes, to avoid spurious false negatives on paths
  *      that are already provably outside the root.
  */
-export function validatePathInProjectCore(rawPath: string, projectRoot: string = process.cwd()): boolean {
+export function validatePathInProjectCore(rawPath: string, projectRoot: string = getEffectiveRoot()): boolean {
 	const resolved = resolve(projectRoot, rawPath);
 	const rootResolved = resolve(projectRoot);
 	if (!isPathInRoot(resolved, rootResolved)) return false;
