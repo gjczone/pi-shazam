@@ -55,6 +55,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   synthetic benchmark), because real projects spend most bytes
   on the JSON metadata + non-deduped file-level rows.
 
+### Fixed
+
+- **`benchmark-v3` timing assertion no longer red CI under load (#650)**:
+  `tests/benchmark-v3.test.ts` (the V3 cache encode/decode speed
+  assertions) is flaky only when run inside the full `npm test`
+  suite under parallel load — it passes in isolation. It is now
+  excluded from the broad `npm test` / `ci` runs via
+  `vitest run --exclude tests/benchmark-v3.test.ts`, and is instead
+  executed by the dedicated `benchmark` CI job in isolation alongside
+  `tests/benchmark.test.ts`. This removes environment-dependent CI
+  noise from unrelated PRs without loosening the performance
+  regression thresholds.
+
 ## [0.26.0] - 2026-07-03
 
 ### Added
