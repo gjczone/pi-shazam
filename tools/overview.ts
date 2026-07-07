@@ -425,6 +425,18 @@ export interface OverviewResult {
 	 * module" candidates without paging through the source tree.
 	 */
 	topByDensity?: OverviewModuleDensity[];
+	/**
+	 * Sections previously rendered only in the text view (issue #662). JSON
+	 * and text modes must expose the same signals so MCP/LLM consumers do
+	 * not silently lose the "where to start / blast radius" guidance.
+	 */
+	dataStructures?: string | null;
+	entryPoints?: OverviewEntryPoint[];
+	httpRoutes?: string | null;
+	complexityHotspots?: OverviewFileHotspot[];
+	suggestedReadingOrder?: string[];
+	parserWarnings?: OverviewParserWarning[];
+	moduleStructure?: OverviewModuleNode[];
 }
 
 export interface OverviewModuleDensity {
@@ -432,6 +444,41 @@ export interface OverviewModuleDensity {
 	files: number;
 	symbols: number;
 	ratio: number;
+}
+
+/** A detected entry point (CLI / HTTP / event handler). Exposed in JSON so
+ * MCP/LLM consumers get the same "where to start" signal as the text view. */
+export interface OverviewEntryPoint {
+	category: "cli" | "http" | "event";
+	name: string;
+	file: string;
+	line: number;
+	signature: string;
+}
+
+/** A file-level complexity hotspot. Exposed in JSON alongside the
+ * symbol-level `hotspots` field for full parity with the text view. */
+export interface OverviewFileHotspot {
+	file: string;
+	symbolCount: number;
+	totalPagerank: number;
+	incomingRefs: number;
+	outgoingRefs: number;
+	hotspotScore: number;
+}
+
+/** Parser-availability warning entry (language whose tree-sitter parser is
+ * unavailable in this environment). */
+export interface OverviewParserWarning {
+	language: string;
+	reason?: string;
+	suggestion?: string;
+}
+
+/** A directory node in the module-structure tree. */
+export interface OverviewModuleNode {
+	dir: string;
+	files: number;
 }
 
 /**
@@ -494,7 +541,49 @@ export function buildOverviewResult(graph: RepoGraph, projectRoot: string, filte
 		})),
 		hotspots,
 		topByDensity,
+		// Sections previously text-only (issue #662): mirror the text builder
+		// so JSON and text modes expose the same signals.
+		dataStructures: filter ? undefined : _buildDataStructuresSection(graph),
+		entryPoints: filter ? undefined : _detectEntryPoints(graph),
+		httpRoutes: filter ? undefined : buildRoutesSection(graph),
+		complexityHotspots: filter ? undefined : _computeHotspots(graph, 10),
+		suggestedReadingOrder: filter ? undefined : topFiles.slice(0, 5).map(([file]) => file),
+		parserWarnings: filter ? undefined : _buildParserWarnings(graph),
+		moduleStructure: filter ? undefined : _buildModuleStructure(files),
 	};
+}
+
+/**
+ * Build the parser-availability warnings (issue #662) for the JSON result,
+ * mirroring the "Parser Availability Warning" section of the text view.
+ * Only languages the project actually uses but whose parser is unavailable.
+ */
+function _buildParserWarnings(graph: RepoGraph): OverviewParserWarning[] {
+	const unavailable = getProjectParserWarnings(graph.fileSymbols.keys());
+	return unavailable.map(([lang, info]) => ({
+		language: lang,
+		reason: info.reason,
+		suggestion: info.suggestion,
+	}));
+}
+
+/**
+ * Build the module-structure directory tree (issue #662) for the JSON
+ * result, mirroring the "Module Structure" section of the text view.
+ * Two levels of directory depth, sorted alphabetically.
+ */
+function _buildModuleStructure(files: string[]): OverviewModuleNode[] {
+	const dirs = new Map<string, number>();
+	for (const file of files) {
+		if (!file.includes("/")) {
+			dirs.set("(root)", (dirs.get("(root)") ?? 0) + 1);
+		} else {
+			const parts = file.split("/");
+			const twoLevels = parts.slice(0, 2).join("/");
+			dirs.set(twoLevels, (dirs.get(twoLevels) ?? 0) + 1);
+		}
+	}
+	return [...dirs.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([dir, count]) => ({ dir, files: count }));
 }
 
 /**
