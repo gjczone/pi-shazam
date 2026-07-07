@@ -3,16 +3,42 @@
  *
  * Compares the on-disk size and round-trip time of the V2 (JSON)
  * and V3 (ProtoBuf) cache formats on a synthetic 1000-symbol
- * graph with ~3 edges per node. The plan's 50% reduction target
- * was aspirational; the actual columnar ProtoBuf layout with a
- * JSON metadata blob achieves ~30% reduction in practice. We assert
- * `V3 < V2 * 0.8` (at least 20% smaller) so the test stays stable
- * across small encoding tweaks.
+ * graph with ~3 edges per node.
+ *
+ * Issue #628: V3.0 hit ~30% reduction vs. V2 thanks to the
+ * columnar ProtoBuf layout.
+ *
+ * Issue #647: V3.1 adds a string table that dedupes the
+ * `source` / `target` symbol IDs across edges. On a 1000-symbol
+ * graph with ~3 edges per node the same 1000 IDs appear ~3000
+ * times across the source + target columns; the string table
+ * stores each ID once, and the index columns add 4 bytes per
+ * occurrence. Net: another ~80KB saved (~20% additional reduction),
+ * bringing V3 to ~50% of V2 -- close to the original plan's
+ * target. We assert `V3 < V2 * 0.6` (at least 40% smaller) so the
+ * test catches regressions in the string-table path.
  *
  * Issue #628's stated goal was "30% lower memory usage" for a
  * 20万-symbol project. The on-disk format change contributes to
  * that goal via faster cache load times; in-memory representation
  * is identical between V2 and V3.
+ *
+ * Real-world sanity check (issue #647, follow-up F):
+ *   Self-scan of pi-shazam (3499 symbols, 1264 symbol-level edges,
+ *   7236 file-level rows; tests excluded) yields:
+ *     V2 JSON:     1557252 bytes
+ *     V3.1 Proto:  1498435 bytes
+ *     Ratio:        0.962
+ *     Reduction:   3.8%
+ *   The 3.8% is much smaller than the 47% on the synthetic graph
+ *   because real projects have a different shape: metadata (JSON
+ *   symbol table with full fields) + file-level rows (no string
+ *   table) dominate the total, while symbol-level edges (the only
+ *   thing the string table helps) are a small fraction. The
+ *   synthetic graph above is edge-heavy by design to stress the
+ *   string-table code path; the real-world number shows where the
+ *   remaining cost sits and motivates future work on
+ *   FileEdgeColumn deduping and metadata compactness.
  */
 import { describe, it, expect } from "vitest";
 import { createRepoGraph, createSymbol, createEdge, serializeGraphV2, type RepoGraph } from "../core/graph.js";
@@ -49,7 +75,7 @@ function buildBenchmarkGraph(n: number, edgesPerNode = 3): RepoGraph {
 }
 
 describe("Cache V3 size benchmark (issue #628)", () => {
-	it("V3 ProtoBuf is at least 20% smaller than V2 JSON for 1000 symbols", () => {
+	it("V3 ProtoBuf is at least 40% smaller than V2 JSON for 1000 symbols", () => {
 		const graph = buildBenchmarkGraph(1000, 3);
 		const v2Serialized = serializeGraphV2(graph, new Map());
 		const v2Json = JSON.stringify(v2Serialized);
@@ -60,10 +86,11 @@ describe("Cache V3 size benchmark (issue #628)", () => {
 		// magnitude (a 1000-symbol graph is several hundred KB).
 		expect(v2Size).toBeGreaterThan(100_000);
 
-		// The win: V3 should be at least 20% smaller.
-		// (Empirically 30-35% on this fixture; the 0.8 threshold
-		// gives headroom for future symbol-table tweaks.)
-		expect(v3Size).toBeLessThan(v2Size * 0.8);
+		// V3.1 (issue #647) targets ~50% of V2 via the string-table
+		// dedup. We assert < 0.6 (40% smaller) so the test catches
+		// regressions in either the columnar encoding or the
+		// string-table path, and gives headroom for future tweaks.
+		expect(v3Size).toBeLessThan(v2Size * 0.6);
 	});
 
 	it("V3 round-trip preserves every edge in a 1000-symbol graph", () => {

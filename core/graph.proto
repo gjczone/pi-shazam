@@ -11,6 +11,33 @@
 // are encoded in ProtoBuf. Symbols and fileSymbols are still
 // written as JSON in the same payload -- those are few and
 // cheap, and proto's per-string overhead would dominate them.
+//
+// Issue #647: V3.1 adds a string table on the top-level payload
+// that dedupes the `source` / `target` symbol IDs across every
+// edge. Each unique ID is written once into `string_table`; each
+// edge then references its source / target by int32 index. On a
+// 1000-symbol graph with ~3 edges per node this cuts the on-disk
+// size by ~20% more (from ~30% to ~50% of V2). The `EdgeColumn`
+// message still carries `source` / `target` fields (kept as empty
+// arrays in V3.1) so the schema remains forward-compatible with
+// future wire-format revisions.
+//
+// Issue #647 (D, V3.2): `EdgeColumn.kind` and `FileEdgeColumn.kind`
+// are encoded as int32 instead of string. Edge.kind in production
+// code takes 5 distinct values (`call`, `type`, `import`, `ref`,
+// `import-binding`); file-level kind takes 3 (`call`, `ref`,
+// `typeRef`). Encoding as int32 (1 byte varint) replaces 5-7 byte
+// strings per row; on the real pi-shazam self-scan this saves
+// another ~30-50 KB on top of V3.1.
+//
+// Int mapping (must match `_kindToInt` / `_intToKind` in
+// `core/cache.ts`):
+//   0 = "call"          (most common, default for unknown)
+//   1 = "type"
+//   2 = "import"
+//   3 = "ref"
+//   4 = "typeRef"
+//   5 = "import-binding"
 
 syntax = "proto3";
 
@@ -24,7 +51,7 @@ message EdgeColumn {
   repeated string source = 1;     // symbol id
   repeated string target = 2;     // symbol id
   repeated double weight = 3;
-  repeated string kind = 4;       // "call" | "type" | "import" | ...
+  repeated int32 kind = 4;        // int mapping (see file header): 0=call, 1=type, 2=import, 3=ref, 4=typeRef, 5=import-binding
   repeated double confidence = 5;
   // Provenance int mapping (matches `Provenance` in core/graph.ts):
   //   0 = resolved, 1 = name_match, 2 = heuristic, 3 = unresolved
@@ -42,7 +69,7 @@ message FileEdgeColumn {
   repeated string file = 1;        // file path
   repeated string symbol_id = 2;   // referenced symbol id
   repeated int32 count = 3;        // number of references
-  repeated string kind = 4;        // "call" | "ref" | "typeRef"
+  repeated int32 kind = 4;        // int mapping (see file header): 0=call, 3=ref, 4=typeRef
 }
 
 // Top-level payload: the ProtoBuf-encoded view of the graph.
@@ -57,4 +84,18 @@ message GraphPayload {
   EdgeColumn edges = 2;
   // The concatenated file-level edge maps.
   FileEdgeColumn file_edges = 3;
+  // V3.1: string table that dedupes symbol IDs across every edge.
+  // `string_table[i]` is the i-th unique ID (in first-occurrence
+  // order). Each edge's source / target is referenced by index
+  // into this table via the parallel `edge_source_idx` /
+  // `edge_target_idx` arrays below. On a 1000-symbol / ~3000-edge
+  // graph this shrinks the on-disk V3 cache by ~80KB vs. inline
+  // string fields.
+  repeated string string_table = 4;
+  // Per-edge source index into `string_table`. Length must match
+  // `edge_target_idx` and equal the total edge count.
+  repeated int32 edge_source_idx = 5;
+  // Per-edge target index into `string_table`. Length must match
+  // `edge_source_idx` and equal the total edge count.
+  repeated int32 edge_target_idx = 6;
 }

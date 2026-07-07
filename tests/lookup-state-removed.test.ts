@@ -69,9 +69,15 @@ describe("shazam_lookup mode=state removal (#630 cleanup)", () => {
 			visibility: "exported",
 			signature: "enum Status",
 			pagerank: 0,
-			docstring: undefined,
+			// `Symbol.docstring` is `string` (not optional). The
+			// test exercises the "no docstring" rendering path;
+			// cast through `unknown` to keep the fixture terse.
+			docstring: undefined as unknown as string,
 		});
-		graph.nameIndex.set("Status", ["Status:src/enums.ts:1:1"]);
+		// nameIndex expects `Symbol[]`; the test never reads from
+		// this map (the lookup dispatch uses the `name` param
+		// directly), so a typed-through-unknown placeholder is fine.
+		graph.nameIndex.set("Status", ["Status:src/enums.ts:1:1"] as unknown as Symbol[]);
 		graph.fileSymbols.set("src/enums.ts", ["Status:src/enums.ts:1:1"]);
 
 		const result = await dispatchLookup(graph, { name: "Status", mode: "state" }, "/tmp");

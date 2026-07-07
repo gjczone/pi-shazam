@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { scanProject, getEffectiveRoot } from "../core/scanner.js";
 import type { RepoGraph } from "../core/graph.js";
-import type { ExtensionContext, ToolCallEvent } from "../types/pi-extension.js";
+import type { ExtensionAPI, ExtensionContext, ToolCallEvent } from "../types/pi-extension.js";
 
 // -- Helpers ------------------------------------------------------------
 
@@ -40,8 +40,12 @@ function mockPiSignal(): AbortSignal {
 // -- Pi tool invoker ----------------------------------------------------
 
 async function invokePiTool(toolName: string, params: Record<string, unknown>): Promise<string> {
-	// Import the tool registration and execute via the factory-registered tool
-	let registerFn: (pi: { registerTool: (tool: unknown) => void }) => void;
+	// Import the tool registration and execute via the factory-registered tool.
+	// The register functions take the real `ExtensionAPI`; the test only
+	// invokes `registerTool`, so we type the callback parameter as
+	// `ExtensionAPI` (the surface the real register functions expect)
+	// and stub the rest of the surface at the call site.
+	let registerFn: (pi: ExtensionAPI) => void;
 	switch (toolName) {
 		case "shazam_overview":
 			registerFn = (await import("../tools/overview.js")).registerOverview;
