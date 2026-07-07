@@ -7,7 +7,6 @@
  * the supported --name lookup path.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-
 const hoisted = vi.hoisted(() => ({
 	logWarnCalls: [] as Array<{ tag: string; message: string; err?: unknown }>,
 }));
@@ -24,7 +23,7 @@ vi.mock("../core/output.js", async (importOriginal) => {
 });
 
 import { dispatchLookup } from "../tools/_dispatchers.js";
-import type { RepoGraph } from "../core/graph.js";
+import type { RepoGraph, Symbol as GraphSymbol } from "../core/graph.js";
 
 function emptyGraph(): RepoGraph {
 	return {
@@ -69,15 +68,20 @@ describe("shazam_lookup mode=state removal (#630 cleanup)", () => {
 			visibility: "exported",
 			signature: "enum Status",
 			pagerank: 0,
-			// `Symbol.docstring` is `string` (not optional). The
-			// test exercises the "no docstring" rendering path;
-			// cast through `unknown` to keep the fixture terse.
-			docstring: undefined as unknown as string,
+			// Explicit empty strings for the fields this fixture
+			// does not exercise; satisfies the `Symbol` interface
+			// and keeps the "no docstring / no returnType" rendering
+			// paths covered.
+			docstring: "",
+			returnType: "",
+			params: "",
 		});
-		// nameIndex expects `Symbol[]`; the test never reads from
-		// this map (the lookup dispatch uses the `name` param
+		// nameIndex expects `GraphSymbol[]`; the test never reads
+		// from this map (the lookup dispatch uses the `name` param
 		// directly), so a typed-through-unknown placeholder is fine.
-		graph.nameIndex.set("Status", ["Status:src/enums.ts:1:1"] as unknown as Symbol[]);
+		// We import the project's `Symbol` as `GraphSymbol` to
+		// avoid colliding with the JS built-in `Symbol` constructor.
+		graph.nameIndex.set("Status", ["Status:src/enums.ts:1:1"] as unknown as GraphSymbol[]);
 		graph.fileSymbols.set("src/enums.ts", ["Status:src/enums.ts:1:1"]);
 
 		const result = await dispatchLookup(graph, { name: "Status", mode: "state" }, "/tmp");

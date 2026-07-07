@@ -41,11 +41,14 @@ function makeSymbol(
 		visibility: "exported",
 		signature: "function " + opts.name,
 		pagerank: 0.5,
-		// `Symbol.docstring` is `string` in core/graph.ts (not
-		// optional). The test deliberately leaves it empty to
-		// exercise the "no docstring" rendering path; cast through
-		// `unknown` to keep the fixture terse.
-		docstring: undefined as unknown as string,
+		// `Symbol` has four `string` fields that the test does not
+		// exercise (docstring / returnType / params / endLine is
+		// set above). Provide explicit empty strings so the
+		// fixture satisfies the interface and the "no docstring /
+		// no returnType" rendering paths are still covered.
+		docstring: "",
+		returnType: "",
+		params: "",
 	};
 }
 

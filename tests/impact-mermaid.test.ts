@@ -9,7 +9,7 @@
  * suffix so the consumer can see provenance at a glance.
  */
 import { describe, it, expect } from "vitest";
-import { _buildCallChainResult, buildMermaidCallGraph } from "../tools/impact.js";
+import { _buildCallChainResult, buildMermaidCallGraph, mermaidSafeName } from "../tools/impact.js";
 import { createRepoGraph, createSymbol, createEdge, type RepoGraph } from "../core/graph.js";
 
 /**
@@ -135,5 +135,65 @@ describe("shazam_impact mermaid call graph (issue #631 B)", () => {
 		// The hyphen must not break the Mermaid parser; we either
 		// quote the node or strip the hyphen.
 		expect(mermaid).toMatch(/weird[-_]name|"weird-name"/);
+	});
+});
+
+/**
+ * CodeQL `js/incomplete-sanitization` regression (hotfix for tools/impact.ts
+ * sanitization): `mermaidSafeName` must escape backslashes BEFORE
+ * quotes, otherwise a raw name containing a backslash + quote pair
+ * (e.g. an obfuscated source file) would produce a Mermaid label that
+ * breaks the surrounding string. The fix is a 2-line change in
+ * `tools/impact.ts` (escape `\\` first, then `"`); this block guards
+ * against future regressions and documents the correct behavior.
+ */
+describe("mermaidSafeName sanitization (CodeQL js/incomplete-sanitization)", () => {
+	it("escapes double-quotes so the surrounding Mermaid string stays valid", () => {
+		const { id, label } = mermaidSafeName('foo"bar');
+		// The label, when placed inside Mermaid `node["..."]`, must
+		// produce `node["foo\"bar"]` -- the quote is escaped, the
+		// surrounding string is closed cleanly.
+		expect(label).toBe('foo\\"bar');
+	});
+
+	it("escapes a lone backslash (no quote) correctly", () => {
+		const { label } = mermaidSafeName("foo\\bar");
+		// One backslash in -> two backslashes out.
+		expect(label).toBe("foo\\\\bar");
+	});
+
+	it("escapes a backslash-then-quote pair in the correct order (the CodeQL bug)", () => {
+		// Input: x\"y (literal chars: x, \, ", y)
+		// Expected output: x\\\"y (literal chars: x, \, \, \, ", y)
+		//
+		// The OLD code (escape " -> \") would produce x\\"y (one
+		// literal backslash, one escaped quote), which Mermaid
+		// parses as x\ + end-of-string + "y outside the node --
+		// a malformed diagram.
+		//
+		// The NEW code (escape \ first, then ") produces x\\\"y
+		// (three literal backslashes, one escaped quote), which
+		// Mermaid parses as x\"y inside the node -- correct.
+		const { id, label } = mermaidSafeName('x\\"y');
+		expect(label).toBe('x\\\\\\"y');
+		// Sanity: the `id` side is just a token, no escaping needed.
+		// x stays x, \ and " both become _.
+		expect(id).toBe("x__y");
+	});
+
+	it("handles an empty string without throwing", () => {
+		const { id, label } = mermaidSafeName("");
+		expect(id).toBe("");
+		expect(label).toBe("");
+	});
+
+	it("handles a name with only special characters (no alphanumerics)", () => {
+		// Input chars: " \  (2 chars)
+		// id: both become _, so "__" (2 chars)
+		// label: \ -> \\, then " -> \", so the 4-char output is
+		// \ " \ \  (backslash, quote, backslash, backslash).
+		const { id, label } = mermaidSafeName('"\\');
+		expect(id).toBe("__");
+		expect(label).toBe('\\\"\\\\');
 	});
 });
