@@ -74,6 +74,20 @@ All tree-sitter grammars ship prebuilt binaries for linux-x64, linux-arm64, darw
 
 On Windows, `npm run build` works in any shell. `bash scripts/ci.sh` requires Git Bash (bundled with Git for Windows).
 
+## GitHub Action
+
+Run `shazam_verify` automatically on every PR with results posted as a comment:
+
+```yaml
+- uses: gjczone/pi-shazam/.github/actions/shazam-verify@main
+  with:
+    project-root: "." # default: "."
+    fail-on-verdict: "false" # default: "false" — only post comment
+    max-files: "100" # default: 100
+```
+
+See [docs/github-action.md](docs/github-action.md) for full usage and configuration details.
+
 ## License
 
 [MIT](LICENSE)
