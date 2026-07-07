@@ -575,10 +575,13 @@ function _buildParserWarnings(graph: RepoGraph): OverviewParserWarning[] {
 function _buildModuleStructure(files: string[]): OverviewModuleNode[] {
 	const dirs = new Map<string, number>();
 	for (const file of files) {
-		if (!file.includes("/")) {
+		// Normalize Windows backslash paths so the two-level grouping and the
+		// "(root)" check behave identically across platforms (issue #662).
+		const normalized = file.replace(/\\/g, "/");
+		if (!normalized.includes("/")) {
 			dirs.set("(root)", (dirs.get("(root)") ?? 0) + 1);
 		} else {
-			const parts = file.split("/");
+			const parts = normalized.split("/");
 			const twoLevels = parts.slice(0, 2).join("/");
 			dirs.set(twoLevels, (dirs.get(twoLevels) ?? 0) + 1);
 		}
@@ -595,7 +598,8 @@ function _buildModuleStructure(files: string[]): OverviewModuleNode[] {
 function _buildTopByDensity(graph: RepoGraph, files: string[], topN: number): OverviewModuleDensity[] {
 	const dirStats = new Map<string, { files: number; symbols: number }>();
 	for (const file of files) {
-		const dir = file.includes("/") ? file.split("/").slice(0, 2).join("/") : "(root)";
+		const normalized = file.replace(/\\/g, "/");
+		const dir = normalized.includes("/") ? normalized.split("/").slice(0, 2).join("/") : "(root)";
 		const symCount = graph.fileSymbols.get(file)?.length ?? 0;
 		const existing = dirStats.get(dir) ?? { files: 0, symbols: 0 };
 		existing.files += 1;
