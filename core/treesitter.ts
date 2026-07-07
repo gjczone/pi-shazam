@@ -61,6 +61,22 @@ interface QueryInstance {
 	captures(node: SyntaxNode, options?: Record<string, unknown>): { name: string; node: SyntaxNode }[];
 }
 
+/**
+ * A single cyclomatic-complexity decision point extracted from the AST.
+ * Plain data so `core/complexity.ts` can apply the else-if rule without
+ * depending on tree-sitter's internal node types (issue #642).
+ */
+export interface ComplexityMatch {
+	/** `branch` counts +1; `else` counts +1 only when it is an `else if`. */
+	kind: "branch" | "else";
+	/** For `else` matches: does the else clause contain an `if`/`if_expression`? */
+	hasIfChild: boolean;
+	/** 1-based line of the node start. */
+	startRow: number;
+	/** 1-based line of the node end. */
+	endRow: number;
+}
+
 // -- File extension -> tree-sitter language mapping ----------------------------
 
 export const EXT_TO_LANG: Record<string, string> = {
@@ -323,6 +339,36 @@ export class TreeSitterAdapter {
 			this.log(`Parse error [${lang}]: ${e}`);
 			return null;
 		}
+	}
+
+	/**
+	 * Extract every cyclomatic-complexity decision node in `source` via the
+	 * `complexity` query (issue #642).
+	 *
+	 * Returns `null` when `lang` has no loaded parser or no compiled
+	 * `complexity` query -- callers fall back to the regex sweep so symbols
+	 * in unsupported languages are not silently dropped.
+	 */
+	complexityMatches(source: string, lang: string): ComplexityMatch[] | null {
+		const langQueries = this.queries.get(lang);
+		const query = langQueries?.get("complexity");
+		if (!query) return null;
+
+		const tree = this.parse(source, lang);
+		if (!tree) return null;
+
+		const matches: ComplexityMatch[] = [];
+		for (const { name, node } of query.captures(tree.rootNode)) {
+			// Accept either `if_statement` (TS/JS/Python/Go) or `if_expression` (Rust).
+			const hasIfChild = node.children.some((c) => c.type === "if_statement" || c.type === "if_expression");
+			matches.push({
+				kind: name === "else" ? "else" : "branch",
+				hasIfChild,
+				startRow: node.startPosition.row + 1,
+				endRow: node.endPosition.row + 1,
+			});
+		}
+		return matches;
 	}
 
 	extractSymbols(tree: Tree, lang: string, file: string): Symbol[] {

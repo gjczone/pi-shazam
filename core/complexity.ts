@@ -5,30 +5,31 @@
  *   - Architectural boundary: `core/` is the only valid home for cross-layer
  *     utilities, and complexity metrics feed both overview output and any
  *     future scoring/thresholding code.
- *   - No Pi / LSP / tree-sitter runtime dependency: only a regex sweep on
- *     the source slice for the symbol's body lines.
+ *   - Now uses tree-sitter AST traversal (issue #642) instead of a regex
+ *     sweep, so keywords inside comments and string literals no longer
+ *     inflate the count -- required for precise threshold-based alerting
+ *     (#631 follow-up).
  *
- * Why regex (issue #629): the issue spec explicitly lists the keywords
- * `if|else|for|while|case|catch` plus `&&`, `||`, `?:` (ternary). These are
- * raw token matches, not AST node types. A regex sweep:
- *   - Is exactly what the spec asks for.
- *   - Reuses the existing `readFileAdaptive` helper (UTF-8 / GBK / GB2312
- *     fallback already in place) without a new tree-sitter query type.
- *   - Runs synchronously inside `executeOverview` -- AST re-parsing each
- *     top-N symbol would push the overview into IO-heavy territory.
+ * Why AST (issue #642): the old regex matched `if|else|for|while|case|catch`
+ * plus `&&`, `||`, `?:` anywhere in the source slice, including comments and
+ * strings. That produces false positives. The `complexity` tree-sitter query
+ * (core/treesitter-queries.ts) matches real branching node types only.
  *
- * Limitations (intentional, see issue #629 "Out of scope"):
- *   - Counts keywords in strings or comments too (regex is line-blind).
- *     Acceptable for an LLM "rough ranking" surface; tree-sitter AST
- *     counting would be needed for precise thresholds (not added here).
- *   - `else if` chains still count twice (one `if` + one `else`) which
- *     matches the McCabe definition.
+ * Fallback: languages without a compiled `complexity` query (e.g. dart, or
+ * any parser that failed to load) fall back to the original regex sweep so a
+ * symbol is never silently scored as 1. Coverage is preserved; only the
+ * supported languages gain precise counts.
+ *
+ * else-if rule (McCabe): a plain `else` adds 0; an `else if` adds 1 (the
+ * `else_clause` counts +1 and its nested `if` counts +1, matching the
+ * original regex behaviour of counting both).
  */
 import type { RepoGraph, Symbol } from "./graph.js";
 import { readFileAdaptive } from "./encoding.js";
 import { isNonSourceFile } from "./filter.js";
-import { resolve } from "node:path";
+import { resolve, extname } from "node:path";
 import { _logWarn } from "./output.js";
+import { TreeSitterAdapter } from "./treesitter.js";
 
 /**
  * Per-symbol complexity entry used by both the text and JSON formatters.
@@ -42,18 +43,63 @@ export interface ComplexityEntry {
 	score: number;
 }
 
+// Lazily-constructed tree-sitter adapter (loads grammars once per module
+// instance). Source is re-read per symbol, matching the pre-#642 behaviour.
+let _adapter: TreeSitterAdapter | null = null;
+
+function getAdapter(): TreeSitterAdapter {
+	if (!_adapter) _adapter = new TreeSitterAdapter();
+	return _adapter;
+}
+
 /**
- * Count cyclomatic complexity tokens within a 1-based line range.
+ * Count cyclomatic complexity within a 1-based line range using a tree-sitter
+ * AST walk (issue #642).
  *
- * Token set (per issue #629 spec):
- *   - `if`, `else`, `for`, `while`, `case`, `catch` as whole words
- *   - `&&` and `||` logical operators
- *   - `?:` ternary (`?` immediately followed by `:` -- excludes `?.` optional
- *     chaining and `??` nullish coalescing)
+ * Decision nodes come from the `complexity` query (real branching AST nodes,
+ * never comment/string tokens). A node only counts when its span lies within
+ * `[startLine, endLine]`, mirroring the old line-slice behaviour (nested
+ * functions inside the range are included).
+ *
+ * Languages without a compiled `complexity` query fall back to the regex
+ * sweep (see `regexComplexity`) so coverage is preserved.
  *
  * Exposed for unit testing -- callers usually want `topByComplexity` instead.
  */
-export function countCyclomaticComplexity(source: string, startLine: number, endLine: number): number {
+export function countCyclomaticComplexity(
+	source: string,
+	lang: string | undefined,
+	startLine: number,
+	endLine: number,
+): number {
+	if (lang) {
+		const matches = getAdapter().complexityMatches(source, lang);
+		if (matches) {
+			let count = 0;
+			for (const m of matches) {
+				if (m.startRow < startLine || m.endRow > endLine) continue;
+				if (m.kind === "else") {
+					// Plain `else` adds 0; `else if` adds 1.
+					if (m.hasIfChild) count++;
+				} else {
+					count++;
+				}
+			}
+			// Baseline 1 so an empty function body still has a score of 1.
+			return 1 + count;
+		}
+	}
+	// Fallback: no AST query for this language -> regex sweep (coverage kept).
+	return regexComplexity(source, startLine, endLine);
+}
+
+/**
+ * Original regex sweep retained as a fallback for languages without a
+ * compiled `complexity` query (issue #642). Counts keywords anywhere in the
+ * line slice, including comments/strings -- imprecise but never drops a
+ * symbol's score to 1.
+ */
+function regexComplexity(source: string, startLine: number, endLine: number): number {
 	// 1-based inclusive slice. Clamp to the source so callers can pass
 	// endLine past EOF without an off-by-one crash.
 	const lines = source.split("\n");
@@ -62,8 +108,6 @@ export function countCyclomaticComplexity(source: string, startLine: number, end
 	if (start >= end) return 1;
 	const body = lines.slice(start, end).join("\n");
 	// Token regex: word-boundary keywords + the three operator variants.
-	// `\?(?::|=)` matches `?:` ternary and `?=` nullish assignment but
-	// not `?.` (optional chaining) or `??` (nullish coalescing).
 	const re = /\b(if|else|for|while|case|catch)\b|&&|\|\||\?(?::|=)/g;
 	const matches = body.match(re);
 	// Baseline 1 so an empty function body still has a score of 1.
@@ -137,8 +181,10 @@ export function topByComplexity(graph: RepoGraph, projectRoot: string, n: number
  */
 function scoreSymbol(sym: Symbol, projectRoot: string): number {
 	try {
-		const source = readFileAdaptive(resolve(projectRoot, sym.file));
-		return countCyclomaticComplexity(source, sym.line, sym.endLine);
+		const filePath = resolve(projectRoot, sym.file);
+		const source = readFileAdaptive(filePath);
+		const lang = TreeSitterAdapter.langForExtension(extname(sym.file));
+		return countCyclomaticComplexity(source, lang, sym.line, sym.endLine);
 	} catch (err) {
 		// Logged at warn level so an operator can investigate (file too
 		// large, permission denied, encoding failure). Never thrown --
