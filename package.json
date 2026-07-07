@@ -69,7 +69,8 @@
 		"protobufjs": "^8.6.6",
 		"protobufjs-cli": "^2.5.7",
 		"typescript": "^6.0.3",
-		"vitest": "^4.1.8"
+		"vitest": "^4.1.8",
+		"yaml": "^2.9.0"
 	},
 	"overrides": {
 		"tree-sitter": "^0.22.4"

@@ -1,0 +1,49 @@
+name: "shazam-verify"
+description: "Run pi-shazam's shazam_verify on a PR and post results as a comment"
+
+inputs:
+  project-root:
+    description: "Project root directory (relative to workspace)"
+    required: false
+    default: "."
+  fail-on-verdict:
+    description: "Fail the check if verdict is FAIL ('true' or 'false')"
+    required: false
+    default: "false"
+  max-files:
+    description: "Maximum files for LSP diagnostics (overrides .pi-shazam/config.json)"
+    required: false
+    default: "100"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node.js 22
+      uses: actions/setup-node@v6.4.0
+      with:
+        node-version: "22"
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci --legacy-peer-deps
+
+    - name: Build pi-shazam
+      shell: bash
+      run: npm run build
+
+    - name: Run shazam_verify
+      id: verify
+      shell: bash
+      run: .github/actions/shazam-verify/entrypoint.sh
+      env:
+        INPUT_PROJECT_ROOT: ${{ inputs.project-root }}
+        INPUT_FAIL_ON_VERDICT: ${{ inputs.fail-on-verdict }}
+        INPUT_MAX_FILES: ${{ inputs.max-files }}
+
+    - name: Post PR comment
+      if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+      shell: bash
+      run: .github/actions/shazam-verify/post-comment.sh
+      env:
+        INPUT_FAIL_ON_VERDICT: ${{ inputs.fail-on-verdict }}
+        GH_TOKEN: ${{ github.token }}
