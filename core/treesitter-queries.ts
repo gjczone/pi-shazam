@@ -16,6 +16,8 @@ export interface QueryDict {
 		call?: string;
 		ref?: string;
 		type?: string;
+		/** AST nodes that contribute to cyclomatic complexity (issue #642). */
+		complexity?: string;
 	};
 }
 
@@ -41,6 +43,16 @@ export const QUERIES: QueryDict = {
 (call function: (identifier) @name) @reference.call
 (call function: (attribute attribute: (identifier) @name)) @reference.call
 `,
+		complexity: `\
+((if_statement) @branch)
+((elif_clause) @branch)
+((for_statement) @branch)
+((while_statement) @branch)
+((except_clause) @branch)
+((case_clause) @branch)
+((conditional_expression) @branch)
+((boolean_operator operator: ["and" "or"]) @branch)
+`,
 	},
 	javascript: {
 		function: `\
@@ -65,6 +77,18 @@ export const QUERIES: QueryDict = {
 	(call_expression arguments: (arguments (identifier) @name))
 	(return_statement (identifier) @name)
 	`,
+		complexity: `\
+((if_statement) @branch)
+((else_clause) @else)
+((for_statement) @branch)
+((while_statement) @branch)
+((do_statement) @branch)
+((switch_case) @branch)
+((switch_default) @branch)
+((catch_clause) @branch)
+((ternary_expression) @branch)
+((binary_expression operator: ["&&" "||"]) @branch)
+`,
 	},
 	typescript: {
 		function: `\
@@ -103,6 +127,18 @@ export const QUERIES: QueryDict = {
 	(generic_type (type_arguments (type_identifier) @name))
 	(generic_type (type_arguments (generic_type name: (type_identifier) @name)))
 	`,
+		complexity: `\
+((if_statement) @branch)
+((else_clause) @else)
+((for_statement) @branch)
+((while_statement) @branch)
+((do_statement) @branch)
+((switch_case) @branch)
+((switch_default) @branch)
+((catch_clause) @branch)
+((ternary_expression) @branch)
+((binary_expression operator: ["&&" "||"]) @branch)
+`,
 	},
 	tsx: {
 		function: `\
@@ -158,6 +194,15 @@ export const QUERIES: QueryDict = {
 (call_expression function: (identifier) @name) @reference.call
 (call_expression function: (selector_expression field: (field_identifier) @name)) @reference.call
 `,
+		complexity: `\
+((if_statement) @branch)
+((for_statement) @branch)
+((expression_case) @branch)
+((type_case) @branch)
+((default_case) @branch)
+((communication_case) @branch)
+((binary_expression operator: ["&&" "||"]) @branch)
+`,
 	},
 	rust: {
 		function: `\
@@ -182,6 +227,15 @@ export const QUERIES: QueryDict = {
 (call_expression function: (identifier) @name) @reference.call
 (call_expression function: (field_expression field: (field_identifier) @name)) @reference.call
 (call_expression function: (scoped_identifier name: (identifier) @name)) @reference.call
+`,
+		complexity: `\
+((if_expression) @branch)
+((else_clause) @else)
+((for_expression) @branch)
+((while_expression) @branch)
+((loop_expression) @branch)
+((match_arm) @branch)
+((binary_expression operator: ["&&" "||"]) @branch)
 `,
 	},
 	c: {
