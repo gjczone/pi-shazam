@@ -10,7 +10,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { readFileSync, realpathSync, statSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { scanProject, setProjectRoot } from "../core/scanner.js";
 import { _logWarn } from "../core/output.js";
@@ -45,7 +45,12 @@ export function validateProjectRoot(root: string): { ok: boolean; error?: string
 			// USERPROFILE is the Windows equivalent. Fall back to USERPROFILE
 			// before the hardcoded "/home" (which does not exist on Windows).
 			const homeDir = process.env.HOME || process.env.USERPROFILE || (process.platform === "win32" ? "" : "/home");
-			const isUnderHome = realRoot === homeDir || realRoot.startsWith(homeDir + "/");
+			// Normalize both sides so the containment check is platform-agnostic:
+			// on Windows realRoot uses backslashes (C:\Users\me\project) while
+			// homeDir + "/" uses forward slashes, so the startsWith check must
+			// compare resolved, separator-normalized paths (fix #668).
+			const homeResolved = resolve(homeDir);
+			const isUnderHome = realRoot === homeResolved || realRoot.startsWith(homeResolved + sep);
 			if (!isUnderHome) {
 				return { ok: false, error: "PROJECT_ROOT must be within user home directory (PI_SHAZAM_HOME_ONLY=1)" };
 			}
