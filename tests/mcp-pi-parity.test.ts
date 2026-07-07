@@ -9,6 +9,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { scanProject, getEffectiveRoot } from "../core/scanner.js";
 import type { RepoGraph } from "../core/graph.js";
 import type { ExtensionAPI, ExtensionContext, ToolCallEvent } from "../types/pi-extension.js";
+import { execFileSync } from "node:child_process";
+import { appendFileSync } from "node:fs";
 
 // -- Helpers ------------------------------------------------------------
 
@@ -25,6 +27,54 @@ beforeAll(() => {
  */
 function normalize(text: string): string {
 	return text.trim().replace(/\r\n/g, "\n");
+}
+
+/**
+ * Run a git command in the current working directory (the worktree under
+ * test) and return trimmed stdout. Used by the shazam_changes tree-state
+ * fixtures (issue #644).
+ */
+function execGit(args: string[]): string {
+	return execFileSync("git", args, { cwd: process.cwd(), encoding: "utf8" }).trim();
+}
+
+/**
+ * Force the working tree into a known state for the shazam_changes parity
+ * cases (issue #644). Returns a `restore` callback that MUST be invoked in
+ * a `finally` block to undo the mutation.
+ *
+ * - "clean": stash every local change (tracked + untracked, but not ignored
+ *   files like node_modules) so `getGitChangedFiles()` sees an empty diff and
+ *   the tool emits the compact no-op. An already-clean tree is a no-op
+ *   (restore does nothing).
+ * - "dirty": append a marker line to a *tracked* file (README.md). A raw
+ *   `touch` of a brand-new file is intentionally avoided because
+ *   `getGitChangedFiles()` only reports `git diff` (tracked changes), so an
+ *   untracked file would be invisible to the tool.
+ */
+function prepareTree(mode: "clean" | "dirty"): () => void {
+	if (mode === "clean") {
+		const dirty = execGit(["status", "--porcelain"]).length > 0;
+		if (dirty) {
+			execGit(["stash", "push", "--include-untracked", "-m", "pi-parity-clean"]);
+			return () => {
+				try {
+					execGit(["stash", "pop"]);
+				} catch {
+					/* nothing was stashed — ignore */
+				}
+			};
+		}
+		return () => {};
+	}
+	appendFileSync("README.md", "\n<!-- pi-parity-dirty-marker -->\n");
+	return () => {
+		try {
+			execGit(["checkout", "--", "README.md"]);
+		} catch {
+			/* README.md missing/untracked — leave as-is */
+		}
+	};
 }
 
 // -- Mock Pi context ----------------------------------------------------
@@ -234,19 +284,50 @@ describe("MCP-Pi parity contract tests", () => {
 
 	// -- shazam_changes --
 	describe("shazam_changes", () => {
-		it("produces equivalent output for default params", async () => {
-			const piText = await invokePiTool("shazam_changes", {});
-			const mcpText = await invokeMcpTool("shazam_changes", {});
-			// File counts may differ due to scan timing (Pi re-scans, MCP uses cached graph).
-			// Verify that key sections and structure match instead of exact equality.
-			// Both compact no-op (issue #634) and full output share the
-			// `## Change Summary` header. The full output additionally
-			// includes `### Risk Level`; the compact no-op short-circuits
-			// to a single summary line.
-			expect(piText).toContain("## Change Summary");
-			expect(mcpText).toContain("## Change Summary");
-			expect(piText).toMatch(/### Risk Level|No uncommitted changes/);
-			expect(mcpText).toMatch(/### Risk Level|No uncommitted changes/);
+		// Issue #644: split the fragile single assertion into explicit
+		// clean/dirty tree variants so both the compact no-op (#634) and the
+		// full output are verified for exactly the sections they emit.
+		// Revert install-time mutations (e.g. package-lock.json from
+		// `npm install`) so they never leak into assertions or the diff.
+		beforeAll(() => {
+			try {
+				execGit(["checkout", "--", "package-lock.json"]);
+			} catch {
+				/* already clean or absent — ignore */
+			}
+		});
+
+		it.each([
+			{ name: "clean", mode: "clean" as const },
+			{ name: "dirty", mode: "dirty" as const },
+		])("produces $name-tree output via Pi and MCP", async ({ mode }) => {
+			const restore = prepareTree(mode);
+			try {
+				const piText = await invokePiTool("shazam_changes", {});
+				const mcpText = await invokeMcpTool("shazam_changes", {});
+
+				expect(piText).toContain("## Change Summary");
+				expect(mcpText).toContain("## Change Summary");
+
+				if (mode === "clean") {
+					// Compact no-op shortcut (#634): a single summary line with
+					// no full-output-only sections.
+					expect(piText).toContain("No uncommitted changes");
+					expect(mcpText).toContain("No uncommitted changes");
+					expect(piText).not.toContain("### Risk Level");
+					expect(mcpText).not.toContain("### Risk Level");
+					expect(piText).not.toContain("### Git Working Tree Changes");
+					expect(mcpText).not.toContain("### Git Working Tree Changes");
+				} else {
+					// Full output: risk + working-tree change sections present.
+					expect(piText).toContain("### Risk Level");
+					expect(mcpText).toContain("### Risk Level");
+					expect(piText).toContain("### Git Working Tree Changes");
+					expect(mcpText).toContain("### Git Working Tree Changes");
+				}
+			} finally {
+				restore();
+			}
 		});
 
 		it("produces equivalent JSON output", async () => {
