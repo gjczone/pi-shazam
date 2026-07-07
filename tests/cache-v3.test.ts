@@ -13,7 +13,10 @@
  * tests in this file assert round-trip correctness -- edges recover
  * the exact source / target after a serialize -> deserialize cycle.
  * The on-disk size benchmark (V3 < V2 * 0.6) lives in
- * `tests/benchmark-v3.test.ts`.
+ * `tests/benchmark-v3.test.ts`. That file is excluded from the broad
+ * `npm test` run (its timing assertions are load-sensitive and flaky
+ * under full-suite parallel load — issue #650) and is instead executed
+ * by the dedicated `benchmark` CI job in isolation.
  */
 import { describe, it, expect } from "vitest";
 import { createRepoGraph, createSymbol, createEdge, type RepoGraph } from "../core/graph.js";

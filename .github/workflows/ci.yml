@@ -168,7 +168,7 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Run benchmark tests
-        run: npx vitest run tests/benchmark.test.ts
+        run: npx vitest run tests/benchmark.test.ts tests/benchmark-v3.test.ts
 
   security:
     needs: typecheck
