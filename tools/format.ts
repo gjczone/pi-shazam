@@ -139,27 +139,8 @@ export async function executeFormat(
 	if (issues.some((i) => i.kind !== "truncation")) {
 		lines.push("### Recommended Fix Commands");
 		lines.push("");
-		if (formatters.includes("prettier")) {
-			lines.push("- `npx prettier --write .`");
-		}
-		if (formatters.includes("biome")) {
-			lines.push("- `npx @biomejs/biome check --write .`");
-		}
-		if (formatters.includes("eslint")) {
-			lines.push("- `npx eslint --fix .`");
-		}
-		if (formatters.includes("ruff")) {
-			lines.push("- `ruff format .`");
-		}
-		if (formatters.includes("rustfmt")) {
-			lines.push("- `cargo fmt`");
-		}
-		if (formatters.includes("gofmt")) {
-			lines.push("- `gofmt -w .`");
-		}
-		if (formatters.length === 0) {
-			lines.push("- Install formatter: `npm install --save-dev prettier`");
-			lines.push("- Then run: `npx prettier --write .`");
+		for (const cmd of buildRecommendedCommands(formatters)) {
+			lines.push(`- \`${cmd}\``);
 		}
 	}
 
@@ -195,6 +176,10 @@ export interface FormatResult {
 	issueCount: number;
 	issues: FormatIssue[];
 	error?: string;
+	/** Per-formatter apply outcomes. Present only when dryRun is false. */
+	formatResults?: FormatterResult[];
+	/** Suggested manual fix commands mirroring the text output. */
+	recommendedCommands?: string[];
 }
 
 /**
@@ -202,6 +187,26 @@ export interface FormatResult {
  * the analysis data; the existing executeFormatJson was a hand-rolled
  * envelope around the same shape.
  */
+/**
+ * Build the list of suggested manual fix commands for the detected
+ * formatters. Shared by the text executor and the JSON result (#658) so
+ * both surfaces expose the same guidance.
+ */
+export function buildRecommendedCommands(formatters: string[]): string[] {
+	const cmds: string[] = [];
+	if (formatters.includes("prettier")) cmds.push("npx prettier --write .");
+	if (formatters.includes("biome")) cmds.push("npx @biomejs/biome check --write .");
+	if (formatters.includes("eslint")) cmds.push("npx eslint --fix .");
+	if (formatters.includes("ruff")) cmds.push("ruff format .");
+	if (formatters.includes("rustfmt")) cmds.push("cargo fmt");
+	if (formatters.includes("gofmt")) cmds.push("gofmt -w .");
+	if (formatters.length === 0) {
+		cmds.push("npm install --save-dev prettier");
+		cmds.push("npx prettier --write .");
+	}
+	return cmds;
+}
+
 export async function buildFormatResult(
 	graph: RepoGraph,
 	projectRoot: string,
@@ -227,6 +232,17 @@ export async function buildFormatResult(
 
 	const issues = await scanFormatIssues(projectRoot, targetFiles, graph);
 
+	// #658: JSON mode must behave like the text path. In apply mode the
+	// text executor calls runFormatters and writes files; the JSON object
+	// must do the same instead of only analyzing. Skipping this left an MCP
+	// agent believing fixes were applied when nothing was written.
+	let formatResults: FormatterResult[] | undefined;
+	let recommendedCommands: string[] | undefined;
+	if (!dryRun) {
+		formatResults = runFormatters(projectRoot, formatters, options.file);
+		recommendedCommands = buildRecommendedCommands(formatters);
+	}
+
 	return {
 		kind: "format",
 		dryRun,
@@ -234,6 +250,8 @@ export async function buildFormatResult(
 		formatters,
 		issueCount: issues.length,
 		issues: issues.slice(0, 50),
+		formatResults,
+		recommendedCommands,
 	};
 }
 
@@ -505,7 +523,7 @@ async function scanFormatIssues(projectRoot: string, files: string[], _graph: Re
 
 // -- Formatter execution ------------------------------------------------------
 
-interface FormatterResult {
+export interface FormatterResult {
 	formatter: string;
 	summary: string;
 	error?: string;

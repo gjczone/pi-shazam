@@ -61,10 +61,11 @@ export function registerVerify(pi: ExtensionAPI): void {
 		description: `\
 		After every write or edit, run this to confirm no errors were
 		introduced. Runs LSP diagnostics (type errors, warnings), then graph
-		analysis (git diff, risk level, orphan detection, graph diffs).
+		analysis (git diff, risk level, orphan detection).
 		Verdict: PASS / WARN / FAIL. Use --quick for a fast git-change-only
 		check (~2s). Use --lspOnly for diagnostics only. Use --preCommit for
-		stricter thresholds. Always performs a fresh scan (cache bypassed).`,
+		stricter thresholds. Relies on the incremental mtime scan -- the
+		on-disk graph cache is reused, not bypassed.`,
 		params: Type.Object({
 			quick: Type.Optional(Type.Boolean()),
 			lspOnly: Type.Optional(Type.Boolean()),

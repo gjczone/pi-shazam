@@ -213,8 +213,12 @@ export function dispatchImpact(graph: RepoGraph, params: Record<string, unknown>
 
 	// Symbol mode: call chain analysis
 	if (inferred.mode === "symbol") {
-		// #447: Record that impact --symbol was run so the rename gate is satisfied
-		recordCallChain(symbolName!);
+		// #447/#666: Record that impact --symbol was run so the rename gate
+		// is satisfied -- but only for a symbol that actually resolves in the
+		// graph. Recording a non-existent name would let shazam_rename_symbol
+		// pass its safety gate via a phantom call (reopens #569).
+		const resolved = graph.nameIndex?.get(symbolName!);
+		if (resolved && resolved.length > 0) recordCallChain(symbolName!);
 		const flat = (params.flat as boolean) ?? false;
 		if (flat) {
 			const refs = getFlatReferences(graph, symbolName!, direction);
