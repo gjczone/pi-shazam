@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **V3.1 cache: string table for symbol ID dedup (#647)**: The on-disk
+  graph cache (`core/cache.ts` V3 format) now stores each unique
+  symbol ID exactly once in a top-level `string_table`; every edge's
+  `source` / `target` is referenced by int32 index. On a 1000-symbol
+  graph with ~3 edges per node this brings the V3 cache to ~53% of
+  the V2 size (down from ~68% in V3.0), close to the plan's 50%
+  target. The on-disk magic header bumped from `SHA\3` to `SHA\4`;
+  old V3.0 caches fall through to the V2 JSON path on load (which
+  fails to parse) and the scanner rebuilds them on the next scan.
+  Schema changes are additive and live in `core/graph.proto` (source
+  of truth) + `core/proto-schema.ts` (JSON runtime mirror).
+
+- **V3.2 cache: kind int enum + silent in-place upgrade (#647 follow-ups
+  D + E)**: Edge `kind` is encoded as int32 (1 byte varint) instead
+  of string (5-7 bytes per row) — on a real-world self-scan this
+  shaves another ~30-50 KB on top of V3.1. The on-disk magic header
+  bumped from `SHA\4` to `SHA\5`. `loadGraphCache` now auto-upgrades
+  legacy V3.0 (`SHA\3`, no string table) and V3.1 (`SHA\4`, kind as
+  string) caches to V3.2 in place on first read, so users on v0.27.0
+  (PR-G) and the just-shipped V3.1 release of this branch pay **no
+  re-scan cost** on upgrade. The V3.1-specific ProtoBuf schema
+  (`kind: string`) lives in `core/proto-schema.ts` as a separate
+  `Root` so the in-place decoder can interpret the legacy wire
+  format; the V3.2 writer always produces the canonical int32 form.
+
+### Added
+
+- **ProtoBuf schema mirror consistency test (`tests/cache-proto-schema.test.ts`)**:
+  Parses `core/graph.proto` text and asserts the field set, IDs,
+  types, and `repeated` flags match the JSON mirror in
+  `core/proto-schema.ts`. Catches drift between the two schema
+  sources before it can corrupt a cache file.
+
+- **V3.0 / V3.1 legacy deserializers** (`deserializeGraphV3V0`,
+  `deserializeGraphV3V1`, `+WithMetadata` variants) plus
+  `encodeGraphPayloadV31` / `decodeGraphPayloadV31` for tests.
+  Public surface for the in-place converter; kept so the load
+  path can decode legacy wire formats.
+
+- **Real-world size sanity check in `tests/benchmark-v3.test.ts`**:
+  Documented the V3.1 ratio on a self-scan of pi-shazam (3499
+  symbols, 1264 symbol-level edges, 7236 file-level rows): V3.1
+  is 96% of V2 on a real project (vs. 53% on the edge-heavy
+  synthetic benchmark), because real projects spend most bytes
+  on the JSON metadata + non-deduped file-level rows.
+
 ## [0.26.0] - 2026-07-03
 
 ### Added

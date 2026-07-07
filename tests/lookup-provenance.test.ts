@@ -41,7 +41,11 @@ function makeSymbol(
 		visibility: "exported",
 		signature: "function " + opts.name,
 		pagerank: 0.5,
-		docstring: undefined,
+		// `Symbol.docstring` is `string` in core/graph.ts (not
+		// optional). The test deliberately leaves it empty to
+		// exercise the "no docstring" rendering path; cast through
+		// `unknown` to keep the fixture terse.
+		docstring: undefined as unknown as string,
 	};
 }
 

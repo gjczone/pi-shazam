@@ -151,13 +151,21 @@ describe("Pi rename_symbol customExecute error responses set isError:true (#545)
 	it("missing symbol returns isError:true", async () => {
 		const result = await tool.execute("id", { symbol: "", newName: "newName" }, undefined, undefined, DUMMY_CTX);
 		expect(result.isError).toBe(true);
-		expect(result.content[0].text).toContain("Error");
+		// `result.content[0]` is `TextContent | ImageContent` in the
+		// MCP SDK's typing; the rename tool only ever emits text
+		// content, so narrowing with a type guard keeps the test
+		// honest without an `as` cast.
+		const first = result.content[0];
+		expect(first?.type).toBe("text");
+		expect((first as { text: string }).text).toContain("Error");
 	});
 
 	it("missing newName returns isError:true", async () => {
 		const result = await tool.execute("id", { symbol: "oldName", newName: "" }, undefined, undefined, DUMMY_CTX);
 		expect(result.isError).toBe(true);
-		expect(result.content[0].text).toContain("Error");
+		const first = result.content[0];
+		expect(first?.type).toBe("text");
+		expect((first as { text: string }).text).toContain("Error");
 	});
 
 	it("[BLOCKED] safety gate returns isError:true", async () => {
@@ -170,6 +178,8 @@ describe("Pi rename_symbol customExecute error responses set isError:true (#545)
 			DUMMY_CTX,
 		);
 		expect(result.isError).toBe(true);
-		expect(result.content[0].text).toContain("[BLOCKED]");
+		const first = result.content[0];
+		expect(first?.type).toBe("text");
+		expect((first as { text: string }).text).toContain("[BLOCKED]");
 	});
 });
