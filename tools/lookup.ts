@@ -466,12 +466,20 @@ interface DocstringCacheEntry {
 }
 const _docstringCache = new Map<string, DocstringCacheEntry>();
 
-function _extractDocstring(filePath: string, symbolLine: number): string | undefined {
+// Exported for unit testing the docstring-cache stat-failure logging (issue #664).
+export function _extractDocstring(filePath: string, symbolLine: number): string | undefined {
 	try {
 		let mtime: number;
 		try {
 			mtime = statSync(filePath).mtimeMs;
-		} catch (_e) {
+		} catch (err) {
+			// ENOENT is expected (file gone between scan and lookup) -- the
+			// mtime=0 fallback keeps graceful degradation. Any other error
+			// (EACCES/EPERM, transient I/O) is a real problem that must be
+			// surfaced to the operator (fix #664); do not silently swallow it.
+			if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+				_logWarn("_extractDocstring", `statSync failed for ${filePath}`, err);
+			}
 			mtime = 0;
 		}
 

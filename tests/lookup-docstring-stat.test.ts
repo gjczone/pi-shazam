@@ -5,6 +5,11 @@
  *
  * The fix logs non-ENOENT stat failures via _logWarn while keeping the
  * ENOENT -> mtime=0 fallback silent (the file is expected to be gone).
+ *
+ * These tests call _extractDocstring directly so they do not depend on the
+ * global project scan, getEffectiveRoot(), or validatePathInProject() -- all
+ * of which vary by environment and made the earlier integration test flaky
+ * on CI.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
@@ -19,32 +24,14 @@ vi.mock("node:fs", async (importOriginal) => {
 	return { ...actual, statSync: vi.fn(actual.statSync) };
 });
 
-// Force the LSP-hover branch to be skipped so _extractDocstring (the target
-// of fix #664) is actually reached. Return null so no hover is produced and
-// the docstring fallback runs; lspDocumentSymbols(null,...) safely no-ops.
-vi.mock("../tools/_context.js", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../tools/_context.js")>();
-	return {
-		...actual,
-		getLspManager: () => null,
-	};
-});
-
-import { scanProject } from "../core/scanner.js";
-import type { RepoGraph } from "../core/graph.js";
-import { executeLookupAsync } from "../tools/lookup.js";
 import { statSync as statSyncMock } from "node:fs";
-import { join } from "node:path";
+import { _extractDocstring } from "../tools/lookup.js";
 
-let graph: RepoGraph;
-// A symbol guaranteed to exist in the graph so the lookup reaches the
-// docstring-extraction path (_getHoverInfo -> _extractDocstring).
-const TEST_SYMBOL = "_logWarn";
+const TEST_FILE = "/nonexistent/proj/core/output.ts";
 
 beforeEach(() => {
 	logWarn.mockClear();
 	vi.mocked(statSyncMock).mockRestore();
-	graph = scanProject(".");
 });
 
 afterEach(() => {
@@ -58,9 +45,10 @@ describe("issue #664: docstring cache logs non-ENOENT stat failures", () => {
 			throw accessErr;
 		});
 
-		await executeLookupAsync(graph, TEST_SYMBOL, join("core", "output.ts"), "both", false);
+		// The stat failure must be surfaced (fix #664) even though the
+		// subsequent read also fails -- the log happens before any read.
+		_extractDocstring(TEST_FILE, 1);
 
-		// The docstring-cache stat failure must be surfaced (fix #664).
 		const messages = logWarn.mock.calls.map((c) => String(c[1])).join(" ");
 		expect(messages).toContain("statSync failed for");
 	});
@@ -71,7 +59,7 @@ describe("issue #664: docstring cache logs non-ENOENT stat failures", () => {
 			throw notFound;
 		});
 
-		await executeLookupAsync(graph, TEST_SYMBOL, join("core", "output.ts"), "both", false);
+		_extractDocstring(TEST_FILE, 1);
 
 		// The ENOENT fallback must stay silent for the docstring stat.
 		const messages = logWarn.mock.calls.map((c) => String(c[1])).join(" ");
