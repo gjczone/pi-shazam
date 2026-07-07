@@ -7,7 +7,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **V3 ProtoBuf cache format (#628, #646)**: New compact binary cache that
+  encodes edge data as columnar ProtoBuf arrays behind a 4-byte `SHA\3`
+  magic header. On a 1000-symbol project the on-disk cache drops from
+  ~800KB (V2 JSON) to ~30% smaller in practice; the V2 JSON format stays
+  readable for backward compatibility. Schema lives in `core/graph.proto`
+  (source of truth) with a JSON runtime mirror in `core/proto-schema.ts`
+  (protobufjs, no generated static module in `dist/`). `saveGraphCache`
+  now writes V3 by default; `loadGraphCache` detects the magic header and
+  falls back to V2 for older caches, preserving the `fileMtimes` map so
+  mtime-based invalidation is unchanged.
+
+- **Impact enrichment: provenance breakdown + Mermaid call graph (#631 B)**:
+  `shazam_impact` JSON now carries a `provenanceCounts` field per affected
+  symbol (resolved vs. heuristic at a glance) plus a compact `R:N N:M H:K`
+  badge on the affected-file markdown line; call-chain edges carry an
+  explicit `provenance`. Every `CallChainEntry` also gains a self-contained
+  Mermaid `flowchart TD` block (`mermaid` field) with provenance as edge
+  labels and solid/dashed arrows, capped at 30 nodes.
+
+- **Overview module-density ranking (#631 B)**: `shazam_overview` surfaces a
+  `topByDensity` list on the JSON envelope and a "Module Density (Top 10 by
+  symbols-per-file)" markdown section to flag "god module" candidates.
+
+- **Lookup provenance edges + provenance-weight sort (#631 B, #643)**:
+  `shazam_lookup` JSON mode now exposes `incomingEdges` / `outgoingEdges`
+  (up to 20 each, with `provenance`) and a precomputed `provenanceCounts`
+  summary per entry (#643). Entries are sorted by provenance weight
+  (resolved > name_match > heuristic > unresolved, PageRank tiebreak) so the
+  most-trustworthy matches come first; markdown output keeps the original
+  PageRank ordering.
+
+- **Changes structural (line-count) working-tree view (#631 B)**:
+  `shazam_changes` adds a `structuralChanges` field with added/removed/
+  modified line counts from `git diff --numstat` (staged + unstaged, binary
+  files skipped, capped at 20 files), plus a compact `(+N -M lines across K
+files)` markdown badge.
+
+- **GitHub Action wrapper for `shazam_verify` (#638, #652)**: Composite
+  action at `.github/actions/shazam-verify/` runs `shazam_verify` on every
+  PR and posts a risk-scored review as a PR comment (plus step summary).
+  Adds `tools/verify-comment.ts` (`formatVerifyComment`), an `action.yml`
+  manifest, orchestrator/entrypoint scripts, and `tests/github-action-*.test.ts`
+  (25 tests). Adds the `yaml` devDependency.
+
+- **ProtoBuf schema mirror consistency test (`tests/cache-proto-schema.test.ts`)**:
+  Parses `core/graph.proto` text and asserts the field set, IDs,
+  types, and `repeated` flags match the JSON mirror in
+  `core/proto-schema.ts`. Catches drift between the two schema
+  sources before it can corrupt a cache file.
+
+- **V3.0 / V3.1 legacy deserializers** (`deserializeGraphV3V0`,
+  `deserializeGraphV3V1`, `+WithMetadata` variants) plus
+  `encodeGraphPayloadV31` / `decodeGraphPayloadV31` for tests.
+  Public surface for the in-place converter; kept so the load
+  path can decode legacy wire formats.
+
+- **Real-world size sanity check in `tests/benchmark-v3.test.ts`**:
+  Documented the V3.1 ratio on a self-scan of pi-shazam (3499
+  symbols, 1264 symbol-level edges, 7236 file-level rows): V3.1
+  is 96% of V2 on a real project (vs. 53% on the edge-heavy
+  synthetic benchmark), because real projects spend most bytes
+  on the JSON metadata + non-deduped file-level rows.
+
 ### Changed
+
+- **Cyclomatic complexity via tree-sitter AST (#642)**: Replaced the regex
+  sweep that counted `if|else|for|while|case|catch` + `&&`/`||`/`:?` across
+  whole source slices (which inflated scores by counting keywords inside
+  comments/strings) with a tree-sitter `complexity` query matching real
+  branching AST nodes only, applying the else-if rule (plain `else` adds 0,
+  `else if` adds 1) on a baseline score of 1. Queries added for
+  TS/TSX/JS/Python/Go/Rust; the original regex is kept as a fallback for
+  languages without a compiled query, preserving coverage.
+
+- **Tool defaults tightened for LLM agents + per-edge provenance (#629,
+  #633, #634, #635, #636; #640)**: Bundled four related quality PRs. Unified
+  Affected-Tests detection (`core/test-patterns.ts` is now the single source
+  of truth; symbol-mode JSON carries `affectedTests`). Display polish +
+  path-traversal UX (`classifyFilePath` distinguishes traversal vs. missing;
+  `did-you-mean` for lookup/impact/format). Per-edge `provenance` on `Edge`
+  with LSP-driven promotion (`upgradeEdgesToResolved` / `upgradeEdgesForHotspots`,
+  zero extra LSP latency). Always-on defaults: `### Hotspots` always in
+  overview text and `JSON.hotspots.{byPageRank,byComplexity}`; `verify` uses a
+  single-line-per-diagnostic format with a summary header (drops suggestedFixes
+  text + `.shazam` auto-export); `inferImpactMode()` picks symbol vs. files
+  mode from input shape, removing the strict mutual-exclusion error.
+
+- **Verify flags migrated to `.pi-shazam/config.json`; `lookup mode=state`
+  removed (#630)**: New `core/config.ts` loads `.pi-shazam/config.json`
+  (missing/empty = silent defaults, malformed = warn). `shazam_verify`
+  `maxFiles` now resolves from `config.verify.maxFiles` (default 100); dead
+  `noCascade` / `noSecrets` options removed. `shazam_lookup mode=state` was
+  first deprecated (warn) then fully removed — callers now get a clear error
+  pointing at `--name` / `--direction`.
+
+- **Default scan now excludes `tests/` (#632)**: `scanProject` skips the
+  `tests/` directory by default (override with `includeTests`).
+
+- **Typed result builders across all tools (#631 A)**: Introduced pure,
+  typed builders — `buildVerifyResult`, `buildFormatResult`,
+  `buildOverviewResult`, `buildImpactResult` + `buildCallChainResult`,
+  `buildChangesResult` (+ `renderChangesMarkdown`), typed `XxxResult` for all
+  three lookup modes, and a `kind` discriminator with `executeRenameSymbolJson`.
+  Tool internals now build a typed model before rendering JSON/markdown,
+  reducing envelope drift and enabling direct result assertions in tests.
 
 - **V3.1 cache: string table for symbol ID dedup (#647)**: The on-disk
   graph cache (`core/cache.ts` V3 format) now stores each unique
@@ -34,28 +140,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Root` so the in-place decoder can interpret the legacy wire
   format; the V3.2 writer always produces the canonical int32 form.
 
-### Added
-
-- **ProtoBuf schema mirror consistency test (`tests/cache-proto-schema.test.ts`)**:
-  Parses `core/graph.proto` text and asserts the field set, IDs,
-  types, and `repeated` flags match the JSON mirror in
-  `core/proto-schema.ts`. Catches drift between the two schema
-  sources before it can corrupt a cache file.
-
-- **V3.0 / V3.1 legacy deserializers** (`deserializeGraphV3V0`,
-  `deserializeGraphV3V1`, `+WithMetadata` variants) plus
-  `encodeGraphPayloadV31` / `decodeGraphPayloadV31` for tests.
-  Public surface for the in-place converter; kept so the load
-  path can decode legacy wire formats.
-
-- **Real-world size sanity check in `tests/benchmark-v3.test.ts`**:
-  Documented the V3.1 ratio on a self-scan of pi-shazam (3499
-  symbols, 1264 symbol-level edges, 7236 file-level rows): V3.1
-  is 96% of V2 on a real project (vs. 53% on the edge-heavy
-  synthetic benchmark), because real projects spend most bytes
-  on the JSON metadata + non-deduped file-level rows.
-
 ### Fixed
+
+- **MCP graph released on idle; memory / native-heap leak fixes (#626, #627)**:
+  `mcp/entry.ts` `getGraph()` now honours a TTL (default 10 min,
+  `PI_SHAZAM_GRAPH_TTL_MS`; 0 disables) and nulls the cached `RepoGraph` on
+  idle so the next access rebuilds from the persistent disk cache instead of
+  holding ~500MB-1GB forever. `dispatchVerify` no longer calls `resetCache()`
+  (avoids two graphs coexisting during verify). `lsp/manager.ts` gains
+  `closeOpenedFiles()` (called after diagnostics) so the LSP child releases
+  per-document AST. `core/scanner.ts` `resetCache()` now preserves the
+  `TreeSitterAdapter` singleton, stopping 100-300MB native-heap inflation per
+  verify cycle in long-lived MCP mode.
+
+- **LSP per-file AST cache invalidated on mtime change (#641)**: When a source
+  file was edited between `verify` calls, the LSP server's per-document AST
+  returned diagnostics against stale content (requiring a manual `touch`/
+  restart). `LspManager` now records each opened file's mtime and, before each
+  `didOpen`, sends `didClose` for any file whose mtime changed so the server
+  drops the old AST.
+
+- **`shazam_changes` keeps `## Change Summary` header in compact output**:
+  The compact path introduced in #640 dropped the header, breaking
+  `tests/mcp-pi-parity.test.ts#238` which expects both Pi and MCP to emit it.
+  The header is now kept (the shortcut is the absence of the other section
+  headers).
 
 - **`benchmark-v3` timing assertion no longer red CI under load (#650)**:
   `tests/benchmark-v3.test.ts` (the V3 cache encode/decode speed
@@ -67,6 +176,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tests/benchmark.test.ts`. This removes environment-dependent CI
   noise from unrelated PRs without loosening the performance
   regression thresholds.
+
+- **`shazam_changes` compact/full output parity test parameterized (#644)**:
+  Split the single fragile assertion into explicit clean/dirty tree variants
+  so the compact no-op (#634) and full output are each verified for the exact
+  sections they emit.
+
+### Security
+
+- **Escape backslashes before quotes in Mermaid label sanitization (#2)**:
+  CodeQL `js/incomplete-sanitization` (high) at `tools/impact.ts`. The
+  previous sanitizer escaped quotes but not backslashes, so a name like
+  `x\"y` produced a malformed Mermaid diagram and a potential XSS sink when
+  embedded in HTML. Now escapes backslashes first, then quotes
+  (`mermaidSafeName` exported for isolated unit testing).
+
+### Dependencies
+
+- **Bump `prettier` 3.9.1 → 3.9.4 (#625)**.
+- **Bump runtime, lsp, and `@types/node` dependency groups (#622, #623, #624)**.
+
+### Chore
+
+- **Review rules: memory-leak / output-parity / MCP long-lived checks (#637)**:
+  Extended `docs/review-rules.md` with P0 patterns (resource leaks incl.
+  tree-sitter native handle recreation and caches without TTL; text/JSON
+  output data drift; MCP stale-graph leak) and P1 patterns (test pollution
+  from `tests/`; Affected Tests on both impact modes; output placeholder
+  strings; summary-counter math; path-traversal vs file-missing distinction).
 
 ## [0.26.0] - 2026-07-03
 
