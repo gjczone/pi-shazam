@@ -157,6 +157,10 @@ export function languagesForSuffixes(suffixes: string[]): string[] {
 
 // -- LSP timeouts by language -------------------------------------------------
 
+// Windows LSP server spawn is slower (process creation + MSYS2 path resolution).
+// Scale timeouts by 1.5x on win32 to avoid cold-start timeouts (issue #676).
+const PLATFORM_TIMEOUT_MULTIPLIER = process.platform === "win32" ? 1.5 : 1;
+
 const LSP_TIMEOUT_BY_LANGUAGE: Record<string, number> = {
 	typescript: 15_000,
 	python: 12_000,
@@ -171,7 +175,10 @@ export const DEFAULT_LSP_TIMEOUT_MS = 8_000;
 
 /**
  * Get the recommended LSP timeout for a language (in milliseconds).
+ * On Windows, timeouts are scaled by 1.5x to account for slower process
+ * spawn and MSYS2 path resolution (issue #676).
  */
 export function lspTimeoutFor(language: string): number {
-	return LSP_TIMEOUT_BY_LANGUAGE[language] ?? DEFAULT_LSP_TIMEOUT_MS;
+	const base = LSP_TIMEOUT_BY_LANGUAGE[language] ?? DEFAULT_LSP_TIMEOUT_MS;
+	return Math.round(base * PLATFORM_TIMEOUT_MULTIPLIER);
 }
