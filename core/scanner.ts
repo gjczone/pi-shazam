@@ -17,6 +17,7 @@ import { readFileAdaptive, FileTooLargeError } from "./encoding.js";
 import { getProjectCacheDir, saveGraphCache, loadGraphCache } from "./cache.js";
 import { SKIP_DIRS, isTestFile } from "./filter.js";
 import { resolveImport, clearExistsCache } from "./resolve-import.js";
+import { normalizePathInput } from "./path-utils.js";
 import { _logWarn } from "./output.js";
 
 // -- Constants ----------------------------------------------------------------
@@ -58,7 +59,8 @@ let _projectRootOverride: string | null = null;
  * Called from index.ts when Pi's ctx.cwd differs from process.cwd().
  */
 export function setProjectRoot(root: string): void {
-	_projectRootOverride = resolve(root);
+	// #673: normalize Git-Bash /c/foo and WSL /mnt/c/foo to C:\foo on Windows.
+	_projectRootOverride = resolve(normalizePathInput(root));
 }
 
 /**

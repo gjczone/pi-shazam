@@ -63,7 +63,12 @@ export function getProjectCacheDir(projectPath: string): string {
 	// #584: Strip both Unix (/) and Windows (\) trailing separators
 	const canonical = projectPath.replace(/[\\/]$/, "");
 	const hash = createHash("sha256").update(canonical).digest("hex").slice(0, 8);
-	const projectName = canonical.split("/").pop() || "unknown";
+	// Cross-platform-safe project name: Node's path.basename mis-parses
+	// Windows drive-prefixed backslash paths (e.g. `C:\a\b\proj` is treated
+	// as a relative `C:` path and yields garbage), so strip the drive prefix
+	// and unify separators to `/` before taking the last segment.
+	const normalized = canonical.replace(/^[A-Za-z]:/, "").replace(/\\/g, "/");
+	const projectName = normalized.split("/").pop() || "unknown";
 	const cacheDir = join(CACHE_ROOT, `${projectName}_${hash}`);
 	try {
 		mkdirSync(cacheDir, { recursive: true });

@@ -14,6 +14,7 @@ import type { LspDiagnostic, LspLocation } from "./client.js";
 import { LSP_SERVER_SPECS, languageForSuffix, lspTimeoutFor } from "./servers.js";
 import { SKIP_DIRS } from "../core/filter.js";
 import { readFileAdaptiveAsync } from "../core/encoding.js";
+import { normalizePathInput } from "../core/path-utils.js";
 import { _logWarn } from "../core/output.js";
 
 // -- Helpers ------------------------------------------------------------------
@@ -204,6 +205,8 @@ export function detectProjectLanguages(
  * looking for root markers.
  */
 function detectWorkspaceRoot(projectRoot: string, filePath: string | null, language: string): string {
+	// #673: normalize Git-Bash /c/foo and WSL /mnt/c/foo to C:\foo on Windows.
+	filePath = filePath ? normalizePathInput(filePath) : filePath;
 	const root = resolve(projectRoot);
 
 	// Ensure filePath is within project root; prevent escaping to parent directories
@@ -596,7 +599,8 @@ export class LspManager {
 	 * No-op if the resolved path is unchanged.
 	 */
 	setProjectRoot(newRoot: string): void {
-		const resolved = resolve(newRoot);
+		// #673: normalize Git-Bash /c/foo and WSL /mnt/c/foo to C:\foo on Windows.
+		const resolved = resolve(normalizePathInput(newRoot));
 		if (resolved !== this.projectRoot) {
 			this.projectRoot = resolved;
 			this._openedFilePaths.clear();

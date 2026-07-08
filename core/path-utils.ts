@@ -26,6 +26,64 @@ import { existsSync, realpathSync } from "node:fs";
 import { relative, resolve, isAbsolute } from "node:path";
 import { getEffectiveRoot } from "./scanner.js";
 
+// Issue #673: Windows/Git-Bash path normalization.
+//
+// On Windows, a Git-Bash user passes `/c/Users/foo` and a WSL user passes
+// `/mnt/c/Users/foo`. Node's `realpathSync`/`statSync` treat `/c/...` as a
+// relative path and throw ENOENT. `normalizePathInput` translates both
+// styles to `C:\Users\foo` before any fs call touches them.
+//
+// The target runtime is Windows-native (including `.exe` packaging), so
+// all user-supplied paths MUST be normalized at ingress. Call this before
+// `realpathSync`/`statSync`/`lspawn` on any user input.
+
+/**
+ * Normalize a user-supplied path for the current platform.
+ *
+ * On win32, translates Git-Bash `/c/foo` and WSL `/mnt/c/foo` to `C:\foo`.
+ * On other platforms the input is returned unchanged.
+ *
+ * See `normalizePathInputForPlatform` for the platform-parameterized core.
+ */
+export function normalizePathInput(input: string): string {
+	return normalizePathInputForPlatform(input, process.platform);
+}
+
+/**
+ * Platform-parameterized core of `normalizePathInput`. Exposed so tests can
+ * exercise the Git-Bash/WSL translation logic on every CI platform, not
+ * just Windows runners.
+ *
+ * Translation rules (win32 only; no-op elsewhere):
+ *   - `/c/Users/foo`     (Git-Bash) -> `C:\Users\foo`
+ *   - `/mnt/c/Users/foo` (WSL)      -> `C:\Users\foo`
+ *   - `C:\Users\foo`                -> unchanged
+ *   - `src/foo.ts`                  -> unchanged (relative)
+ *   - `/home/user/proj`             -> unchanged (not a drive pattern)
+ *
+ * The first path segment must be exactly one ASCII letter (optionally
+ * preceded by `/mnt/`) to be treated as a drive letter. This prevents
+ * `/home/...` and `/usr/...` from being misinterpreted as drives.
+ */
+export function normalizePathInputForPlatform(input: string, platform: string): string {
+	if (platform !== "win32") return input;
+	// Git-Bash style: /<drive>/<rest>
+	const gitBash = /^\/([a-zA-Z])\/(.*)$/.exec(input);
+	if (gitBash) {
+		const drive = gitBash[1]!.toUpperCase();
+		const rest = gitBash[2]!.replace(/\//g, "\\");
+		return `${drive}:\\${rest}`;
+	}
+	// WSL style: /mnt/<drive>/<rest>
+	const wsl = /^\/mnt\/([a-zA-Z])\/(.*)$/.exec(input);
+	if (wsl) {
+		const drive = wsl[1]!.toUpperCase();
+		const rest = wsl[2]!.replace(/\//g, "\\");
+		return `${drive}:\\${rest}`;
+	}
+	return input;
+}
+
 export type FilePathError =
 	| { kind: "traversal"; path: string; message: string }
 	| { kind: "missing"; path: string; suggestion?: string }
@@ -97,6 +155,8 @@ export function validatePathInProjectCore(rawPath: string, projectRoot: string =
  *      still gates the final `"ok"` outcome.
  */
 export function classifyFilePath(relPath: string, projectRoot: string): FilePathError {
+	// #673: normalize Git-Bash /c/foo and WSL /mnt/c/foo to C:\foo on Windows.
+	relPath = normalizePathInput(relPath);
 	// Use `resolve` (not `join`) so absolute paths like `/etc/shadow`
 	// short-circuit to themselves rather than being appended to the root.
 	const absPath = resolve(projectRoot, relPath);

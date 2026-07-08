@@ -13,6 +13,7 @@ import { readFileSync, realpathSync, statSync } from "node:fs";
 import { resolve, dirname, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { scanProject, setProjectRoot } from "../core/scanner.js";
+import { normalizePathInput } from "../core/path-utils.js";
 import { _logWarn } from "../core/output.js";
 import type { RepoGraph } from "../core/graph.js";
 import { LspManager, detectProjectLanguages } from "../lsp/manager.js";
@@ -31,8 +32,11 @@ import { registerAllTools } from "./tools.js";
  * Returns { ok: true } on success, or { ok: false, error } on failure.
  */
 export function validateProjectRoot(root: string): { ok: boolean; error?: string; realRoot?: string } {
+	// #673: normalize Git-Bash /c/foo and WSL /mnt/c/foo to C:\foo before
+	// realpathSync so Node can resolve the path on Windows.
+	const normalizedRoot = normalizePathInput(root);
 	try {
-		const realRoot = realpathSync(root);
+		const realRoot = realpathSync(normalizedRoot);
 		const stats = statSync(realRoot);
 		if (!stats.isDirectory()) {
 			return { ok: false, error: "PROJECT_ROOT must be a directory" };
