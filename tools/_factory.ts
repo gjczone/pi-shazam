@@ -25,6 +25,7 @@ import { truncateOutput, _logWarn } from "../core/output.js";
 import { setLastToolTiming } from "./_context.js";
 import { resolve, relative, isAbsolute } from "node:path";
 import { realpathSync } from "node:fs";
+import { normalizePathInput } from "../core/path-utils.js";
 
 // -- Path traversal guard ----------------------------------------------------
 
@@ -51,7 +52,9 @@ export function isPathInRoot(target: string, root: string): boolean {
  * Returns false for paths outside the project scope.
  */
 export function validatePathInProject(rawPath: string, projectRoot: string = getEffectiveRoot()): boolean {
-	const resolved = resolve(projectRoot, rawPath);
+	// #673: normalize Git-Bash /c/foo and WSL /mnt/c/foo to C:\foo on Windows.
+	const safePath = normalizePathInput(rawPath);
+	const resolved = resolve(projectRoot, safePath);
 	const rootResolved = resolve(projectRoot);
 	// Containment check: platform-agnostic via relative(), not startsWith(root + "/").
 	if (!isPathInRoot(resolved, rootResolved)) return false;

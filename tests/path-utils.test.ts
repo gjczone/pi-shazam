@@ -8,7 +8,14 @@
  * feedback ("did you mean X?") for typos but a hard stop for traversal.
  */
 import { describe, it, expect } from "vitest";
-import { classifyFilePath, suggestSimilarFile, levenshtein, isPathInRoot } from "../core/path-utils.js";
+import {
+	classifyFilePath,
+	suggestSimilarFile,
+	levenshtein,
+	isPathInRoot,
+	normalizePathInput,
+	normalizePathInputForPlatform,
+} from "../core/path-utils.js";
 
 const ROOT = process.cwd();
 
@@ -129,5 +136,101 @@ describe("isPathInRoot", () => {
 
 	it("rejects parent paths", () => {
 		expect(isPathInRoot(ROOT + "/..", ROOT)).toBe(false);
+	});
+});
+
+// Issue #673: Windows/Git-Bash path normalization.
+// On Windows, a Git-Bash user passes `/c/Users/foo` and a WSL user passes
+// `/mnt/c/Users/foo`. Node's `realpathSync`/`statSync` cannot resolve these
+// (they treat `/c/...` as a relative path and throw ENOENT). `normalizePathInput`
+// translates both styles to `C:\Users\foo` on win32 and is a no-op elsewhere.
+describe("normalizePathInput", () => {
+	it("leaves relative paths unchanged on every platform", () => {
+		expect(normalizePathInput("src/foo.ts")).toBe("src/foo.ts");
+		expect(normalizePathInput("./src/foo.ts")).toBe("./src/foo.ts");
+	});
+
+	it("leaves empty input unchanged", () => {
+		expect(normalizePathInput("")).toBe("");
+	});
+
+	it("leaves Windows drive paths unchanged on every platform", () => {
+		// `C:\foo` and `C:/foo` do not match Git-Bash or WSL patterns, so
+		// they pass through verbatim regardless of host platform.
+		expect(normalizePathInput("C:\\Users\\foo")).toBe("C:\\Users\\foo");
+		expect(normalizePathInput("C:/Users/foo")).toBe("C:/Users/foo");
+	});
+
+	it("translates Git-Bash /c/foo to C:\\foo on Windows, no-op elsewhere", () => {
+		if (process.platform === "win32") {
+			expect(normalizePathInput("/c/Users/foo")).toBe("C:\\Users\\foo");
+			expect(normalizePathInput("/C/Users/foo")).toBe("C:\\Users\\foo");
+			expect(normalizePathInput("/d/proj/src/bar.ts")).toBe("D:\\proj\\src\\bar.ts");
+		} else {
+			expect(normalizePathInput("/c/Users/foo")).toBe("/c/Users/foo");
+		}
+	});
+
+	it("translates WSL /mnt/c/foo to C:\\foo on Windows, no-op elsewhere", () => {
+		if (process.platform === "win32") {
+			expect(normalizePathInput("/mnt/c/Users/foo")).toBe("C:\\Users\\foo");
+			expect(normalizePathInput("/mnt/C/proj")).toBe("C:\\proj");
+		} else {
+			expect(normalizePathInput("/mnt/c/Users/foo")).toBe("/mnt/c/Users/foo");
+		}
+	});
+
+	it("does not touch POSIX absolute paths that are not Git-Bash/WSL style", () => {
+		// `/home/user/proj` does not match `/<drive>/` or `/mnt/<drive>/` --
+		// leave as-is. On Windows such a path is invalid, but normalizePathInput
+		// only does format translation; existence is validated downstream.
+		expect(normalizePathInput("/home/user/proj")).toBe("/home/user/proj");
+	});
+});
+
+// Direct platform-parameterized tests so the Git-Bash/WSL translation logic
+// is exercised on every CI platform, not just Windows runners.
+describe("normalizePathInputForPlatform", () => {
+	it("translates Git-Bash paths when platform is win32", () => {
+		expect(normalizePathInputForPlatform("/c/Users/foo", "win32")).toBe("C:\\Users\\foo");
+		expect(normalizePathInputForPlatform("/C/Users/foo", "win32")).toBe("C:\\Users\\foo");
+		expect(normalizePathInputForPlatform("/d/proj/src", "win32")).toBe("D:\\proj\\src");
+	});
+
+	it("translates WSL paths when platform is win32", () => {
+		expect(normalizePathInputForPlatform("/mnt/c/Users/foo", "win32")).toBe("C:\\Users\\foo");
+		expect(normalizePathInputForPlatform("/mnt/C/proj", "win32")).toBe("C:\\proj");
+	});
+
+	it("is a no-op on non-win32 platforms", () => {
+		expect(normalizePathInputForPlatform("/c/Users/foo", "linux")).toBe("/c/Users/foo");
+		expect(normalizePathInputForPlatform("/mnt/c/Users/foo", "linux")).toBe("/mnt/c/Users/foo");
+		expect(normalizePathInputForPlatform("/home/user/proj", "darwin")).toBe("/home/user/proj");
+	});
+
+	it("leaves Windows drive paths unchanged even on win32", () => {
+		expect(normalizePathInputForPlatform("C:\\Users\\foo", "win32")).toBe("C:\\Users\\foo");
+		expect(normalizePathInputForPlatform("C:/Users/foo", "win32")).toBe("C:/Users/foo");
+	});
+
+	it("leaves relative paths unchanged on every platform", () => {
+		expect(normalizePathInputForPlatform("src/foo.ts", "win32")).toBe("src/foo.ts");
+		expect(normalizePathInputForPlatform("src/foo.ts", "linux")).toBe("src/foo.ts");
+	});
+
+	it("handles bare drive root /c/ and /mnt/c/ as C:\\", () => {
+		expect(normalizePathInputForPlatform("/c/", "win32")).toBe("C:\\");
+		expect(normalizePathInputForPlatform("/mnt/c/", "win32")).toBe("C:\\");
+	});
+
+	it("does not misinterpret /home/ as a Git-Bash drive", () => {
+		// `/home/user/proj` must NOT match the `/h/...` Git-Bash pattern
+		// because the second segment is `home`, not a single drive letter.
+		// The regex requires the first segment to be exactly one letter.
+		expect(normalizePathInputForPlatform("/home/user/proj", "win32")).toBe("/home/user/proj");
+	});
+
+	it("does not misinterpret /usr/ as a Git-Bash drive", () => {
+		expect(normalizePathInputForPlatform("/usr/local/bin", "win32")).toBe("/usr/local/bin");
 	});
 });
