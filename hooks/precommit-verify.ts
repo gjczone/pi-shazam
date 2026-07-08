@@ -1,14 +1,14 @@
 /**
  * pi-shazam hooks/precommit-verify -- Auto-run verify before commit.
  *
- * When the agent runs `git commit` without `--no-verify`, automatically
- * runs `shazam_verify --preCommit` and sends the results to the LLM.
+ * When the agent runs `git commit` without `--no-verify`/`-n`, automatically
+ * runs `shazam_verify --preCommit` and sends the results to the LLM as a
+ * non-blocking reference.
  *
- * Does NOT block the commit -- the LLM sees the results and can decide
- * to fix issues. --no-verify is available only when the LLM is certain
- * the reported issues are false positives.
- *
- * Quality enforcement happens in CI, not in pre-commit hooks.
+ * Does NOT block the commit -- the LLM sees the results and decides whether
+ * to fix issues. The hook never gates the commit; quality enforcement is the
+ * job of CI. --no-verify/`-n` is honored when the LLM is certain the reported
+ * issues are false positives.
  */
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
@@ -35,10 +35,11 @@ export function registerPrecommitVerify(pi: ExtensionAPI): void {
 		const gitCommitSeg = segments.find((seg) => seg[0] === "git" && seg.length >= 2 && seg[1] === "commit");
 		if (!gitCommitSeg) return;
 
-		// Skip if --no-verify or -n flag is present (user explicitly bypassing)
-		const hasNoVerify =
-			gitCommitSeg.includes("--no-verify") ||
-			gitCommitSeg.some((a) => a.startsWith("-") && !a.startsWith("--") && a.includes("n"));
+		// Skip if --no-verify or -n flag is present (user explicitly bypassing).
+		// -n is the short form of --no-verify; only that exact flag is honored,
+		// so other short options containing "n" (e.g. none in git commit's common
+		// set) are not mistaken for a bypass.
+		const hasNoVerify = gitCommitSeg.includes("--no-verify") || gitCommitSeg.includes("-n");
 		if (hasNoVerify) return;
 
 		// Auto-run shazam_verify --preCommit
@@ -63,13 +64,13 @@ export function registerPrecommitVerify(pi: ExtensionAPI): void {
 
 				pi.sendMessage(
 					{
-						customType: "shazam-reminder",
+						customType: "shazam-commit-verify",
 						content: [
-							"[shazam] Auto-verify before commit:",
+							"[shazam] Pre-commit auto-verify (non-blocking reference):",
 							"",
 							truncated,
 							"",
-							"Please fix any issues above before committing.",
+							"Review the above at your discretion. The commit is not blocked; fix any real issues you agree with, or proceed if they are false positives.",
 						].join("\n"),
 						display: false,
 					},

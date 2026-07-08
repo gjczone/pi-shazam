@@ -74,23 +74,27 @@ function incrementFailure(toolName: string, errorMessage: string): number {
 
 /**
  * Analyze error message and return a human-readable description.
+ *
+ * Matching is deliberately conservative: only well-scoped phrases (e.g.
+ * "type error", "syntax error") are classified, because broad substrings
+ * like "type" appear in unrelated messages and would mislead the agent.
  */
 function analyzeError(errorMessage: string): string {
 	const lower = errorMessage.toLowerCase();
 	if (lower.includes("file not found") || lower.includes("enoent")) {
-		return "The error is: file not found. The target path may be incorrect.";
+		return "The error looks like: file not found. The target path may be incorrect.";
 	}
 	if (lower.includes("permission") || lower.includes("eacces")) {
-		return "The error is: permission denied. Check file access rights.";
+		return "The error looks like: permission denied. Check file access rights.";
 	}
 	if (lower.includes("network") || lower.includes("enotfound") || lower.includes("econnrefused")) {
-		return "The error is: network issue. The remote resource may be unavailable.";
+		return "The error looks like: network issue. The remote resource may be unavailable.";
 	}
-	if (lower.includes("type") || lower.includes("syntax")) {
-		return "The error is: type/syntax error. Run shazam_verify to check.";
+	if (lower.includes("type error") || lower.includes("syntax error") || lower.includes("typecheck")) {
+		return "The error looks like: a type or syntax error. Run shazam_verify to inspect it.";
 	}
 	if (lower.includes("timeout") || lower.includes("timed out")) {
-		return "The error is: timeout. The operation took too long.";
+		return "The error looks like: timeout. The operation took too long.";
 	}
 	return "Repeated failures detected.";
 }
@@ -177,9 +181,8 @@ function getSuggestion(toolName: string, failCount: number, errorMessage: string
 					"[shazam] Bash command failed 3x consecutively.",
 					"",
 					"Try a different approach:",
-					"- Use `shazam_lookup` instead of grep/find",
-					"- Use `shazam_lookup` to understand file structure first",
-					"- Break the command into smaller steps",
+					"- Use `shazam_lookup` to inspect file structure instead of grep/find",
+					"- Break the command into smaller steps and verify each one",
 				].join("\n");
 
 			case "edit":

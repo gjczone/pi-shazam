@@ -7,7 +7,7 @@
  * - tool_call (shazam_impact): suggest running shazam_verify first
  * - tool_call (shazam_rename_symbol): suggest running shazam_impact --symbol first
  *
- * Auto-format feature (v0.6.4):
+ * Auto-format feature:
  * - After write/edit, detect file type and run native formatter
  * - Supported: ruff (Python), prettier (JS/TS/JSON/MD), gofmt (Go), rustfmt (Rust)
  * - Falls back to shazam_format suggestion if no native formatter found
@@ -227,12 +227,16 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 				}
 			}
 
-			// Check if multi-file edit was done -- suggest impact analysis
+			// Check if multi-file edit was done -- suggest impact analysis.
+			// Injected into context (not just UI) because it changes the agent's
+			// next action: assessing blast radius before continuing.
 			if (hasMultiFileEdit(event.content)) {
-				ctx.ui.notify(
-					"suggestion: you edited multiple files - shazam_impact assesses blast radius before continuing",
-					"info",
-				);
+				pi.sendMessage({
+					customType: "shazam-guide",
+					content:
+						"[shazam] You edited multiple files this turn. Run `shazam_impact --files <paths>` to assess blast radius before continuing.",
+					display: false,
+				});
 			}
 			return;
 		}
@@ -241,15 +245,17 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 		if (event.toolName === "shazam_lookup") {
 			const symbolName = hasManyCallers(event.content);
 			if (symbolName && !event.isError) {
-				ctx.ui.notify(
-					`recommended: shazam_impact --symbol ${symbolName} traces all callers before changing this symbol`,
-					"info",
-				);
+				pi.sendMessage({
+					customType: "shazam-guide",
+					content: `recommended: shazam_impact --symbol ${symbolName} traces all callers before changing this symbol`,
+					display: false,
+				});
 			}
 			return;
 		}
 
-		// After shazam_verify FAIL/WARN: suggest remediation
+		// After shazam_verify FAIL/WARN: suggest remediation.
+		// Injected into context so the agent acts on the verdict.
 		if (event.toolName === "shazam_verify" && !event.isError) {
 			const texts: string[] = [];
 			if (event.content) {
@@ -259,9 +265,18 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 			}
 			const combined = texts.join("\n");
 			if (combined.includes("[FAIL]")) {
-				ctx.ui.notify("shazam_verify reported FAIL - fix errors before proceeding", "warning");
+				pi.sendMessage({
+					customType: "shazam-guide",
+					content: "[shazam] shazam_verify reported FAIL - fix the reported errors before proceeding.",
+					display: false,
+				});
 			} else if (combined.includes("[WARN]")) {
-				ctx.ui.notify("shazam_verify reported WARN - review warnings, then run shazam_format if needed", "info");
+				pi.sendMessage({
+					customType: "shazam-guide",
+					content:
+						"[shazam] shazam_verify reported WARN - review the warnings; run shazam_format if formatting is the cause.",
+					display: false,
+				});
 			}
 			return;
 		}

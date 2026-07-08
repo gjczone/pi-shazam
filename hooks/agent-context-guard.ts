@@ -4,8 +4,10 @@
  * Intercepts agent-like tool calls (agent, agent_swarm, subagent) and checks
  * whether the prompt contains sufficient structural context for the task type.
  *
- * For review/audit tasks: blocks if context score is below threshold.
- * For coding tasks: warns (non-blocking) if context is insufficient.
+ * Non-blocking: for both review/audit and coding tasks it only emits a UI
+ * warning when context is insufficient. It never blocks the tool call, because
+ * automated subagents cannot interact with blocking dialogs.
+ *
  * Short prompts (< 30 words) are always skipped.
  */
 
@@ -71,11 +73,11 @@ function computeContextScore(prompt: string): number {
 /**
  * Register the agent context guard hook.
  *
- * Blocks review tasks that lack structural context and warns on
- * coding tasks with insufficient context.
- * When shazam_ tools are already referenced in the prompt,
- * the review threshold is lowered to 1 and self-referential
- * prompts (prompts that are about shazam itself) are allowed.
+ * Non-blocking: warns (via UI notification) on review tasks that lack
+ * structural context and on coding tasks with insufficient context.
+ * When shazam_ tools are already referenced in the prompt, the review
+ * threshold is lowered to 1 and self-referential prompts (about shazam
+ * itself) are allowed through without a warning.
  */
 export function registerAgentContextGuard(pi: ExtensionAPI): void {
 	pi.on("tool_call", (event, ctx): ToolCallEventResult | void => {

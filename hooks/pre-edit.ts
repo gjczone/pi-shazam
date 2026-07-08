@@ -9,7 +9,7 @@
  */
 
 import type { ExtensionAPI, ToolCallEventResult } from "../types/pi-extension.js";
-import { resolve } from "node:path";
+import { resolve, relative } from "node:path";
 import { isTrackableEditedPath } from "../core/filter.js";
 import { _logInternal } from "../core/output.js";
 
@@ -108,6 +108,16 @@ const _timeoutHandles = new Map<string, ReturnType<typeof setTimeout>>();
  */
 export function normalizeEditedPath(filePath: string, cwd: string): string {
 	return resolve(cwd, filePath);
+}
+
+/**
+ * Convert an absolute, OS-native path into a project-relative path with
+ * forward slashes. Used when building the `shazam_impact --files` command
+ * injected into the prompt, so the suggested command is valid on every
+ * platform (Windows backslash paths break shell parsing and quoting).
+ */
+export function toRelativePosixPath(absPath: string, cwd: string): string {
+	return relative(cwd, absPath).split("\\").join("/");
 }
 
 /**
@@ -281,8 +291,11 @@ export function registerPreEditGuard(pi: ExtensionAPI): void {
 
 		if (reasons.length > 0 && !_wasGroupWarned(allFiles)) {
 			_markGroupWarned(allFiles);
+			// Build a cross-platform command: relative paths with forward
+			// slashes, each quoted so paths containing spaces stay intact.
+			const relFiles = allFiles.map((f) => `"${toRelativePosixPath(f, ctx.cwd)}"`).join(" ");
 			ctx.ui.notify(
-				`[shazam] Caution: ${reasons.join("; ")}. Run \`shazam_impact --files ${allFiles.join(" ")}\` to assess blast radius before editing.`,
+				`[shazam] Caution: ${reasons.join("; ")}. Run \`shazam_impact --files ${relFiles}\` to assess blast radius before editing.`,
 				"warning",
 			);
 			_logInternal("pre-edit", "multi-file edit warning", { fileCount: allFiles.length, files: allFiles });
