@@ -102,13 +102,14 @@ export function registerStopVerify(pi: ExtensionAPI): void {
 		// Send a steer message that triggers a new turn, forcing the agent
 		// to run shazam_verify before continuing. deliverAs: "steer" makes
 		// the message more prominent; triggerTurn: true schedules an
-		// immediate internal continuation.
+		// immediate internal continuation. customType is distinct from the
+		// pre-commit verify reminder so the two are not confused.
 		_logInternal("stop-verify", "verification reminder sent", { editCount: editedFiles.length });
 		pi.sendMessage(
 			{
-				customType: "shazam-reminder",
+				customType: "shazam-turn-verify",
 				content: [
-					"[shazam] Verification required",
+					"[shazam] Turn-end verification required",
 					"",
 					`You edited ${fileList} this session but haven't run \`shazam_verify\`.`,
 					"Run \`shazam_verify\` now to check for type errors, lint issues, and broken references.",

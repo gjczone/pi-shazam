@@ -112,17 +112,15 @@ function buildProactiveRecommendations(projectRoot: string, graph: RepoGraph): s
 			);
 		}
 
-		// Always include the most critical workflow guidance
-		lines.push("- Before editing a file for the first time: \`shazam_lookup --file <path>\`");
-		lines.push("- Before changing a shared/exported symbol: \`shazam_impact --symbol <name>\`");
-
-		// Conditional: only mention if project has OOP types
+		// Core workflow pointers (per-action contextual reminders are injected
+		// by shazam-guide at the relevant moments, so we keep this overview terse).
+		lines.push(
+			"- Before changing a shared/exported symbol: \`shazam_impact --symbol <name>\` (per-action reminder also fires)",
+		);
 		if (hasHierarchy) {
 			lines.push("- For OOP type hierarchies: \`shazam_lookup --name <class>\`");
 		}
-
-		// Core workflow tools
-		lines.push("- After every edit: \`shazam_verify\` to check for errors");
+		lines.push("- Run \`shazam_verify\` after edits to catch errors (auto-reminder fires at turn end if skipped)");
 	} catch (err) {
 		// If scan fails, provide minimal recommendations
 		_logWarn("buildProactiveRecommendations", "scan failed", err);
