@@ -8,7 +8,14 @@
  * feedback ("did you mean X?") for typos but a hard stop for traversal.
  */
 import { describe, it, expect } from "vitest";
-import { classifyFilePath, suggestSimilarFile, levenshtein, isPathInRoot, normalizePathInput, normalizePathInputForPlatform } from "../core/path-utils.js";
+import {
+	classifyFilePath,
+	suggestSimilarFile,
+	levenshtein,
+	isPathInRoot,
+	normalizePathInput,
+	normalizePathInputForPlatform,
+} from "../core/path-utils.js";
 
 const ROOT = process.cwd();
 
