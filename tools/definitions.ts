@@ -27,7 +27,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_overview",
 		label: "Project Overview",
 		description:
-			"When you first enter a project or return after changes - use this to understand the codebase before reading a single file. Returns module dependency map, top-10 PageRank files, key dependencies, recent git changes, entry points, reading order, HTTP routes, and complexity hotspots ranked by blast radius.",
+			"When you first enter a project or return after changes - use this to understand the codebase before reading a single file. Returns module dependency map, top-10 PageRank files, key dependencies, recent git changes, entry points, reading order, HTTP routes, and complexity hotspots ranked by blast radius. Pass --filter <keyword> to scope the overview to files matching the keyword.",
 		typeboxParams: Type.Object({
 			filter: Type.Optional(Type.String()),
 		}),
@@ -109,7 +109,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_verify",
 		label: "Verify Changes",
 		description:
-			"After every write or edit, run this to confirm no errors were introduced. Runs LSP diagnostics (type errors, warnings), then graph analysis (git diff, risk level, orphan detection, graph diffs). Verdict: PASS / WARN / FAIL. Use --quick for a fast git-change-only check (~2s). Use --lspOnly for diagnostics only. Use --preCommit for stricter thresholds. The `maxFiles` cap is configured in `.pi-shazam/config.json` under `verify.maxFiles` (default 100).",
+			"After every write or edit, run this to confirm no errors were introduced. Runs LSP diagnostics (type errors, warnings), then graph analysis (git diff, risk level, orphan detection). Verdict: PASS / WARN / FAIL. Use --quick for a fast git-change-only check (~2s). Use --lspOnly for diagnostics only. Use --preCommit for stricter thresholds. The `maxFiles` cap is configured in `.pi-shazam/config.json` under `verify.maxFiles` (default 100).",
 		typeboxParams: Type.Object({
 			quick: Type.Optional(Type.Boolean()),
 			lspOnly: Type.Optional(Type.Boolean()),

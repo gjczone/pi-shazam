@@ -25,16 +25,16 @@ jobs:
         with:
           project-root: "." # default: '.'
           fail-on-verdict: "false" # default: 'false' — only post comment
-          max-files: "100" # default: 100, passed to shazam_verify
+          max-files: "100" # default: 100, forwarded as a verify option (VerifyOptions.maxFiles)
 ```
 
 ## Inputs
 
-| Input             | Description                                                            | Default | Required |
-| ----------------- | ---------------------------------------------------------------------- | ------- | -------- |
-| `project-root`    | Project root directory (relative to workspace)                         | `.`     | No       |
-| `fail-on-verdict` | Fail the check if verdict is FAIL (`true` or `false`)                  | `false` | No       |
-| `max-files`       | Maximum files for LSP diagnostics (overrides `.pi-shazam/config.json`) | `100`   | No       |
+| Input             | Description                                                                                                                   | Default | Required |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------- | -------- |
+| `project-root`    | Project root directory (relative to workspace)                                                                                | `.`     | No       |
+| `fail-on-verdict` | Fail the check if verdict is FAIL (`true` or `false`)                                                                         | `false` | No       |
+| `max-files`       | Maximum files for LSP diagnostics, forwarded as a verify option (resolved into `VerifyOptions.maxFiles` via `run-verify.mjs`) | `100`   | No       |
 
 ## How It Works
 

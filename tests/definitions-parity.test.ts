@@ -40,4 +40,20 @@ describe("definitions parity (#332)", () => {
 		const def = getToolDefinition("shazam_overview")!;
 		expect(def.description).toContain("project");
 	});
+
+	it("shazam_overview: description should mention the --filter keyword param", () => {
+		const def = getToolDefinition("shazam_overview")!;
+		expect(def.description.toLowerCase()).toContain("filter");
+	});
+
+	it("shazam_verify: description must not claim graph diffs", () => {
+		const def = getToolDefinition("shazam_verify")!;
+		expect(def.description.toLowerCase()).not.toContain("graph diffs");
+	});
+
+	it("shazam_format: description must say 'never touches logic', not 'default'", () => {
+		const def = getToolDefinition("shazam_format")!;
+		expect(def.description.toLowerCase()).toContain("never touches logic");
+		expect(def.description.toLowerCase()).not.toContain("never touches default");
+	});
 });
