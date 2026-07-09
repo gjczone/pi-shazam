@@ -216,6 +216,41 @@ describe("shazam_impact --symbol mode surfaces Affected Tests (#635)", () => {
 });
 
 // ------------------------------------------------------------------
+// Issue #692: compact mode must report the affected-tests COUNT
+// (compact mode must NOT list full test paths, only the count)
+// ------------------------------------------------------------------
+
+describe("shazam_impact compact mode reports affected-tests count (#692)", () => {
+	it("includes 'Affected Tests (must re-run): N' when affected set has test files", () => {
+		const graph = buildFileImpactFixture();
+		const output = executeImpact(graph, ["src/helpers.ts"], { compact: true });
+
+		expect(output).toContain("Affected Tests (must re-run): 1");
+	});
+
+	it("omits the line entirely when no test files are affected", () => {
+		const graph = createRepoGraph();
+		const sym = (id: string, name: string, kind: string, file: string, line: number) =>
+			createSymbol(id, name, kind, file, line);
+
+		const a = sym("src/a.ts::fnA::1", "fnA", "function", "src/a.ts", 1);
+		const b = sym("src/b.ts::fnB::1", "fnB", "function", "src/b.ts", 1);
+		for (const s of [a, b]) {
+			graph.symbols.set(s.id, s);
+			graph.fileSymbols.set(s.file, [...(graph.fileSymbols.get(s.file) ?? []), s.id]);
+		}
+		const edge = createEdge(a.id, b.id, 1.0, "call");
+		graph.outgoing.set(a.id, [edge]);
+		graph.incoming.set(b.id, [edge]);
+
+		const output = executeImpact(graph, ["src/a.ts"], { compact: true });
+
+		expect(output).not.toContain("Affected Tests (must re-run)");
+		expect(output).toContain("1 affected file(s):");
+	});
+});
+
+// ------------------------------------------------------------------
 // Mode independence — both modes use the SAME predicates
 // ------------------------------------------------------------------
 
