@@ -21,7 +21,7 @@ import { join, extname } from "node:path";
 import { detectFormatters } from "../core/formatters.js";
 import { hasRecentPassingVerify } from "./verify-state.js";
 import { _logWarn } from "../core/output.js";
-import { isPathInRoot } from "../tools/_factory.js";
+import { validatePathInProject } from "../tools/_factory.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -101,13 +101,16 @@ function hasMultiFileEdit(content: unknown[] | undefined): boolean {
 async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<boolean> {
 	if (!filePath || typeof filePath !== "string") return false;
 
-	// Resolve relative paths
-	const absPath = filePath.startsWith("/") ? filePath : join(ctx.cwd, filePath);
 	const projectRoot = ctx.cwd;
 
-	// Path traversal guard: ensure formatting operations don't escape the project root.
-	// Uses isPathInRoot (relative()-based) so Windows backslash paths are handled too (#463).
-	if (!isPathInRoot(absPath, projectRoot)) return false;
+	// Symlink-escape guard (#688): validatePathInProject resolves the path via
+	// realpathSync and rejects targets that live outside the project root,
+	// closing the gap where a string-only check would format a file outside root.
+	// Also normalizes Git-Bash/WSL style paths (via the factory wrapper).
+	if (!validatePathInProject(filePath, projectRoot)) return false;
+
+	// Resolve relative paths (after validation so traversal can't escape).
+	const absPath = filePath.startsWith("/") ? filePath : join(projectRoot, filePath);
 
 	if (!existsSync(absPath)) return false;
 
