@@ -3,7 +3,7 @@ import { LspManager } from "../lsp/manager.js";
 import type { LspClient } from "../lsp/client.js";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdtempSync, writeFileSync, chmodSync, rmSync, mkdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, chmodSync, rmSync, mkdirSync, symlinkSync, unlinkSync } from "node:fs";
 
 describe("lsp/manager", () => {
 	describe("LspManager constructor", () => {
@@ -403,10 +403,27 @@ describe("_trustedUserCandidates Windows paths (#582)", () => {
 
 // -- detectProjectLanguages symlink containment (issue #609) --
 
+// Symlink creation requires admin/developer-mode privilege on Windows.
+// Probe once at module load; skip the assertion where symlinks cannot be created.
+function canCreateSymlinks(): boolean {
+	const probeDir = mkdtempSync(join(tmpdir(), "pi-shazam-609-probe-"));
+	const probeTarget = join(probeDir, "target");
+	const probeLink = join(probeDir, "link");
+	try {
+		writeFileSync(probeTarget, "");
+		symlinkSync(probeTarget, probeLink);
+		unlinkSync(probeLink);
+		return true;
+	} catch {
+		return false;
+	} finally {
+		rmSync(probeDir, { recursive: true, force: true });
+	}
+}
+
 describe("detectProjectLanguages symlink containment (#609)", () => {
-	it("does not walk symlinks resolving outside project root", async () => {
+	it.skipIf(!canCreateSymlinks())("does not walk symlinks resolving outside project root", async () => {
 		const { detectProjectLanguages } = await import("../lsp/manager.js");
-		const { symlinkSync } = await import("node:fs");
 		const projectDir = mkdtempSync(join(tmpdir(), "pi-shazam-609-proj-"));
 		const externalDir = mkdtempSync(join(tmpdir(), "pi-shazam-609-ext-"));
 		try {
