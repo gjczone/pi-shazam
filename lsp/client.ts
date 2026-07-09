@@ -408,7 +408,7 @@ export class LspClient {
 			signal.addEventListener("abort", abortListener, { once: true });
 		}
 		try {
-			const result = await this._sendRequest<InitializeResult>("initialize", initParams, this.timeout, initCts.token);
+			const result = await this._sendRequest<InitializeResult>("initialize", initParams, 30000, initCts.token);
 			this._serverCapabilities = ((result as InitializeResult).capabilities as Record<string, unknown>) ?? {};
 			await conn.sendNotification("initialized", {});
 			this._initialized = true;

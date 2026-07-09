@@ -692,8 +692,8 @@ async function runLspDiagnostics(
 
 	// Poll for diagnostics with retries instead of fixed wait.
 	// Some LSP servers need more time to publish diagnostics for large files.
-	const MAX_POLL_ATTEMPTS = 5;
-	const POLL_INTERVAL_MS = 200;
+	const MAX_POLL_ATTEMPTS = 20;
+	const POLL_INTERVAL_MS = 500;
 	const lspManagerForPolling = lspManager; // capture reference
 	if (serversUsed.size > 0) {
 		for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
