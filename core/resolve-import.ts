@@ -213,6 +213,23 @@ export function resolveImport(importPath: string, fromFile: string, root: string
 			}
 			return null;
 		}
+		// Fallback: non-prefixed multi-segment paths start from crate root in Rust 2018+
+		// e.g. `use utils::helper::doThing;` == `use crate::utils::helper::doThing;`
+		if (importPath.includes("::")) {
+			const cratePath = importPath.replace(/::/g, "/");
+			let crateRoot = fromDir;
+			while (crateRoot !== ".") {
+				if (existsCached(join(root, crateRoot, "Cargo.toml"))) break;
+				const parent = dirname(crateRoot);
+				if (parent === crateRoot) break;
+				crateRoot = parent;
+			}
+			const candidates = [`${crateRoot}/${cratePath}.rs`, `${crateRoot}/${cratePath}/mod.rs`];
+			for (const c of candidates) {
+				const found = tryCandidate(graph, root, c);
+				if (found) return found;
+			}
+		}
 	}
 
 	// Go standard library or external package imports (non-relative) - return as-is
