@@ -42,7 +42,10 @@ describe("resolveGitWorkdir", () => {
 	});
 });
 
-describe("getGitChangedFiles — worktree awareness (issue #226)", () => {
+// #679: the git setup in beforeAll (git init + worktree add) can take
+// longer than the default 10s hookTimeout under full-suite load, causing a
+// flaky "Hook timed out in 10000ms" failure. Raise the hook timeout to 30s.
+describe("getGitChangedFiles — worktree awareness (issue #226)", { hookTimeout: 30000 }, () => {
 	let mainRepo: string;
 	let worktreeDir: string;
 
