@@ -100,7 +100,7 @@ export interface LspEnrichContext {
 		client: LspClient;
 		workspaceRoot: string;
 	}[];
-	trackOpenedFile(language: string, filePath: string): void;
+	trackOpenedFile(language: string, filePath: string, mtime?: number): void;
 }
 
 export interface EnrichedSymbolHit {
