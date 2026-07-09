@@ -42,6 +42,27 @@ describe("resolveGitWorkdir", () => {
 	});
 });
 
+// Run a git command, retrying on transient failures (lock contention,
+// EAGAIN) that occur under heavy full-suite load on the local runner.
+// Caps total attempts so a genuine failure still surfaces. Returns the
+// trimmed stdout so it can also replace inline execSync calls that need
+// the command output (e.g. git rev-parse).
+function gitWithRetry(cwd: string, cmd: string, attempts = 3): string {
+	let lastErr: unknown;
+	for (let i = 0; i < attempts; i++) {
+		try {
+			return execSync(cmd, { cwd, encoding: "utf-8" }).trim();
+		} catch (err) {
+			lastErr = err;
+			if (i < attempts - 1) {
+				// Brief backoff before retrying the flaky git op.
+				Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250 * (i + 1));
+			}
+		}
+	}
+	throw lastErr;
+}
+
 // #679: the git setup in beforeAll (git init + worktree add) can take
 // longer than the default 10s hookTimeout under full-suite load, causing a
 // flaky "Hook timed out in 10000ms" failure. Raise the hook timeout to 30s.
@@ -50,24 +71,24 @@ describe("getGitChangedFiles — worktree awareness (issue #226)", { hookTimeout
 	let worktreeDir: string;
 
 	beforeAll(() => {
-		// Create a temporary git repo
+		// Create a temporary git repo. Every git op is wrapped in
+		// gitWithRetry because under heavy full-suite load on the local
+		// runner any single git command can hit transient lock contention.
 		mainRepo = mkdtempSync(join(tmpdir(), "shazam-wt-main-"));
-		execSync("git init", { cwd: mainRepo, encoding: "utf-8" });
-		execSync("git config user.email test@test.com", { cwd: mainRepo, encoding: "utf-8" });
-		execSync("git config user.name Test", { cwd: mainRepo, encoding: "utf-8" });
+		gitWithRetry(mainRepo, "git init");
+		gitWithRetry(mainRepo, "git config user.email test@test.com");
+		gitWithRetry(mainRepo, "git config user.name Test");
 
 		// Create initial commit
 		writeFileSync(join(mainRepo, "index.ts"), "export const x = 1;\n");
-		execSync("git add .", { cwd: mainRepo, encoding: "utf-8" });
-		execSync('git commit -m "initial"', { cwd: mainRepo, encoding: "utf-8" });
+		gitWithRetry(mainRepo, "git add .");
+		gitWithRetry(mainRepo, 'git commit -m "initial"');
 
-		// Create a worktree
+		// Create a worktree (retry: git worktree add can hit lock
+		// contention under full-suite load on the local runner)
 		const worktreeBase = mkdtempSync(join(tmpdir(), "shazam-wt-worktrees-"));
 		worktreeDir = join(worktreeBase, "feature");
-		execSync(`git worktree add -b feature "${worktreeDir}"`, {
-			cwd: mainRepo,
-			encoding: "utf-8",
-		});
+		gitWithRetry(mainRepo, `git worktree add -b feature "${worktreeDir}"`);
 
 		// Make changes in the worktree (not in main)
 		writeFileSync(join(worktreeDir, "new-file.ts"), "export const y = 2;\n");
@@ -129,10 +150,8 @@ describe("getGitChangedFiles — worktree awareness (issue #226)", { hookTimeout
 		// The resolved dir should be the worktree directory itself
 		// (since worktree root IS the worktree directory)
 		// Use realpathSync to handle macOS /private/var symlink
-		const resolved = execSync("git rev-parse --show-toplevel", {
-			cwd: worktreeDir,
-			encoding: "utf-8",
-		}).trim();
+		// gitWithRetry guards the rev-parse against transient lock errors.
+		const resolved = gitWithRetry(worktreeDir, "git rev-parse --show-toplevel");
 		// #592: On Windows, git rev-parse may return short-name paths
 		// (e.g. C:\Users\RUNNER~1) while mkdtempSync returns long names
 		// (C:\Users\runneradmin). realpathSync does not always resolve
