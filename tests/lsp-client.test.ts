@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { pathToUri } from "../lsp/client.js";
 
@@ -81,6 +81,17 @@ vi.mock("node:child_process", () => ({
 
 import { spawn } from "node:child_process";
 import { LspClient } from "../lsp/client.js";
+
+// Opt in to ERR_STREAM_DESTROYED suppression during LSP teardown. Mocked
+// StreamMessageWriter instances may fire async writes to destroyed streams
+// during worker cleanup. This is a test-environment artifact only.
+beforeAll(() => {
+	(globalThis as any).__suppressStreamDestroyed = true;
+});
+
+afterAll(() => {
+	(globalThis as any).__suppressStreamDestroyed = false;
+});
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
