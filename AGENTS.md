@@ -12,14 +12,7 @@
 - **NEVER** proactively refactor existing code under the guise of "function too long" or "messy file structure" unless explicitly instructed.
 - **NEVER** delete, merge, or relocate modules without an explicit migration instruction.
 
-**Opportunistic fixes — fix on sight, report in completion report:**
-When encountering a pre-existing issue that is unrelated to the current task, fix it immediately — without asking — if and only if ALL of the following are true:
-
-1. No refactoring involved (moving, renaming, restructuring code).
-2. No new dependencies required.
-3. The fix is self-contained and low-risk (a typo, a missing null check, an unused import, an empty catch block, an obvious off-by-one, a broken log message).
-
-If the issue fails any of the three criteria above — stop, do not touch it, and report it under **Follow-up** in the completion report.
+**Opportunistic fixes — fix on sight, report in completion report:** When you hit a pre-existing issue unrelated to the current task, fix it immediately (no ask) if and only if it is self-contained, low-risk, needs no new dependency, and involves no refactoring (typo, missing null check, unused import, empty catch, obvious off-by-one, broken log). Otherwise stop, do not touch it, and report it under **Follow-up**.
 
 ### Data & Security
 
@@ -32,8 +25,8 @@ If the issue fails any of the three criteria above — stop, do not touch it, an
 
 - **NEVER** ignore type errors, build errors, failing tests, or command failures.
 - **NEVER** validate only the happy path — boundary cases and repeated runs must be covered.
-- **NEVER** modify or add code paths outside the task scope in order to handle edge cases — discover the issue, report it, do not self-extend.
-- Every `except` / `catch` / `match Err` branch **MUST** either handle the error with a log or propagate it. Empty catch blocks are forbidden. Log: what operation failed, the input context, and the original error message.
+- **NEVER** modify or add code paths outside the task scope to handle edge cases — discover, report, do not self-extend.
+- Every error branch (`catch` / `except`) **MUST** log (what failed, input context, original error message) or propagate. Empty catch blocks are forbidden.
 
 ---
 
@@ -43,13 +36,13 @@ If the issue fails any of the three criteria above — stop, do not touch it, an
 - Default to Simplified Chinese. Use English only for code, commands, technical terms, commit types, and tool names.
 - Treat the user as non-technical unless they clearly ask for engineering detail. Explain in business terms first.
 - Do not dump code unless the user asks for it.
-- Comments added to code must explain: business purpose, implementation logic, and edge cases. Use Chinese; avoid jargon.
+- Code comments must explain business purpose, implementation logic, and edge cases, in Chinese, without jargon.
 
 ---
 
 ## 2) Tool Invocation
 
-- When a relevant skill or MCP tool exists for the task, invoke it directly — do not ask first.
+- When a relevant skill or MCP tool exists, invoke it directly — do not ask first.
 - **NEVER** fall back to raw shell commands when a better tool alternative is available.
 
 ---
@@ -65,22 +58,16 @@ If the issue fails any of the three criteria above — stop, do not touch it, an
 ### 3.2 Change Discipline
 
 - Do only what the user asked. Prefer the smallest change that solves the request.
-- Fix broken things on sight — build errors, missing dependencies, type errors, broken commands — regardless of whether the current task introduced them.
-- Apply opportunistic fixes per the criteria in §0 Scope Lock. Do not ask for permission; just fix and report under **Opportunistic fixes** in the completion report.
+- Fix broken things on sight (build errors, missing deps, type errors, broken commands) regardless of source.
+- Apply opportunistic fixes per §0 Scope Lock; report them under **Opportunistic fixes**.
 - Do not touch naming, formatting, or architecture preferences unless the task explicitly requires it.
-- When replacing a component, function, or module: ① grep all references, ② update them, ③ delete the old file — all in the same change. No leftover references. No compatibility wrappers.
+- When replacing a component/function/module: ① grep all references, ② update them, ③ delete the old file — all in the same change. No leftover references, no compatibility wrappers.
 
 ### 3.3 Verifiable Execution
 
-- Execute autonomously. Do not stop and ask for confirmation between steps — keep going until the task is complete or you hit a blocker.
-- Stop and ask only when: (a) verification fails and you cannot fix it, (b) business meaning or domain rules are unclear, (c) a destructive action has no safety net, or (d) the user explicitly asked to be consulted.
+- Execute autonomously; do not stop to ask between steps. Stop and ask only when: (a) verification fails and you cannot fix it, (b) business meaning or domain rules are unclear, (c) a destructive action has no safety net, or (d) the user asked to be consulted.
 - On verification failure: stop immediately, report what failed and why. Do not self-patch tests or silently work around the failure.
-- For multi-step tasks, list the plan first, then execute all steps autonomously:
-
-```text
-1. [Step] -> verify: [check]
-2. [Step] -> verify: [check]
-```
+- For multi-step tasks, list the plan first, then execute all steps autonomously (`1. [Step] -> verify: [check]`).
 
 ---
 
@@ -122,205 +109,119 @@ Trigger only when the task or milestone is fully completed:
 
 ## 5) Code Structure
 
-### 5.1 Function Scope
-
-- **NEVER** write a function that does more than one thing. If the name needs "and" to describe its purpose, split it.
-- This rule applies only to new or modified functions within the task scope. **NEVER** proactively refactor existing functions on this basis.
-
-### 5.2 File Boundaries
-
-- One file = one business concept. Any file with a generic name (`utils`, `helpers`, `common`, `misc`) that spans multiple unrelated domains is a boundary violation — regardless of line count.
-- When a file directly touched by the task contains 2+ unrelated domains, extract each into its own file. **NEVER** proactively scan the codebase to clean this up.
-- **NEVER** create a module file that only re-exports another module's symbols — inline the imports at call sites instead.
-
-### 5.3 API Calls
-
-- Before writing any code that calls your project's own backend (regardless of language or library), read `rules/api.d.ts` first. Endpoint path, HTTP method, request shape, and response shape must match exactly.
-- External library APIs → query `context7` MCP. Your project's own API → read `rules/api.d.ts`. **NEVER** guess either.
-- If `rules/api.d.ts` does not exist or the needed endpoint is missing: update `rules/api.d.ts` first, then implement both backend and frontend together. **NEVER** write client code against an undocumented endpoint.
+- **NEVER** write a function that does more than one thing. Applies to new/modified functions only; never proactively refactor existing ones.
+- One file = one business concept. Generic names (`utils`, `helpers`, `common`, `misc`) spanning unrelated domains are boundary violations. **NEVER** create a module that only re-exports another module's symbols — inline imports at call sites.
+- This project has **zero HTTP framework, zero ORM, zero auth** — there is no backend API to call. Do not introduce network/service calls.
 
 ---
 
 ## 6) Toolchain
 
 - **Python**: ALL operations MUST go through `uv`. **NEVER** invoke `python`, `pip`, `venv`, or `virtualenv` directly.
-- **JavaScript / TypeScript**: Use the package manager already present in the project (`npm`, `yarn`, or `pnpm` — determined by the lockfile). **NEVER** mix package managers in the same project.
-- When the project's toolchain is not covered above, check the project-level for toolchain rules before using any default.
+- **JavaScript / TypeScript**: Use the package manager already present (lockfile decides `npm`/`yarn`/`pnpm`). **NEVER** mix package managers in the same project.
 
 <general-project-rules>
 
 # pi-shazam
 
-Pi coding agent native codebase awareness extension. "Shazam" — like the superhero whose power comes from multiple deities, pi-shazam unifies the strength of multiple analysis engines (repomap/aider, pi-lens, serena MCP, tree-sitter, LSP) into one coherent interface for the agent.
-
-Rewrites the Python CLI project [repomap](https://github.com/gjczone/repomap) as a native Pi extension in TypeScript. All analysis capabilities register as first-class Pi tools — LLM sees them alongside `read`/`write`/`bash` with no distinction.
+Pi coding agent native codebase awareness extension. Rewrites the Python CLI [repomap](https://github.com/gjczone/repomap) as a native Pi extension in TypeScript. All analysis capabilities register as first-class Pi tools — the LLM sees them alongside `read`/`write`/`bash`.
 
 ## shazam Tools — USE THEM
 
 You have access to pi-shazam — 7 code analysis tools. You WILL use every one of them. They are NOT optional.
 
-**`shazam_overview` is ALREADY in your context.** It was auto-injected before you started reading. READ it. The project structure, top files, and hotspots are right there above this section. If you can see the overview output in your context — Do NOT call `shazam_overview`. If you do NOT see it — call it immediately. It is the single most important tool. You cannot work blind.
+**`shazam_overview` is ALREADY in your context.** If you can see its output, do NOT call it; if you do not, call it immediately — it is the single most important tool.
 
-Here are the other 6 tools. You MUST call them. Memorize them. Use them or fail.
+| Tool                   | What it does                                                                       | You MUST call it when                                                      |
+| ---------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `shazam_overview`      | Project structure, top files, hotspots, entry points, key data structures          | First entry / need project structure                                       |
+| `shazam_lookup`        | Symbol/file details — hover info, type hierarchy, callers, callees, concept search | Understand any symbol, file, or "how is X implemented"                     |
+| `shazam_impact`        | Blast radius — every file, symbol, and test affected by your change                | BEFORE editing shared or exported modules. Do NOT guess what you'll break. |
+| `shazam_verify`        | Post-edit gate — LSP diagnostics, graph analysis, PASS/WARN/FAIL                   | AFTER every write. Run it. If FAIL or WARN, fix it NOW.                    |
+| `shazam_changes`       | Git change summary with symbol-level detail and risk level                         | Need to know what actually changed                                         |
+| `shazam_format`        | Auto-fix formatting — multiple formatters                                          | `shazam_verify` reports format errors                                      |
+| `shazam_rename_symbol` | Cross-file symbol rename with atomic writes and safety gate                        | Renaming ANY symbol. Do NOT manually find-and-replace.                     |
 
-| Tool                   | What it does                                                                       | You MUST call it when                                                             |
-| ---------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `shazam_lookup`        | Symbol/file details — hover info, type hierarchy, callers, callees, concept search | You need to understand any symbol, file, or "how is X implemented"                |
-| `shazam_impact`        | Blast radius — every file, symbol, and test affected by your change                | BEFORE editing shared or exported modules. Do NOT guess what you'll break.        |
-| `shazam_verify`        | Post-edit gate — LSP diagnostics, graph analysis, PASS/WARN/FAIL                   | AFTER every write. Run it. Read the verdict. If it says FAIL or WARN, fix it NOW. |
-| `shazam_changes`       | Git change summary with symbol-level detail and risk level                         | You edited things and need to know what actually changed                          |
-| `shazam_format`        | Auto-fix formatting — supports multiple formatters                                 | `shazam_verify` reports format errors                                             |
-| `shazam_rename_symbol` | Cross-file symbol rename with atomic writes and safety gate                        | Renaming ANY symbol. Do NOT manually find-and-replace.                            |
-
-If a tool errors or is unavailable, try once more, then work around it. But you MUST try it first. These tools are the difference between a working change and a broken build.
+If a tool errors or is unavailable, try once more, then work around it. But you MUST try it first.
 
 ## When to Read Rules Files
 
-- Read `rules/CODING.md` before writing or modifying code. Layer boundaries and tool registration patterns live here.
-- Read `rules/REVIEW-RULES.md` before performing a code review. NEVER submit findings that violate the DO NOT REPORT rules.
-
-## When to Read Companion Files
-
-| File                      | Directive                                                                                                                                                                                                    | Trigger                                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| `docs/INSTRUCTION.md`     | Single source of truth for Pi extension API contracts, architecture layer boundaries, tool registration patterns, content format contracts, release process, and verification gates. Read before any change. | Any code change, tool/hook creation, or release                                     |
-| `docs/kimi-code-hooks.md` | Kimi Code shell hooks version mapping, maintenance checklist, and update procedure. Read before releasing a new version.                                                                                     | Version release, tool name/behavior changes                                         |
-| `SKILL.md`                | Documents every shazam tool's parameters, behavior, return format, and usage patterns with concrete examples. Do not guess parameter names or output shapes.                                                 | Before calling a shazam tool for the first time, or when uncertain about parameters |
-| `README.md`               | User-facing setup, install, and feature descriptions.                                                                                                                                                        | User onboarding, release announcements                                              |
-| `CHANGELOG.md`            | Release history and version tracking. Update when releasing a new version.                                                                                                                                   | Before creating a release, before investigating regression                          |
+- `rules/CODING.md` — before writing or modifying code (layer boundaries, tool registration patterns).
+- `rules/REVIEW-RULES.md` — before a code review. NEVER submit findings that violate its DO NOT REPORT rules.
+- `docs/INSTRUCTION.md` — single source of truth for API contracts, layer boundaries, tool registration, content-format contracts, release process, verification gates. Read before any change.
 
 ## Project Snapshot
 
-- **Language**: TypeScript (ES2022, ESM), Node.js >= 18
-- **What it does**: Codebase graph construction (tree-sitter AST -> symbols -> dependencies -> PageRank), LSP integration, and safe code modification tools
-- **Platforms**: Linux, macOS, Windows — all tree-sitter grammars ship prebuilt binaries for linux/darwin/win32 (x64 + arm64). On Windows, all 4 shells (cmd, PowerShell 5/7, Git Bash) are supported; `npm run build` works everywhere, `bash scripts/ci.sh` requires Git Bash.
-- **Package manager**: npm (lockfile: `package-lock.json`)
-- **Deployment**: Pi extension (symlink dist/ into `~/.pi/agent/extensions/pi-shazam`) + MCP server (`npx pi-shazam-mcp`)
-- **Test framework**: vitest, 48 TypeScript source files, tests in `tests/`
-- **Key boundaries**: `core/` must never import from `tools/`, `hooks/`, or `lsp/`. Zero HTTP framework, zero ORM, zero auth.
-- **On-disk cache**: V3.2 (ProtoBuf columnar + string table + kind int enum) format by default since #647 + D, magic header `SHA\5`. Symbol IDs are deduped into a top-level `string_table`; each edge's `source` / `target` is an int32 index; `kind` is int32 (1 byte varint) instead of string. V2 (JSON) cache is still readable for backward compat — see `core/cache.ts` and `core/graph.proto`.
-- **Primary risk areas**: tree-sitter grammar version compatibility, LSP JSON-RPC frame parsing, encoding fallback (UTF-8/GBK/GB2312), MCP/Pi tool definition sync, Windows LSP server discovery (SAFE_PATH_DIRS), V3 cache magic byte routing (V3.0 `0x03` and V3.1 `0x04` auto-upgrade to V3.2 `0x05` in place via `loadGraphCache`; V2 JSON is the only silent-fallthrough path)
+- **Language**: TypeScript (ES2022, ESM), Node.js >= 18.
+- **What it does**: Codebase graph construction (tree-sitter AST -> symbols -> dependencies -> PageRank), LSP integration, safe code modification tools.
+- **Platforms**: Linux, macOS, Windows (cmd, PowerShell 5/7, Git Bash). All tree-sitter grammars ship prebuilt binaries (linux/darwin/win32, x64 + arm64); no C++ compiler needed. `npm run build` works in any shell; `bash scripts/ci.sh` needs Git Bash.
+- **Package manager**: npm (`package-lock.json`). **Deployment**: Pi extension (symlink `dist/` into `~/.pi/agent/extensions/pi-shazam`) + MCP server (`npx pi-shazam-mcp`).
+- **Architecture**: 4 layers `hooks/` -> `tools/` -> `core/` + `lsp/`. Dependency direction is one-way downward; `core/` has zero Pi/LSP imports. `mcp/` is a standalone entry that may import `tools/`/`core/`/`lsp/` but NOT `hooks/`.
+- **On-disk cache**: V3.2 ProtoBuf (columnar + string table + kind int) is the default; V2 JSON stays readable for backward compat. Magic-header routing in `loadGraphCache` upgrades legacy caches in place.
+- **Test framework**: vitest. **TDD**: write the failing test first, implement, verify green, commit.
+- **Primary risk areas**: tree-sitter grammar version compat, LSP JSON-RPC framing, encoding fallback (UTF-8/GBK/GB2312), MCP/Pi tool-definition sync, Windows LSP discovery, V3 cache magic-byte routing.
 
 ## Commands
 
-| Command                          | Purpose                                                                    |
-| -------------------------------- | -------------------------------------------------------------------------- |
-| `npm install --legacy-peer-deps` | Install dependencies (legacy-peer-deps required for tree-sitter)           |
-| `npm run build`                  | Compile TS -> `dist/`                                                      |
-| `npm run typecheck`              | `tsc --noEmit` — type validation without emit                              |
-| `npm run dev`                    | `tsc --watch` — incremental compilation                                    |
-| `npm test`                       | Run all tests via vitest                                                   |
-| `bash scripts/ci.sh`             | Local CI quick gate — run before every commit (Windows: requires Git Bash) |
-| `bash scripts/release.sh`        | Release operations — run through ALL checklist items when publishing       |
+| Command                          | Purpose                                                   |
+| -------------------------------- | --------------------------------------------------------- |
+| `npm install --legacy-peer-deps` | Install deps (legacy-peer-deps required for tree-sitter)  |
+| `npm run build`                  | Compile TS -> `dist/`                                     |
+| `npm run typecheck`              | `tsc --noEmit`                                            |
+| `npm run dev`                    | `tsc --watch`                                             |
+| `npm test`                       | Run all tests via vitest                                  |
+| `bash scripts/ci.sh`             | Local CI gate — run before every commit (needs Git Bash)  |
+| `bash scripts/release.sh`        | Release checklist — run through ALL items when publishing |
 
-## Architecture
+## Key Decisions (preserve these)
 
-4 layers: `hooks/` -> `tools/` -> `core/` + `lsp/`. Dependency direction is one-way downward. `core/` has zero Pi or LSP imports. Tools compose core and enrich with LSP data. Hooks call tool logic and inject into LLM context via `pi.sendMessage()`.
+- **MCP / Pi tool parity**: The 7 tools are registered once and shared. Any change to a tool's dispatch, params, path guards, error handling, or routing MUST be mirrored in `mcp/tools.ts`, then verified with `bash scripts/check-mcp-parity.sh`. MCP and Pi must stay in sync within the same PR.
+- **Windows path normalization**: The runtime targets Windows-native (incl. `.exe` packaging). All user-supplied paths MUST be normalized at ingress via `core/path-utils.ts` `normalizePathInput()` (handles Git-Bash `/c/foo` and WSL `/mnt/c/foo`). Never call `realpathSync`/`statSync`/`spawn` on a raw user path without it.
+- **No `process.exit` at module load**: `mcp/entry.ts` must exit only inside `main()` behind the `isMainModule` guard, deferred via `setImmediate` where I/O is pending — a module-top-level exit kills the host worker under vitest (see #676).
+- **LSP graceful degradation**: When LSP is unavailable, fall back to tree-sitter only; annotate output "(tree-sitter only, LSP unavailable)". Never throw on missing LSP.
+- **Encoding**: Always read source via `core/encoding.ts` adaptive reader (UTF-8 -> GBK -> GB2312). Never assume UTF-8.
+- **Platform support**: New platform logic MUST branch on `process.platform === "win32"` explicitly; never assume POSIX separators/paths. Verify `package.json` scripts use Node built-ins (no `rm -rf`), and add `windows-latest` to CI matrix.
 
-## API Surface
+## Change Workflow (high level)
 
-- **Pi Extension API**: `types/pi-extension.d.ts` — self-contained `ExtensionAPI` type stub. Import as `from "./types/pi-extension.js"`. Key types: `ExtensionAPI`, `ExtensionContext`, `AgentToolResult`.
-- **Tool registration**: `tools/_factory.ts` → `createTool(pi, { name, label, description, params, execute })`. Registration happens in `index.ts` default export.
-- **MCP server**: `mcp/tools.ts` uses Zod schemas from `tools/definitions.ts`. MCP and Pi tools MUST stay in sync within the same PR.
+- **Add a tool**: `tools/<name>.ts` with `register*` -> call in `index.ts` -> append NEXT rules in `core/output.ts` -> sync `mcp/tools.ts` + `mcp/README.md` -> docs in `SKILL.md` -> update `README.md` if the user-facing tool list changed.
+- **Modify a tool handler**: mirror in `mcp/tools.ts`, run `bash scripts/check-mcp-parity.sh`.
+- **Add a hook**: `hooks/<name>.ts` with `register*` -> call in `index.ts`. Hooks listen to lifecycle events; they do not return tools.
+- **Add a language**: grammar in `core/treesitter.ts` EXT_TO_LANG -> query in `core/treesitter-queries.ts` -> LSP spec in `lsp/servers.ts`.
+- **Add/extend a typed result**: expose `buildXxxResult(...): XxxResult` (typed data) + `executeXxxJson(result, root): string` (envelope wrapper); keep `executeXxx` for text backward-compat. Compute new fields inside `buildXxxResult` (single source of truth).
+- **Cache / wire-format change**: define in `core/graph.proto` (source of truth) + mirror in `core/proto-schema.ts`; guard serialize/deserialize by a 4-byte magic header; bump the magic byte on breaking changes; keep the V2 JSON fallthrough path.
+- **Tool name / behavior change**: after the code change, read `docs/kimi-code-hooks.md`, run its checklist, update the version-mapping table, sync Kimi Code shell hooks (MCP format `mcp__pi-shazam__shazam_<name>`).
+- For any change touching a contract/layer/convention, read `docs/INSTRUCTION.md` first.
 
-## Data & State Flows
+## First Places to Inspect (by layer)
 
-| Variable / Cache                 | Type                        | Purpose                                                     | Reset trigger                                           |
-| -------------------------------- | --------------------------- | ----------------------------------------------------------- | ------------------------------------------------------- |
-| Module-level cached scan results | In-memory                   | `scanProject()` result reused across tools within a session | New tool call with `scanProject` flag, or session end   |
-| LSP client connections           | Process                     | Spawned language server processes per language              | Session end, server crash, or explicit shutdown         |
-| Audit log                        | File (`~/.pi/hooks/audit/`) | All tool invocations                                        | Log rotation (10 MB cap)                                |
-| Graph cache                      | In-memory                   | RepoGraph built from tree-sitter parse                      | File change detected, or session end                    |
-| LSP per-file mtime cache (#641)  | In-memory                   | `LspManager._openedFileMtimes` records mtimeMs at didOpen   | Invalidate on mtime change, server restart, or shutdown |
-| Project config cache (#630)      | In-memory                   | `core/config.ts` parses `.pi-shazam/config.json` once       | Process restart (no hot-reload); reset via test helper  |
-
-## Security
-
-- **Project root validation**: `core/scanner.ts` `getEffectiveRoot()` validates project root; never trust user-supplied paths blindly.
-- **File path sanitization**: All file paths resolved against project root; path traversal (`../`) outside root is rejected.
-- **Secrets detection**: `shazam_verify` includes secrets detection. Never commit files containing detected secrets.
-- **Audit logging**: All tool invocations logged to audit file with timestamp, tool name, and parameters. Sensitive parameter values are redacted.
-- **LSP processes**: Auto-spawned language servers run as child processes; stdin/stdout communication only, no network exposure.
-
-## Debugging Guide
-
-| Symptom                               | Likely cause                             | Check                                                                    |
-| ------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------ |
-| Tree-sitter parse returns empty       | Grammar version mismatch                 | `package.json` `overrides` for `tree-sitter` version                     |
-| LSP tool returns "(tree-sitter only)" | Language server not installed or crashed | Run `/shazam-doctor` for a full health check                             |
-| LSP communication errors              | JSON-RPC frame parsing                   | `lsp/client.ts` Content-Length header mismatch, incomplete reads         |
-| LSP server not found on Windows       | SAFE_PATH_DIRS is POSIX-only             | `lsp/manager.ts` findInPath filter; install LSP server globally via npm  |
-| Build fails on Windows (`rm -rf`)     | POSIX command in prebuild script         | `package.json` prebuild uses Node.js `fs.rmSync` since v0.24.4           |
-| Tool not appearing in Pi              | Registration missing                     | Verify `register*` called in `index.ts`; check Pi extension loading logs |
-| Test failures with stream errors      | vscode-jsonrpc pre-existing issue        | `vitest.setup.ts` suppresses these; not a real bug                       |
-| Encoding errors on source read        | Non-UTF-8 file                           | `core/encoding.ts` adaptive reader tries UTF-8 -> GBK -> GB2312          |
-
-## Change Map
-
-- **Adding a new tool**: Create `tools/<name>.ts` with `register*` function using `createTool()` from `tools/_factory.ts` -> import and call in `index.ts` -> append Next recommendation rules to `NEXT_RULES` in `core/output.ts` -> sync in `mcp/tools.ts` and `mcp/README.md` -> add docs to `SKILL.md` -> update `README.md` if user-facing tool list changed.
-- **Modifying an existing tool handler**: When you change the dispatch logic, parameter validation, path guards, error handling, or routing in any `tools/*.ts` `register*` or `execute*` function, you MUST mirror the change in the corresponding MCP handler in `mcp/tools.ts`. After both sides are updated, run `bash scripts/check-mcp-parity.sh` to confirm parity. See #616 and #618 for the root cause of drift.
-- **Adding a typed result to a tool (#631 A)**: Each tool file should expose `buildXxxResult(graph, projectRoot, options?): XxxResult` (the typed data) and `executeXxxJson(result, projectRoot): string` (thin `buildEnvelope` wrapper). The existing `executeXxx` keeps its string-returning signature for backward compat with the 52 tests; it internally calls `renderXxxMarkdown(buildXxxResult(...))`. Dispatcher pattern: `result = buildXxxResult(...); text = json ? executeXxxJson(result, projectRoot) : renderXxxMarkdown(result)`. The XxxResult interface is exported so PR-G enrichment can extend it.
-- **Extending a typed result with provenance / density / structural data (#631 B)**: New fields go onto the existing `XxxResult` interface; compute them inside `buildXxxResult` (single source of truth). For per-affected-symbol provenance summaries add a `provenanceCounts: SymbolLookupProvenanceCounts` field; for per-edge provenance on call chains add `provenance: Provenance` to each edge; for directory density add a `topByDensity: OverviewModuleDensity[]` field; for line-count structural changes add a `structuralChanges?: { added, removed, modified }` field. Markdown renderers may add a compact badge; JSON surfaces the full data. New types are exported so future tests can import them.
-- **Adding a V3 (ProtoBuf) cache field (#628, #647, #647 D/E)**: Define a columnar ProtoBuf message in `core/graph.proto` (source of truth) and mirror the schema as JSON in `core/proto-schema.ts` (runtime). New serialize / deserialize functions go in `core/cache.ts`; they must be guarded by a 4-byte magic header so `loadGraphCache` can route to the right deserializer. Wire `saveGraphCache` to write the new format and `loadGraphCache` to detect it and fall back to the previous format. When bumping the V3 wire format (e.g. V3.0 -> V3.1 with the string table, or V3.1 -> V3.2 with kind int), bump the magic byte (e.g. `0x03` -> `0x04` -> `0x05`). For schema-breaking changes (e.g. kind type), add a version-specific Root in `core/proto-schema.ts` (see `_getRootV31`) so the in-place upgrade decoder can still parse the legacy wire format. `loadGraphCache` then transparently re-encodes legacy caches as the current format on first load (atomic-rename overwrite), so users pay no re-scan cost on upgrade. Never break the V2 on-disk backward-compat path. For repeated strings (e.g. symbol IDs across edges), prefer adding a top-level `string_table` + int32 index columns to a single message over inline `repeated string` fields. For repeated small-cardinality enums (e.g. `kind` with 5-6 values), prefer int32 + a small `_kindToInt` / `_intToKind` helper over repeated strings.
-- **Adding a new hook**: Create `hooks/<name>.ts` with `register*` calling `pi.on(...)` -> import and call in `index.ts`. Hooks listen to lifecycle events (`tool_execution_start`, `before_agent_start`, etc.); they do not return tools to LLM.
-- **Adding a new language**: Add grammar to `core/treesitter.ts` EXT_TO_LANG map -> add tree-sitter query in `core/treesitter-queries.ts` -> add LSP server config in `lsp/servers.ts`.
-- **Wiring a shared utility**: Add function to appropriate `core/*.ts` -> export -> import in consumers from `../core/<file>.js`. `core/` is the only valid home for cross-layer utilities.
-- **Changing LSP protocol**: Modify `lsp/client.ts` -> verify `lsp/manager.ts` lifecycle -> test with at least 2 different language servers.
-- **Changing tool output format**: Update the specific `tools/*.ts` formatter -> verify JSON envelope schema (all tools support `{ json: true }`).
-- **Changing tool names, adding/removing tools, or changing tool behaviors**: After the code change, read `docs/kimi-code-hooks.md` -> run through the checklist -> update version mapping table -> sync Kimi Code shell hooks if needed. Kimi Code uses MCP format (`mcp__pi-shazam__shazam_<name>`); old tool names in shell hooks will silently fail on Kimi Code.
-- **Adding platform support**: Check `process.platform` branches in `lsp/manager.ts` (isExecutable, findInPath, SAFE_PATH_DIRS, trustedUserCandidates). Ensure all shell commands in `package.json` scripts use Node.js built-ins (no `rm -rf`, `test -f`). Add platform-specific paths to `lsp/servers.ts` LSP server specs if needed. Verify `mcp/entry.ts` env var fallbacks (HOME vs USERPROFILE). Add `windows-latest` to CI matrix.
-- **Windows path normalization**: The target runtime is Windows-native (including `.exe` packaging), so all user-supplied paths MUST be normalized at ingress to handle both Git-Bash style (`/c/foo`) and WSL style (`/mnt/c/foo`) on Windows. Centralize this in `core/path-utils.ts` (`normalizePathInput()`); never call `realpathSync`/`statSync`/`lspawn` on a raw user path without it. See Issue #673. (LANGUAGE RULE: code/comments stay English; this bullet is a project convention note.)
-- **Migrating a flag to config file (#630)**: Drop the flag from `tools/definitions.ts` schema (both TypeBox and Zod), add a reader in `core/config.ts` if one does not exist, update the dispatcher resolution chain (call value > config value > hard-coded default), update `hooks/precommit-verify.ts` if it set the flag literally, document in `SKILL.md` and `docs/INSTRUCTION.md`. Verify `bash scripts/check-mcp-parity.sh` stays at 10/10.
-
-## First Places to Inspect
-
-- `index.ts` — extension entry, all registrations
-- `core/treesitter.ts` — language support, symbol extraction
-- `core/graph.ts` — dependency graph construction
-- `core/output.ts` — shared utilities: `_logWarn`, `NEXT_RULES`, `truncateOutput`
-- `core/scanner.ts` — project scanning, `getEffectiveRoot()`
-- `core/config.ts` — `.pi-shazam/config.json` loader (#630)
-- `core/risk.ts` — risk-level assessment for verify and pre-commit
-- `core/baseline.ts` — graph-baseline diff for risk and orphan tracking
-- `core/cache.ts` — on-disk graph cache (V2 JSON + V3 ProtoBuf, #628)
-- `core/proto-schema.ts` — JSON mirror of `core/graph.proto` (ProtoBuf runtime)
-- `core/graph.proto` — columnar ProtoBuf schema for the V3 cache (source of truth)
-- `lsp/client.ts` — LSP JSON-RPC communication
-- `lsp/manager.ts` — LSP server lifecycle + per-file mtime cache (#641)
-- `tools/_factory.ts` — tool registration factory
-- `tools/_dispatchers.ts` — shared MCP/Pi dispatch layer (#618)
-- `vitest.config.ts` — test runner config (suppresses pre-existing stream errors)
-- `docs/INSTRUCTION.md` — single source of truth for contracts and conventions
+- Entry / registration: `index.ts`
+- Core graph & scan: `core/scanner.ts` (getEffectiveRoot), `core/graph.ts`, `core/treesitter.ts`, `core/output.ts`, `core/cache.ts`, `core/proto-schema.ts`, `core/graph.proto`
+- LSP: `lsp/client.ts` (JSON-RPC), `lsp/manager.ts` (lifecycle, mtime cache)
+- Tools: `tools/_factory.ts` (registration), `tools/_dispatchers.ts` (shared Pi/MCP dispatch)
+- Contracts: `docs/INSTRUCTION.md`
 
 ## Project-Specific Rules
 
-- **LANGUAGE RULE**: All source code, code comments, JSDoc, commit messages, PR titles/descriptions, GitHub Issue content, and GitHub Release notes MUST be written in English. No Chinese or any other non-English language in any artifact that goes into the repository.
-- **No emoji or decorative symbols**: Forbidden in all source files, tool output, code comments, and commit messages. Only standard ASCII punctuation and Markdown formatting allowed. Exception: `AGENTS.md` and `SKILL.md`.
-- **Tool output must be clean**: No emoji, no decorative Unicode, no ANSI escape codes. No "friendly" filler phrases. Consistent heading hierarchy. Truncation explicitly flagged. No trailing whitespace.
-- **Tool naming**: Prefix all tools with `shazam_` to avoid conflicts.
-- **Symbol IDs**: Format as `{file}::{name}::{line}` — keeps repomap convention.
-- **LSP degradation**: When LSP is unavailable, fall back to tree-sitter only. Annotate output with "(tree-sitter only, LSP unavailable)". Never throw on missing LSP.
-- **Encoding**: Always use `core/encoding.ts` adaptive reader (UTF-8 -> GBK -> GB2312). Never assume UTF-8.
-- **TDD**: Write the test first for every slice. Verify it fails, implement, verify it passes, commit.
-- **PR scope**: One vertical slice per PR — build a complete module (core + tool + typecheck), then merge. No big-bang PRs.
+- **LANGUAGE RULE**: All source code, comments, JSDoc, commit messages, PR titles/descriptions, Issue content, and Release notes MUST be in English. No Chinese in any repository artifact.
+- **No emoji / decorative symbols** in source, tool output, comments, or commits. Standard ASCII + Markdown only. Exceptions: `AGENTS.md`, `SKILL.md`.
+- **Tool output must be clean**: no emoji, no decorative Unicode, no ANSI codes, no filler phrases, consistent heading hierarchy, truncation flagged, no trailing whitespace.
+- **Tool naming**: prefix all tools with `shazam_`.
+- **Symbol IDs**: `{file}::{name}::{line}` (repomap convention).
+- **PR scope**: one vertical slice per PR (build a complete module: core + tool + typecheck), then merge. No big-bang PRs.
 
-## Agent Checklist
-
-Before committing or creating a PR, verify ALL of the following:
+## Agent Checklist (before commit / PR)
 
 - [ ] `bash scripts/ci.sh` passes all checks
-- [ ] `npm run typecheck` passes with zero errors
-- [ ] `npm test` passes — 0 failures, 0 errors, 0 skipped
-- [ ] `npm run build` succeeds with `dist/index.js` and `dist/index.d.ts` present
-- [ ] `shazam_verify` called after all code changes (PASS/WARN verdict, no FAIL)
-- [ ] Read `docs/INSTRUCTION.md` if any contract, layer, or convention was changed
-- [ ] AGENTS.md updated if new module/tool/command/hook/data flow was added
-- [ ] MCP tools synced in `mcp/tools.ts` if Pi tools were changed
-- [ ] Kimi Code shell hooks checked via `docs/kimi-code-hooks.md` checklist if tool names/behaviors changed
-- [ ] `docs/kimi-code-hooks.md` version mapping table updated for this release
-- [ ] All code comments, JSDoc, commit messages in English (LANGUAGE RULE)
-- [ ] Address user as 老板 (user-level rules)
-- [ ] Completion report format (user-level rules)
-- [ ] No empty catch blocks — handle or propagate every error (user-level rules)
+- [ ] `npm run typecheck` — zero errors
+- [ ] `npm test` — 0 failures / 0 errors / 0 skipped
+- [ ] `npm run build` — `dist/index.js` + `dist/index.d.ts` present
+- [ ] `shazam_verify` called after all code changes (PASS/WARN, no FAIL)
+- [ ] `docs/INSTRUCTION.md` read if contract/layer/convention changed
+- [ ] AGENTS.md updated if new module/tool/command/hook/data flow added
+- [ ] MCP tools synced in `mcp/tools.ts` if Pi tools changed
+- [ ] Kimi Code shell hooks checked via `docs/kimi-code-hooks.md` if tool names/behaviors changed
+- [ ] All comments/JSDoc/commits in English (LANGUAGE RULE)
+- [ ] Address user as 老板; completion-report format used; no empty catch blocks
 
 </general-project-rules>

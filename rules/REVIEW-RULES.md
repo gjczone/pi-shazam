@@ -148,3 +148,48 @@ Skip any finding that does not meet the P0/P1 bar. Do not submit more than 15 fi
 - [ ] **Test exclusion**: Verify `tests/` files are excluded by default from the main graph (see #632). Test mocks must not pollute `shazam_lookup` / `shazam_overview`.
 - [ ] **Output placeholder strings**: Grep tool output templates for `PICK FROM`, `[REVIEW]`, `TODO`, `<insert-here>`, `XXX`. Placeholder text slipped through to LLM agents is a real bug.
 - [ ] **Summary counter math**: For any tool that reports a counter summary (errors/warnings/total etc.), the math must be self-consistent or the breakdown must be explicit.
+
+## Windows-Specific Review Rules
+
+pi-shazam runs on Windows (cmd, PowerShell 5/7, Git Bash) as a standalone MCP server. The local MCP path is the most failure-prone surface on Windows. Review these in addition to the P0/P1 lists above.
+
+### P0 -- must fix (Windows correctness / process safety)
+
+- **W1. Path normalization at ingress**: Every user- or tool-supplied path on Windows must pass through `normalizePathInput()` before `realpathSync`/`resolve`. Git-Bash `/c/foo` and WSL `/mnt/c/foo` styles must be normalized to `C:\foo`, and mixed `\`/`/` must be collapsed. A new function that accepts a path and calls `resolve()`/`realpathSync()` directly without normalization will corrupt the graph cache key and break LSP (symlink vs resolved path mismatch). See #673.
+- **W2. Symlink privilege guard**: Creating a symlink on Windows requires admin or Developer Mode. Any `symlinkSync` call (tests OR production) MUST be wrapped in try/catch with a graceful fallback, or preceded by a privilege probe. A bare `symlinkSync` throws `EPERM` on a normal Windows machine and crashes the process/test. See #485, #678.
+- **W3. MCP process lifecycle / no zombie**: `mcp/entry.ts` must guarantee LSP child processes are `shutdown()`-ed before the process exits, and `process.exit` must be deferred via `setImmediate` (#599) so pending I/O flushes. New `process.exit` calls must NOT terminate immediately (orphaned LSP children). The server must NOT spawn multiple MCP processes -- `isMainModule` is the single entry gate (#485).
+- **W4. LSP discovery on Windows**: `lsp/manager.ts` `findInPath` bypasses the POSIX-only `SAFE_PATH_DIRS` filter on `win32` and `isExecutable` is PATHEXT-aware. When adding a new LSP server spec, you MUST provide a `win32` install/discovery path; otherwise the server silently degrades to tree-sitter-only on Windows with no error.
+
+### P1 -- reliability risk (Windows)
+
+- **W5. Encoding fallback**: `core/encoding.ts` adaptive reader (UTF-8 -> GBK -> GB2312) is mandatory. Any `readFileSync` of source must use `_readFileAdaptive`; a direct `readFileSync` will emit garbled text for valid GBK files and corrupt symbol extraction.
+- **W6. Platform-aware timeouts**: Any new heavyweight synchronous or child-process operation (scanProject, LSP init) MUST account for win32 timeout scaling (1.5x, #677). Hardcoded 30s/60s values can be too short under Windows load. `vitest.config.ts` win32 `testTimeout` is already 180s -- keep new long tests mindful of that.
+- **W7. Explicit `process.platform` branches**: New platform-specific logic MUST use `process.platform === "win32"` explicitly; do not assume POSIX separators or paths. Use `path.sep` / `path.resolve` for cross-platform comparisons (#668).
+- **W8. No absolute Windows paths in user output**: Error/audit messages must not leak absolute local paths (`C:\Users\...`) to the LLM or logs. Use paths relative to PROJECT_ROOT.
+
+## AI-Prone Mistakes -- patterns to reject
+
+These are the failure modes LLM-generated patches most often introduce. Reject any diff that exhibits them unless there is a concrete, explained reason.
+
+- **A1. Swallowed errors / empty catch**: Any `catch {}` or `catch (e) { /* ignore */ }` with no `_logWarn` and no rethrow. AI patches frequently "make it compile" by emptying a catch. Every `catch` MUST log (what operation failed, the input context, the original `err.message`) or propagate. Empty catch blocks are forbidden project-wide (AGENTS.md Hard Boundaries).
+- **A2. `any` bypassing the data model**: `as any`, `: any` parameters/returns, or `any` in shared types hide RepoGraph/Symbol/Edge shape mismatches. Use concrete types; if a boundary truly needs looseness, use `unknown` + a runtime narrowing guard, never `any`.
+- **A3. Unsafe `as` casts on unknown input**: Casting `Record<string, unknown>` (MCP SDK payloads) directly with `as string`/`as X` without Zod validation or a runtime `typeof` check will fail at runtime. Validate at the boundary, then assert.
+- **A4. `process.exit` at module load**: A module-top-level `process.exit` kills the host worker under vitest and cascades test failures (#676). All exits belong inside `main()` / behind the `isMainModule` guard, and must be deferred via `setImmediate` where I/O is pending.
+- **A5. Masked original error**: `catch (e) { throw new Error("failed"); }` discards `e`. Preserve the cause: `new Error("context", { cause: e })` or append `e.message`.
+- **A6. Orphaned child processes**: `spawn`/`execSync` of LSP or git without a teardown path (SIGTERM handler, `shutdown()`, `AbortSignal`) leaks processes that accumulate as zombies. Every spawned process needs a matched cleanup.
+- **A7. Test pollution via module-level state / env**: Tests that mutate `process.env`, `setProjectRoot`, or module-level caches MUST restore them in `afterEach`/`afterAll`. E2E tests that `spawn` a child MUST pass a cleaned `env`, never inherit the (possibly mutated) parent env -- a leaked `PI_SHAZAM_HOME_ONLY=1` makes the child reject its root and exit before responding (#676).
+- **A8. Floating / unawaited promises**: `async` calls not `await`ed (errors vanish); `throw` inside a `setTimeout` callback (never propagates). Await or attach `.catch`.
+- **A9. Over-broad try/catch**: Wrapping an entire function in one `try` hides the real failure site. Catch at the boundary where you can actually handle or log the error.
+- **A10. Hardcoded platform paths**: Hardcoding `/home`, `/tmp`, `C:\Users`, or assuming a fixed drive letter. Use `os.tmpdir()`, `process.env.HOME || process.env.USERPROFILE`, and `path.resolve`.
+
+## Windows / AI greps to add to the sanity checklist
+
+Run these alongside the checklist above:
+
+- `grep -rn "process.exit" mcp/ core/ --include="*.ts"` -- every call must be inside `main()` / behind `isMainModule`, and (where I/O is pending) deferred via `setImmediate`. No module-top-level `process.exit`.
+- `grep -rn "symlinkSync" --include="*.ts"` -- every call must have a try/catch or a privilege probe.
+- `grep -rn "catch\s*{\s*}\|catch\s*(e)\s*{\s*}\|/\*\s*ignore\s*\*/" core/ tools/ hooks/ lsp/ mcp/ --include="*.ts"` -- reject empty catch blocks.
+- `grep -rn "as any" core/ tools/ hooks/ lsp/ mcp/ --include="*.ts"` -- reject `any` casts.
+- `grep -rn "readFileSync" core/ tools/ --include="*.ts"` -- must use `_readFileAdaptive` (encoding fallback).
+- `grep -rn "spawn\|execSync" core/ tools/ lsp/ mcp/ --include="*.ts"` -- verify each spawned process has a matched teardown path.
+- `grep -rn "resolve(process.argv\|process.argv\[2\]" mcp/ --include="*.ts"` -- argv-derived root must be normalized and validated, never trusted blindly.
