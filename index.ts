@@ -215,7 +215,8 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 							try {
 								const parsed = JSON.parse(l);
 								return parsed.err || parsed.level === "error" ? parsed : null;
-							} catch {
+							} catch (err) {
+								_logWarn("shazam-doctor", "JSON.parse failed for internal.log line", err);
 								return null;
 							}
 						})
@@ -240,7 +241,8 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 									const parsed = JSON.parse(l);
 									if (parsed.event === "result" && parsed.durationMs > 500) return parsed;
 									return null;
-								} catch {
+								} catch (err) {
+									_logWarn("shazam-doctor", "JSON.parse failed for shazam-calls.log line", err);
 									return null;
 								}
 							})
