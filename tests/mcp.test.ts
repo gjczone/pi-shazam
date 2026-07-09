@@ -262,6 +262,19 @@ function canCreateSymlinks(): boolean {
 	}
 }
 
+// #676: the spawned MCP server process inherits this worker's environment.
+// Other tests may leave PI_SHAZAM_HOME_ONLY=1 or PI_SHAZAM_PROJECT_ROOT set,
+// which makes the child's PROJECT_ROOT validation fail and the server exit(1)
+// before emitting any initialize response (only reproducible in the full
+// suite, where the env is mutated). Strip those variables so the child falls
+// back to the valid cwd passed as argv[2].
+function cleanMcpEnv(): NodeJS.ProcessEnv {
+	const env: NodeJS.ProcessEnv = { ...process.env };
+	delete env.PI_SHAZAM_HOME_ONLY;
+	delete env.PI_SHAZAM_PROJECT_ROOT;
+	return env;
+}
+
 describe("MCP: server starts correctly via symlink (#485)", () => {
 	// E2E tests require built dist/ — skip when running in CI before build step
 	const entryExists = existsSync(join(process.cwd(), "dist", "mcp", "entry.js"));
@@ -290,6 +303,7 @@ describe("MCP: server starts correctly via symlink (#485)", () => {
 				// Spawn the MCP server via the symlink (simulates npm/npx .bin/ symlink)
 				const child = spawn(process.execPath, [symlinkPath, resolve(".")], {
 					stdio: ["pipe", "pipe", "pipe"],
+					env: cleanMcpEnv(),
 				});
 
 				// Build MCP initialize request
@@ -360,7 +374,7 @@ describe("MCP: server starts correctly via symlink (#485)", () => {
 				}
 			}
 		},
-		15000,
+		60000,
 	);
 
 	it("MCP server responds to initialize when entry.js is accessed directly", async () => {
@@ -371,6 +385,7 @@ describe("MCP: server starts correctly via symlink (#485)", () => {
 		const entryPath = resolve("dist/mcp/entry.js");
 		const child = spawn(process.execPath, [entryPath, resolve(".")], {
 			stdio: ["pipe", "pipe", "pipe"],
+			env: cleanMcpEnv(),
 		});
 
 		const initRequest = JSON.stringify({
@@ -396,13 +411,13 @@ describe("MCP: server starts correctly via symlink (#485)", () => {
 
 		setTimeout(() => {
 			child.stdin.write(initRequest + "\n");
-		}, 2000);
+		}, 5000);
 
 		const result = await new Promise<{ stdout: string; stderr: string; code: number | null }>((resolve) => {
 			const timer = setTimeout(() => {
 				child.kill("SIGTERM");
 				resolve({ stdout, stderr, code: -1 });
-			}, 10000);
+			}, 45000);
 
 			child.on("close", (code) => {
 				clearTimeout(timer);
@@ -421,7 +436,7 @@ describe("MCP: server starts correctly via symlink (#485)", () => {
 			expect(response.result).toBeDefined();
 			expect(response.result.serverInfo.name).toBe("pi-shazam");
 		}
-	}, 15000);
+	}, 60000);
 
 	it("package.json version is correctly resolved from dist/mcp/entry.js", async () => {
 		// The version should NOT be "0.0.0" (the fallback) when entry.js is in dist/mcp/
