@@ -687,6 +687,7 @@ function _scanProject(projectPath: string, log?: (msg: string) => void, options:
 	if (isInMemory) {
 		const incremental = scanIncremental(root, files, adapter, logger);
 		recordExcludedTestCount(incremental, excludedTestCount);
+		incremental.truncated = truncated;
 		return incremental;
 	}
 
@@ -743,10 +744,12 @@ function _scanProject(projectPath: string, log?: (msg: string) => void, options:
 			saveGraphCache(updatedGraph, saveFileMtimes, cachePath);
 			logger(`Graph cache updated: ${updatedGraph.symbols.size} symbols`);
 		} catch (err) {
+			_logWarn("scanProject", "Failed to save graph cache (incremental)", err);
 			logger(`Failed to save graph cache: ${err}`);
 		}
 
 		recordExcludedTestCount(updatedGraph, excludedTestCount);
+		updatedGraph.truncated = truncated;
 		return updatedGraph;
 	}
 
@@ -760,9 +763,11 @@ function _scanProject(projectPath: string, log?: (msg: string) => void, options:
 		saveGraphCache(graph, saveFileMtimes, cachePath);
 		logger(`Graph cache saved: ${graph.symbols.size} symbols`);
 	} catch (err) {
+		_logWarn("scanProject", "Failed to save graph cache (full)", err);
 		logger(`Failed to save graph cache: ${err}`);
 	}
 
+	graph.truncated = truncated;
 	return graph;
 }
 
