@@ -110,6 +110,15 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 	lines.push("");
 	lines.push(`${graph.symbols.size} symbols across ${files.length} source files`);
 
+	// Issue #693: warn when the scan hit MAX_FILES and skipped files, so the
+	// agent knows the graph (and any dependency results) may be incomplete.
+	if (graph.truncated === true) {
+		lines.push("");
+		lines.push(
+			"[WARNING] File count exceeded MAX_FILES — the analysis graph is incomplete. Results may miss dependencies.",
+		);
+	}
+
 	// Language breakdown
 	const langCounts = new Map<string, number>();
 	for (const file of files) {
@@ -437,6 +446,8 @@ export interface OverviewResult {
 	suggestedReadingOrder?: string[];
 	parserWarnings?: OverviewParserWarning[];
 	moduleStructure?: OverviewModuleNode[];
+	/** Issue #693: true when the scan hit MAX_FILES and skipped source files. */
+	truncated?: boolean;
 }
 
 export interface OverviewModuleDensity {
@@ -546,6 +557,7 @@ export function buildOverviewResult(graph: RepoGraph, projectRoot: string, filte
 		dataStructures: filter ? undefined : _buildDataStructuresSection(graph),
 		entryPoints: filter ? undefined : _detectEntryPoints(graph),
 		httpRoutes: filter ? undefined : buildRoutesSection(graph),
+		truncated: graph.truncated === true ? true : undefined,
 		complexityHotspots: filter ? undefined : _computeHotspots(graph, 10),
 		suggestedReadingOrder: filter ? undefined : topFiles.slice(0, 5).map(([file]) => file),
 		parserWarnings: filter ? undefined : _buildParserWarnings(graph),

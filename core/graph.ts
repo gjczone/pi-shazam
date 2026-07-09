@@ -74,6 +74,8 @@ export interface RepoGraph {
 	nameIndex: Map<string, Symbol[]>;
 	/** Reverse edge index: target symbol ID -> set of source symbol IDs pointing to it, speeds up cross-file edge cleanup in removeEdgesForFile */
 	targetToSources: Map<string, Set<string>>;
+	/** Issue #693: true when the scan hit MAX_FILES and skipped source files. Surfaces incomplete-graph warnings. */
+	truncated?: boolean;
 }
 
 /** A JS/TS import binding */
@@ -412,14 +414,17 @@ export interface ModifiedSymbol {
 	risk?: "HIGH" | "MEDIUM" | "LOW";
 }
 
-function edgeIdentity(edge: Edge): string {
+export function edgeIdentity(edge: Edge): string {
 	// M5: Include weight and confidence in edge identity so that
 	// compareGraphSnapshots detects modified edges, not just added/removed ones.
-	return `${edge.source}::${edge.target}::${edge.kind}::${edge.weight}::${edge.confidence}`;
+	// Issue #695: include provenance so a provenance-only edge update is
+	// detected as a change instead of being treated as identical.
+	return `${edge.source}::${edge.target}::${edge.kind}::${edge.weight}::${edge.confidence}::${edge.provenance}`;
 }
 
 function edgeIdentityFromRow(row: SerializedEdge): string {
-	return `${row.source}::${row.target}::${row.kind}::${row.weight}::${row.confidence ?? 1.0}`;
+	// Issue #695: default to "heuristic" to match deserializeGraphV2.
+	return `${row.source}::${row.target}::${row.kind}::${row.weight}::${row.confidence ?? 1.0}::${row.provenance ?? "heuristic"}`;
 }
 
 function stableKey(sym: { file: string; name: string; kind: string }): string {
