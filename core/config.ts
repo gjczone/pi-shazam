@@ -21,10 +21,11 @@
  * from `tools/`, `hooks/`, or `lsp/`. It is consumed by
  * `tools/_dispatchers.ts` and `tools/verify.ts` only.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { getEffectiveRoot } from "./scanner.js";
 import { _logWarn } from "./output.js";
+import { readFileAdaptive } from "./encoding.js";
 
 /**
  * Per-tool config block. Each tool that opts into config-file-driven
@@ -67,7 +68,7 @@ export function loadConfig(projectRoot?: string): PiShazamConfig {
 		return _cached;
 	}
 	try {
-		const raw = readFileSync(configPath, "utf-8");
+		const raw = readFileAdaptive(configPath);
 		const parsed = JSON.parse(raw) as unknown;
 		// Defensive: a JSON literal (null, number, string) parses but is
 		// not a valid config object. Treat as missing and warn.
