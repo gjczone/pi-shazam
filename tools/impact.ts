@@ -211,7 +211,12 @@ export function executeImpact(
 
 	if (opts.compact) {
 		const affected = [...bfs.affectedFiles].sort();
-		return `## Impact (Compact)\n\n${affected.length} affected file(s):\n\n${affected.join("\n")}`;
+		const affectedTests = [...bfs.affectedFiles, ...files].filter((f) => isTestFile(f));
+		const lines = [`## Impact (Compact)`, ``, `${affected.length} affected file(s):`, ``, affected.join("\n")];
+		if (affectedTests.length > 0) {
+			lines.push(``, `Affected Tests (must re-run): ${affectedTests.length}`);
+		}
+		return lines.join("\n");
 	}
 
 	const lines: string[] = [];
