@@ -124,6 +124,12 @@ const GRAPH_TTL_MS = (() => {
 })();
 let cachedGraph: RepoGraph | null = null;
 let lastGraphAccess = 0;
+// Re-entrancy guard mirroring scanner.ts `_scanning`. getGraph is synchronous
+// and scanProject is synchronous, so two calls cannot truly interleave — but a
+// re-entrant getGraph (e.g. from a hook firing during a scan) must not trigger
+// a duplicate scanProject. While a build is in progress we return the graph we
+// already have.
+let graphBuilding = false;
 
 export function getGraph(): RepoGraph {
 	const now = Date.now();
@@ -140,7 +146,13 @@ export function getGraph(): RepoGraph {
 	if (cachedGraph !== null) {
 		return cachedGraph;
 	}
+	if (graphBuilding) {
+		// A scan is already in progress (synchronous, so this is defensive
+		// against re-entrant calls); return whatever we have.
+		return cachedGraph!;
+	}
 	try {
+		graphBuilding = true;
 		// #676: when imported by tests, PROJECT_ROOT is not a validated MCP
 		// root (module load no longer exits), so fall back to cwd — the real
 		// project under test. In the running MCP server PROJECT_ROOT is always
@@ -149,6 +161,8 @@ export function getGraph(): RepoGraph {
 	} catch (err) {
 		_logWarn("getGraph", "scanProject failed, falling back to cached graph", err);
 		if (!cachedGraph) throw err;
+	} finally {
+		graphBuilding = false;
 	}
 	return cachedGraph!;
 }
