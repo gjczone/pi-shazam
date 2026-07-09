@@ -105,6 +105,36 @@ check \
   "grep -q 'existsSync' '$ROOT/tools/_dispatchers.ts'" \
   "The lookup dispatcher must include existsSync for file-path verification (see #598)."
 
+# 7. Tool name parity: every registerMcpTool name must equal a name in
+#    tools/definitions.ts (the single source of truth). A drift here means
+#    the MCP client sees a different tool name than Pi, or vice versa.
+echo ""
+echo "--- Tool name parity (MCP name set == definitions name set) ---"
+check_tool_names() {
+  local defs="$ROOT/tools/definitions.ts"
+  local mcp="$ROOT/mcp/tools.ts"
+  # names declared in the shared definitions (source of truth)
+  local def_names
+  def_names=$(grep -oE 'name:\s*"[^"]+"' "$defs" | sed -E 's/name:\s*"([^"]+)"/\1/' | sort -u)
+  # names actually registered with the MCP server
+  local mcp_names
+  mcp_names=$(grep -oE 'registerMcpTool\([^,]+,\s*"[^"]+"' "$mcp" | grep -oE '"[^"]+"' | tr -d '"' | sort -u)
+  local only_def only_mcp
+  only_def=$(comm -23 <(echo "$def_names") <(echo "$mcp_names"))
+  only_mcp=$(comm -13 <(echo "$def_names") <(echo "$mcp_names"))
+  if [ -z "$only_def" ] && [ -z "$only_mcp" ]; then
+    echo "  [PASS] MCP tool names match definitions.ts exactly"
+    PASS=$((PASS + 1))
+    return 0
+  fi
+  echo "  [WARN] MCP tool names diverge from definitions.ts"
+  [ -n "$only_def" ] && echo "         In definitions.ts but NOT registered in MCP: $only_def"
+  [ -n "$only_mcp" ] && echo "         Registered in MCP but NOT in definitions.ts: $only_mcp"
+  echo "         Hint: the MCP name set must equal the definitions.ts name set (single source of truth)."
+  FAIL=$((FAIL + 1))
+}
+check_tool_names
+
 echo ""
 echo "==> Parity Check Results: $PASS passed, $FAIL warnings"
 echo ""
