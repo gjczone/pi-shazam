@@ -153,7 +153,7 @@ export function formatVerifyComment(input: VerifyCommentInput, opts: FormatOptio
 			} else if (cp.incomingCallers >= 10) {
 				lines.push(`- \`${cp.symbol}\` (top by PageRank) — ${cp.incomingCallers} incoming callers`);
 			} else {
-				lines.push(`- \`${cp.symbol}\` (mcp) — ${cp.incomingCallers} incoming callers`);
+				lines.push(`- \`${cp.symbol}\` (verify) — ${cp.incomingCallers} incoming callers`);
 			}
 		}
 		lines.push("");

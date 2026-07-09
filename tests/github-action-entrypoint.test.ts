@@ -173,7 +173,7 @@ describe("formatVerifyComment", () => {
 
 		expect(md).toContain("### Affected Critical Paths");
 		expect(md).toContain("- `scanProject` (top by PageRank) — 24 incoming callers");
-		expect(md).toContain("- `getGraph` (mcp) — 2 incoming callers");
+		expect(md).toContain("- `getGraph` (verify) — 2 incoming callers");
 		expect(md).toContain("- `runLspDiagnostics` (verify) — internal-only");
 	});
 
