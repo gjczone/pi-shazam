@@ -193,7 +193,8 @@ export async function dispatchLookup(
 
 export function dispatchImpact(graph: RepoGraph, params: Record<string, unknown>, projectRoot: string): DispatchResult {
 	const json = (params.json as boolean) ?? false;
-	const depth = Math.min(Math.max((params.depth as number) ?? 3, 1), 10);
+	const rawDepth = typeof params.depth === "string" ? Number(params.depth) : params.depth;
+	const depth = typeof rawDepth === "number" && Number.isFinite(rawDepth) ? Math.min(Math.max(rawDepth, 1), 10) : 3;
 	const direction = (params.direction as "incoming" | "outgoing" | "both") ?? "both";
 	const symbolName = params.symbol as string | undefined;
 
