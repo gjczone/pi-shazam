@@ -216,6 +216,36 @@ files)` markdown badge.
     now treats a project under `USERPROFILE` (Windows) as in-home, not just
     the POSIX `HOME`.
 
+- **Windows path normalization for Git-Bash and WSL styles (#673, #675)**:
+  `core/path-utils.ts` `normalizePathInput()` now collapses Git-Bash
+  `/c/foo` and WSL `/mnt/c/foo` paths to `C:\foo` at ingress, so the MCP
+  server and tool paths resolve correctly on Windows regardless of the
+  invoking shell. All user-supplied paths must route through it.
+
+- **Platform-aware timeouts for Windows (#677)**: LSP initialization and
+  other blocking operations scale their timeout by 1.5x on `win32`, and
+  `vitest.config.ts` raises the win32 `testTimeout` to 180s, eliminating the
+  Windows-specific timeouts that were failing the local full suite.
+
+- **MCP entry no longer kills the test worker on a bad root (#676, #679)**:
+  `mcp/entry.ts` moved the `process.exit(1)` for an invalid `PROJECT_ROOT`
+  out of module load and into `main()` (behind the `isMainModule` guard).
+  Importing the module under vitest no longer aborts the worker, which had
+  cascade-failed 12 tests that share the file; `getGraph()` falls back to
+  `cwd` when imported under test. The real-server fail-closed behavior
+  (exit on bad root) is preserved.
+
+- **Hook injection content and context delivery fixed (#674)**: Corrected
+  the content and context delivered by the before-agent-start hook so the
+  injected project snapshot matches what the tools consume.
+
+- **Local full-suite flaky hardening (#678, #680, #681)**: Windows test
+  stability improvements — symlink tests probe privilege at module load and
+  `it.skipIf(!canCreateSymlinks())` (no admin/Developer-Mode required);
+  `verify-worktree` `beforeAll` `hookTimeout` raised to 30s with retry+backoff
+  on every git op; `benchmark-v3` speed assertions use vitest `retry: 2`.
+  No production code touched; CI (windows/macos/ubuntu) remains authoritative.
+
 ### Security
 
 - **Escape backslashes before quotes in Mermaid label sanitization (#2)**:
