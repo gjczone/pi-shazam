@@ -67,23 +67,16 @@ export function validateProjectRoot(root: string): { ok: boolean; error?: string
 
 // Priority: CLI arg > PI_SHAZAM_PROJECT_ROOT env > PWD env > cwd
 const rawRoot = resolve(process.argv[2] || process.env.PI_SHAZAM_PROJECT_ROOT || process.env.PWD || ".");
-// #464/#465: validate PROJECT_ROOT exists and is a directory, then propagate
-// it to the scanner override so getEffectiveRoot() returns PROJECT_ROOT.
+// #464/#465: validate PROJECT_ROOT exists and is a directory.
 const rootValidation = validateProjectRoot(rawRoot);
-if (!rootValidation.ok) {
-	console.error(`[pi-shazam mcp] ${rootValidation.error}`);
-	process.exit(1);
-}
-// #464: propagate the explicit project-root argument to the scanner override
-// so getEffectiveRoot() returns PROJECT_ROOT inside MCP executors. Without
-// this, factory-injected params.project and buildEnvelope project fields
-// would fall back to process.cwd(), diverging from PROJECT_ROOT used by
-// scanProject and the LSP manager.
-// #570: use the realpath-resolved root from validateProjectRoot to avoid
-// path mismatches with LSP (symlink paths vs resolved paths).
-const PROJECT_ROOT = rootValidation.realRoot!;
-
-setProjectRoot(PROJECT_ROOT);
+// #676: do NOT call process.exit at module load. Tests import this module
+// (e.g. to call validateProjectRoot / getGraph) under a vitest worker where
+// process.argv[2] is a vitest argument, not a project root. Exiting here would
+// kill the worker and cascade-fail every later test in the same file. The exit
+// is deferred to main() (see below) so only the real MCP entry point aborts on
+// a bad root. PROJECT_ROOT still resolves to a usable value at load time so
+// getGraph() and other exports work when imported by tests.
+const PROJECT_ROOT = rootValidation.ok ? rootValidation.realRoot! : rawRoot;
 
 // Issue #632: the scanner excludes test files from the default graph to
 // prevent ~56% noise in pi-shazam-sized projects. We do NOT pass
@@ -148,7 +141,11 @@ export function getGraph(): RepoGraph {
 		return cachedGraph;
 	}
 	try {
-		cachedGraph = scanProject(PROJECT_ROOT);
+		// #676: when imported by tests, PROJECT_ROOT is not a validated MCP
+		// root (module load no longer exits), so fall back to cwd — the real
+		// project under test. In the running MCP server PROJECT_ROOT is always
+		// valid (main() guards it), so this branch never triggers there.
+		cachedGraph = scanProject(rootValidation.ok ? PROJECT_ROOT : process.cwd());
 	} catch (err) {
 		_logWarn("getGraph", "scanProject failed, falling back to cached graph", err);
 		if (!cachedGraph) throw err;
@@ -157,6 +154,23 @@ export function getGraph(): RepoGraph {
 }
 
 async function main(): Promise<void> {
+	// #676: abort only when this module is the actual MCP entry point.
+	// (Module load no longer exits — see rootValidation above — so vitest
+	// imports stay alive. Here, with a bad PROJECT_ROOT, we still refuse to
+	// start the server, preserving the original fail-closed behavior.)
+	if (!rootValidation.ok) {
+		console.error(`[pi-shazam mcp] ${rootValidation.error}`);
+		process.exit(1);
+	}
+	// #464: propagate the explicit project-root argument to the scanner override
+	// so getEffectiveRoot() returns PROJECT_ROOT inside MCP executors. Without
+	// this, factory-injected params.project and buildEnvelope project fields
+	// would fall back to process.cwd(), diverging from PROJECT_ROOT used by
+	// scanProject and the LSP manager.
+	// #570: use the realpath-resolved root from validateProjectRoot to avoid
+	// path mismatches with LSP (symlink paths vs resolved paths).
+	setProjectRoot(PROJECT_ROOT);
+
 	// Initialize LSP servers for richer analysis (hover, diagnostics, etc.)
 	const lspManager = new LspManager(PROJECT_ROOT);
 	// Scan project early so we can derive languages from the graph
