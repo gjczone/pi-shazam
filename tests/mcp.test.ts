@@ -2,7 +2,16 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { z } from "zod";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeFileSync, rmSync, existsSync, mkdirSync, mkdtempSync, realpathSync } from "node:fs";
+import {
+	writeFileSync,
+	rmSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	realpathSync,
+	unlinkSync,
+	symlinkSync,
+} from "node:fs";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
 import { validatePathInProject, buildEnvelope } from "../tools/_factory.js";
@@ -233,6 +242,26 @@ describe("MCP: recordCallChain enables rename workflow (#447)", () => {
 
 // -- MCP server startup via symlink (issue #485) --
 
+// Symlink creation requires admin/developer-mode privilege on Windows.
+// Probe once at module load; skip the assertion where symlinks cannot be created.
+function canCreateSymlinks(): boolean {
+	const probeDir = join(tmpdir(), "pi-shazam-485-probe");
+	rmSync(probeDir, { recursive: true, force: true });
+	mkdirSync(probeDir, { recursive: true });
+	const probeTarget = join(probeDir, "target");
+	const probeLink = join(probeDir, "link");
+	try {
+		writeFileSync(probeTarget, "");
+		symlinkSync(probeTarget, probeLink);
+		unlinkSync(probeLink);
+		return true;
+	} catch {
+		return false;
+	} finally {
+		rmSync(probeDir, { recursive: true, force: true });
+	}
+}
+
 describe("MCP: server starts correctly via symlink (#485)", () => {
 	// E2E tests require built dist/ — skip when running in CI before build step
 	const entryExists = existsSync(join(process.cwd(), "dist", "mcp", "entry.js"));
@@ -241,95 +270,98 @@ describe("MCP: server starts correctly via symlink (#485)", () => {
 		return;
 	}
 
-	it("MCP server responds to initialize when entry.js is accessed via a symlink", async () => {
-		const { symlinkSync, unlinkSync, mkdirSync, rmSync } = await import("node:fs");
-		const { resolve, join } = await import("node:path");
-		const { spawn } = await import("node:child_process");
+	it.skipIf(!canCreateSymlinks())(
+		"MCP server responds to initialize when entry.js is accessed via a symlink",
+		async () => {
+			const { resolve, join } = await import("node:path");
+			const { spawn } = await import("node:child_process");
 
-		// Create a temp directory with a symlink to the built entry.js.
-		// Clean up stale leftovers from a previous run so symlinkSync won't hit EEXIST.
-		const tmpDir = join(tmpdir(), "pi-shazam-485-test");
-		rmSync(tmpDir, { recursive: true, force: true });
-		mkdirSync(tmpDir, { recursive: true });
-		const entryPath = resolve("dist/mcp/entry.js");
-		const symlinkPath = join(tmpDir, "pi-shazam-mcp");
+			// Create a temp directory with a symlink to the built entry.js.
+			// Clean up stale leftovers from a previous run so symlinkSync won't hit EEXIST.
+			const tmpDir = join(tmpdir(), "pi-shazam-485-test");
+			rmSync(tmpDir, { recursive: true, force: true });
+			mkdirSync(tmpDir, { recursive: true });
+			const entryPath = resolve("dist/mcp/entry.js");
+			const symlinkPath = join(tmpDir, "pi-shazam-mcp");
 
-		try {
-			symlinkSync(entryPath, symlinkPath);
+			try {
+				symlinkSync(entryPath, symlinkPath);
 
-			// Spawn the MCP server via the symlink (simulates npm/npx .bin/ symlink)
-			const child = spawn(process.execPath, [symlinkPath, resolve(".")], {
-				stdio: ["pipe", "pipe", "pipe"],
-			});
-
-			// Build MCP initialize request
-			const initRequest = JSON.stringify({
-				jsonrpc: "2.0",
-				id: 1,
-				method: "initialize",
-				params: {
-					protocolVersion: "2024-11-05",
-					capabilities: {},
-					clientInfo: { name: "test-485", version: "1.0" },
-				},
-			});
-
-			let stdout = "";
-			let stderr = "";
-
-			child.stdout.on("data", (chunk: Buffer) => {
-				stdout += chunk.toString();
-			});
-			child.stderr.on("data", (chunk: Buffer) => {
-				stderr += chunk.toString();
-			});
-
-			// Send initialize request after a short delay (let the server start)
-			setTimeout(() => {
-				child.stdin.write(initRequest + "\n");
-			}, 2000);
-
-			// Wait for response or timeout
-			const result = await new Promise<{ stdout: string; stderr: string; code: number | null }>((resolve) => {
-				const timer = setTimeout(() => {
-					child.kill("SIGTERM");
-					resolve({ stdout, stderr, code: -1 });
-				}, 10000);
-
-				child.on("close", (code) => {
-					clearTimeout(timer);
-					resolve({ stdout, stderr, code });
+				// Spawn the MCP server via the symlink (simulates npm/npx .bin/ symlink)
+				const child = spawn(process.execPath, [symlinkPath, resolve(".")], {
+					stdio: ["pipe", "pipe", "pipe"],
 				});
-			});
 
-			// The server MUST respond to initialize with a valid JSON-RPC response
-			expect(result.stdout.length).toBeGreaterThan(0);
+				// Build MCP initialize request
+				const initRequest = JSON.stringify({
+					jsonrpc: "2.0",
+					id: 1,
+					method: "initialize",
+					params: {
+						protocolVersion: "2024-11-05",
+						capabilities: {},
+						clientInfo: { name: "test-485", version: "1.0" },
+					},
+				});
 
-			// Parse the response — MCP uses Content-Length framing, extract JSON
-			const jsonMatch = result.stdout.match(/\{[\s\S]*"result"[\s\S]*\}/);
-			expect(jsonMatch).not.toBeNull();
-			if (jsonMatch) {
-				const response = JSON.parse(jsonMatch[0]);
-				expect(response.jsonrpc).toBe("2.0");
-				expect(response.id).toBe(1);
-				expect(response.result).toBeDefined();
-				expect(response.result.serverInfo.name).toBe("pi-shazam");
-				expect(response.result.capabilities).toBeDefined();
-				expect(response.result.capabilities.tools).toBeDefined();
+				let stdout = "";
+				let stderr = "";
+
+				child.stdout.on("data", (chunk: Buffer) => {
+					stdout += chunk.toString();
+				});
+				child.stderr.on("data", (chunk: Buffer) => {
+					stderr += chunk.toString();
+				});
+
+				// Send initialize request after a short delay (let the server start)
+				setTimeout(() => {
+					child.stdin.write(initRequest + "\n");
+				}, 2000);
+
+				// Wait for response or timeout
+				const result = await new Promise<{ stdout: string; stderr: string; code: number | null }>((resolve) => {
+					const timer = setTimeout(() => {
+						child.kill("SIGTERM");
+						resolve({ stdout, stderr, code: -1 });
+					}, 10000);
+
+					child.on("close", (code) => {
+						clearTimeout(timer);
+						resolve({ stdout, stderr, code });
+					});
+				});
+
+				// The server MUST respond to initialize with a valid JSON-RPC response
+				expect(result.stdout.length).toBeGreaterThan(0);
+
+				// Parse the response — MCP uses Content-Length framing, extract JSON
+				const jsonMatch = result.stdout.match(/\{[\s\S]*"result"[\s\S]*\}/);
+				expect(jsonMatch).not.toBeNull();
+				if (jsonMatch) {
+					const response = JSON.parse(jsonMatch[0]);
+					expect(response.jsonrpc).toBe("2.0");
+					expect(response.id).toBe(1);
+					expect(response.result).toBeDefined();
+					expect(response.result.serverInfo.name).toBe("pi-shazam");
+					expect(response.result.capabilities).toBeDefined();
+					expect(response.result.capabilities.tools).toBeDefined();
+				}
+			} finally {
+				try {
+					unlinkSync(symlinkPath);
+				} catch {
+					// ignore
+				}
+				try {
+					rmSync(tmpDir, { recursive: true, force: true });
+				} catch {
+					// ignore
+				}
 			}
-		} finally {
-			try {
-				unlinkSync(symlinkPath);
-			} catch {
-				// ignore
-			}
-			try {
-				rmSync(tmpDir, { recursive: true, force: true });
-			} catch {
-				// ignore
-			}
-		}
-	}, 15000);
+		},
+		15000,
+	);
 
 	it("MCP server responds to initialize when entry.js is accessed directly", async () => {
 		const { resolve } = await import("node:path");
