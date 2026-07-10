@@ -58,7 +58,8 @@
 		"typebox": "^1.0.0",
 		"vscode-jsonrpc": "^9.0.0",
 		"vscode-languageserver-protocol": "^3.18.0",
-		"zod": "4.4.3"
+		"zod": "4.4.3",
+		"protobufjs": "^8.6.6"
 	},
 	"peerDependencies": {
 		"typebox": "^1.0.0"
@@ -66,7 +67,6 @@
 	"devDependencies": {
 		"@types/node": "^26.0.1",
 		"prettier": "^3.8.3",
-		"protobufjs": "^8.6.6",
 		"protobufjs-cli": "^2.5.7",
 		"typescript": "^6.0.3",
 		"vitest": "^4.1.8",
