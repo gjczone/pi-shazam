@@ -18,12 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.27.0] - 2026-07-10
 
-### Unreleased Notes
-
-_The following changes were accumulated during the 0.27.0 cycle._
-
-## [Unreleased]
-
 ### Added
 
 - **V3 ProtoBuf cache format (#628, #646)**: New compact binary cache that
