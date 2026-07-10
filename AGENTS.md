@@ -181,6 +181,8 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 - **LSP graceful degradation**: When LSP is unavailable, fall back to tree-sitter only; annotate output "(tree-sitter only, LSP unavailable)". Never throw on missing LSP.
 - **Encoding**: Always read source via `core/encoding.ts` adaptive reader (UTF-8 -> GBK -> GB2312). Never assume UTF-8.
 - **Platform support**: New platform logic MUST branch on `process.platform === "win32"` explicitly; never assume POSIX separators/paths. Verify `package.json` scripts use Node built-ins (no `rm -rf`), and add `windows-latest` to CI matrix.
+- **Path validation must defeat symlink escape**: Any code that reads/writes a user-supplied path MUST validate via `validatePathInProject` (from `tools/_factory.ts`, which applies `realpathSync` symlink resolution on top of the `isPathInRoot` string check). The string-only `isPathInRoot` is NOT sufficient — a symlink inside the project root pointing outside escapes it (#688). Always normalize ingress via `normalizePathInput()` first.
+- **Failures must be observable, never silent**: Parse/deserialize failures, cache-write errors, and config-load errors MUST be logged via `_logWarn` (with the original error) or propagated — never swallowed by an empty `catch`. Empty catch blocks are forbidden (see §0 Quality Gates). A silent failure hides a real defect and wastes an agent turn (#689, #690).
 
 ## Change Workflow (high level)
 

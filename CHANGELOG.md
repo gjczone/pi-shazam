@@ -142,6 +142,52 @@ files)` markdown badge.
 
 ### Fixed
 
+- **Batch code-review fixes (code-review findings #687-#701)**: Resolves
+  15 `code-review`-labelled findings across the tool surface. Highlights:
+  - **Rust import resolution (#687)**: Non-prefixed multi-segment `use`
+    paths (`use utils::helper::doThing`) are now resolved from the crate
+    root (Rust 2018+ semantics) instead of being dropped as external crates,
+    so `shazam_impact` / `shazam_verify` no longer miss local Rust edges.
+  - **Symlink path-traversal in auto-format (#688, P0)**: `hooks/shazam-guide.ts`
+    `autoFormatFile` now validates via `validatePathInProject` (realpathSync
+    symlink-escape check) instead of the string-only `isPathInRoot`, and
+    imports it from `tools/_factory.ts` (resolving the hook→tools layer
+    violation flagged in #697).
+  - **Silent audit-log discards (#689)**: Two empty `catch` blocks in
+    `index.ts` shazam-doctor parsing now log via `_logWarn` instead of
+    swallowing malformed `internal.log` / `shazam-calls.log` lines.
+  - **Silent cache-write failures (#690)**: `saveGraphCache` catch blocks in
+    `core/scanner.ts` now emit `_logWarn` (incremental + full paths) so
+    ENOSPC/EACCES/EROFS cache drops are observable, not silent.
+  - **MAX_FILES truncation has no output signal (#693)**: `RepoGraph` gains a
+    `truncated` flag set when `collectSourceFiles` hits the cap; overview
+    output now warns the agent the graph is incomplete.
+  - **Edge provenance lost in diff identity (#695)**: `edgeIdentity` /
+    `edgeIdentityFromRow` now include `provenance`, so `shazam_changes`
+    reports provenance-only edge upgrades (heuristic → resolved).
+  - **Concurrent getGraph duplicate scan (#691)**: `mcp/entry.ts` `getGraph()`
+    gains a re-entrancy guard so overlapping MCP calls share one scan
+    (defensive against the `_scanning` re-entry throw).
+  - **Impact compact mode drops affected tests (#692)**: `shazam_impact --compact`
+    now reports an "Affected Tests (must re-run): N" count line.
+  - **LSP false PASS on large projects (#694)**: `initialize` timeout raised
+    8s → 30s and diagnostic poll 1s → 10s so `shazam_verify` no longer
+    reports PASS before the language server finishes indexing.
+  - **MCP `depth` not coerced from string (#696)**: `dispatchImpact` now
+    coerces a string `depth` to a finite number (falls back to 3 on
+    `NaN` / non-numeric), preventing undefined traversal behavior.
+  - **Wrong `(mcp)` label in verify PR comment (#698)**: `formatVerifyComment`
+    now emits `(verify)` for 1-9 incoming-caller critical paths.
+  - **Over-broad unhandledRejection suppression (#699)**: `vitest.setup.ts`
+    now suppresses `ERR_STREAM_DESTROYED` only when opted in by LSP teardown
+    tests, so non-LSP tests that throw it correctly fail instead of passing.
+  - **GBK config files fail silently (#700)**: `loadConfig` reads via
+    `readFileAdaptive` (UTF-8 → GBK → GB2312) instead of hardcoded
+    UTF-8, so Windows GBK `.pi-shazam/config.json` parses correctly.
+  - **LspEnrichContext interface missing mtime (#701)**: `trackOpenedFile`
+    gains an optional `mtime?` param matching `LspManager`, preventing a
+    cache-invalidation regression if callers are refactored to the interface.
+
 - **MCP graph released on idle; memory / native-heap leak fixes (#626, #627)**:
   `mcp/entry.ts` `getGraph()` now honours a TTL (default 10 min,
   `PI_SHAZAM_GRAPH_TTL_MS`; 0 disables) and nulls the cached `RepoGraph` on
