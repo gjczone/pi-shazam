@@ -74,7 +74,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		name: "shazam_impact",
 		label: "Change Impact Analysis",
 		description:
-			"Required before editing 2+ files or any shared/exported module. Returns every file, symbol, and test affected by your planned changes. Pass --symbol for per-symbol caller/callee tracing. Pass --flat for a flat list of references. Pass --direction to filter by incoming/outgoing/both. Pass --with-symbols for per-symbol risk breakdown. Pass --compact for concise output. Pass --depth to control BFS traversal depth (default 3).",
+			"Required before editing 2+ files or any shared/exported module. Returns every file, symbol, and test affected by your planned changes. Pass --symbol for per-symbol caller/callee tracing.",
 		typeboxParams: Type.Object({
 			files: Type.Optional(Type.Array(Type.String())),
 			symbol: Type.Optional(Type.String()),
