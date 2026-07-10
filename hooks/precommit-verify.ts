@@ -12,7 +12,7 @@
  */
 
 import type { ExtensionAPI } from "../types/pi-extension.js";
-import type { VerifyOptions } from "../tools/verify.js";
+import type { VerifyOptions } from "../core/verify-types.js";
 import { tokenizeSegments, extractCommandFromEvent } from "./_bash-utils.js";
 import { _logInternal } from "../core/output.js";
 

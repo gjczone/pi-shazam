@@ -14,7 +14,7 @@ import type { ExtensionAPI } from "../types/pi-extension.js";
 import { join } from "node:path";
 import { redact } from "../core/redact.js";
 import { AUDIT_LOG_DIR, ts, writeJsonl } from "../core/audit-log.js";
-import { consumeLastToolTiming } from "../tools/_context.js";
+import { consumeLastToolTiming } from "../core/context.js";
 
 const LOG_FILE = join(AUDIT_LOG_DIR, "shazam-calls.log");
 const MAX_RESULT_CHARS = 10_000;

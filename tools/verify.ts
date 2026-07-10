@@ -48,10 +48,11 @@ import { readFileAdaptiveAsync } from "../core/encoding.js";
 import { resolve, join } from "node:path";
 import { getNextForTool, formatNextSection, truncateOutput, estimateTokens, _logWarn } from "../core/output.js";
 import { getLspManager } from "./_context.js";
+import type { VerifyOptions } from "../core/verify-types.js";
+import { setLastToolTiming } from "../core/context.js";
 import { lspCodeActions, lspReferences, upgradeEdgesToResolved } from "./lsp_enrich.js";
 import { createTool } from "./_factory.js";
 import { dispatchVerify } from "./_dispatchers.js";
-import { setLastToolTiming } from "./_context.js";
 import { uriToPath } from "../lsp/client.js";
 
 export function registerVerify(pi: ExtensionAPI): void {
@@ -93,25 +94,9 @@ export function registerVerify(pi: ExtensionAPI): void {
 }
 
 // -- Verify options ----------------------------------------------------------
-
-export interface VerifyOptions {
-	quick?: boolean;
-	lspOnly?: boolean;
-	preCommit?: boolean;
-	/**
-	 * Max files to pass to the LSP server for diagnostics. Resolved by
-	 * the dispatcher from the per-call value (none) > the
-	 * `.pi-shazam/config.json` `verify.maxFiles` value > the hard-coded
-	 * default of 100 (#630). Direct callers of `executeVerifyTextAsync`
-	 * / `executeVerifyJsonAsync` can still pass an explicit value here.
-	 */
-	maxFiles?: number;
-	// noCascade and noSecrets were never read anywhere in the codebase
-	// (dead options from an earlier migration). Dropped in #630 along
-	// with the per-call flag. If cascade analysis or secrets detection
-	// are reintroduced they should re-appear in `.pi-shazam/config.json`
-	// as boolean fields, not as per-call flags.
-}
+// VerifyOptions is defined in core/verify-types.ts so hooks can reference it
+// without importing the tools/ layer. Re-exported here for existing callers.
+export type { VerifyOptions } from "../core/verify-types.js";
 
 // -- JSON maxTokens truncation (issue #470) ----------------------------------
 
