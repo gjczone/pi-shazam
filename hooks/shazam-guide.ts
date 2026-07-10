@@ -21,7 +21,7 @@ import { join, extname } from "node:path";
 import { detectFormatters } from "../core/formatters.js";
 import { hasRecentPassingVerify } from "./verify-state.js";
 import { _logWarn } from "../core/output.js";
-import { validatePathInProject } from "../tools/_factory.js";
+import { validatePathInProjectCore, normalizePathInput } from "../core/path-utils.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -103,11 +103,11 @@ async function autoFormatFile(filePath: string, ctx: ExtensionContext): Promise<
 
 	const projectRoot = ctx.cwd;
 
-	// Symlink-escape guard (#688): validatePathInProject resolves the path via
+	// Symlink-escape guard (#688): validatePathInProjectCore resolves the path via
 	// realpathSync and rejects targets that live outside the project root,
 	// closing the gap where a string-only check would format a file outside root.
-	// Also normalizes Git-Bash/WSL style paths (via the factory wrapper).
-	if (!validatePathInProject(filePath, projectRoot)) return false;
+	// normalizePathInput (#673) handles Git-Bash/WSL style paths before validation.
+	if (!validatePathInProjectCore(normalizePathInput(filePath), projectRoot)) return false;
 
 	// Resolve relative paths (after validation so traversal can't escape).
 	const absPath = filePath.startsWith("/") ? filePath : join(projectRoot, filePath);
@@ -226,7 +226,7 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 			if (!formatted) {
 				const availableFormatters = detectFormatters(ctx.cwd);
 				if (availableFormatters.length > 0) {
-					ctx.ui.notify("run shazam_format to auto-format (prettier/ruff/gofmt/rustfmt)", "info");
+					ctx.ui.notify("run shazam_format to auto-format", "info");
 				}
 			}
 
@@ -236,8 +236,7 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 			if (hasMultiFileEdit(event.content)) {
 				pi.sendMessage({
 					customType: "shazam-guide",
-					content:
-						"[shazam] You edited multiple files this turn. Run `shazam_impact --files <paths>` to assess blast radius before continuing.",
+					content: "[shazam-guide] Run `shazam_impact --files <paths>` to assess blast radius.",
 					display: false,
 				});
 			}
@@ -250,7 +249,7 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 			if (symbolName && !event.isError) {
 				pi.sendMessage({
 					customType: "shazam-guide",
-					content: `recommended: shazam_impact --symbol ${symbolName} traces all callers before changing this symbol`,
+					content: `[shazam-guide] Run shazam_impact --symbol ${symbolName} to check callers before editing.`,
 					display: false,
 				});
 			}
@@ -270,14 +269,13 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 			if (combined.includes("[FAIL]")) {
 				pi.sendMessage({
 					customType: "shazam-guide",
-					content: "[shazam] shazam_verify reported FAIL - fix the reported errors before proceeding.",
+					content: "[shazam-guide] shazam_verify reported FAIL - fix the reported errors before proceeding.",
 					display: false,
 				});
 			} else if (combined.includes("[WARN]")) {
 				pi.sendMessage({
 					customType: "shazam-guide",
-					content:
-						"[shazam] shazam_verify reported WARN - review the warnings; run shazam_format if formatting is the cause.",
+					content: "[shazam-guide] shazam_verify reported WARN - review the warnings before proceeding.",
 					display: false,
 				});
 			}
@@ -292,14 +290,20 @@ export function registerShazamGuide(pi: ExtensionAPI): void {
 		// Skip the tip when a recent PASS verify already exists (noise reduction).
 		if (name === "shazam_impact") {
 			if (!hasRecentPassingVerify()) {
-				ctx.ui.notify("tip: run shazam_verify first to establish a baseline before assessing impact", "info");
+				ctx.ui.notify(
+					"[shazam-guide] Run shazam_verify first to establish a baseline before assessing impact.",
+					"info",
+				);
 			}
 			return;
 		}
 
 		// Before rename_symbol: suggest impact first
 		if (name === "shazam_rename_symbol") {
-			ctx.ui.notify("tip: run shazam_impact --symbol first to verify all references before renaming", "info");
+			ctx.ui.notify(
+				"[shazam-guide] Run shazam_impact --symbol first to verify all references before renaming.",
+				"info",
+			);
 			return;
 		}
 	});
