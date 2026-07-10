@@ -70,27 +70,10 @@ export function validatePathInProject(rawPath: string, projectRoot: string = get
 }
 
 // -- Envelope helper --------------------------------------------------------
-
-/**
- * Build a standardized JSON envelope for tool output.
- * Used by all tools to produce consistent schema_version/command/project/status/result.
- */
-export function buildEnvelope(name: string, project: string, status: "ok" | "error", result: unknown): string {
-	// #586: Normalize backslash paths (Windows) to forward slashes for
-	// consistent JSON output across platforms.
-	const normalizedProject = project.replace(/\\/g, "/");
-	return JSON.stringify(
-		{
-			schema_version: "1.0",
-			command: name.replace("shazam_", ""),
-			project: normalizedProject,
-			status,
-			result,
-		},
-		null,
-		2,
-	);
-}
+// Definition sunk into core/output.ts (issue #716); re-exported here so all
+// existing tools/_factory.js importers (tools/*.ts, tests) keep working.
+import { buildEnvelope } from "../core/output.js";
+export { buildEnvelope };
 
 // -- Factory types ----------------------------------------------------------
 
