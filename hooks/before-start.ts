@@ -114,13 +114,11 @@ function buildProactiveRecommendations(projectRoot: string, graph: RepoGraph): s
 
 		// Core workflow pointers (per-action contextual reminders are injected
 		// by shazam-guide at the relevant moments, so we keep this overview terse).
-		lines.push(
-			"- Before changing a shared/exported symbol: \`shazam_impact --symbol <name>\` (per-action reminder also fires)",
-		);
+		lines.push("- Before changing a shared/exported symbol: \`shazam_impact --symbol <name>\`");
 		if (hasHierarchy) {
 			lines.push("- For OOP type hierarchies: \`shazam_lookup --name <class>\`");
 		}
-		lines.push("- Run \`shazam_verify\` after edits to catch errors (auto-reminder fires at turn end if skipped)");
+		lines.push("- Run \`shazam_verify\` after edits to catch errors");
 	} catch (err) {
 		// If scan fails, provide minimal recommendations
 		_logWarn("buildProactiveRecommendations", "scan failed", err);
