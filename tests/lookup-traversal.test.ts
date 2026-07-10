@@ -88,6 +88,13 @@ describe("shazam_lookup path traversal guard", () => {
 });
 
 describe("LspManager.getServerForFile path traversal guard", () => {
+	// Each case constructs a fresh LspManager; its vscode-jsonrpc stream
+	// is destroyed on teardown and can emit ERR_STREAM_DESTROYED.
+	// This is expected LSP teardown noise (#699), not a real failure.
+	beforeEach(() => {
+		(globalThis as any).__suppressStreamDestroyed = true;
+	});
+
 	it("should return null for paths outside project root", async () => {
 		const { LspManager } = await import("../lsp/manager.js");
 		const manager = new LspManager("/tmp/fake-project", () => {});
