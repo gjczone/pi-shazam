@@ -31,6 +31,7 @@ import { readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { SKIP_DIRS } from "../core/filter.js";
 import { EXT_TO_LANG } from "../core/treesitter.js";
+import { SHZ_VERIFY, SUGGESTIONS } from "./_shared.js";
 
 /** Source file extensions set (mirrors core/scanner.ts SOURCE_EXTS). */
 const SOURCE_EXTS = new Set(Object.keys(EXT_TO_LANG));
@@ -114,19 +115,19 @@ function buildProactiveRecommendations(projectRoot: string, graph: RepoGraph): s
 
 		// Core workflow pointers (per-action contextual reminders are injected
 		// by shazam-guide at the relevant moments, so we keep this overview terse).
-		lines.push("- Before changing a shared/exported symbol: \`shazam_impact --symbol <name>\`");
+		lines.push(`- ${SUGGESTIONS.impactBeforeEdit}`);
 		if (hasHierarchy) {
 			lines.push("- For OOP type hierarchies: \`shazam_lookup --name <class>\`");
 		}
-		lines.push("- Run \`shazam_verify\` after edits to catch errors");
+		lines.push(`- ${SUGGESTIONS.verifyAfterEdit}`);
 	} catch (err) {
 		// If scan fails, provide minimal recommendations
 		_logWarn("buildProactiveRecommendations", "scan failed", err);
 		lines.push("### Recommendations");
 		lines.push("");
-		lines.push("- \`shazam_overview\` to understand project structure");
-		lines.push("- \`shazam_lookup --file <path>\` before editing any file");
-		lines.push("- \`shazam_verify\` after every edit");
+		lines.push(`- ${SUGGESTIONS.overviewForStructure}`);
+		lines.push(`- ${SUGGESTIONS.lookupBeforeEdit}`);
+		lines.push(`- \`${SHZ_VERIFY}\` after every edit`);
 	}
 
 	return lines.join("\n");

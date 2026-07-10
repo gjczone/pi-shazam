@@ -12,8 +12,7 @@ set -eu
 source "$(dirname "${BASH_SOURCE[0]}")/lib/shazam-common.sh"
 
 INPUT=$(cat)
-# #570: jq may not be installed; fall back to empty string without blocking.
-cmd=$(echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null || echo "")
+cmd=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
 
 # Only intercept git commit (without --no-verify)
 if ! echo "$cmd" | grep -qE '(^|[;&|])git[[:space:]]+commit'; then

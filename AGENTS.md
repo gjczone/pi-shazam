@@ -156,22 +156,23 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 - **What it does**: Codebase graph construction (tree-sitter AST -> symbols -> dependencies -> PageRank), LSP integration, safe code modification tools.
 - **Platforms**: Linux, macOS, Windows (cmd, PowerShell 5/7, Git Bash). All tree-sitter grammars ship prebuilt binaries (linux/darwin/win32, x64 + arm64); no C++ compiler needed. `npm run build` works in any shell; `bash scripts/ci.sh` needs Git Bash.
 - **Package manager**: npm (`package-lock.json`). **Deployment**: Pi extension (symlink `dist/` into `~/.pi/agent/extensions/pi-shazam`) + MCP server (`npx pi-shazam-mcp`).
-- **Architecture**: 4 layers `hooks/` -> `tools/` -> `core/` + `lsp/`. Dependency direction is one-way downward; `core/` has zero Pi/LSP imports. `mcp/` is a standalone entry that may import `tools/`/`core/`/`lsp/` but NOT `hooks/`.
+- **Architecture**: 4 layers `hooks/` -> `tools/` -> `core/` + `lsp/`. Dependency direction is one-way downward; `core/` has zero Pi/LSP imports. `mcp/` is a standalone entry that may import `tools/`/`core/`/`lsp/` but NOT `hooks/`. Shell hooks for CodeBuddy / Kimi Code live in `hooks/codebuddy/` and `hooks/kimi/`; shared shell lib lives in `hooks/lib/`; TypeScript-side shared constants live in `hooks/_shared.ts`.
 - **On-disk cache**: V3.2 ProtoBuf (columnar + string table + kind int) is the default; V2 JSON stays readable for backward compat. Magic-header routing in `loadGraphCache` upgrades legacy caches in place.
 - **Test framework**: vitest. **TDD**: write the failing test first, implement, verify green, commit.
 - **Primary risk areas**: tree-sitter grammar version compat, LSP JSON-RPC framing, encoding fallback (UTF-8/GBK/GB2312), MCP/Pi tool-definition sync, Windows LSP discovery, V3 cache magic-byte routing.
 
 ## Commands
 
-| Command                          | Purpose                                                   |
-| -------------------------------- | --------------------------------------------------------- |
-| `npm install --legacy-peer-deps` | Install deps (legacy-peer-deps required for tree-sitter)  |
-| `npm run build`                  | Compile TS -> `dist/`                                     |
-| `npm run typecheck`              | `tsc --noEmit`                                            |
-| `npm run dev`                    | `tsc --watch`                                             |
-| `npm test`                       | Run all tests via vitest                                  |
-| `bash scripts/ci.sh`             | Local CI gate — run before every commit (needs Git Bash)  |
-| `bash scripts/release.sh`        | Release checklist — run through ALL items when publishing |
+| Command                          | Purpose                                                                                                      |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `npm install --legacy-peer-deps` | Install deps (legacy-peer-deps required for tree-sitter)                                                     |
+| `npm run build`                  | Compile TS -> `dist/`                                                                                        |
+| `npm run typecheck`              | `tsc --noEmit`                                                                                               |
+| `npm run dev`                    | `tsc --watch`                                                                                                |
+| `npm test`                       | Run all tests via vitest                                                                                     |
+| `bash scripts/ci.sh`             | Local CI gate — run before every commit (needs Git Bash)                                                     |
+| `bash scripts/release.sh`        | Release checklist — run through ALL items when publishing                                                    |
+| `bash scripts/deploy-hooks.sh`   | Deploy shell hooks to ~/.codebuddy/hooks/ and ~/.kimi-code/hooks/ (dry-run by default, use --apply to write) |
 
 ## Key Decisions (preserve these)
 
@@ -192,7 +193,7 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 - **Add a language**: grammar in `core/treesitter.ts` EXT_TO_LANG -> query in `core/treesitter-queries.ts` -> LSP spec in `lsp/servers.ts`.
 - **Add/extend a typed result**: expose `buildXxxResult(...): XxxResult` (typed data) + `executeXxxJson(result, root): string` (envelope wrapper); keep `executeXxx` for text backward-compat. Compute new fields inside `buildXxxResult` (single source of truth).
 - **Cache / wire-format change**: define in `core/graph.proto` (source of truth) + mirror in `core/proto-schema.ts`; guard serialize/deserialize by a 4-byte magic header; bump the magic byte on breaking changes; keep the V2 JSON fallthrough path.
-- **Tool name / behavior change**: after the code change, read `docs/kimi-code-hooks.md`, run its checklist, update the version-mapping table, sync Kimi Code shell hooks (MCP format `mcp__pi-shazam__shazam_<name>`).
+- **Tool name / behavior change**: after the code change, run `bash scripts/deploy-hooks.sh --apply` to deploy updated shell hooks to CodeBuddy and Kimi Code. Then read `docs/kimi-code-hooks.md`, update the version-mapping table, verify MCP format `mcp__pi-shazam__shazam_<name>` is correct.
 - For any change touching a contract/layer/convention, read `docs/INSTRUCTION.md` first.
 
 ## First Places to Inspect (by layer)
@@ -201,6 +202,8 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 - Core graph & scan: `core/scanner.ts` (getEffectiveRoot), `core/graph.ts`, `core/treesitter.ts`, `core/output.ts`, `core/cache.ts`, `core/proto-schema.ts`, `core/graph.proto`
 - LSP: `lsp/client.ts` (JSON-RPC), `lsp/manager.ts` (lifecycle, mtime cache)
 - Tools: `tools/_factory.ts` (registration), `tools/_dispatchers.ts` (shared Pi/MCP dispatch)
+- Shell hooks: `hooks/codebuddy/` (CodeBuddy adapters), `hooks/kimi/` (Kimi adapters), `hooks/lib/shazam-common.sh` (shared lib)
+- Shell hooks dev docs: `docs/codebuddy-hooks.md`, `docs/kimi-code-hooks.md`
 - Contracts: `docs/INSTRUCTION.md`
 
 ## Project-Specific Rules
@@ -222,7 +225,7 @@ If a tool errors or is unavailable, try once more, then work around it. But you 
 - [ ] `docs/INSTRUCTION.md` read if contract/layer/convention changed
 - [ ] AGENTS.md updated if new module/tool/command/hook/data flow added
 - [ ] MCP tools synced in `mcp/tools.ts` if Pi tools changed
-- [ ] Kimi Code shell hooks checked via `docs/kimi-code-hooks.md` if tool names/behaviors changed
+- [ ] Shell hooks deployed via `bash scripts/deploy-hooks.sh --apply` if hooks changed; `docs/codebuddy-hooks.md` and `docs/kimi-code-hooks.md` updated if needed
 - [ ] All comments/JSDoc/commits in English (LANGUAGE RULE)
 - [ ] Address user as 老板; completion-report format used; no empty catch blocks
 

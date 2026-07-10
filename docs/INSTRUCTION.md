@@ -511,18 +511,19 @@ function write(line: string) {
 
 **Existing hooks in pi-shazam:**
 
-| Hook                     | Event                       | Purpose                                              |
-| ------------------------ | --------------------------- | ---------------------------------------------------- |
-| `before-start.ts`        | `before_agent_start`        | Inject project structure overview into system prompt |
-| `pre-edit.ts`            | `tool_call` + `tool_result` | Detect multi-file edits, warn about blast radius     |
-| `shazam-guide.ts`        | `tool_result` + `tool_call` | Auto-format + nudge agent to use shazam tools        |
-| `tool-logger.ts`         | `tool_call` + `tool_result` | Log shazam calls to audit dir                        |
-| `precommit-verify.ts`    | `tool_call` (bash)          | Auto-run shazam_verify on git commit (non-blocking)  |
-| `stop-verify.ts`         | `tool_result` + `turn_end`  | Remind to verify before ending turn                  |
-| `failure-recovery.ts`    | `tool_result`               | Detect consecutive failures, suggest alternatives    |
-| `issue-guard.ts`         | `tool_call` + `tool_result` | Detect gh issue creation, prompt impact analysis     |
-| `agent-context-guard.ts` | `tool_call`                 | Warn on review tasks without structural context      |
-| `verify-state.ts`        | (shared module)             | Shared verify tracking state for stop-verify         |
+| Hook                     | Event                       | Purpose                                                          |
+| ------------------------ | --------------------------- | ---------------------------------------------------------------- |
+| `before-start.ts`        | `before_agent_start`        | Inject project structure overview into system prompt             |
+| `pre-edit.ts`            | `tool_call` + `tool_result` | Detect multi-file edits, warn about blast radius                 |
+| `shazam-guide.ts`        | `tool_result` + `tool_call` | Auto-format + nudge agent to use shazam tools                    |
+| `tool-logger.ts`         | `tool_call` + `tool_result` | Log shazam calls to audit dir                                    |
+| `precommit-verify.ts`    | `tool_call` (bash)          | Auto-run shazam_verify on git commit (non-blocking)              |
+| `stop-verify.ts`         | `tool_result` + `turn_end`  | Remind to verify before ending turn                              |
+| `_shared.ts`             | (shared module)             | Single source of truth for tool names and shared suggestion text |
+| `failure-recovery.ts`    | `tool_result`               | Detect consecutive failures, suggest alternatives                |
+| `issue-guard.ts`         | `tool_call` + `tool_result` | Detect gh issue creation, prompt impact analysis                 |
+| `agent-context-guard.ts` | `tool_call`                 | Warn on review tasks without structural context                  |
+| `verify-state.ts`        | (shared module)             | Shared verify tracking state for stop-verify                     |
 
 ### 3.10 MCP Server — Non-Pi Client Wrapping
 
@@ -597,11 +598,12 @@ When one piece changes, others MUST follow in the same PR.
 
 **Hook changes:**
 
-| Change             | AGENTS.md          | AGENTS.md Change Map |
-| ------------------ | ------------------ | -------------------- |
-| New hook           | Add to hooks/ tree | Add to architecture  |
-| Hook event changed | Update description | —                    |
-| Delete hook        | Remove from tree   | —                    |
+| Change                 | AGENTS.md                                                                              | AGENTS.md Change Map                                          |
+| ---------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| New hook               | Add to hooks/ tree                                                                     | Add to architecture                                           |
+| New/changed shell hook | Update `hooks/codebuddy/` or `hooks/kimi/`, run `bash scripts/deploy-hooks.sh --apply` | Update `docs/codebuddy-hooks.md` or `docs/kimi-code-hooks.md` |
+| Hook event changed     | Update description                                                                     | —                                                             |
+| Delete hook            | Remove from tree                                                                       | —                                                             |
 
 **Doc changes:**
 
