@@ -65,28 +65,7 @@ export async function awaitPreviousShutdown(): Promise<void> {
 }
 
 // -- Tool timing (shared between tools and tool-logger) --------------------
-
-/**
- * Stores the most recent tool timing data.
- * Tools write to this before returning; tool-logger reads it on tool_result.
- * Safe because tools execute sequentially (one tool call at a time).
- */
-let _lastToolTiming: Record<string, number> | null = null;
-
-/**
- * Store nested timing data from the current tool execution.
- * Called by tools that have per-stage timing instrumentation.
- */
-export function setLastToolTiming(laps: Record<string, number>): void {
-	_lastToolTiming = laps;
-}
-
-/**
- * Retrieve and clear the last tool timing data.
- * Called by tool-logger after a tool result event.
- */
-export function consumeLastToolTiming(): Record<string, number> | null {
-	const laps = _lastToolTiming;
-	_lastToolTiming = null;
-	return laps;
-}
+// Re-exported from core/context.ts so tools/ callers keep working unchanged.
+// The definition lives in core/ to let hooks consume it without importing
+// the tools/ layer (preserves the one-way dependency rule).
+export { setLastToolTiming, consumeLastToolTiming } from "../core/context.js";
