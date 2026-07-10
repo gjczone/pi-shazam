@@ -441,3 +441,28 @@ export function _logWarn(tag: string, message: string, err?: unknown): void {
 export function _logInternal(tag: string, message: string, extra?: Record<string, unknown>): void {
 	writeJsonl(INTERNAL_LOG_PATH, { ts: ts(), tag, message, ...extra });
 }
+
+// -- Envelope helper --------------------------------------------------------
+
+/**
+ * Build a standardized JSON envelope for tool output.
+ * Used by all tools to produce consistent schema_version/command/project/status/result.
+ * Sunk from tools/_factory.ts into core (issue #716) so tools and core share one
+ * definition and core/overview.ts can construct JSON output without importing tools.
+ */
+export function buildEnvelope(name: string, project: string, status: "ok" | "error", result: unknown): string {
+	// #586: Normalize backslash paths (Windows) to forward slashes for
+	// consistent JSON output across platforms.
+	const normalizedProject = project.replace(/\\/g, "/");
+	return JSON.stringify(
+		{
+			schema_version: "1.0",
+			command: name.replace("shazam_", ""),
+			project: normalizedProject,
+			status,
+			result,
+		},
+		null,
+		2,
+	);
+}

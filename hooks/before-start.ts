@@ -22,7 +22,7 @@
 import type { ExtensionAPI } from "../types/pi-extension.js";
 import type { RepoGraph } from "../core/graph.js";
 import { scanProject } from "../core/scanner.js";
-import { executeOverview } from "../tools/overview.js";
+import { executeOverview } from "../core/overview.js";
 import { hasHierarchyKinds, _logWarn } from "../core/output.js";
 import { createBaseline, getBaseline, formatBaselineSummary } from "../core/baseline.js";
 import { safeGitExec, isProjectDir } from "../core/git-utils.js";
