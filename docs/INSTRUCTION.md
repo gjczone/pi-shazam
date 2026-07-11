@@ -555,6 +555,40 @@ and the next call rebuilds from the persistent disk cache.
 - Set `PI_SHAZAM_GRAPH_TTL_MS=0` to disable (always retain cache).
 - CLI one-shot mode is unaffected — the process exits before the TTL elapses.
 
+**Home-directory guard (`mcp/entry.ts`, `index.ts`, issue #720):**
+
+Walking the user's `$HOME` (or `%USERPROFILE%` on Windows) is the most common
+way to accidentally block MCP startup. Home trees are 10-100 GB and tens of
+thousands of directories. Two complementary guards prevent this:
+
+1. _Entrypoint refusal_ -- `mcp/entry.ts:validateProjectRoot` and
+   `index.ts` both refuse to operate on a project root that equals or is
+   nested under `$HOME`. The check uses `core/path-utils.ts:isHomeDirectory`,
+   which handles Windows case-insensitivity and falls back to `USERPROFILE`
+   when `HOME` is unset (issue #586). Opt out with
+   `PI_SHAZAM_ALLOW_HOME=1`.
+2. _Library deadline_ -- `core/scanner.ts:collectSourceFiles` enforces a
+   wall-clock budget (default `10_000 ms`) inside `_walkDirectory`. When
+   the budget is exceeded the graph is flagged `truncated: true` and a
+   one-shot warning is logged. Tune via `PI_SHAZAM_SCAN_DEADLINE_MS`;
+   set to `0` to disable.
+
+The guard composes with the existing `PI_SHAZAM_HOME_ONLY=1` (issue #465)
+flag: when both are set, the project must live under `$HOME` (HOME_ONLY)
+and the user has explicitly opted in to home scanning (ALLOW_HOME).
+
+**Skip-dir expansion (`core/filter.ts`, issue #720):**
+
+The canonical `SKIP_DIRS` set now includes cross-platform non-source trees
+commonly found under `$HOME`:
+
+- `snap` (Ubuntu snap package tree, contains many broken symlinks)
+- `Library`, `Applications`, `Movies`, `Music`, `Pictures` (macOS)
+- `Application Data`, `Desktop`, `Downloads`, `Documents` (Windows shell folders)
+
+Even if the entry guard is bypassed (e.g. `PI_SHAZAM_ALLOW_HOME=1`), the
+walker still skips these trees so the scanner does not waste I/O on them.
+
 **Tool registration (`mcp/tools.ts`) — Zod schemas (NOT TypeBox):**
 
 ```typescript
