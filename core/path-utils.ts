@@ -321,7 +321,13 @@ export function isHomeDirectoryForPlatform(
 	}
 
 	if (candidateResolved === homeDir) return true;
-	const homeWithSep = homeDir.endsWith(pathSep) ? homeDir : homeDir + pathSep;
+	// When either side is POSIX-style, force a POSIX separator so the
+	// prefix check uses the same separator the candidate uses. On Windows
+	// the default `path.sep` is "\\" but a POSIX-style candidate never
+	// contains it.
+	const usePosixSep = looksPosixStyle || !homeIsWin32Style;
+	const sep = usePosixSep ? "/" : pathSep;
+	const homeWithSep = homeDir.endsWith(sep) || homeDir.endsWith(pathSep) ? homeDir : homeDir + sep;
 	return candidateResolved.startsWith(homeWithSep);
 }
 
