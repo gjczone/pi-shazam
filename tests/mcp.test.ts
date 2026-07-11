@@ -272,6 +272,13 @@ function cleanMcpEnv(): NodeJS.ProcessEnv {
 	const env: NodeJS.ProcessEnv = { ...process.env };
 	delete env.PI_SHAZAM_HOME_ONLY;
 	delete env.PI_SHAZAM_PROJECT_ROOT;
+	// Issue #720: spawn the MCP server under $HOME (e.g. when tests run
+	// from a project cloned into the user's home directory). Without this,
+	// validateProjectRoot refuses to start and the server produces no
+	// stdout before the 10s spawn timeout, failing the test. Setting
+	// ALLOW_HOME here only affects the spawned test child process --
+	// production users still get the default-refused behaviour.
+	env.PI_SHAZAM_ALLOW_HOME = "1";
 	return env;
 }
 
