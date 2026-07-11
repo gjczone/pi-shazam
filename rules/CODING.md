@@ -95,7 +95,7 @@ Evidence: `grep "export function register" tools/*.ts` -> 8 matches. `grep "crea
 
 ### `_logWarn` Pattern
 
-Defined in `core/output.ts:462`. Standard warning mechanism for `core/` and `tools/` layers:
+Defined in `core/output.ts:427`. Standard warning mechanism for `core/` and `tools/` layers:
 
 ```typescript
 import { _logWarn } from "../core/output.js";
@@ -108,7 +108,19 @@ try {
 }
 ```
 
-Behavior: ENOENT errors suppressed (expected for optional binaries); other errors print `[pi-shazam] tag: message - reason`. Evidence: 39 usages across 9 `core/` files.
+Behavior: **the framework does NOT suppress ENOENT** -- the blanket early-return was deliberately removed in #551 because it hid root causes in paths where ENOENT signals a real problem (LSP hover failure, mid-walk directory deletion). Callers that probe optional files (negative probes -- e.g. agent asking for a missing path, `package.json` search, `validatePathInProject` containment) MUST add their own local guard before calling `_logWarn`:
+
+```typescript
+try {
+    await probeOptionalFile(filePath);
+} catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return; // expected outcome of negative probe
+    _logWarn("scanner", `unexpected probe failure for ${filePath}`, err);
+    return null;
+}
+```
+
+Reference pattern: `core/scanner.ts:175-176` (`getFileMtimes`), `core/git-hooks.ts:308-309` (one of four), `tools/_factory.ts:75-76` (`validatePathInProject`), `core/path-utils.ts:138-139` (`validatePathInProjectCore`), `mcp/entry.ts:123-124` (package.json search). See also REVIEW-RULES.md P1 #20 ("Negative-probe ENOENT must be guarded caller-side").
 
 Hooks layer uses `_logWarn` (from `core/output.js`) for internal diagnostics and `pi.sendMessage()` for user-visible output.
 
