@@ -291,7 +291,14 @@ export function isHomeDirectoryForPlatform(
 	const looksWin32Absolute = /^[A-Za-z]:[\\/]/.test(root) || (platform === "win32" && root.startsWith("/"));
 	const candidateResolved = looksWin32Absolute ? root : resolve(root);
 
-	if (platform === "win32") {
+	// On win32 with POSIX-style paths (e.g. CI runners that set HOME to
+	// /home/me without translating to Windows format), use POSIX
+	// comparison logic -- the candidate is also POSIX-style so we should
+	// not force a backslash separator that does not appear in either
+	// side. The case-insensitive win32 branch only applies when both
+	// sides use Windows separators.
+	const homeIsWin32Style = homeDir.includes("\\");
+	if (platform === "win32" && homeIsWin32Style) {
 		// Case-insensitive containment on Windows (issue #668).
 		const lowerHome = homeDir.toLowerCase();
 		const lowerCandidate = candidateResolved.toLowerCase();
