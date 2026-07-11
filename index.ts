@@ -16,6 +16,7 @@ import { setLspManager, awaitPreviousShutdown } from "./tools/_context.js";
 import { installPreCommitHook, isPreCommitHookInstalled } from "./core/git-hooks.js";
 import { setProjectRoot as scannerSetProjectRoot } from "./core/scanner.js";
 import { _logWarn, _logInternal } from "./core/output.js";
+import { isHomeDirectory } from "./core/path-utils.js";
 
 // -- Hook registrations ---------------------------------------------------
 import { registerBeforeStartHook } from "./hooks/before-start.js";
@@ -44,6 +45,25 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 	const log = (msg: string) => {
 		pi.logger?.info?.(`[pi-shazam] ${msg}`);
 	};
+	// Issue #720: warn (not info) so the user actually sees it. The home
+	// guard fires only on misconfiguration, so a warn level is appropriate.
+	const warn = (msg: string) => {
+		pi.logger?.warn?.(`[pi-shazam] ${msg}`);
+	};
+
+	// Issue #720: refuse to operate on the user's home directory by default.
+	// Home trees are 10-100 GB / tens of thousands of dirs and would block
+	// agent startup. Opt in with PI_SHAZAM_ALLOW_HOME=1, or simply `cd` into
+	// a specific project subdirectory before launching. We log a clear
+	// guidance message but do NOT abort -- the user may still want the
+	// extension to load other hooks (e.g. issue-guard). The scanner-side
+	// deadline in `_walkDirectory` caps latency even if the guard is bypassed.
+	if (process.env.PI_SHAZAM_ALLOW_HOME !== "1" && isHomeDirectory(projectRoot)) {
+		warn(
+			`Refusing to scan home directory ${projectRoot}. ` +
+				`Set PI_SHAZAM_ALLOW_HOME=1 to opt in, or change cwd to a project directory.`,
+		);
+	}
 
 	// -- LSP manager ---------------------------------------------------------
 
@@ -60,12 +80,20 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 			// Update projectRoot from Pi's detected project directory when it
 			// differs from process.cwd(). Handles the case where pi is started
 			// from a parent directory but detects the project in a subdirectory
-			// (issue #241).
+			// (issue #241). The home guard at the top of this module only
+			// checked process.cwd(); re-check the new root here so a Pi-detected
+			// cwd under $HOME also surfaces the warning (issue #720).
 			if (ctx.cwd && ctx.cwd !== projectRoot) {
 				projectRoot = ctx.cwd;
 				lspManager.setProjectRoot(ctx.cwd);
 				scannerSetProjectRoot(ctx.cwd);
 				log(`Project root updated from Pi context: ${ctx.cwd}`);
+				if (process.env.PI_SHAZAM_ALLOW_HOME !== "1" && isHomeDirectory(ctx.cwd)) {
+					warn(
+						`Refusing to scan home directory ${ctx.cwd}. ` +
+							`Set PI_SHAZAM_ALLOW_HOME=1 to opt in, or change cwd to a project directory.`,
+					);
+				}
 			}
 
 			await awaitPreviousShutdown();

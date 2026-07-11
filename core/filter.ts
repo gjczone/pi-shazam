@@ -70,6 +70,18 @@ export const SKIP_DIRS = new Set([
 	".yarn",
 	".idea",
 	".vscode",
+	// Issue #720: cross-platform non-source trees commonly found under $HOME.
+	// Walking these on home-directory scans is the bulk of the wasted work.
+	"snap", // Ubuntu snap package tree
+	"Library", // macOS
+	"Applications", // macOS
+	"Movies",
+	"Music",
+	"Pictures",
+	"Application Data", // Windows shell folder
+	"Desktop",
+	"Downloads",
+	"Documents",
 ]);
 
 export function isNonSourceFile(file: string): boolean {

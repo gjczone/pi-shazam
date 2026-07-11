@@ -25,6 +25,25 @@ import { _logWarn } from "./output.js";
 /** Maximum files to scan (safety limit) */
 export const MAX_FILES = 20_000;
 
+/**
+ * Default wall-clock budget (ms) for `_walkDirectory`. When the
+ * directory walk exceeds this budget, the result is flagged
+ * `truncated: true` and further descent stops. Issue #720 bounds
+ * worst-case scan latency on adversarial trees (deeply nested
+ * package managers, broken symlinks, etc.).
+ *
+ * Override via `PI_SHAZAM_SCAN_DEADLINE_MS` (set to 0 to disable).
+ */
+export const SCAN_DEADLINE_DEFAULT_MS = 10_000;
+
+function getScanDeadlineMs(): number {
+	const raw = process.env.PI_SHAZAM_SCAN_DEADLINE_MS;
+	if (raw === undefined || raw === "") return SCAN_DEADLINE_DEFAULT_MS;
+	const parsed = Number.parseInt(raw, 10);
+	if (!Number.isFinite(parsed) || parsed < 0) return SCAN_DEADLINE_DEFAULT_MS;
+	return parsed;
+}
+
 /** File extensions to scan */
 const SOURCE_EXTS = new Set(Object.keys(EXT_TO_LANG));
 
@@ -1044,8 +1063,25 @@ export function collectSourceFiles(
 		truncated: false,
 		includeTests,
 		excludedTestCount: 0,
+		// Issue #720: wall-clock budget. 0 disables the deadline entirely.
+		// The deadline is captured at the start of the walk so we compare
+		// against a stable anchor; reading Date.now() once avoids drift if
+		// the env var is mutated mid-walk.
+		deadlineStartMs: Date.now(),
+		deadlineMs: getScanDeadlineMs(),
 	};
 	_walkDirectory(root, 0, options);
+	// Surface the deadline-budget breach as a one-shot warning so the
+	// agent knows the graph may be incomplete (mirrors the MAX_FILES
+	// warning at the call site -- see _scanProject).
+	if (options.deadlineMs > 0 && Date.now() - options.deadlineStartMs >= options.deadlineMs) {
+		options.truncated = true;
+		_logWarn(
+			"collectSourceFiles",
+			`scan deadline exceeded (${options.deadlineMs} ms) -- graph may be incomplete. ` +
+				`Tune via PI_SHAZAM_SCAN_DEADLINE_MS.`,
+		);
+	}
 	return { files: options.files, truncated: options.truncated, excludedTestCount: options.excludedTestCount };
 }
 
@@ -1061,6 +1097,8 @@ function _walkDirectory(
 		truncated: boolean;
 		includeTests: boolean;
 		excludedTestCount: number;
+		deadlineStartMs: number;
+		deadlineMs: number;
 	},
 ): void {
 	const { root, maxFiles, maxDepth, files, visitedSymlinks } = options;
@@ -1069,6 +1107,14 @@ function _walkDirectory(
 		return;
 	}
 	if (depth > maxDepth) return;
+	// Issue #720: stop walking when the wall-clock budget is exhausted.
+	// The caller's collectSourceFiles() emits the user-facing warning; we
+	// only flip the truncated flag so the outer scan path also knows to
+	// mark the graph incomplete.
+	if (options.deadlineMs > 0 && Date.now() - options.deadlineStartMs >= options.deadlineMs) {
+		options.truncated = true;
+		return;
+	}
 
 	let entries;
 	try {

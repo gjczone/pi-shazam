@@ -32,4 +32,27 @@ describe("SKIP_DIRS canonical set", () => {
 	it("should include .next (canonical after #336)", () => {
 		expect(SKIP_DIRS.has(".next")).toBe(true);
 	});
+
+	// Issue #720: home-directory scan guard. Add cross-platform non-source
+	// tree names so `_walkDirectory` does not descend into well-known
+	// platform-specific data directories when the project root happens to
+	// sit under $HOME.
+	it("should include snap (Ubuntu snap package tree)", () => {
+		expect(SKIP_DIRS.has("snap")).toBe(true);
+	});
+
+	it("should include macOS Library/Applications/Movies/Music/Pictures", () => {
+		expect(SKIP_DIRS.has("Library")).toBe(true);
+		expect(SKIP_DIRS.has("Applications")).toBe(true);
+		expect(SKIP_DIRS.has("Movies")).toBe(true);
+		expect(SKIP_DIRS.has("Music")).toBe(true);
+		expect(SKIP_DIRS.has("Pictures")).toBe(true);
+	});
+
+	it("should include Windows shell folders", () => {
+		expect(SKIP_DIRS.has("Application Data")).toBe(true);
+		expect(SKIP_DIRS.has("Desktop")).toBe(true);
+		expect(SKIP_DIRS.has("Downloads")).toBe(true);
+		expect(SKIP_DIRS.has("Documents")).toBe(true);
+	});
 });

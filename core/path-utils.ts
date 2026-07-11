@@ -23,7 +23,8 @@
  * stays import-free of `tools/`.
  */
 import { existsSync, realpathSync } from "node:fs";
-import { relative, resolve, isAbsolute } from "node:path";
+import { relative, resolve, isAbsolute, sep as pathSep } from "node:path";
+import { homedir } from "node:os";
 import { getEffectiveRoot } from "./scanner.js";
 
 // Issue #673: Windows/Git-Bash path normalization.
@@ -247,4 +248,104 @@ export function levenshtein(a: string, b: string, cutoff: number = Infinity): nu
 		[prev, curr] = [curr, prev];
 	}
 	return prev[n];
+}
+
+/**
+ * Return the current user's home directory, falling back across
+ * platforms. On Windows HOME is often unset, so USERPROFILE is the
+ * canonical source (issue #586). If neither is set, returns whatever
+ * `os.homedir()` reports (Node already handles the platform default).
+ *
+ * `os.homedir()` already returns a realpath-resolved path on macOS
+ * managed profiles (`/Users/foo`, not `/home/foo -> /Users/foo`), so
+ * no further fs resolution is needed. This keeps the helper pure
+ * (no `realpathSync`) which is important for testability: callers
+ * that mock `node:fs.realpathSync` for other reasons do not
+ * accidentally distort the home directory.
+ */
+export function getHomeDirectory(): string {
+	const fromEnv = process.env.HOME || process.env.USERPROFILE;
+	if (fromEnv && fromEnv.length > 0) {
+		// Pass POSIX-style paths through verbatim. `node:path.resolve`
+		// on Windows rewrites `/foo` to `C:\foo`, which would translate a
+		// CI-style HOME (e.g. `/home/runner`) into a Windows path and
+		// break the containment check below when the candidate is also
+		// POSIX-style. The downstream `isHomeDirectory` handles
+		// POSIX-style paths uniformly across platforms.
+		const looksPosixStyle = fromEnv.startsWith("/") && !fromEnv.startsWith("//");
+		if (looksPosixStyle) {
+			return fromEnv;
+		}
+		return resolve(fromEnv);
+	}
+	return homedir();
+}
+
+/**
+ * Platform-parameterized core of `isHomeDirectory`. Exposed so tests
+ * can exercise the win32 branch on POSIX runners (mirrors the
+ * `normalizePathInputForPlatform` pattern). See `isHomeDirectory`
+ * for the public contract.
+ */
+export function isHomeDirectoryForPlatform(
+	root: string,
+	platform: NodeJS.Platform,
+	homeDir: string = getHomeDirectory(),
+): boolean {
+	if (!root) return false;
+	// Detect POSIX-style paths up front: `node:path.resolve` on Windows
+	// rewrites `/foo` to `C:\foo`, which breaks containment checks when
+	// the home directory is also POSIX-style (common on CI runners where
+	// HOME is set to `/home/runner/...` rather than translated to a
+	// Windows path). Pass POSIX-style inputs through verbatim regardless
+	// of platform so the comparison below is consistent.
+	const looksPosixStyle = root.startsWith("/") && !root.startsWith("//");
+	const looksWin32Absolute = /^[A-Za-z]:[\\/]/.test(root);
+	const candidateResolved = looksWin32Absolute || looksPosixStyle ? root : resolve(root);
+
+	// On win32 with POSIX-style paths (e.g. CI runners that set HOME to
+	// /home/me without translating to Windows format), use POSIX
+	// comparison logic -- the candidate is also POSIX-style so we should
+	// not force a backslash separator that does not appear in either
+	// side. The case-insensitive win32 branch only applies when both
+	// sides use Windows separators.
+	const homeIsWin32Style = homeDir.includes("\\");
+	if (platform === "win32" && homeIsWin32Style && !looksPosixStyle) {
+		// Case-insensitive containment on Windows (issue #668).
+		const lowerHome = homeDir.toLowerCase();
+		const lowerCandidate = candidateResolved.toLowerCase();
+		if (lowerCandidate === lowerHome) return true;
+		// Treat both separators uniformly for the prefix check.
+		const homeWithSep = lowerHome.endsWith("\\") ? lowerHome : lowerHome + "\\";
+		return lowerCandidate.startsWith(homeWithSep);
+	}
+
+	if (candidateResolved === homeDir) return true;
+	// When either side is POSIX-style, force a POSIX separator so the
+	// prefix check uses the same separator the candidate uses. On Windows
+	// the default `path.sep` is "\\" but a POSIX-style candidate never
+	// contains it.
+	const usePosixSep = looksPosixStyle || !homeIsWin32Style;
+	const sep = usePosixSep ? "/" : pathSep;
+	const homeWithSep = homeDir.endsWith(sep) || homeDir.endsWith(pathSep) ? homeDir : homeDir + sep;
+	return candidateResolved.startsWith(homeWithSep);
+}
+
+/**
+ * Check whether `root` is the user's home directory or a direct child
+ * of it. Returns false for unrelated paths and for paths that merely
+ * share a prefix with the home directory (e.g. /home/melody vs
+ * /home/me).
+ *
+ * Cross-platform:
+ *  - POSIX: case-sensitive, separator = "/".
+ *  - Windows: case-insensitive on the drive and path components,
+ *    separator = "\\" after resolution.
+ *
+ * Issue #720: this helper powers the default home-refusal guard in
+ * the MCP entry and the native entry. Set PI_SHAZAM_ALLOW_HOME=1 to
+ * opt out of the guard.
+ */
+export function isHomeDirectory(root: string): boolean {
+	return isHomeDirectoryForPlatform(root, process.platform);
 }

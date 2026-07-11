@@ -13,7 +13,7 @@ import { readFileSync, realpathSync, statSync } from "node:fs";
 import { resolve, dirname, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { scanProject, setProjectRoot } from "../core/scanner.js";
-import { normalizePathInput } from "../core/path-utils.js";
+import { normalizePathInput, isHomeDirectory } from "../core/path-utils.js";
 import { _logWarn } from "../core/output.js";
 import type { RepoGraph } from "../core/graph.js";
 import { LspManager, detectProjectLanguages } from "../lsp/manager.js";
@@ -58,6 +58,22 @@ export function validateProjectRoot(root: string): { ok: boolean; error?: string
 			if (!isUnderHome) {
 				return { ok: false, error: "PROJECT_ROOT must be within user home directory (PI_SHAZAM_HOME_ONLY=1)" };
 			}
+		}
+		// Issue #720: refuse to scan the user's home directory by default.
+		// Home trees are 10-100 GB and tens of thousands of directories --
+		// a full walk blocks MCP startup past the 30 s default timeout and
+		// burns CPU on non-project content. Users who genuinely want to
+		// scan a project under $HOME can opt in with PI_SHAZAM_ALLOW_HOME=1.
+		// The PI_SHAZAM_HOME_ONLY branch above (#465) is an explicit opt-in
+		// to home scanning, so it implicitly satisfies the home guard too.
+		const homeAllowed = process.env.PI_SHAZAM_ALLOW_HOME === "1" || process.env.PI_SHAZAM_HOME_ONLY === "1";
+		if (!homeAllowed && isHomeDirectory(realRoot)) {
+			return {
+				ok: false,
+				error:
+					"Refusing to scan home directory. Set PI_SHAZAM_ALLOW_HOME=1 to opt in, " +
+					"or pass a project root outside $HOME.",
+			};
 		}
 		return { ok: true, realRoot };
 	} catch (err) {
