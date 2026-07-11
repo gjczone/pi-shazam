@@ -691,15 +691,13 @@ function _scanProject(projectPath: string, log?: (msg: string) => void, options:
 			`MAX_FILES limit reached (${MAX_FILES}) — additional source files skipped. Graph may be incomplete`,
 		);
 	}
-	// Issue #632: observable signal that tests were excluded by default. Only
-	// logs once per scan (here), not on every tool call. Opt-in via env var
-	// disables the warning by including the files.
-	if (!includeTests && excludedTestCount > 0) {
-		_logWarn(
-			"scanProject",
-			`Excluded ${excludedTestCount} test files from graph. Set PI_SHAZAM_INCLUDE_TESTS=1 to include them.`,
-		);
-	}
+	// Issue #632: tests are excluded by default. The count is surfaced to the
+	// agent via the overview's "Note: N test file(s) excluded..." section
+	// (core/overview.ts:280-286), which is injected into the system prompt by
+	// the before-start hook. We deliberately do NOT emit a console.warn here --
+	// this is a policy observation, not a failure, and a stderr line on every
+	// Pi startup is noise the user does not need to see. Opt-in via env var
+	// disables the note by including the files.
 
 	// Check in-memory cache first (same process, fastest path)
 	const isInMemory = cachedGraph !== null && cachedProjectPath === root && cachedFiles.size > 0;

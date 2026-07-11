@@ -10,7 +10,7 @@
  * (defined in core/filter.ts). Opt-in: pass `includeTests: true` or
  * set `PI_SHAZAM_INCLUDE_TESTS=1`.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { scanProject, resetCache, getExcludedTestCount } from "../core/scanner.js";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -82,6 +82,23 @@ describe("scanProject test exclusion (issue #632)", () => {
 			delete process.env.PI_SHAZAM_INCLUDE_TESTS;
 		} else {
 			process.env.PI_SHAZAM_INCLUDE_TESTS = ORIGINAL_ENV;
+		}
+	});
+
+	it("default scan does NOT emit console.warn when tests are excluded (issue #632 UX)", () => {
+		// The "Excluded N test files from graph" notice is policy information,
+		// not a failure. It must be surfaced to the agent via the overview's
+		// system-prompt injection (core/overview.ts), NOT via console.warn.
+		// A stderr line on every Pi startup is noise that the user does not
+		// need to see.
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			scanProject(projectRoot);
+			const calls = warnSpy.mock.calls.map((c) => c.join(" "));
+			const offending = calls.find((m) => /Excluded \d+ test files/i.test(m));
+			expect(offending, `unexpected console.warn: ${JSON.stringify(offending)}`).toBeUndefined();
+		} finally {
+			warnSpy.mockRestore();
 		}
 	});
 
