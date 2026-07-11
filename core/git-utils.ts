@@ -90,6 +90,13 @@ export function isProjectDir(projectRoot: string): boolean {
 			return true;
 		}
 	}
+	// #720 followup: a plain git repo with no project marker files (e.g.
+	// a config-only project) is still a project directory. Check `.git/`
+	// via existsSync -- cheaper than spawning `git rev-parse` and avoids
+	// the warning that isGitRepo emits on non-git paths.
+	if (existsSync(join(projectRoot, ".git"))) {
+		return true;
+	}
 	return false;
 }
 

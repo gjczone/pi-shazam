@@ -14,6 +14,7 @@ import { LspManager } from "./lsp/manager.js";
 import { generateSetupReport, generateSetupSummary } from "./lsp/setup.js";
 import { setLspManager, awaitPreviousShutdown } from "./tools/_context.js";
 import { installPreCommitHook, isPreCommitHookInstalled } from "./core/git-hooks.js";
+import { isProjectDir } from "./core/git-utils.js";
 import { setProjectRoot as scannerSetProjectRoot } from "./core/scanner.js";
 import { _logWarn, _logInternal } from "./core/output.js";
 import { isHomeDirectory } from "./core/path-utils.js";
@@ -194,9 +195,13 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 			_logWarn("auto-setup", "Failed to generate LSP setup report", err);
 		}
 
-		// Auto-install git pre-commit hook
+		// Auto-install git pre-commit hook. Skip entirely when projectRoot is
+		// not a project directory (no git repo, no marker files) so we
+		// do not emit confusing "git rev-parse failed" warnings when the
+		// Pi-detected cwd sits somewhere unintended (e.g. $HOME under
+		// the issue #720 home guard).
 		try {
-			if (!isPreCommitHookInstalled(projectRoot)) {
+			if (isProjectDir(projectRoot) && !isPreCommitHookInstalled(projectRoot)) {
 				installPreCommitHook(projectRoot);
 				log("Git pre-commit hook auto-installed");
 			}
