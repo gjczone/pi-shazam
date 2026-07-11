@@ -266,6 +266,16 @@ export function levenshtein(a: string, b: string, cutoff: number = Infinity): nu
 export function getHomeDirectory(): string {
 	const fromEnv = process.env.HOME || process.env.USERPROFILE;
 	if (fromEnv && fromEnv.length > 0) {
+		// Pass POSIX-style paths through verbatim. `node:path.resolve`
+		// on Windows rewrites `/foo` to `C:\foo`, which would translate a
+		// CI-style HOME (e.g. `/home/runner`) into a Windows path and
+		// break the containment check below when the candidate is also
+		// POSIX-style. The downstream `isHomeDirectory` handles
+		// POSIX-style paths uniformly across platforms.
+		const looksPosixStyle = fromEnv.startsWith("/") && !fromEnv.startsWith("//");
+		if (looksPosixStyle) {
+			return fromEnv;
+		}
 		return resolve(fromEnv);
 	}
 	return homedir();
