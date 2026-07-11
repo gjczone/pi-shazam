@@ -283,13 +283,15 @@ export function isHomeDirectoryForPlatform(
 	homeDir: string = getHomeDirectory(),
 ): boolean {
 	if (!root) return false;
-	// On win32, root already comes in as an absolute Windows-style path
-	// (e.g. C:\Users\me). Calling `resolve()` on a POSIX runner would
-	// re-interpret backslash paths as relative and prepend cwd, which
-	// breaks the case-insensitive comparison below. Pass the input
-	// through verbatim when it looks like a Windows absolute path.
-	const looksWin32Absolute = /^[A-Za-z]:[\\/]/.test(root) || (platform === "win32" && root.startsWith("/"));
-	const candidateResolved = looksWin32Absolute ? root : resolve(root);
+	// Detect POSIX-style paths up front: `node:path.resolve` on Windows
+	// rewrites `/foo` to `C:\foo`, which breaks containment checks when
+	// the home directory is also POSIX-style (common on CI runners where
+	// HOME is set to `/home/runner/...` rather than translated to a
+	// Windows path). Pass POSIX-style inputs through verbatim regardless
+	// of platform so the comparison below is consistent.
+	const looksPosixStyle = root.startsWith("/") && !root.startsWith("//");
+	const looksWin32Absolute = /^[A-Za-z]:[\\/]/.test(root);
+	const candidateResolved = looksWin32Absolute || looksPosixStyle ? root : resolve(root);
 
 	// On win32 with POSIX-style paths (e.g. CI runners that set HOME to
 	// /home/me without translating to Windows format), use POSIX
@@ -298,7 +300,7 @@ export function isHomeDirectoryForPlatform(
 	// side. The case-insensitive win32 branch only applies when both
 	// sides use Windows separators.
 	const homeIsWin32Style = homeDir.includes("\\");
-	if (platform === "win32" && homeIsWin32Style) {
+	if (platform === "win32" && homeIsWin32Style && !looksPosixStyle) {
 		// Case-insensitive containment on Windows (issue #668).
 		const lowerHome = homeDir.toLowerCase();
 		const lowerCandidate = candidateResolved.toLowerCase();
