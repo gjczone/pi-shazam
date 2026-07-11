@@ -102,6 +102,27 @@ describe("scanProject test exclusion (issue #632)", () => {
 		}
 	});
 
+	it("default scan does NOT emit console.warn for MAX_FILES truncation or deadline breach (issue #632 UX)", () => {
+		// The MAX_FILES and scan-deadline notices are status observations, not
+		// failures. The canonical LLM-visible signal is the single
+		// `[WARNING] File count exceeded MAX_FILES ...` line at
+		// core/overview.ts:91-96, which covers BOTH truncation paths and
+		// flows into the system prompt via the before-start hook. A parallel
+		// console.warn is duplicate signal that the user does not need to
+		// see on stderr.
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			scanProject(projectRoot);
+			const calls = warnSpy.mock.calls.map((c) => c.join(" "));
+			const maxFiles = calls.find((m) => /MAX_FILES limit reached/i.test(m));
+			const deadline = calls.find((m) => /scan deadline exceeded/i.test(m));
+			expect(maxFiles, `unexpected console.warn: ${JSON.stringify(maxFiles)}`).toBeUndefined();
+			expect(deadline, `unexpected console.warn: ${JSON.stringify(deadline)}`).toBeUndefined();
+		} finally {
+			warnSpy.mockRestore();
+		}
+	});
+
 	it("default scan excludes test files (3 production files only)", () => {
 		const graph = scanProject(projectRoot);
 		const files = [...graph.fileSymbols.keys()].sort();

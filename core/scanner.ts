@@ -683,14 +683,13 @@ function _scanProject(projectPath: string, log?: (msg: string) => void, options:
 	const collected = collectSourceFiles(root, MAX_FILES, includeTests);
 	const { files, truncated, excludedTestCount } = collected;
 	logger(`Scanned ${files.length} source files`);
-	// Issue #471 Finding A: warn when the file cap was hit so the agent is
-	// incomplete, instead of silently returning a truncated graph with no indication.
-	if (truncated) {
-		_logWarn(
-			"scanProject",
-			`MAX_FILES limit reached (${MAX_FILES}) — additional source files skipped. Graph may be incomplete`,
-		);
-	}
+	// Issue #471 Finding A: when the file cap is hit, the graph is incomplete
+	// and the agent needs to know. The canonical LLM-visible signal is the
+	// `[WARNING] File count exceeded MAX_FILES ...` line rendered at
+	// core/overview.ts:91-96, which flows into the system prompt via the
+	// before-start hook. We deliberately do NOT emit a console.warn here --
+	// the stderr line is duplicate signal (issue #632 UX principle: status
+	// and policy observations belong in the LLM context, not stderr).
 	// Issue #632: tests are excluded by default. The count is surfaced to the
 	// agent via the overview's "Note: N test file(s) excluded..." section
 	// (core/overview.ts:280-286), which is injected into the system prompt by
@@ -1074,16 +1073,15 @@ export function collectSourceFiles(
 		effectiveSkipDirs: getEffectiveSkipDirs(root),
 	};
 	_walkDirectory(root, 0, options);
-	// Surface the deadline-budget breach as a one-shot warning so the
-	// agent knows the graph may be incomplete (mirrors the MAX_FILES
-	// warning at the call site -- see _scanProject).
+	// When the deadline budget is breached, mark truncated so the outer scan
+	// path knows the graph is incomplete. The canonical LLM-visible signal
+	// is the same `[WARNING] File count exceeded MAX_FILES ...` line at
+	// core/overview.ts:91-96 -- the overview renders `graph.truncated` as a
+	// single warning that covers BOTH the MAX_FILES cap and the deadline
+	// breach. Issue #632 UX principle: status observations belong in the
+	// LLM context, not stderr -- no parallel console.warn here.
 	if (options.deadlineMs > 0 && Date.now() - options.deadlineStartMs >= options.deadlineMs) {
 		options.truncated = true;
-		_logWarn(
-			"collectSourceFiles",
-			`scan deadline exceeded (${options.deadlineMs} ms) -- graph may be incomplete. ` +
-				`Tune via PI_SHAZAM_SCAN_DEADLINE_MS.`,
-		);
 	}
 	return { files: options.files, truncated: options.truncated, excludedTestCount: options.excludedTestCount };
 }
