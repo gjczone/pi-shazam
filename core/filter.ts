@@ -8,6 +8,8 @@
 
 import type { RepoGraph } from "./graph.js";
 import { resolveModulePath, moduleMatchesFile } from "./resolve-import.js";
+import { homedir } from "node:os";
+import { resolve as nodeResolve } from "node:path";
 
 /**
  * Config files, generated files, and lockfiles -- excluded from source-file
@@ -37,9 +39,15 @@ const NON_SOURCE_FILE_PATTERNS: readonly RegExp[] = [
 /**
  * Directories to skip during project scanning and LSP detection.
  *
- * Single source of truth -- consumed by core/scanner.ts and lsp/manager.ts.
- * Includes build outputs, dependency caches, virtual environments, IDE
- * directories, and other non-source trees that should never be walked.
+ * Always-active set -- entries here must never collide with real source
+ * directory names. Build outputs, dependency caches, virtual environments,
+ * IDE directories, and similar trees that should NEVER be walked.
+ *
+ * Single source of truth -- consumed by core/scanner.ts and lsp/manager.ts
+ * via `getEffectiveSkipDirs(root)`. Cross-platform non-source trees that
+ * may legitimately collide with project names (`Library`, `Documents`,
+ * `snap`, ...) live in `HOME_SKIP_DIRS` instead, applied only when the
+ * project root sits under $HOME / %USERPROFILE% (issue #724).
  */
 export const SKIP_DIRS = new Set([
 	"node_modules",
@@ -70,19 +78,103 @@ export const SKIP_DIRS = new Set([
 	".yarn",
 	".idea",
 	".vscode",
-	// Issue #720: cross-platform non-source trees commonly found under $HOME.
-	// Walking these on home-directory scans is the bulk of the wasted work.
-	"snap", // Ubuntu snap package tree
-	"Library", // macOS
-	"Applications", // macOS
+]);
+
+/**
+ * Cross-platform non-source directories that only skip when the project
+ * root is under $HOME / %USERPROFILE% (issue #724). These names collide
+ * with real project directories (Python `library/`, Sphinx `documents/`,
+ * Linux tooling that ships under `snap/`, ...), so applying them
+ * unconditionally would silently skip user source code outside home.
+ *
+ * Always-active skip candidates are kept in `SKIP_DIRS` instead -- never
+ * add a name here that could plausibly be a top-level source dir.
+ */
+export const HOME_SKIP_DIRS = new Set<string>([
+	// Linux / Ubuntu
+	"snap", // snap package tree (contains many broken symlinks)
+	".Trash", // GNOME/KDE trash
+	// macOS
+	"Library",
+	"Applications",
 	"Movies",
 	"Music",
 	"Pictures",
-	"Application Data", // Windows shell folder
 	"Desktop",
-	"Downloads",
 	"Documents",
+	"Downloads",
+	"Public",
+	// Windows shell folders (case-insensitive in practice but compared verbatim)
+	"Application Data",
+	"My Documents", // legacy Windows shell folder name
+	"Favorites",
+	"Links",
+	"Searches",
+	"Videos",
+	"OneDrive",
 ]);
+
+/**
+ * Compute the effective skip-dir set for a given project root.
+ *
+ * Always returns `SKIP_DIRS`. Adds `HOME_SKIP_DIRS` only when `root`
+ * equals or sits under $HOME / %USERPROFILE% -- in that case the
+ * scanner benefits from skipping OS-level junk, and the project name
+ * is unlikely to collide with the user's actual project.
+ *
+ * Outside home, the home-only set is left OUT so a project literally
+ * named `Library` or `Documents` is scanned normally.
+ *
+ * The home check is inlined here (rather than reusing
+ * `path-utils:isHomeDirectory`) to keep `core/filter` import-free of
+ * `core/path-utils` -- path-utils pulls in `scanner.js` via
+ * `getEffectiveRoot`, which would create a circular import.
+ *
+ * Issue #724.
+ */
+export function getEffectiveSkipDirs(root: string): Set<string> {
+	const effective = new Set(SKIP_DIRS);
+	if (root && _isUnderHome(root)) {
+		for (const entry of HOME_SKIP_DIRS) effective.add(entry);
+	}
+	return effective;
+}
+
+/**
+ * Minimal home-directory containment check, scoped to the filter module.
+ * Mirrors `path-utils:isHomeDirectory` but with no fs calls and no
+ * cross-platform casing logic -- the home guard here is a coarse
+ * "is this under $HOME?" used only to gate HOME_SKIP_DIRS activation.
+ *
+ * The single source of truth for the home-directory guard that the
+ * entry layer relies on still lives in `path-utils:isHomeDirectory`.
+ */
+function _isUnderHome(root: string): boolean {
+	const homeResolved = _resolveHome();
+	if (!homeResolved) return false;
+	const candidate = nodeResolve(root);
+	if (process.platform === "win32") {
+		const lowerHome = homeResolved.toLowerCase();
+		const lowerCandidate = candidate.toLowerCase();
+		return lowerCandidate === lowerHome || lowerCandidate.startsWith(lowerHome + "\\");
+	}
+	return candidate === homeResolved || candidate.startsWith(homeResolved + "/");
+}
+
+function _resolveHome(): string {
+	const fromEnv = process.env.HOME || process.env.USERPROFILE;
+	if (fromEnv && fromEnv.length > 0) {
+		// Pass POSIX-style paths through verbatim. `node:path.resolve`
+		// on Windows rewrites `/foo` to `C:\foo`, which would translate a
+		// CI-style HOME (e.g. `/home/runner`) into a Windows path and
+		// break the containment check when the candidate is also
+		// POSIX-style.
+		const looksPosixStyle = fromEnv.startsWith("/") && !fromEnv.startsWith("//");
+		if (looksPosixStyle) return fromEnv;
+		return nodeResolve(fromEnv);
+	}
+	return homedir();
+}
 
 export function isNonSourceFile(file: string): boolean {
 	// Normalize Windows backslash separators to "/" so the POSIX-anchored

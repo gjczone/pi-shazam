@@ -577,17 +577,23 @@ The guard composes with the existing `PI_SHAZAM_HOME_ONLY=1` (issue #465)
 flag: when both are set, the project must live under `$HOME` (HOME_ONLY)
 and the user has explicitly opted in to home scanning (ALLOW_HOME).
 
-**Skip-dir expansion (`core/filter.ts`, issue #720):**
+**Skip-dir expansion (`core/filter.ts`, issues #720 / #724):**
 
-The canonical `SKIP_DIRS` set now includes cross-platform non-source trees
-commonly found under `$HOME`:
+The canonical skip-dir set is split into two halves so cross-platform
+non-source trees do not silently skip user source code:
 
-- `snap` (Ubuntu snap package tree, contains many broken symlinks)
-- `Library`, `Applications`, `Movies`, `Music`, `Pictures` (macOS)
-- `Application Data`, `Desktop`, `Downloads`, `Documents` (Windows shell folders)
+- `SKIP_DIRS` -- always active. Entries here must never collide with
+  real source directory names (node_modules, dist, build, .git, ...).
+- `HOME_SKIP_DIRS` -- active only when the project root sits under
+  `$HOME` / `%USERPROFILE%`. Covers cross-platform home-only trees that
+  may legitimately collide with project names (`Library`, `Documents`,
+  `snap`, ...).
 
-Even if the entry guard is bypassed (e.g. `PI_SHAZAM_ALLOW_HOME=1`), the
-walker still skips these trees so the scanner does not waste I/O on them.
+`getEffectiveSkipDirs(root)` returns the merged set for the scanner.
+The split means a project literally named `library` (Python,
+npm package roots) is NOT silently skipped when the user runs
+pi-shazam from a non-home workspace path, but `~/code/myproj/Library`
+is skipped during home-directory scans.
 
 **Tool registration (`mcp/tools.ts`) — Zod schemas (NOT TypeBox):**
 
