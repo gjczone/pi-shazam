@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SKIP_DIRS } from "../core/filter.js";
+import { SKIP_DIRS, HOME_SKIP_DIRS } from "../core/filter.js";
 
 describe("SKIP_DIRS canonical set", () => {
 	it("should include build output directories", () => {
@@ -33,26 +33,44 @@ describe("SKIP_DIRS canonical set", () => {
 		expect(SKIP_DIRS.has(".next")).toBe(true);
 	});
 
-	// Issue #720: home-directory scan guard. Add cross-platform non-source
-	// tree names so `_walkDirectory` does not descend into well-known
-	// platform-specific data directories when the project root happens to
-	// sit under $HOME.
-	it("should include snap (Ubuntu snap package tree)", () => {
-		expect(SKIP_DIRS.has("snap")).toBe(true);
+	it("must NOT include home-scoped entries (issue #724 split)", () => {
+		// Entries that may collide with real source directory names
+		// (`Library`, `Documents`, ...) are gated by HOME_SKIP_DIRS so a
+		// project literally named `library` is not silently skipped when
+		// the user runs pi-shazam from a non-home workspace path.
+		expect(SKIP_DIRS.has("snap")).toBe(false);
+		expect(SKIP_DIRS.has("Library")).toBe(false);
+		expect(SKIP_DIRS.has("Applications")).toBe(false);
+		expect(SKIP_DIRS.has("Documents")).toBe(false);
+		expect(SKIP_DIRS.has("Desktop")).toBe(false);
+		expect(SKIP_DIRS.has("Downloads")).toBe(false);
+		expect(SKIP_DIRS.has("Music")).toBe(false);
+		expect(SKIP_DIRS.has("Movies")).toBe(false);
+		expect(SKIP_DIRS.has("Pictures")).toBe(false);
+		expect(SKIP_DIRS.has("Application Data")).toBe(false);
+	});
+});
+
+describe("HOME_SKIP_DIRS (issue #724)", () => {
+	it("includes the cross-platform non-source trees from #720", () => {
+		// Linux / Ubuntu
+		expect(HOME_SKIP_DIRS.has("snap")).toBe(true);
+		// macOS
+		expect(HOME_SKIP_DIRS.has("Library")).toBe(true);
+		expect(HOME_SKIP_DIRS.has("Applications")).toBe(true);
+		expect(HOME_SKIP_DIRS.has("Movies")).toBe(true);
+		expect(HOME_SKIP_DIRS.has("Music")).toBe(true);
+		expect(HOME_SKIP_DIRS.has("Pictures")).toBe(true);
+		// Windows shell folders
+		expect(HOME_SKIP_DIRS.has("Application Data")).toBe(true);
+		expect(HOME_SKIP_DIRS.has("Desktop")).toBe(true);
+		expect(HOME_SKIP_DIRS.has("Downloads")).toBe(true);
+		expect(HOME_SKIP_DIRS.has("Documents")).toBe(true);
 	});
 
-	it("should include macOS Library/Applications/Movies/Music/Pictures", () => {
-		expect(SKIP_DIRS.has("Library")).toBe(true);
-		expect(SKIP_DIRS.has("Applications")).toBe(true);
-		expect(SKIP_DIRS.has("Movies")).toBe(true);
-		expect(SKIP_DIRS.has("Music")).toBe(true);
-		expect(SKIP_DIRS.has("Pictures")).toBe(true);
-	});
-
-	it("should include Windows shell folders", () => {
-		expect(SKIP_DIRS.has("Application Data")).toBe(true);
-		expect(SKIP_DIRS.has("Desktop")).toBe(true);
-		expect(SKIP_DIRS.has("Downloads")).toBe(true);
-		expect(SKIP_DIRS.has("Documents")).toBe(true);
+	it("does NOT overlap SKIP_DIRS (single source of truth)", () => {
+		for (const entry of HOME_SKIP_DIRS) {
+			expect(SKIP_DIRS.has(entry)).toBe(false);
+		}
 	});
 });

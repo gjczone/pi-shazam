@@ -15,7 +15,7 @@ import type { RepoGraph, Symbol, Edge } from "./graph.js";
 import { calculatePageRank } from "./pagerank.js";
 import { readFileAdaptive, FileTooLargeError } from "./encoding.js";
 import { getProjectCacheDir, saveGraphCache, loadGraphCache } from "./cache.js";
-import { SKIP_DIRS, isTestFile } from "./filter.js";
+import { isTestFile, getEffectiveSkipDirs } from "./filter.js";
 import { resolveImport, clearExistsCache } from "./resolve-import.js";
 import { normalizePathInput } from "./path-utils.js";
 import { _logWarn } from "./output.js";
@@ -1069,6 +1069,11 @@ export function collectSourceFiles(
 		// the env var is mutated mid-walk.
 		deadlineStartMs: Date.now(),
 		deadlineMs: getScanDeadlineMs(),
+		// Issue #724: scoped skip-dir set. Always-active SKIP_DIRS plus
+		// HOME_SKIP_DIRS only when the project root sits under $HOME / %USERPROFILE%.
+		// Resolved once at walk start so the entry-name check in
+		// _walkDirectory does not re-evaluate the home predicate per directory.
+		effectiveSkipDirs: getEffectiveSkipDirs(root),
 	};
 	_walkDirectory(root, 0, options);
 	// Surface the deadline-budget breach as a one-shot warning so the
@@ -1099,6 +1104,7 @@ function _walkDirectory(
 		excludedTestCount: number;
 		deadlineStartMs: number;
 		deadlineMs: number;
+		effectiveSkipDirs: Set<string>;
 	},
 ): void {
 	const { root, maxFiles, maxDepth, files, visitedSymlinks } = options;
@@ -1138,7 +1144,7 @@ function _walkDirectory(
 		const relPath = relative(root, join(dir, entry.name));
 
 		if (entry.isDirectory()) {
-			if (SKIP_DIRS.has(entry.name)) continue;
+			if (options.effectiveSkipDirs.has(entry.name)) continue;
 			if (entry.name.startsWith(".") && entry.name !== ".github") continue;
 			_walkDirectory(join(dir, entry.name), depth + 1, options);
 		} else if (entry.isSymbolicLink()) {
