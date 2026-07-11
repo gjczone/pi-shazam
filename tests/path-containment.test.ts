@@ -16,7 +16,7 @@
  * reproduces the original bug with the old `startsWith(root + "/")` approach
  * and proves the new algorithm resolves it.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { win32, join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -86,6 +86,28 @@ describe("validatePathInProject (end-to-end on real POSIX paths)", () => {
 		const tmp = mkdtempSync(join(tmpdir(), "pi-shazam-pc-"));
 		try {
 			expect(validatePathInProject("/etc/passwd", tmp)).toBe(false);
+		} finally {
+			rmSync(tmp, { recursive: true, force: true });
+		}
+	});
+
+	it("returns false silently for ENOENT (missing file does NOT log a warning) -- issue #632 UX", () => {
+		// When an agent asks for a path that does not exist on disk (the common
+		// negative-probe case), validatePathInProject must return false and
+		// must NOT emit a stderr line. A "realpathSync failed for ..." warning
+		// on every miss is user-visible noise (#632 UX principle: status /
+		// observation notes belong in the LLM context, not stderr).
+		const tmp = mkdtempSync(join(tmpdir(), "pi-shazam-pc-enoent-"));
+		try {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+			try {
+				expect(validatePathInProject("does-not-exist.ts", tmp)).toBe(false);
+				const calls = warnSpy.mock.calls.map((c) => c.join(" "));
+				const offending = calls.find((m) => /realpathSync failed/i.test(m));
+				expect(offending, `unexpected console.warn: ${JSON.stringify(offending)}`).toBeUndefined();
+			} finally {
+				warnSpy.mockRestore();
+			}
 		} finally {
 			rmSync(tmp, { recursive: true, force: true });
 		}

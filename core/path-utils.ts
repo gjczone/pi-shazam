@@ -127,7 +127,16 @@ export function validatePathInProjectCore(rawPath: string, projectRoot: string =
 		const realRoot = realpathSync(rootResolved);
 		return isPathInRoot(realResolved, realRoot);
 	} catch (err) {
-		// realpathSync failures (ENOENT, EACCES, symlink loops) all mean
+		// ENOENT means the path does not exist on disk -- the expected
+		// outcome of a negative probe. Return false silently so callers
+		// can produce a clean "not in project / not found" result; a
+		// stderr line on every miss is user-visible noise (issue #632
+		// UX principle: status/observation notes belong in the LLM
+		// context, not stderr). Other errors (EACCES, ELOOP, ENOTDIR)
+		// signal real filesystem issues worth surfacing.
+		const code = (err as NodeJS.ErrnoException).code;
+		if (code === "ENOENT") return false;
+		// realpathSync failures (EACCES, symlink loops, ...) mean
 		// "we can't prove this path is in the project". Log to surface
 		// unexpected cases (symlink loops, permission issues) but treat
 		// as not-in-root so callers fall back to the safe path.

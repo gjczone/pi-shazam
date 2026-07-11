@@ -115,6 +115,12 @@ for (const candidate of [resolve(__dirname, "..", "..", "package.json"), resolve
 			break;
 		}
 	} catch (err) {
+		// ENOENT is expected on the first candidate when entry.js sits at
+		// dist/mcp/ (the second candidate ../package.json will succeed).
+		// Suppress the stderr line; only surface real parse errors. Issue
+		// #632 UX principle: negative probes must stay silent.
+		const code = (err as NodeJS.ErrnoException).code;
+		if (code === "ENOENT") continue;
 		_logWarn("entry", `package.json not readable at ${candidate}`, err);
 	}
 }

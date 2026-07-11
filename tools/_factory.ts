@@ -64,6 +64,15 @@ export function validatePathInProject(rawPath: string, projectRoot: string = get
 		const realRoot = realpathSync(rootResolved);
 		return isPathInRoot(realResolved, realRoot);
 	} catch (err) {
+		// ENOENT means the agent asked for a path that does not exist on
+		// disk -- the expected outcome of a negative probe. Return false
+		// silently so the caller can produce a clean "not found" result;
+		// a stderr line on every miss is user-visible noise (#632 UX
+		// principle: policy/observation notes go to the LLM, not stderr).
+		// Other errors (EACCES, ELOOP, ENOTDIR) signal a real filesystem
+		// issue worth surfacing.
+		const code = (err as NodeJS.ErrnoException).code;
+		if (code === "ENOENT") return false;
 		_logWarn("validatePathInProject", `realpathSync failed for ${resolved}`, err);
 		return false;
 	}
