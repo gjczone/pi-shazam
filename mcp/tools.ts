@@ -110,10 +110,17 @@ function registerMcpTool(
 			inputSchema: def.zodParams,
 		},
 		withLogging(name, async (args) => {
-			const result = await dispatch(getGraph(), args, projectRoot);
+			const graph = getGraph();
+			const result = await dispatch(graph, args, projectRoot);
 			let text = result.text;
 			if (typeof args.maxTokens === "number" && (args.maxTokens as number) > 0 && !args.json) {
 				text = truncateOutput(text.split("\n"), args.maxTokens as number);
+			}
+			// Issue #731: non-overview tools must also surface the truncated flag
+			// so the agent knows results may be incomplete when MAX_FILES was hit.
+			if (graph.truncated === true && !args.json) {
+				text +=
+					"\n\n[WARNING] File count exceeded MAX_FILES — the analysis graph is incomplete. Results may miss dependencies.";
 			}
 			const out: Record<string, unknown> = { content: [{ type: "text" as const, text }] };
 			if (result.isError) out.isError = true;

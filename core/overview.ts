@@ -95,6 +95,24 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 		);
 	}
 
+	// Issue #732 / #733: warn when cache was not persisted (degraded mode —
+	// subsequent scans will be full scans instead of fast incremental).
+	const cs = graph.cacheStatus;
+	if (cs && !cs.persisted) {
+		lines.push("");
+		if (cs.reason === "oversized") {
+			const sizeKB = cs.sizeBytes ? `${(cs.sizeBytes / 1024 / 1024).toFixed(1)} MB` : "too large";
+			const maxKB = cs.maxBytes ? `${(cs.maxBytes / 1024 / 1024).toFixed(1)} MB` : "MAX_CACHE_SIZE";
+			lines.push(
+				`[WARNING] Graph cache not saved — serialized graph is ${sizeKB}, exceeding the ${maxKB} limit. Next scan will be a full scan.`,
+			);
+		} else {
+			lines.push(
+				`[WARNING] Graph cache not saved — ${cs.errorMessage || "persistence error"}. Next scan will be a full scan.`,
+			);
+		}
+	}
+
 	// Language breakdown
 	const langCounts = new Map<string, number>();
 	for (const file of files) {
@@ -424,6 +442,15 @@ export interface OverviewResult {
 	moduleStructure?: OverviewModuleNode[];
 	/** Issue #693: true when the scan hit MAX_FILES and skipped source files. */
 	truncated?: boolean;
+	/** Issue #732 / #733: cache persistence status. Undefined means cache
+	 * status unknown (cached load or not yet saved). */
+	cacheStatus?: {
+		persisted: boolean;
+		reason?: "oversized" | "error";
+		errorMessage?: string;
+		sizeBytes?: number;
+		maxBytes?: number;
+	};
 }
 
 export interface OverviewModuleDensity {
@@ -534,6 +561,15 @@ export function buildOverviewResult(graph: RepoGraph, projectRoot: string, filte
 		entryPoints: filter ? undefined : _detectEntryPoints(graph),
 		httpRoutes: filter ? undefined : buildRoutesSection(graph),
 		truncated: graph.truncated === true ? true : undefined,
+		cacheStatus: graph.cacheStatus
+			? {
+					persisted: graph.cacheStatus.persisted,
+					reason: graph.cacheStatus.reason,
+					errorMessage: graph.cacheStatus.errorMessage,
+					sizeBytes: graph.cacheStatus.sizeBytes,
+					maxBytes: graph.cacheStatus.maxBytes,
+				}
+			: undefined,
 		complexityHotspots: filter ? undefined : _computeHotspots(graph, 10),
 		suggestedReadingOrder: filter ? undefined : topFiles.slice(0, 5).map(([file]) => file),
 		parserWarnings: filter ? undefined : _buildParserWarnings(graph),

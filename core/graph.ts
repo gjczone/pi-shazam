@@ -76,6 +76,14 @@ export interface RepoGraph {
 	targetToSources: Map<string, Set<string>>;
 	/** Issue #693: true when the scan hit MAX_FILES and skipped source files. Surfaces incomplete-graph warnings. */
 	truncated?: boolean;
+	/** Issue #732 / #733: cache persistence status — undefined means cache status unknown (cached load or not yet saved). */
+	cacheStatus?: {
+		persisted: boolean;
+		reason?: "oversized" | "error";
+		errorMessage?: string;
+		sizeBytes?: number;
+		maxBytes?: number;
+	};
 }
 
 /** A JS/TS import binding */
