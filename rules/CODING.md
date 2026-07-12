@@ -124,11 +124,40 @@ Reference pattern: `core/scanner.ts:175-176` (`getFileMtimes`), `core/git-hooks.
 
 Hooks layer uses `_logWarn` (from `core/output.js`) for internal diagnostics and `pi.sendMessage()` for user-visible output.
 
+### Console.warn vs _logWarn
+
+All warning/error logging in `core/`, `tools/`, `lsp/`, and `mcp/` MUST go through `_logWarn`. Never use direct `console.warn` or `console.error` in business logic.
+
+- `_logWarn` writes to the JSONL audit log; `console.warn` does not.
+- `_logWarn` has a consistent message format; `console.warn` prints full error stacks.
+- Exceptions: `_logWarn`'s own implementation in `core/output.ts`, and `mcp/entry.ts` startup errors before the logging framework is initialized.
+
+Evidence: #727 — `validatePathInProjectCore` used `console.warn` while `validatePathInProject` used `_logWarn`, creating an audit trail inconsistency.
+
+### Degraded-Mode Signaling
+
+When a subsystem partially fails (tree-sitter queries, cache save, graph truncation), the degraded status MUST propagate to the user-visible output, not just `_logWarn`.
+
+- **Cache persistence**: `saveGraphCache` returns `CacheSaveResult`; stored in `RepoGraph.cacheStatus`; surfaced in overview. See #732, #733.
+- **Graph truncation**: `graph.truncated` flag; warning prepended to ALL tool outputs, not just overview. See #731.
+- **Parser degraded**: `_parserStatus.degradedQueries`; "Parser Degraded Mode" section in overview. See #734.
+
+Status observations (not real failures) go to the LLM context via tool output, NOT to stderr via `_logWarn`.
+
 ### LSP Degradation
 
 When language server is unavailable, fall back to tree-sitter only. Annotate output with `(tree-sitter only, LSP unavailable)`. Never throw on missing LSP.
 
 Evidence: `tools/lookup.ts:279` `"(tree-sitter only)"`, `lsp/client.ts:20` "falling back to tree-sitter only (issue #441)".
+
+### LSP File Lifecycle
+
+- Open files for LSP enrichment with `didOpen`; always close with `didClose` when done.
+- `LspClient` has an LRU safety net: `MAX_OPENED_FILES = 200`, oldest-first eviction.
+- Enrichment functions (hover, definition, references) should close files in `finally` blocks — don't rely on LRU eviction alone.
+- Unbalanced `didOpen`/`didClose` causes LSP server-side AST memory growth.
+
+Evidence: `lsp/client.ts` `_openedFiles` Set + LRU eviction, `tools/lsp_enrich.ts` `finally` blocks with `didClose`. See #729.
 
 ---
 
@@ -176,3 +205,12 @@ Evidence: `types/pi-extension.d.ts`, `tools/_factory.ts` imports `{ Type } from 
 - Module-level caches must reset in `session_shutdown` (`index.ts` lines 108-119).
 - When adding state/cache: update create -> read -> update -> invalidate/reset lifecycle.
 - Update `AGENTS.md` when adding/changing: module, tool, command, hook, data flow, dependency, build step, layer boundary, or architectural pattern.
+
+---
+
+## 12. Shell Hooks (CodeBuddy / Kimi)
+
+- Every hook that uses `SHAZAM_LOG_DIR` or other shared variables MUST source `lib/shazam-common.sh` immediately after `set -euo pipefail`.
+- Under `set -u`, an unset variable crashes with exit code 1, which the hook framework interprets as "hook error" (fail-open). A missing source line disables the safety hook entirely.
+- Pattern: `source "$(dirname "${BASH_SOURCE[0]}")/../lib/shazam-common.sh"`
+- See #728 — both `check-destructive.sh` hooks were missing the source line, making them completely non-functional.
