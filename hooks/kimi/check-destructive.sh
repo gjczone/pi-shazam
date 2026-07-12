@@ -17,7 +17,11 @@
 
 set -euo pipefail
 
-source "$(dirname "${BASH_SOURCE[0]}")/../lib/shazam-common.sh"
+_SHAZAM_LIB="$(dirname "${BASH_SOURCE[0]}")/lib/shazam-common.sh"
+if [[ ! -f "$_SHAZAM_LIB" ]]; then
+  _SHAZAM_LIB="$(dirname "${BASH_SOURCE[0]}")/../lib/shazam-common.sh"
+fi
+source "$_SHAZAM_LIB"
 
 INPUT=$(cat)
 tool_name=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""')
@@ -52,7 +56,7 @@ for pattern in "${HIGH_PATTERNS[@]}"; do
     if [[ "$pattern" == "rm -rf" || "$pattern" == "rm -fr" || "$pattern" == "rm --recursive" ]]; then
       # 使用 (^|[[:space:];|&]) 锚点，防止通过命令链接（&&、||、;）绕过
       # 匹配 -r -f（flag 之间有空格）的情况
-      if ! printf '%s' "$cmd_normalized" | grep -qE '(^|[[:space:];|&])rm[[:space:]]+(-(rf|fr|r[[:space:]]*f)|--recursive[[:space:]]+--force|--force[[:space:]]+--recursive)[[:space:]]+/(\*|[[:space:]]|"|;|$)'; then
+      if ! printf '%s' "$cmd_normalized" | grep -qE '(^|[[:space:];|&])rm[[:space:]]+(-(rf|fr|r[[:space:]]*f)|--recursive[[:space:]]+--force|--force[[:space:]]+--recursive)([[:space:]]+--)?[[:space:]]+["'"'"']?/(\*|[[:space:]]|"|;|'"'"'|$)'; then
         continue
       fi
     fi

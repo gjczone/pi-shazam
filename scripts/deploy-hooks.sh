@@ -97,13 +97,28 @@ fi
 # ── Syntax check ──
 
 echo "=== Syntax check ==="
-for dir in "$CB" "$KIMI"; do
+	for dir in "$CB" "$KIMI"; do
   for f in "$dir"/*.sh "$dir"/lib/*.sh; do
     [[ -f "$f" ]] || continue
     check "bash -n $(basename "$dir")/$(basename "$f")" \
       "bash -n $f" \
       "fix syntax error in $f"
   done
+done
+
+# ── Source-path resolution check ──
+# Every deployed hook must be able to resolve shazam-common.sh via its
+# layout-resilient resolver (sibling lib/ then ../lib/). A broken source path
+# makes the hook fail-open under set -eu (issue #728 / #750), so assert it here.
+
+echo "=== Source-path resolution ==="
+for f in "$CB"/*.sh "$KIMI"/*.sh; do
+  [[ -f "$f" ]] || continue
+  resolved="$(dirname "$f")/lib/shazam-common.sh"
+  [[ -f "$resolved" ]] || resolved="$(dirname "$f")/../lib/shazam-common.sh"
+  check "lib resolves for $(basename "$f")" \
+    "test -f '$resolved'" \
+    "source path broken in $f (resolver could not locate shazam-common.sh)"
 done
 
 # ── Drift detection ──

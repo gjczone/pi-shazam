@@ -28,7 +28,20 @@ elif [[ "$_HOOK_DIR" == *".kimi-code/hooks"* ]]; then
   SHAZAM_ROOT="${_HOOK_DIR%/hooks}"
   SHAZAM_WATCHDOG_DIR="${SHAZAM_WATCHDOG_DIR:-$SHAZAM_ROOT/watchdog}"
   SHAZAM_LOG_DIR="${SHAZAM_LOG_DIR:-$SHAZAM_ROOT/hooks-log}"
+else
+  # Fallback for any layout where _HOOK_DIR does not match a known platform
+  # (e.g. running a hook directly from the source tree). Without this, the
+  # SHAZAM_ vars stay unset and every hook crashes under set -u (fail-open).
+  SHAZAM_WATCHDOG_DIR="${SHAZAM_WATCHDOG_DIR:-/tmp}"
+  SHAZAM_LOG_DIR="${SHAZAM_LOG_DIR:-/tmp}"
 fi
+
+# Export unprefixed aliases so existing hook scripts that reference
+# ${WATCHDOG_DIR}/${LOG_DIR} do not crash under set -u. This restores the
+# impact gate / watchdog / audit trails without rewriting every caller.
+WATCHDOG_DIR="$SHAZAM_WATCHDOG_DIR"
+LOG_DIR="$SHAZAM_LOG_DIR"
+export WATCHDOG_DIR LOG_DIR
 
 # ── Constants ──
 

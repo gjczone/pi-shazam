@@ -9,7 +9,11 @@
 # Exit 0: allow (always).
 
 set -eu
-source "$(dirname "${BASH_SOURCE[0]}")/lib/shazam-common.sh"
+_SHAZAM_LIB="$(dirname "${BASH_SOURCE[0]}")/lib/shazam-common.sh"
+if [[ ! -f "$_SHAZAM_LIB" ]]; then
+  _SHAZAM_LIB="$(dirname "${BASH_SOURCE[0]}")/../lib/shazam-common.sh"
+fi
+source "$_SHAZAM_LIB"
 
 INPUT=$(cat)
 # #570: jq may not be installed; fall back to empty string without blocking.
