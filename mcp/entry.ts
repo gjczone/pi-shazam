@@ -169,9 +169,10 @@ export function getGraph(): RepoGraph {
 		return cachedGraph;
 	}
 	if (graphBuilding) {
-		// A scan is already in progress (synchronous, so this is defensive
-		// against re-entrant calls); return whatever we have.
-		return cachedGraph!;
+		if (cachedGraph === null) {
+			throw new Error("Graph build already in progress but no cached graph available");
+		}
+		return cachedGraph;
 	}
 	try {
 		graphBuilding = true;
@@ -186,7 +187,10 @@ export function getGraph(): RepoGraph {
 	} finally {
 		graphBuilding = false;
 	}
-	return cachedGraph!;
+	if (cachedGraph === null) {
+		throw new Error("Failed to build graph and no cached graph available");
+	}
+	return cachedGraph;
 }
 
 async function main(): Promise<void> {

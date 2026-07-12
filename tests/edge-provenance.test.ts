@@ -133,7 +133,7 @@ describe("FlatReferences surface provenance", () => {
 		// Use a hand-built graph to keep the test deterministic.
 		const { graph } = buildEdgeFixture("resolved");
 		const { getFlatReferences } = await import("../tools/impact.js");
-		const refs = getFlatReferences(graph, "bar", "incoming");
+		const { refs } = getFlatReferences(graph, "bar", "incoming");
 		expect(refs).toHaveLength(1);
 		expect(refs[0].provenance).toBe("resolved");
 	});
@@ -141,7 +141,7 @@ describe("FlatReferences surface provenance", () => {
 	it("heuristic edges surface as 'heuristic' in flat references", async () => {
 		const { graph } = buildEdgeFixture(); // default = heuristic
 		const { getFlatReferences } = await import("../tools/impact.js");
-		const refs = getFlatReferences(graph, "bar", "incoming");
+		const { refs } = getFlatReferences(graph, "bar", "incoming");
 		expect(refs[0].provenance).toBe("heuristic");
 	});
 });

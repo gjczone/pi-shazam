@@ -80,8 +80,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 			symbol: Type.Optional(Type.String()),
 			withSymbols: Type.Optional(Type.Boolean()),
 			compact: Type.Optional(Type.Boolean()),
-			depth: Type.Optional(Type.Number({ minimum: 1, maximum: 10 })),
-			flat: Type.Optional(Type.Boolean()),
+			depth: Type.Optional(Type.Number({ minimum: 1, maximum: 10, default: 3 })),
+			flat: Type.Optional(Type.Boolean({ default: false })),
 			direction: Type.Optional(
 				Type.Union([Type.Literal("incoming"), Type.Literal("outgoing"), Type.Literal("both")], {
 					default: "both",
@@ -111,9 +111,9 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 		description:
 			"After every write or edit, run this to confirm no errors were introduced. Runs LSP diagnostics (type errors, warnings), then graph analysis (git diff, risk level, orphan detection). Verdict: PASS / WARN / FAIL. Use --quick for a fast git-change-only check (~2s). Use --lspOnly for diagnostics only. Use --preCommit for stricter thresholds. The `maxFiles` cap is configured in `.pi-shazam/config.json` under `verify.maxFiles` (default 100).",
 		typeboxParams: Type.Object({
-			quick: Type.Optional(Type.Boolean()),
-			lspOnly: Type.Optional(Type.Boolean()),
-			preCommit: Type.Optional(Type.Boolean()),
+			quick: Type.Optional(Type.Boolean({ default: false })),
+			lspOnly: Type.Optional(Type.Boolean({ default: false })),
+			preCommit: Type.Optional(Type.Boolean({ default: false })),
 			// #630: maxFiles, noCascade, noSecrets moved to .pi-shazam/config.json.
 			// noCascade and noSecrets were never read anywhere (dead options).
 			maxTokens: Type.Optional(Type.Number()),

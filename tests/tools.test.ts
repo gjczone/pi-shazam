@@ -254,11 +254,12 @@ describe("Tool: call_chain", () => {
 	it("should support --flat mode (replaces refs)", async () => {
 		const mod = await import("../tools/impact.js");
 		const graph = getGraph();
-		const refs = mod.getFlatReferences(graph, "scanProject");
-		expect(refs).toBeDefined();
-		expect(Array.isArray(refs)).toBe(true);
-		if (refs.length > 0) {
-			const formatted = mod.formatFlatReferences(refs, "scanProject");
+		const result = mod.getFlatReferences(graph, "scanProject");
+		expect(result).toBeDefined();
+		expect(Array.isArray(result.refs)).toBe(true);
+		expect(Array.isArray(result.affectedTests)).toBe(true);
+		if (result.refs.length > 0) {
+			const formatted = mod.formatFlatReferences(result.refs, "scanProject", result.affectedTests);
 			expect(typeof formatted).toBe("string");
 			expect(formatted.length).toBeGreaterThan(0);
 		}
