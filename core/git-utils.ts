@@ -69,6 +69,8 @@ export function isGitRepo(projectRoot: string): boolean {
 		});
 		result = output.trim() === "true";
 	} catch (err) {
+		const code = (err as NodeJS.ErrnoException).code;
+		if (code === "ENOENT") return false;
 		_logWarn("isGitRepo", `git rev-parse failed for ${projectRoot}`, err);
 		result = false;
 	}

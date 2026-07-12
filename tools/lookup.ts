@@ -233,18 +233,28 @@ async function _executeLookupAsync(
 	const typeSym = matches.find((s) => ["class", "interface", "type_alias", "struct"].includes(s.kind));
 	if (typeSym) {
 		const hierarchy = await _getTypeHierarchy(graph, typeSym, direction);
-		if (hierarchy.supertypes.length > 0 || hierarchy.subtypes.length > 0 || hierarchy.implementations.length > 0) {
+		if (
+			hierarchy.supertypes.length > 0 ||
+			hierarchy.subtypes.length > 0 ||
+			hierarchy.implementations.length > 0 ||
+			hierarchy.supertypesUnavailable ||
+			hierarchy.subtypesUnavailable
+		) {
 			lines.push("### Type Hierarchy");
 			lines.push("");
 			if (hierarchy.supertypes.length > 0) {
 				lines.push(`Supertypes (${hierarchy.supertypes.length}):`);
 				for (const st of hierarchy.supertypes)
 					lines.push(`  - ${st.kind} \`${_sanitizeMarkdown(st.name)}\` - ${st.file}:${st.line}`);
+			} else if (hierarchy.supertypesUnavailable) {
+				lines.push(`(supertypes unavailable: ${_sanitizeMarkdown(hierarchy.supertypesUnavailable)})`);
 			}
 			if (hierarchy.subtypes.length > 0) {
 				lines.push(`Subtypes (${hierarchy.subtypes.length}):`);
 				for (const st of hierarchy.subtypes)
 					lines.push(`  - ${st.kind} \`${_sanitizeMarkdown(st.name)}\` - ${st.file}:${st.line}`);
+			} else if (hierarchy.subtypesUnavailable) {
+				lines.push(`(subtypes unavailable: ${_sanitizeMarkdown(hierarchy.subtypesUnavailable)})`);
 			}
 			if (hierarchy.implementations.length > 0) {
 				lines.push(`Implementations (${hierarchy.implementations.length}):`);
@@ -613,6 +623,8 @@ interface TypeHierarchyResult {
 	supertypes: TypeHierarchyEntry[];
 	subtypes: TypeHierarchyEntry[];
 	implementations: TypeHierarchyEntry[];
+	supertypesUnavailable?: string;
+	subtypesUnavailable?: string;
 }
 
 async function _getTypeHierarchy(
@@ -676,12 +688,14 @@ async function _getTypeHierarchy(
 					needSuper
 						? client.request("typeHierarchy/supertypes", { item }).catch((err) => {
 								_logWarn("_getTypeHierarchy", "supertypes request failed", err);
+								result.supertypesUnavailable = err instanceof Error ? err.message : "LSP request failed";
 								return null;
 							})
 						: Promise.resolve(null),
 					needSub
 						? client.request("typeHierarchy/subtypes", { item }).catch((err) => {
 								_logWarn("_getTypeHierarchy", "subtypes request failed", err);
+								result.subtypesUnavailable = err instanceof Error ? err.message : "LSP request failed";
 								return null;
 							})
 						: Promise.resolve(null),

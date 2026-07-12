@@ -46,11 +46,18 @@ import { stat } from "node:fs/promises";
 import { redact } from "../core/redact.js";
 import { readFileAdaptiveAsync } from "../core/encoding.js";
 import { resolve, join } from "node:path";
-import { getNextForTool, formatNextSection, truncateOutput, estimateTokens, _logWarn } from "../core/output.js";
+import {
+	getNextForTool,
+	formatNextSection,
+	truncateOutput,
+	estimateTokens,
+	_logWarn,
+	_logInternal,
+} from "../core/output.js";
 import { getLspManager } from "./_context.js";
 import type { VerifyOptions } from "../core/verify-types.js";
 import { setLastToolTiming } from "../core/context.js";
-import { lspCodeActions, lspReferences, upgradeEdgesToResolved } from "./lsp_enrich.js";
+import { lspCodeActions, lspReferences, upgradeEdgesToResolved, resetLspEnrichState } from "./lsp_enrich.js";
 import { createTool } from "./_factory.js";
 import { dispatchVerify } from "./_dispatchers.js";
 import { uriToPath } from "../lsp/client.js";
@@ -767,6 +774,7 @@ async function runLspDiagnostics(
 			// when the LSP result is unreliable, the documents we just
 			// didOpen still occupy memory on the language server.
 			await lspManager.closeOpenedFiles();
+			resetLspEnrichState();
 			const subResult = await runSubprocessDiagnostics(projectRoot);
 			return {
 				...subResult,
@@ -791,6 +799,7 @@ async function runLspDiagnostics(
 	}
 
 	await lspManager.closeOpenedFiles();
+	resetLspEnrichState();
 
 	return {
 		diagnostics,
@@ -871,7 +880,7 @@ async function upgradeEdgesForHotspots(
 		}
 	}
 	if (attempted > 0) {
-		_logWarn(
+		_logInternal(
 			"upgradeEdgesForHotspots",
 			`upgraded ${upgraded}/${attempted} edges across top-${topN} hot symbols to provenance=resolved`,
 		);
