@@ -472,7 +472,9 @@ export async function lspSignatureHelp(
 	const cts = _createCts();
 	try {
 		const result = await withEnrichTimeout(
-			opened.client.signatureHelp(filePath, line, character, cts?.token).then((r) => (r.status === "ok" ? r.data : null)),
+			opened.client
+				.signatureHelp(filePath, line, character, cts?.token)
+				.then((r) => (r.status === "ok" ? r.data : null)),
 			effectiveTimeout(opened.justOpened, timeoutMs),
 			cts,
 		);
