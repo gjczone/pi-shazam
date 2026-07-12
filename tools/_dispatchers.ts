@@ -236,10 +236,10 @@ export function dispatchImpact(graph: RepoGraph, params: Record<string, unknown>
 		if (resolved && resolved.length > 0) recordCallChain(symbolName!);
 		const flat = (params.flat as boolean) ?? false;
 		if (flat) {
-			const refs = getFlatReferences(graph, symbolName!, direction);
+			const { refs, affectedTests } = getFlatReferences(graph, symbolName!, direction);
 			const text = json
-				? buildEnvelope("shazam_impact", projectRoot, "ok", refs)
-				: formatFlatReferences(refs, symbolName!);
+				? buildEnvelope("shazam_impact", projectRoot, "ok", { refs, affectedTests })
+				: formatFlatReferences(refs, symbolName!, affectedTests);
 			return { text };
 		}
 		const text = json

@@ -642,18 +642,25 @@ interface FlatReference {
 	provenance: import("../core/graph.js").Provenance;
 }
 
+interface FlatReferenceResult {
+	refs: FlatReference[];
+	affectedTests: string[];
+}
+
 function _getFlatReferences(
 	graph: RepoGraph,
 	symbolName: string,
 	direction: "incoming" | "outgoing" | "both" = "both",
-): FlatReference[] {
+): FlatReferenceResult {
 	const targets = graph.nameIndex.get(symbolName) ?? [];
-	if (targets.length === 0) return [];
+	if (targets.length === 0) return { refs: [], affectedTests: [] };
 
 	const refs: FlatReference[] = [];
 	const seen = new Set<string>();
+	const referencedFiles = new Set<string>();
 
 	for (const target of targets) {
+		referencedFiles.add(target.file);
 		if (direction !== "outgoing") {
 			const incoming = graph.incoming.get(target.id);
 			if (incoming) {
@@ -663,6 +670,7 @@ function _getFlatReferences(
 					const key = `${src.name}:${src.file}:${src.line}`;
 					if (seen.has(key)) continue;
 					seen.add(key);
+					referencedFiles.add(src.file);
 					refs.push({
 						symbol: src.name,
 						file: src.file,
@@ -683,6 +691,7 @@ function _getFlatReferences(
 					const key = `${tgt.name}:${tgt.file}:${tgt.line}`;
 					if (seen.has(key)) continue;
 					seen.add(key);
+					referencedFiles.add(tgt.file);
 					refs.push({
 						symbol: tgt.name,
 						file: tgt.file,
@@ -696,10 +705,11 @@ function _getFlatReferences(
 		}
 	}
 
-	return refs;
+	const { tests: affectedTests } = filterTestFiles([...referencedFiles]);
+	return { refs, affectedTests };
 }
 
-function _formatFlatReferences(refs: FlatReference[], symbolName: string): string {
+function _formatFlatReferences(refs: FlatReference[], symbolName: string, affectedTests: string[] = []): string {
 	if (refs.length === 0) return `No references found for "${symbolName}".`;
 
 	const lines: string[] = [`## Flat References for \`${symbolName}\` (${refs.length} total)`, ""];
@@ -721,6 +731,8 @@ function _formatFlatReferences(refs: FlatReference[], symbolName: string): strin
 		if (outgoing.length > MAX_DISPLAY_REFS) lines.push(`  ... and ${outgoing.length - MAX_DISPLAY_REFS} more`);
 		lines.push("");
 	}
+
+	appendAffectedTests(lines, affectedTests);
 
 	return lines.join("\n");
 }
@@ -880,10 +892,10 @@ export function getFlatReferences(
 	graph: RepoGraph,
 	symbolName: string,
 	direction: "incoming" | "outgoing" | "both" = "both",
-): FlatReference[] {
+): FlatReferenceResult {
 	return _getFlatReferences(graph, symbolName, direction);
 }
 
-export function formatFlatReferences(refs: FlatReference[], symbolName: string): string {
-	return _formatFlatReferences(refs, symbolName);
+export function formatFlatReferences(refs: FlatReference[], symbolName: string, affectedTests: string[] = []): string {
+	return _formatFlatReferences(refs, symbolName, affectedTests);
 }
