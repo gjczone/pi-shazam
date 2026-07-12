@@ -17,6 +17,8 @@
 
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/shazam-common.sh"
+
 INPUT=$(cat)
 tool_name=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""')
 cmd=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""')

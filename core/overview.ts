@@ -12,7 +12,7 @@ import type { RepoGraph, Symbol } from "./graph.js";
 import { isNonSourceFile } from "./filter.js";
 import { getNextForTool, formatNextSection, _logWarn, buildEnvelope } from "./output.js";
 import { getExcludedTestCount } from "./scanner.js";
-import { EXT_TO_LANG, getProjectParserWarnings } from "./treesitter.js";
+import { EXT_TO_LANG, getProjectParserWarnings, getParserStatus } from "./treesitter.js";
 import { existsSync } from "node:fs";
 import { readFileAdaptive } from "./encoding.js";
 import { safeGitExec } from "./git-utils.js";
@@ -148,6 +148,39 @@ function _buildOverviewText(graph: RepoGraph, projectRoot: string, filter?: stri
 			lines.push("");
 			lines.push(
 				"Files in these languages will have 0 symbols in the graph. Use `shazam_lookup` and `shazam_verify` (LSP-based) for these files instead.",
+			);
+		}
+
+		// Issue #734: degraded mode — parser loads but some query types fail to compile.
+		// These languages have symbols but may be missing certain edge types (imports, calls, etc.).
+		const degradedLangs: [string, string[]][] = [];
+		const allStatus = getParserStatus();
+		const projectLangs = new Set<string>();
+		for (const filePath of graph.fileSymbols.keys()) {
+			const dotIdx = filePath.lastIndexOf(".");
+			if (dotIdx < 0) continue;
+			const ext = filePath.slice(dotIdx).toLowerCase();
+			const lang = EXT_TO_LANG[ext];
+			if (lang) projectLangs.add(lang);
+		}
+		for (const lang of projectLangs) {
+			const info = allStatus.get(lang);
+			if (info && info.status === "loaded" && info.degradedQueries && info.degradedQueries.length > 0) {
+				degradedLangs.push([lang, info.degradedQueries]);
+			}
+		}
+		if (degradedLangs.length > 0) {
+			lines.push("");
+			lines.push("### Parser Degraded Mode");
+			lines.push("");
+			lines.push("Some tree-sitter queries failed to compile — analysis may be incomplete for these languages:");
+			lines.push("");
+			for (const [lang, queries] of degradedLangs) {
+				lines.push(`- **${lang}**: missing queries — ${queries.join(", ")}`);
+			}
+			lines.push("");
+			lines.push(
+				"Edge types for failed queries will be absent from the graph. Consider reinstalling the tree-sitter grammar for the affected language.",
 			);
 		}
 	}
