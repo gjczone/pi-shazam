@@ -44,7 +44,7 @@ import { executeVerifyTextAsync, executeVerifyJsonAsync, capVerifyDiagnostics } 
 import { executeChanges, executeChangesJson } from "./changes.js";
 import { executeRenameSymbol, formatRenameResult, executeRenameSymbolJson } from "./rename_symbol.js";
 import { hasCallChainChecked, recordCallChain } from "./rename-state.js";
-import { validatePathInProject, buildEnvelope } from "./_factory.js";
+import { buildEnvelope } from "./_factory.js";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { classifyFilePath, suggestSimilarFile } from "../core/path-utils.js";
@@ -100,16 +100,30 @@ export async function dispatchLookup(
 	const mode = (params.mode as string) ?? "default";
 
 	// Path traversal guard: reject file paths outside project root.
-	// #616: check nameIndex before validatePathInProject — symbols that
+	// #616: check nameIndex before classifyFilePath — symbols that
 	// look like file paths (e.g. "config.json") must not be rejected when
 	// they exist in the graph (matching Pi native behavior, issue #497).
-	if (_isFilePath(nameStr) && !graph.nameIndex?.has(nameStr) && !validatePathInProject(nameStr, projectRoot)) {
-		return {
-			text: buildEnvelope("shazam_lookup", projectRoot, "error", {
-				error: `Path '${nameStr}' is outside the project root and cannot be read.`,
-			}),
-			isError: true,
-		};
+	if (_isFilePath(nameStr) && !graph.nameIndex?.has(nameStr)) {
+		const nameClassification = classifyFilePath(nameStr, projectRoot);
+		if (nameClassification.kind === "traversal") {
+			return {
+				text: buildEnvelope("shazam_lookup", projectRoot, "error", {
+					error: nameClassification.message,
+				}),
+				isError: true,
+			};
+		}
+		if (nameClassification.kind === "missing") {
+			const knownFiles = graph.fileSymbols ? graph.fileSymbols.keys() : [];
+			const suggestion = suggestSimilarFile(nameStr, knownFiles);
+			const hint = suggestion ? ` Did you mean '${suggestion}'?` : "";
+			return {
+				text: buildEnvelope("shazam_lookup", projectRoot, "error", {
+					error: `File '${nameStr}' is not in the project.${hint}`,
+				}),
+				isError: true,
+			};
+		}
 	}
 
 	const fileParam = params.file as string | undefined;

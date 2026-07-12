@@ -20,7 +20,8 @@ import { getNextForTool, formatNextSection, truncateOutput, _logWarn } from "../
 import { getLspManager } from "./_context.js";
 import { lspDocumentSymbols, lspCodeLens, lspImplementation, ensureFileOpened } from "./lsp_enrich.js";
 import type { DocumentSymbol } from "vscode-languageserver-protocol";
-import { createTool, buildEnvelope, validatePathInProject } from "./_factory.js";
+import { createTool, buildEnvelope } from "./_factory.js";
+import { classifyFilePath } from "../core/path-utils.js";
 import { dispatchLookup } from "./_dispatchers.js";
 import { setLastToolTiming } from "./_context.js";
 import { statSync } from "node:fs";
@@ -812,9 +813,13 @@ async function _executeFileDetailAsync(
 	_json: boolean,
 	_maxTokens: number | undefined,
 ): Promise<string> {
-	// Defense-in-depth: reject paths outside project root (issue #395)
-	if (!validatePathInProject(file, getEffectiveRoot())) {
+	// Defense-in-depth: classify path to distinguish missing vs traversal (issue #737)
+	const fileClassification = classifyFilePath(file, getEffectiveRoot());
+	if (fileClassification.kind === "traversal") {
 		return `Error: Path '${file}' is outside the project root and cannot be read.`;
+	}
+	if (fileClassification.kind === "missing") {
+		return `Error: File '${file}' not found in the project.`;
 	}
 	const cacheKey = `${file}:text`;
 	const cached = fileDetailCache.get(cacheKey);
@@ -1262,9 +1267,15 @@ export async function executeLookupAsync(
 	direction: "both" | "supertypes" | "subtypes",
 	showCallbacks: boolean,
 ): Promise<string> {
-	// Defense-in-depth: reject file paths outside project root (issue #395)
-	if (file && !validatePathInProject(file, getEffectiveRoot())) {
-		return `Error: File path '${file}' is outside the project root.`;
+	// Defense-in-depth: classify file path to distinguish missing vs traversal (issue #737)
+	if (file) {
+		const fileClassification = classifyFilePath(file, getEffectiveRoot());
+		if (fileClassification.kind === "traversal") {
+			return `Error: File path '${file}' is outside the project root.`;
+		}
+		if (fileClassification.kind === "missing") {
+			return `Error: File '${file}' not found in the project.`;
+		}
 	}
 	return _executeLookupAsync(graph, name, file, direction, showCallbacks);
 }
