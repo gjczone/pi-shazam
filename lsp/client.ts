@@ -179,6 +179,10 @@ export class LspClient {
 	private process: ChildProcess | null = null;
 	private connection: import("vscode-jsonrpc").MessageConnection | null = null;
 	private _openedFiles = new Set<string>();
+	/** Issue #729: LRU order for opened files — oldest first. Used to evict
+	 *  files when the set grows too large, preventing unbounded LSP server
+	 *  memory growth from enrichment paths that forget to call didClose. */
+	private _openedFilesOrder: string[] = [];
 	private _openingFiles = new Set<string>();
 	private _serverCapabilities: Record<string, unknown> = {};
 	private _running = false;
@@ -188,6 +192,11 @@ export class LspClient {
 	private _cleanedUp = false;
 	private _closePromise: Promise<void> | null = null;
 	private _log: (msg: string) => void;
+
+	/** Issue #729: cap on opened files per LSP server. Enforced via LRU
+	 *  eviction in didOpen. Prevents unbounded server-side AST memory growth
+	 *  when callers (enrichment paths) open files without closing them. */
+	private static readonly MAX_OPENED_FILES = 200;
 
 	// Store notifications (e.g., diagnostics) received outside request-response.
 	// Deduplicated per URI: only the latest notification per URI is kept.
@@ -439,6 +448,20 @@ export class LspClient {
 		}
 		this._openingFiles.add(resolvedPath);
 
+		// #729: LRU eviction — if we're at the cap, evict the oldest opened
+		// file before opening a new one. This caps server-side AST memory
+		// even if callers forget to close files after enrichment.
+		if (this._openedFiles.size >= LspClient.MAX_OPENED_FILES) {
+			const oldest = this._openedFilesOrder.shift();
+			if (oldest) {
+				try {
+					await this.didClose(oldest);
+				} catch (err) {
+					this._log(`LRU eviction: didClose failed for ${oldest}: ${err}`);
+				}
+			}
+		}
+
 		// #449: Resolve against workspaceRoot so URI matches collectDiagnostics
 		const uri = pathToUri(this.resolveRel(filePath));
 
@@ -454,6 +477,7 @@ export class LspClient {
 		try {
 			await this.connection.sendNotification("textDocument/didOpen", params);
 			this._openedFiles.add(resolvedPath);
+			this._openedFilesOrder.push(resolvedPath);
 			this._docVersions.set(uri, 1);
 		} finally {
 			this._openingFiles.delete(resolvedPath);
@@ -527,7 +551,13 @@ export class LspClient {
 			}
 		} finally {
 			this._docVersions.delete(uri);
-			this._openedFiles.delete(this.resolveRel(filePath));
+			const resolved = this.resolveRel(filePath);
+			this._openedFiles.delete(resolved);
+			// #729: remove from LRU order list
+			const orderIdx = this._openedFilesOrder.indexOf(resolved);
+			if (orderIdx !== -1) {
+				this._openedFilesOrder.splice(orderIdx, 1);
+			}
 		}
 	}
 

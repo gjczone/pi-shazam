@@ -385,12 +385,20 @@ export async function lspDocumentSymbols(
 		return null;
 	}
 	const cts = _createCts();
-	const result = await withEnrichTimeout(
-		opened.client.documentSymbols(filePath, cts?.token).then((r) => (r.status === "ok" ? r.data : null)),
-		effectiveTimeout(opened.justOpened, timeoutMs),
-		cts,
-	).finally(() => cts?.dispose());
-	return result;
+	try {
+		const result = await withEnrichTimeout(
+			opened.client.documentSymbols(filePath, cts?.token).then((r) => (r.status === "ok" ? r.data : null)),
+			effectiveTimeout(opened.justOpened, timeoutMs),
+			cts,
+		);
+		return result;
+	} finally {
+		cts?.dispose();
+		// #729: close file after enrichment to release server-side AST memory
+		void opened.client.didClose(filePath).catch((err) => {
+			_logWarn("lspDocumentSymbols", `didClose failed for ${filePath}`, err);
+		});
+	}
 }
 
 /**
@@ -423,14 +431,22 @@ export async function lspCodeActions(
 		return null;
 	}
 	const cts = _createCts();
-	const result = await withEnrichTimeout(
-		opened.client
-			.codeAction(filePath, startLine, startChar, endLine, endChar, cts?.token)
-			.then((r) => (r.status === "ok" ? r.data : null)),
-		effectiveTimeout(opened.justOpened, timeoutMs),
-		cts,
-	).finally(() => cts?.dispose());
-	return result;
+	try {
+		const result = await withEnrichTimeout(
+			opened.client
+				.codeAction(filePath, startLine, startChar, endLine, endChar, cts?.token)
+				.then((r) => (r.status === "ok" ? r.data : null)),
+			effectiveTimeout(opened.justOpened, timeoutMs),
+			cts,
+		);
+		return result;
+	} finally {
+		cts?.dispose();
+		// #729: close file after enrichment to release server-side AST memory
+		void opened.client.didClose(filePath).catch((err) => {
+			_logWarn("lspCodeActions", `didClose failed for ${filePath}`, err);
+		});
+	}
 }
 
 // -- signatureHelp -----------------------------------------------------------
@@ -454,12 +470,20 @@ export async function lspSignatureHelp(
 		return null;
 	}
 	const cts = _createCts();
-	const result = await withEnrichTimeout(
-		opened.client.signatureHelp(filePath, line, character, cts?.token).then((r) => (r.status === "ok" ? r.data : null)),
-		effectiveTimeout(opened.justOpened, timeoutMs),
-		cts,
-	).finally(() => cts?.dispose());
-	return result;
+	try {
+		const result = await withEnrichTimeout(
+			opened.client.signatureHelp(filePath, line, character, cts?.token).then((r) => (r.status === "ok" ? r.data : null)),
+			effectiveTimeout(opened.justOpened, timeoutMs),
+			cts,
+		);
+		return result;
+	} finally {
+		cts?.dispose();
+		// #729: close file after enrichment to release server-side AST memory
+		void opened.client.didClose(filePath).catch((err) => {
+			_logWarn("lspSignatureHelp", `didClose failed for ${filePath}`, err);
+		});
+	}
 }
 
 // -- implementation ----------------------------------------------------------
@@ -484,26 +508,34 @@ export async function lspImplementation(
 		return null;
 	}
 	const cts = _createCts();
-	const result = await withEnrichTimeout(
-		opened.client.implementation(filePath, line, character, cts?.token).then((r) => {
-			if (r.status !== "ok" || !r.data) return null;
-			const arr: unknown[] = Array.isArray(r.data) ? r.data : [r.data];
-			// Detect LocationLink[] by checking for "targetUri" property
-			if (isLocationLinkArray(arr)) {
-				return arr.map(
-					(ll) =>
-						({
-							uri: ll.targetUri,
-							range: ll.targetRange,
-						}) as Location,
-				);
-			}
-			return arr as Location[];
-		}),
-		effectiveTimeout(opened.justOpened, timeoutMs),
-		cts,
-	).finally(() => cts?.dispose());
-	return result;
+	try {
+		const result = await withEnrichTimeout(
+			opened.client.implementation(filePath, line, character, cts?.token).then((r) => {
+				if (r.status !== "ok" || !r.data) return null;
+				const arr: unknown[] = Array.isArray(r.data) ? r.data : [r.data];
+				// Detect LocationLink[] by checking for "targetUri" property
+				if (isLocationLinkArray(arr)) {
+					return arr.map(
+						(ll) =>
+							({
+								uri: ll.targetUri,
+								range: ll.targetRange,
+							}) as Location,
+					);
+				}
+				return arr as Location[];
+			}),
+			effectiveTimeout(opened.justOpened, timeoutMs),
+			cts,
+		);
+		return result;
+	} finally {
+		cts?.dispose();
+		// #729: close file after enrichment to release server-side AST memory
+		void opened.client.didClose(filePath).catch((err) => {
+			_logWarn("lspImplementation", `didClose failed for ${filePath}`, err);
+		});
+	}
 }
 
 /**
@@ -526,26 +558,34 @@ export async function lspReferences(
 		return null;
 	}
 	const cts = _createCts();
-	const result = await withEnrichTimeout(
-		opened.client.references(filePath, line, character, cts?.token).then((r) => {
-			if (r.status !== "ok" || !r.data) return null;
-			const arr: unknown[] = Array.isArray(r.data) ? r.data : [r.data];
-			// Detect LocationLink[] by checking for "targetUri" property
-			if (isLocationLinkArray(arr)) {
-				return arr.map(
-					(ll) =>
-						({
-							uri: ll.targetUri,
-							range: ll.targetRange,
-						}) as Location,
-				);
-			}
-			return arr as Location[];
-		}),
-		effectiveTimeout(opened.justOpened, timeoutMs),
-		cts,
-	).finally(() => cts?.dispose());
-	return result;
+	try {
+		const result = await withEnrichTimeout(
+			opened.client.references(filePath, line, character, cts?.token).then((r) => {
+				if (r.status !== "ok" || !r.data) return null;
+				const arr: unknown[] = Array.isArray(r.data) ? r.data : [r.data];
+				// Detect LocationLink[] by checking for "targetUri" property
+				if (isLocationLinkArray(arr)) {
+					return arr.map(
+						(ll) =>
+							({
+								uri: ll.targetUri,
+								range: ll.targetRange,
+							}) as Location,
+					);
+				}
+				return arr as Location[];
+			}),
+			effectiveTimeout(opened.justOpened, timeoutMs),
+			cts,
+		);
+		return result;
+	} finally {
+		cts?.dispose();
+		// #729: close file after enrichment to release server-side AST memory
+		void opened.client.didClose(filePath).catch((err) => {
+			_logWarn("lspReferences", `didClose failed for ${filePath}`, err);
+		});
+	}
 }
 
 // -- codeLens ----------------------------------------------------------------
@@ -567,12 +607,20 @@ export async function lspCodeLens(
 		return null;
 	}
 	const cts = _createCts();
-	const result = await withEnrichTimeout(
-		opened.client.codeLens(filePath, cts?.token).then((r) => (r.status === "ok" ? r.data : null)),
-		effectiveTimeout(opened.justOpened, timeoutMs),
-		cts,
-	).finally(() => cts?.dispose());
-	return result;
+	try {
+		const result = await withEnrichTimeout(
+			opened.client.codeLens(filePath, cts?.token).then((r) => (r.status === "ok" ? r.data : null)),
+			effectiveTimeout(opened.justOpened, timeoutMs),
+			cts,
+		);
+		return result;
+	} finally {
+		cts?.dispose();
+		// #729: close file after enrichment to release server-side AST memory
+		void opened.client.didClose(filePath).catch((err) => {
+			_logWarn("lspCodeLens", `didClose failed for ${filePath}`, err);
+		});
+	}
 }
 
 // -- Edge provenance upgrade (issue #633) --------------------------------
