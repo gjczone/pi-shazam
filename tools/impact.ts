@@ -85,7 +85,7 @@ export function registerImpact(pi: ExtensionAPI): void {
 		}),
 		execute(graph, params) {
 			const projectRoot = (params.project as string) || ".";
-			return dispatchImpact(graph, params, projectRoot).text;
+			return dispatchImpact(graph, params, projectRoot);
 		},
 	});
 }

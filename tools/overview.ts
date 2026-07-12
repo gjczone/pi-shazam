@@ -30,7 +30,7 @@ export function registerOverview(pi: ExtensionAPI): void {
 		}),
 		execute(graph, params) {
 			const projectRoot = (params.project as string) || ".";
-			return dispatchOverview(graph, params, projectRoot).text;
+			return dispatchOverview(graph, params, projectRoot);
 		},
 	});
 }

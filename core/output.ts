@@ -450,19 +450,29 @@ export function _logInternal(tag: string, message: string, extra?: Record<string
  * Sunk from tools/_factory.ts into core (issue #716) so tools and core share one
  * definition and core/overview.ts can construct JSON output without importing tools.
  */
-export function buildEnvelope(name: string, project: string, status: "ok" | "error", result: unknown): string {
+export function buildEnvelope(
+	name: string,
+	project: string,
+	status: "ok" | "error",
+	result: unknown,
+	options?: { truncated?: boolean },
+): string {
 	// #586: Normalize backslash paths (Windows) to forward slashes for
 	// consistent JSON output across platforms.
 	const normalizedProject = project.replace(/\\/g, "/");
-	return JSON.stringify(
-		{
-			schema_version: "1.0",
-			command: name.replace("shazam_", ""),
-			project: normalizedProject,
-			status,
-			result,
-		},
-		null,
-		2,
-	);
+	const envelope: Record<string, unknown> = {
+		schema_version: "1.0",
+		command: name.replace("shazam_", ""),
+		project: normalizedProject,
+		status,
+		result,
+	};
+	// #731/#758: surface truncation as a machine-readable top-level flag
+	// so JSON consumers (MCP clients, programmatic callers) can detect
+	// incomplete graphs when MAX_FILES was hit during the scan. Only
+	// included when truncation actually occurred (sparse representation).
+	if (options?.truncated === true) {
+		envelope.truncated = true;
+	}
+	return JSON.stringify(envelope, null, 2);
 }

@@ -95,7 +95,10 @@ export interface ToolSpec<T extends TProperties> {
 	 * Standard domain function: receives pre-scanned graph and merged params,
 	 * returns text output. Factory handles envelope, json toggle, truncation.
 	 */
-	execute?: (graph: RepoGraph, params: Record<string, unknown>) => string | Promise<string>;
+	execute?: (
+		graph: RepoGraph,
+		params: Record<string, unknown>,
+	) => string | { text: string; isError?: boolean } | Promise<string | { text: string; isError?: boolean }>;
 	/**
 	 * Custom execute for tools with complex logic (async LSP, multi-branch).
 	 * Receives the full execute context. Factory only merges params.
@@ -172,11 +175,21 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 					: "";
 
 			let text: string;
+			let isError = false;
 			try {
 				const t0 = Date.now();
-				text = await domainFn(graph, effectiveParams);
+				const rawResult = await domainFn(graph, effectiveParams);
 				const totalMs = Date.now() - t0;
 				setLastToolTiming({ formatOutput: totalMs });
+				// #756: support dispatchers that return { text, isError } for
+				// path-traversal and validation failures. String-only returns
+				// default to isError=false (backward-compatible).
+				if (typeof rawResult === "string") {
+					text = rawResult;
+				} else {
+					text = rawResult.text;
+					isError = rawResult.isError === true;
+				}
 			} catch (err) {
 				const errMsg = err instanceof Error ? err.message : String(err);
 				_logWarn("createTool", `${spec.name} domainFn failed`, err);
@@ -193,6 +206,12 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 			if (json) {
 				try {
 					const parsed = JSON.parse(text);
+					// #758: surface truncation as a machine-readable top-level
+					// flag so JSON consumers (MCP clients) can detect incomplete
+					// graphs when MAX_FILES was hit during the scan.
+					if (graph.truncated === true) {
+						parsed.truncated = true;
+					}
 					text = JSON.stringify(parsed, null, 2);
 				} catch (err) {
 					_logWarn("createTool", `JSON.parse failed for ${spec.name} output`, err);
@@ -224,6 +243,7 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 						text,
 					},
 				],
+				isError,
 			};
 		},
 	});
