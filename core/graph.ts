@@ -578,14 +578,14 @@ export function compareGraphSnapshots(
 		callChainChanges: {
 			newCalls: edgesAdded.slice(0, 20).map((e) => {
 				const parts = e.split("::");
-				const kind = parts[parts.length - 3];
+				const kind = parts[parts.length - 4];
 				const target = parts.slice(3, 6).join("::");
 				const source = parts.slice(0, 3).join("::");
 				return { from: source, to: target, kind };
 			}),
 			removedCalls: edgesRemoved.slice(0, 20).map((e) => {
 				const parts = e.split("::");
-				const kind = parts[parts.length - 3];
+				const kind = parts[parts.length - 4];
 				const target = parts.slice(3, 6).join("::");
 				const source = parts.slice(0, 3).join("::");
 				return { from: source, to: target, kind };
