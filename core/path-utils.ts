@@ -26,6 +26,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { relative, resolve, isAbsolute, sep as pathSep } from "node:path";
 import { homedir } from "node:os";
 import { getEffectiveRoot } from "./scanner.js";
+import { _logWarn } from "./output.js";
 
 // Issue #673: Windows/Git-Bash path normalization.
 //
@@ -140,7 +141,7 @@ export function validatePathInProjectCore(rawPath: string, projectRoot: string =
 		// "we can't prove this path is in the project". Log to surface
 		// unexpected cases (symlink loops, permission issues) but treat
 		// as not-in-root so callers fall back to the safe path.
-		console.warn(`[pi-shazam] validatePathInProjectCore: realpathSync failed for ${resolved}:`, err);
+		_logWarn("validatePathInProjectCore", `realpathSync failed for ${resolved}`, err);
 		return false;
 	}
 }
