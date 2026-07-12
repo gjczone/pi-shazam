@@ -106,6 +106,9 @@ export interface ParserStatusInfo {
 	status: "loaded" | "unavailable";
 	reason?: string;
 	suggestion?: string;
+	/** Issue #734: query types that failed to compile (degraded mode).
+	 *  When present, the parser loads but certain edge types are unavailable. */
+	degradedQueries?: string[];
 }
 
 const _parserStatus = new Map<string, ParserStatusInfo>();
@@ -283,6 +286,7 @@ export class TreeSitterAdapter {
 			if (!parser) continue;
 
 			const langQueries = new Map<string, QueryInstance>();
+			const degraded: string[] = [];
 			try {
 				for (const [qtype, src] of Object.entries(patterns)) {
 					if (!src || src.trim().length === 0) continue;
@@ -293,12 +297,25 @@ export class TreeSitterAdapter {
 						langQueries.set(qtype, q);
 					} catch (e) {
 						this.log(`Query compile failed [${lang}/${qtype}]: ${e}`);
+						degraded.push(qtype);
 					}
 				}
 			} catch (err) {
 				this.log(`Unable to create queries for ${lang}: ${err}`);
 			}
 			this.queries.set(lang, langQueries);
+
+			// Issue #734: surface degraded query compilation so overview
+			// can warn the user that some edge types are missing.
+			if (degraded.length > 0) {
+				const existing = _parserStatus.get(lang);
+				if (existing && existing.status === "loaded") {
+					_parserStatus.set(lang, {
+						...existing,
+						degradedQueries: degraded,
+					});
+				}
+			}
 		}
 	}
 
