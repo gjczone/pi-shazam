@@ -19,9 +19,14 @@
  * by the dedicated `benchmark` CI job in isolation.
  */
 import { describe, it, expect } from "vitest";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { unlinkSync } from "node:fs";
 import { createRepoGraph, createSymbol, createEdge, type RepoGraph } from "../core/graph.js";
 import {
 	serializeGraphV3,
+	saveGraphCache,
+	loadGraphCache,
 	deserializeGraphV3,
 	deserializeGraphV3V1,
 	deserializeGraphV3V0,
@@ -599,5 +604,66 @@ describe("Cache V3.0 / V3.1 legacy deserializers (issue #647 follow-up E)", () =
 		const graph = buildLegacyFixture();
 		const v32 = serializeGraphV3(graph);
 		expect(() => deserializeGraphV3V0(v32)).toThrow(/magic/i);
+	});
+});
+
+describe("V3 targetToSources reverse index (issue #752)", () => {
+	// Build a graph with cross-file symbol edges where targetToSources is
+	// maintained exactly as addEdge (scanner.ts:1242) does in production.
+	// The V3 deserializer must rebuild this derived index from the edges,
+	// otherwise the first incremental scan after a cache load (which reads
+	// targetToSources in _cleanEdgesForSymbols, scanner.ts:339) cannot clean
+	// stale cross-file edges.
+	function buildEdgeFixture(): RepoGraph {
+		const graph = createRepoGraph();
+		const a = createSymbol("src/a.ts::a::1", "a", "function", "src/a.ts", 1);
+		const b = createSymbol("src/b.ts::b::1", "b", "function", "src/b.ts", 1);
+		const c = createSymbol("src/c.ts::c::1", "c", "function", "src/c.ts", 1);
+		for (const s of [a, b, c]) {
+			graph.symbols.set(s.id, s);
+			graph.fileSymbols.set(s.file, [s.id]);
+		}
+		const e1 = createEdge(a.id, b.id, 1.0, "call", 0.9, "resolved");
+		const e2 = createEdge(b.id, c.id, 1.0, "call", 0.9, "resolved");
+		const e3 = createEdge(a.id, c.id, 1.0, "type", 0.5, "name_match");
+		graph.outgoing.set(a.id, [e1, e3]);
+		graph.outgoing.set(b.id, [e2]);
+		graph.incoming.set(b.id, [e1]);
+		graph.incoming.set(c.id, [e2, e3]);
+		// Reverse index — the value the V3 load must reconstruct.
+		graph.targetToSources.set(b.id, new Set([a.id]));
+		graph.targetToSources.set(c.id, new Set([a.id, b.id]));
+		return graph;
+	}
+
+	it("V3 deserialize reconstructs targetToSources from edges", () => {
+		const graph = buildEdgeFixture();
+		const buf = serializeGraphV3(graph);
+		const loaded = deserializeGraphV3(buf);
+		expect(loaded.targetToSources.size).toBe(graph.targetToSources.size);
+		for (const [target, sources] of graph.targetToSources) {
+			expect(loaded.targetToSources.get(target)).toEqual(sources);
+		}
+	});
+
+	it("loadGraphCache (V3) populates targetToSources for incremental scan", () => {
+		const graph = buildEdgeFixture();
+		const cachePath = join(tmpdir(), `shazam-v3-tts-${process.pid}-${Date.now()}.bin`);
+		try {
+			const result = saveGraphCache(graph, new Map(), cachePath);
+			expect(result.persisted).toBe(true);
+			const loaded = loadGraphCache(cachePath);
+			expect(loaded).not.toBeNull();
+			expect(loaded!.graph.targetToSources.size).toBe(graph.targetToSources.size);
+			for (const [target, sources] of graph.targetToSources) {
+				expect(loaded!.graph.targetToSources.get(target)).toEqual(sources);
+			}
+		} finally {
+			try {
+				unlinkSync(cachePath);
+			} catch {
+				/* best-effort cleanup */
+			}
+		}
 	});
 });

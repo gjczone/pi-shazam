@@ -722,6 +722,16 @@ function _appendEdge(graph: RepoGraph, edge: Edge): void {
 	const inc = graph.incoming.get(edge.target) ?? [];
 	inc.push(edge);
 	graph.incoming.set(edge.target, inc);
+	// Reverse-edge index: required by _cleanEdgesForSymbols (scanner.ts:339).
+	// Without this, the incremental scan after a V3 cache load cannot clean
+	// cross-file edges pointing at changed-file symbols, corrupting
+	// shazam_impact blast radius and PageRank. Mirrors addEdge (scanner.ts:1242).
+	const sources = graph.targetToSources.get(edge.target);
+	if (sources) {
+		sources.add(edge.source);
+	} else {
+		graph.targetToSources.set(edge.target, new Set([edge.source]));
+	}
 }
 
 /**
