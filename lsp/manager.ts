@@ -177,8 +177,11 @@ export function detectProjectLanguages(
 				let realTarget: string;
 				try {
 					realTarget = realpathSync(fullPath);
-				} catch (_err) {
-					// Broken symlink or inaccessible path — skip
+				} catch (err) {
+					// Broken symlink or inaccessible path — skip, but record
+					// the failure so silent filesystem issues (EACCES, ELOOP,
+					// ENOTDIR) are diagnosable instead of swallowed (#755).
+					_logWarn("lspDiscover", `realpathSync failed for ${fullPath}, skipping`, err);
 					continue;
 				}
 				const realBase = realTarget.split(/[\\/]/).pop() ?? "";

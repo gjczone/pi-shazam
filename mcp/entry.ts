@@ -255,6 +255,22 @@ async function main(): Promise<void> {
 			/* best effort */
 		}
 	};
+	// #757: shared shutdown-and-exit helper. Every shutdown trigger (transport
+	// close, stdin end/error/close, signals) must eventually call process.exit(0)
+	// after shutdown() completes. Without this, Windows MCP processes linger as
+	// zombies when the client disconnects abruptly — SIGTERM is not reliably
+	// delivered on Windows, so the stdin/transport handlers are the only path to
+	// cleanup. The _shuttingDown latch inside shutdown() makes multiple triggers
+	// safe (only the first one runs the full shutdown).
+	const shutdownAndExit = (reason: string) => {
+		shutdown()
+			.catch((err) => _logWarn("mcpShutdown", `shutdown failed on ${reason}`, err))
+			.finally(() => {
+				// #599: defer exit so the event loop flushes pending I/O
+				// from lspManager.shutdown() (LSP shutdown/exit JSON-RPC).
+				setImmediate(() => process.exit(0));
+			});
+	};
 	const onSignal = async (): Promise<void> => {
 		await shutdown();
 		// #599: Defer process.exit via setImmediate so the event loop
@@ -269,15 +285,7 @@ async function main(): Promise<void> {
 
 	// Start stdio transport
 	const transport = new StdioServerTransport();
-	transport.onclose = () => {
-		shutdown().catch((err) => _logWarn("mcpShutdown", "shutdown failed on transport close", err));
-	};
-	const shutdownSignal = () => {
-		shutdown().catch((err) => _logWarn("mcpShutdown", "shutdown failed", err));
-	};
-	process.stdin.on("end", () => {
-		shutdown().catch((err) => _logWarn("mcpShutdown", "shutdown failed on stdin end", err));
-	});
+	transport.onclose = () => shutdownAndExit("transport close");
 	// #608: Windows-reliable shutdown triggers. On Windows, when an
 	// MCP client exits abruptly without orderly stdin close, the OS
 	// delivers a pipe 'error' or 'close' event instead of 'end'.
@@ -285,11 +293,12 @@ async function main(): Promise<void> {
 	// These additional handlers ensure lspManager.shutdown() runs
 	// and LSP child processes are cleaned up regardless of platform.
 	// All handlers are idempotent (protected by _shuttingDown latch).
+	process.stdin.on("end", () => shutdownAndExit("stdin end"));
 	process.stdin.on("error", (e) => {
 		_logWarn("mcpShutdown", "stdin error, initiating shutdown", e);
-		shutdownSignal();
+		shutdownAndExit("stdin error");
 	});
-	process.stdin.on("close", shutdownSignal);
+	process.stdin.on("close", () => shutdownAndExit("stdin close"));
 	await server.connect(transport);
 }
 

@@ -65,10 +65,11 @@ for pattern in "${HIGH_PATTERNS[@]}"; do
     echo "  Command: ${cmd:0:200}${cmd:200:+,...}" >&2
     echo "  Reason: This command could cause irreversible data loss." >&2
 
-    # Log blocked command
-    LOG_DIR="${SHAZAM_LOG_DIR}"
-    mkdir -p "${SHAZAM_LOG_DIR}"
-    echo "[$(date -Iseconds)] HIGH:${pattern} cwd=${cwd:-?} cmd=${cmd:0:300}" >> "${LOG_DIR}/bash-blocked.log"
+    # Log blocked command — best-effort, must never cause fail-open.
+    # Logging failures (read-only fs, permission denied) must not change
+    # the exit code away from 2, or the hook framework treats it as "proceed".
+    mkdir -p "${SHAZAM_LOG_DIR}" 2>/dev/null || true
+    echo "[$(date -Iseconds)] HIGH:${pattern} cwd=${cwd:-?} cmd=${cmd:0:300}" >> "${SHAZAM_LOG_DIR}/bash-blocked.log" 2>/dev/null || true
 
     exit 2
   fi
@@ -96,9 +97,9 @@ for pattern in "${MEDIUM_PATTERNS[@]}"; do
     echo "  Command: ${cmd:0:200}${cmd:200:+,...}" >&2
     echo "  Reason: This command could cause system instability or data loss." >&2
 
-    LOG_DIR="${SHAZAM_LOG_DIR}"
-    mkdir -p "${SHAZAM_LOG_DIR}"
-    echo "[$(date -Iseconds)] MEDIUM:${pattern} cwd=${cwd:-?} cmd=${cmd:0:300}" >> "${LOG_DIR}/bash-blocked.log"
+    # Log blocked command — best-effort, must never cause fail-open.
+    mkdir -p "${SHAZAM_LOG_DIR}" 2>/dev/null || true
+    echo "[$(date -Iseconds)] MEDIUM:${pattern} cwd=${cwd:-?} cmd=${cmd:0:300}" >> "${SHAZAM_LOG_DIR}/bash-blocked.log" 2>/dev/null || true
 
     exit 2
   fi

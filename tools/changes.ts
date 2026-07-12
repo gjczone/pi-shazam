@@ -31,7 +31,7 @@ export function registerChanges(pi: ExtensionAPI): void {
 		params: Type.Object({}),
 		execute(graph, params) {
 			const projectRoot = (params.project as string) || ".";
-			return dispatchChanges(graph, params, projectRoot).text;
+			return dispatchChanges(graph, params, projectRoot);
 		},
 	});
 }

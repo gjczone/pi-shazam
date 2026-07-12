@@ -744,6 +744,13 @@ function _scanProject(projectPath: string, log?: (msg: string) => void, options:
 			cachedProjectPath = root;
 			cachedFiles = reconstructFileCache(diskCache.graph, diskCache.fileMtimes);
 			recordExcludedTestCount(cachedGraph, excludedTestCount);
+			// #754: restore the truncated flag so the no-changes cache-hit path
+			// does not silently drop the incompleteness warning. Every other
+			// path (in-memory L706, partial-hit L772, full-scan L792) already
+			// sets graph.truncated from the current scan's collected result.
+			// Since hasChanges is false, the file set identity means truncation
+			// status matches.
+			cachedGraph.truncated = truncated;
 			return cachedGraph;
 		}
 

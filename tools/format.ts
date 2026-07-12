@@ -78,8 +78,11 @@ export async function executeFormat(
 		dryRun ? "**Mode: DRY RUN** (preview only, no changes applied)" : "**Mode: APPLY** (changes will be written)",
 	);
 
-	// Path traversal validation: must run before runFormatters to prevent formatters from operating on files outside the project
-	if (options.file && !validatePathInProject(options.file, getEffectiveRoot())) {
+	// Path traversal validation: must run before runFormatters to prevent
+	// formatters from operating on files outside the project. Validates against
+	// projectRoot (the root used for formatter execution) so validation and
+	// execution always share the same root (#759).
+	if (options.file && !validatePathInProject(options.file, projectRoot)) {
 		return "Error: file path escapes project root";
 	}
 
@@ -215,7 +218,7 @@ export async function buildFormatResult(
 	const dryRun = options.dryRun ?? true;
 	const formatters = detectFormatters(projectRoot);
 
-	if (options.file && !validatePathInProject(options.file, getEffectiveRoot())) {
+	if (options.file && !validatePathInProject(options.file, projectRoot)) {
 		return {
 			kind: "error",
 			dryRun,
@@ -542,7 +545,7 @@ function runFormatters(projectRoot: string, formatters: string[], targetFile?: s
 				case "prettier": {
 					const args = ["npx", "--yes", "prettier", "--write"];
 					if (targetFile) {
-						args.push(targetFile);
+						args.push("--", targetFile);
 					} else {
 						args.push("--ignore-unknown", "**/*.{ts,js,json,css,html,md}");
 					}
@@ -556,7 +559,7 @@ function runFormatters(projectRoot: string, formatters: string[], targetFile?: s
 				case "eslint": {
 					const args = ["npx", "--yes", "eslint", "--fix"];
 					if (targetFile) {
-						args.push(targetFile);
+						args.push("--", targetFile);
 					}
 					runFormatterCommand(args, projectRoot);
 					results.push({
@@ -568,7 +571,7 @@ function runFormatters(projectRoot: string, formatters: string[], targetFile?: s
 				case "biome": {
 					const args = ["npx", "--yes", "@biomejs/biome", "check", "--write"];
 					if (targetFile) {
-						args.push(targetFile);
+						args.push("--", targetFile);
 					} else {
 						args.push(".");
 					}
@@ -582,7 +585,7 @@ function runFormatters(projectRoot: string, formatters: string[], targetFile?: s
 				case "ruff": {
 					const args = ["ruff", "format"];
 					if (targetFile) {
-						args.push(targetFile);
+						args.push("--", targetFile);
 					} else {
 						args.push(".");
 					}
@@ -605,7 +608,7 @@ function runFormatters(projectRoot: string, formatters: string[], targetFile?: s
 				case "gofmt": {
 					const args = ["gofmt", "-w"];
 					if (targetFile) {
-						args.push(targetFile);
+						args.push("--", targetFile);
 					} else {
 						args.push(".");
 					}
