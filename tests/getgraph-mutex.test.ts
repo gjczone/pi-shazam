@@ -47,12 +47,10 @@ describe("MCP: getGraph re-entrancy guard (#691)", () => {
 		const { getGraph } = mod;
 		capturedGetGraph = getGraph;
 
-		const result = getGraph();
-		expect(result).toBeDefined();
-		// During the in-progress build cachedGraph is still null, so the
-		// re-entrant getGraph() returns null (defensive path) instead of
-		// spawning a second scanProject.
-		expect(reentrantGraph).toBeNull();
+		// #736: re-entrant getGraph() when no cached graph is available
+		// throws a descriptive error instead of silently returning null
+		// (the old cachedGraph! non-null assertion was lying to TypeScript).
+		expect(() => getGraph()).toThrow("Graph build already in progress but no cached graph available");
 		// Only ONE scanProject call despite the re-entrant getGraph().
 		expect(scanProjectCalls).toBe(1);
 	});

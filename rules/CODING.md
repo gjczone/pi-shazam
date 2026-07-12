@@ -112,11 +112,11 @@ Behavior: **the framework does NOT suppress ENOENT** -- the blanket early-return
 
 ```typescript
 try {
-    await probeOptionalFile(filePath);
+	await probeOptionalFile(filePath);
 } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return; // expected outcome of negative probe
-    _logWarn("scanner", `unexpected probe failure for ${filePath}`, err);
-    return null;
+	if ((err as NodeJS.ErrnoException).code === "ENOENT") return; // expected outcome of negative probe
+	_logWarn("scanner", `unexpected probe failure for ${filePath}`, err);
+	return null;
 }
 ```
 
