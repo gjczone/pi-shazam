@@ -5,6 +5,82 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.0] - 2026-07-13
+
+### Fixed
+
+- **Truncated flag dropped on no-changes cache hit (#754)**: The `scanProject`
+  no-changes cache-hit path now sets `graph.truncated` so the incompleteness
+  warning reaches all tools. Every other return path already did this; only the
+  fast path was missing it.
+
+- **Silent `realpathSync` failures in LSP discovery (#755)**: The
+  comment-only catch in `lsp/manager.ts` now logs via `_logWarn` so filesystem
+  errors (EACCES, ELOOP, ENOTDIR) during LSP server discovery are diagnosable
+  instead of swallowed.
+
+- **`isError` flag discarded by Pi tool wrappers (#756)**: The factory
+  `execute` return type now supports `{ text, isError? }` from dispatchers,
+  and the factory normalizes + propagates `isError` into the
+  `AgentToolResult`. `tools/impact.ts`, `tools/changes.ts`, and
+  `tools/overview.ts` now return the full `DispatchResult` instead of `.text`
+  only. Path-traversal and validation rejections now correctly surface as
+  tool errors.
+
+- **Zombie MCP processes on Windows disconnect (#757)**: All four shutdown
+  triggers (`transport.onclose`, `stdin end/error/close`) now call a shared
+  `shutdownAndExit` helper that defers `process.exit(0)` via `setImmediate`
+  after `shutdown()` completes, matching the existing `SIGTERM`/`SIGINT`
+  handler pattern.
+
+- **JSON envelope missing `truncated` field (#758)**: `buildEnvelope` now
+  accepts an optional `{ truncated }` option and surfaces it as a top-level
+  flag. The factory injects `graph.truncated` into JSON output so MCP/JSON
+  consumers can detect incomplete graphs when `MAX_FILES` was hit.
+
+- **Format root mismatch — validation vs. execution (#759)**:
+  `tools/format.ts` now validates `options.file` against `projectRoot` (the
+  same root used for formatter execution) instead of `getEffectiveRoot()`,
+  eliminating the scenario where a file passes validation against one root
+  but is formatted under another.
+
+- **Argument injection via dash-prefixed filenames (#760)**: All five
+  formatter cases (prettier, eslint, biome, ruff, gofmt) now insert `--`
+  before `targetFile` so filenames starting with `-` are never interpreted
+  as formatter flags.
+
+- **`check-destructive.sh` fail-open on logging failure (#761)**: The
+  BLOCKED and MEDIUM paths now wrap `mkdir -p` and `echo >>` in `|| true`
+  guards so a logging failure (read-only fs, permission denied) cannot
+  change the exit code away from 2 and cause a destructive command to
+  proceed. Both codebuddy and kimi hooks are updated.
+
+- **V3 incremental scan stale edge cleanup (#752)**: `_appendEdge` now
+  populates `targetToSources` so the incremental scan path correctly
+  removes stale edges when files are deleted.
+
+- **Shell hooks hardened against fail-open (#750)**: Source resolver,
+  alias expansion, and `rm` regex patterns hardened so unexpected shell
+  state cannot cause hooks to silently pass when they should block.
+
+- **Home-directory scan guard (#720, #724)**: The scanner refuses to
+  operate on `$HOME` / `%USERPROFILE%` by default (opt-out via
+  `PI_SHAZAM_ALLOW_HOME=1`). `HOME_SKIP_DIRS` entries are scoped so
+  cross-platform patterns cannot skip real source directories.
+
+- **Stderr noise reduction (#632, #727)**: Suppressed ENOENT warnings on
+  negative filesystem probes; silenced `isGitRepo` warnings on non-git
+  directories; aligned `validatePathInProjectCore` to `_logWarn`.
+
+- **Degraded-mode visibility (#728-#734, #731-#733)**: Truncation
+  warnings now reach all tools, not just overview. Cache persistence status
+  propagates to `RepoGraph.cacheStatus`. Parser degraded queries are
+  surfaced in the overview. LSP memory leak fixed (LRU cap on opened files).
+
+- **Batch P1 code-review fixes (#735-#739)**: Null guards, defaults, path
+  classification, flat tests, stderr noise reduction, stale state cleanup,
+  partial hierarchy fixes.
+
 ## [0.27.1] - 2026-07-10
 
 ### Fixed
