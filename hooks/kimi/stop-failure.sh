@@ -12,7 +12,11 @@
 # Exit 0: allow. stdout shown to LLM as context.
 
 set -eu
-source "$(dirname "${BASH_SOURCE[0]}")/lib/shazam-common.sh"
+_SHAZAM_LIB="$(dirname "${BASH_SOURCE[0]}")/lib/shazam-common.sh"
+if [[ ! -f "$_SHAZAM_LIB" ]]; then
+  _SHAZAM_LIB="$(dirname "${BASH_SOURCE[0]}")/../lib/shazam-common.sh"
+fi
+source "$_SHAZAM_LIB"
 
 INPUT=$(cat)
 session_id=$(echo "$INPUT" | jq -r '.session_id // ""')

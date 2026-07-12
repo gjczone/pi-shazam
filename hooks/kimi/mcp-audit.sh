@@ -16,7 +16,11 @@
 # Exit 0: allow. Silent (no stdout).
 
 set -eu
-source "$(dirname "${BASH_SOURCE[0]}")/lib/shazam-common.sh"
+_SHAZAM_LIB="$(dirname "${BASH_SOURCE[0]}")/lib/shazam-common.sh"
+if [[ ! -f "$_SHAZAM_LIB" ]]; then
+  _SHAZAM_LIB="$(dirname "${BASH_SOURCE[0]}")/../lib/shazam-common.sh"
+fi
+source "$_SHAZAM_LIB"
 
 INPUT=$(cat)
 hook_event=$(echo "$INPUT" | jq -r '.hook_event_name // ""')
