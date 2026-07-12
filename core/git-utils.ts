@@ -69,9 +69,12 @@ export function isGitRepo(projectRoot: string): boolean {
 		});
 		result = output.trim() === "true";
 	} catch (err) {
-		const code = (err as NodeJS.ErrnoException).code;
-		if (code === "ENOENT") return false;
-		_logWarn("isGitRepo", `git rev-parse failed for ${projectRoot}`, err);
+		// #727: silent return for all non-ENOENT failures too.
+		// "Not a git repo" is a status observation, not a failure —
+		// the surrounding code already handles the false return correctly.
+		// Real git failures (permission denied, corrupted repo) are rare
+		// and indistinguishable from "not a repo" via exit code alone
+		// without parsing stderr, which is fragile.
 		result = false;
 	}
 
