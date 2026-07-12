@@ -110,6 +110,14 @@ function atomicRename(tmpPath: string, targetPath: string): void {
 	}
 }
 
+export interface CacheSaveResult {
+	persisted: boolean;
+	reason?: "oversized" | "error";
+	errorMessage?: string;
+	sizeBytes?: number;
+	maxBytes?: number;
+}
+
 /**
  * Save the full graph + file mtimes to a persistent cache file.
  * Uses atomic write (tmp file + rename) to prevent corruption on crash.
@@ -117,21 +125,31 @@ function atomicRename(tmpPath: string, targetPath: string): void {
  * Writes the V3 (ProtoBuf) format by default. The V2 (JSON) format
  * is still readable via `loadGraphCache` for backward compatibility
  * with caches written by older pi-shazam versions.
+ *
+ * Returns a CacheSaveResult indicating whether the cache was persisted
+ * and, if not, why. Never throws — failures are captured in the result
+ * so the caller can propagate degraded-mode status to the user.
  */
-export function saveGraphCache(graph: RepoGraph, fileMtimes: Map<string, number>, cachePath: string): void {
+export function saveGraphCache(graph: RepoGraph, fileMtimes: Map<string, number>, cachePath: string): CacheSaveResult {
 	// #628: emit the V3 (ProtoBuf) format. The serialized buffer
 	// is ~30% smaller than the equivalent JSON for a 1000-symbol
 	// graph and decodes in comparable time.
 	const buf = serializeGraphV3(graph, fileMtimes);
-	mkdirSync(dirname(cachePath), { recursive: true });
+	try {
+		mkdirSync(dirname(cachePath), { recursive: true });
+	} catch (err) {
+		_logWarn("saveGraphCache", `cannot create cache directory ${dirname(cachePath)}`, err);
+		return { persisted: false, reason: "error", errorMessage: (err as Error).message };
+	}
 	const tmpPath = cachePath + ".tmp";
 	try {
 		if (buf.length > MAX_CACHE_SIZE) {
 			_logWarn("saveGraphCache", `serialized graph too large (${buf.length} bytes), skipping cache`);
-			return;
+			return { persisted: false, reason: "oversized", sizeBytes: buf.length, maxBytes: MAX_CACHE_SIZE };
 		}
 		writeFileSync(tmpPath, buf);
 		atomicRename(tmpPath, cachePath);
+		return { persisted: true, sizeBytes: buf.length };
 	} catch (err) {
 		// Clean up tmp file on failure
 		try {
@@ -139,7 +157,8 @@ export function saveGraphCache(graph: RepoGraph, fileMtimes: Map<string, number>
 		} catch (cleanupErr) {
 			_logWarn("saveGraphCache", "failed to clean up tmp file", cleanupErr);
 		}
-		throw err;
+		_logWarn("saveGraphCache", "failed to persist graph cache", err);
+		return { persisted: false, reason: "error", errorMessage: (err as Error).message };
 	}
 }
 

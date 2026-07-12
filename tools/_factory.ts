@@ -164,6 +164,13 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 			const effectiveParams = { ...params, project };
 			const graph = scanProject(".");
 
+			// Issue #731: non-overview tools must also surface the truncated flag
+			// so the agent knows results may be incomplete when MAX_FILES was hit.
+			const truncatedWarning =
+				graph.truncated === true
+					? "\n\n[WARNING] File count exceeded MAX_FILES — the analysis graph is incomplete. Results may miss dependencies."
+					: "";
+
 			let text: string;
 			try {
 				const t0 = Date.now();
@@ -204,6 +211,10 @@ export function createTool<T extends TProperties>(pi: ExtensionAPI, spec: ToolSp
 
 			if (typeof maxTokens === "number" && maxTokens > 0 && !json) {
 				text = truncateOutput(text.split("\n"), maxTokens);
+			}
+
+			if (truncatedWarning && !json) {
+				text += truncatedWarning;
 			}
 
 			return {

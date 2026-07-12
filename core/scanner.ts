@@ -755,13 +755,17 @@ function _scanProject(projectPath: string, log?: (msg: string) => void, options:
 		const updatedGraph = scanIncremental(root, files, adapter, logger);
 
 		// Persist updated graph to disk
-		try {
+		{
 			const saveFileMtimes = getFileMtimes(root, files);
-			saveGraphCache(updatedGraph, saveFileMtimes, cachePath);
-			logger(`Graph cache updated: ${updatedGraph.symbols.size} symbols`);
-		} catch (err) {
-			_logWarn("scanProject", "Failed to save graph cache (incremental)", err);
-			logger(`Failed to save graph cache: ${err}`);
+			const saveResult = saveGraphCache(updatedGraph, saveFileMtimes, cachePath);
+			updatedGraph.cacheStatus = saveResult;
+			if (saveResult.persisted) {
+				logger(
+					`Graph cache updated: ${updatedGraph.symbols.size} symbols (${((saveResult.sizeBytes ?? 0) / 1024) | 0} KB)`,
+				);
+			} else {
+				logger(`Graph cache not persisted (${saveResult.reason}): ${saveResult.errorMessage || "graph too large"}`);
+			}
 		}
 
 		recordExcludedTestCount(updatedGraph, excludedTestCount);
@@ -774,13 +778,15 @@ function _scanProject(projectPath: string, log?: (msg: string) => void, options:
 	recordExcludedTestCount(graph, excludedTestCount);
 
 	// Save to persistent cache
-	try {
+	{
 		const saveFileMtimes = getFileMtimes(root, files);
-		saveGraphCache(graph, saveFileMtimes, cachePath);
-		logger(`Graph cache saved: ${graph.symbols.size} symbols`);
-	} catch (err) {
-		_logWarn("scanProject", "Failed to save graph cache (full)", err);
-		logger(`Failed to save graph cache: ${err}`);
+		const saveResult = saveGraphCache(graph, saveFileMtimes, cachePath);
+		graph.cacheStatus = saveResult;
+		if (saveResult.persisted) {
+			logger(`Graph cache saved: ${graph.symbols.size} symbols (${((saveResult.sizeBytes ?? 0) / 1024) | 0} KB)`);
+		} else {
+			logger(`Graph cache not persisted (${saveResult.reason}): ${saveResult.errorMessage || "graph too large"}`);
+		}
 	}
 
 	graph.truncated = truncated;
