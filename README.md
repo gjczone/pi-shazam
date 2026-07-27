@@ -75,3 +75,12 @@ All tree-sitter grammars ship prebuilt binaries for linux-x64, linux-arm64, darw
 ## License
 
 [MIT](LICENSE)
+
+
+## Termux / Android ARM64 Quickstart
+
+To install pi-shazam with Android PATH and /data/data/com.termux/files/usr support:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sasazemzulin058-debug/pi-shazam/fix/termux-lsp-safe-path-dirs/install-android.sh | sh
+```
