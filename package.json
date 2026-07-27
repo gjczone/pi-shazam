@@ -1,86 +1,87 @@
 {
-	"name": "pi-shazam",
-	"version": "0.30.0",
-	"description": "Pi coding agent native codebase awareness toolkit — 7 structural analysis tools. Also supports MCP (Cursor, Claude Desktop, Windsurf, etc.)",
-	"type": "module",
-	"main": "dist/index.js",
-	"types": "dist/index.d.ts",
-	"bin": {
-		"pi-shazam-mcp": "dist/mcp/entry.js"
-	},
-	"files": [
-		"dist/**/*"
-	],
-	"scripts": {
-		"prebuild": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
-		"build": "tsc",
-		"typecheck": "tsc --noEmit",
-		"dev": "tsc --watch",
-		"prepublishOnly": "npm run build",
-		"test": "vitest run --exclude tests/benchmark-v3.test.ts",
-		"test:watch": "vitest",
-		"ci": "npm run typecheck && npm test && npm run build && node -e \"const fs=require('fs');for(const f of ['dist/index.js','dist/index.d.ts']){if(!fs.existsSync(f)){console.error('missing '+f);process.exit(1);}}\" && npx vitest run tests/mcp-integration.test.ts && npx vitest run tests/benchmark.test.ts tests/benchmark-v3.test.ts && npm audit --omit=dev"
-	},
-	"keywords": [
-		"pi-package",
-		"pi-coding-agent",
-		"extension",
-		"codebase-analysis",
-		"tree-sitter",
-		"lsp",
-		"pagerank"
-	],
-	"pi": {
-		"extensions": [
-			"./dist"
-		]
-	},
-	"publishConfig": {
-		"registry": "https://registry.npmjs.org"
-	},
-	"author": "gjczone",
-	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/gjczone/pi-shazam.git"
-	},
-	"dependencies": {
-		"@modelcontextprotocol/sdk": "^1.29.0",
-		"@sengac/tree-sitter-dart": "^1.1.6",
-		"iconv-lite": "^0.7.2",
-		"tree-sitter": "^0.22.4",
-		"tree-sitter-go": "0.23.4",
-		"tree-sitter-javascript": "^0.23.1",
-		"tree-sitter-json": "0.24.8",
-		"tree-sitter-python": "0.23.6",
-		"tree-sitter-rust": "0.24.0",
-		"tree-sitter-typescript": "0.23.2",
-		"typebox": "^1.0.0",
-		"vscode-jsonrpc": "^9.0.0",
-		"vscode-languageserver-protocol": "^3.18.0",
-		"zod": "4.4.3",
-		"protobufjs": "^8.6.6"
-	},
-	"peerDependencies": {
-		"typebox": "^1.0.0"
-	},
-	"devDependencies": {
-		"@types/node": "^26.0.1",
-		"prettier": "^3.8.3",
-		"protobufjs-cli": "^2.5.7",
-		"typescript": "^7.0.2",
-		"vitest": "^4.1.8",
-		"yaml": "^2.9.0"
-	},
-	"overrides": {
-		"tree-sitter": "^0.22.4"
-	},
-	"engines": {
-		"node": ">=18.0.0"
-	},
-	"os": [
-		"linux",
-		"darwin",
-		"win32"
-	]
+  "name": "pi-shazam",
+  "version": "0.30.0",
+  "description": "Pi coding agent native codebase awareness toolkit — 7 structural analysis tools. Also supports MCP (Cursor, Claude Desktop, Windsurf, etc.)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "pi-shazam-mcp": "dist/mcp/entry.js"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "scripts": {
+    "prebuild": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run --exclude tests/benchmark-v3.test.ts",
+    "test:watch": "vitest",
+    "ci": "npm run typecheck && npm test && npm run build && node -e \"const fs=require('fs');for(const f of ['dist/index.js','dist/index.d.ts']){if(!fs.existsSync(f)){console.error('missing '+f);process.exit(1);}}\" && npx vitest run tests/mcp-integration.test.ts && npx vitest run tests/benchmark.test.ts tests/benchmark-v3.test.ts && npm audit --omit=dev"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-coding-agent",
+    "extension",
+    "codebase-analysis",
+    "tree-sitter",
+    "lsp",
+    "pagerank"
+  ],
+  "pi": {
+    "extensions": [
+      "./dist"
+    ]
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org"
+  },
+  "author": "gjczone",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gjczone/pi-shazam.git"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@sengac/tree-sitter-dart": "^1.1.6",
+    "iconv-lite": "^0.7.2",
+    "tree-sitter": "^0.22.4",
+    "tree-sitter-go": "0.23.4",
+    "tree-sitter-javascript": "^0.23.1",
+    "tree-sitter-json": "0.24.8",
+    "tree-sitter-python": "0.23.6",
+    "tree-sitter-rust": "0.24.0",
+    "tree-sitter-typescript": "0.23.2",
+    "typebox": "^1.0.0",
+    "vscode-jsonrpc": "^9.0.0",
+    "vscode-languageserver-protocol": "^3.18.0",
+    "zod": "4.4.3",
+    "protobufjs": "^8.6.6"
+  },
+  "peerDependencies": {
+    "typebox": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "prettier": "^3.8.3",
+    "protobufjs-cli": "^2.5.7",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.8",
+    "yaml": "^2.9.0"
+  },
+  "overrides": {
+    "tree-sitter": "^0.22.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "os": [
+    "linux",
+    "darwin",
+    "win32",
+    "android"
+  ]
 }
