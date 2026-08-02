@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.1] - 2026-08-03
+
+### Changed
+
+- **Dependency bumps**: protobufjs 8.7.0 -> 8.7.1 (#767), protobufjs-cli
+  2.6.0 -> 2.6.1 (#766), typebox 1.3.6 -> 1.3.8 (#769), prettier 3.9.5 ->
+  3.9.6 (#770), @types/node 26.1.1 -> 26.1.2 (#772),
+  @modelcontextprotocol/sdk 1.29.0 -> 1.30.0 (#773).
+- **GitHub Actions updates (#774)**: checkout v7.0.0 -> v7.0.1 and
+  setup-node v6.4.0 -> v7.0.0 (pinned by SHA across ci.yml, codeql.yml,
+  publish.yml).
+
+### Fixed
+
+- **Termux / Android LSP executable discovery (#771)**: `_SAFE_PATH_DIRS`
+  in `lsp/manager.ts` now includes `$PREFIX/bin` (when `PREFIX` is set) and
+  `/data/data/com.termux/files/usr/bin` so LSP servers installed through the
+  Termux package manager are discovered on Android ARM64. No effect on other
+  platforms.
+
 ## [0.30.0] - 2026-07-13
 
 ### Fixed
