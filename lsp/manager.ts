@@ -311,6 +311,8 @@ function isExecutable(filePath: string): boolean {
 }
 
 export const _SAFE_PATH_DIRS = new Set([
+	...(process.env.PREFIX ? [`${process.env.PREFIX}/bin`] : []),
+	"/data/data/com.termux/files/usr/bin",
 	"/usr/local/bin",
 	"/usr/bin",
 	"/bin",
