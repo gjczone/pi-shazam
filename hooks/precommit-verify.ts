@@ -58,7 +58,13 @@ export function registerPrecommitVerify(pi: ExtensionAPI): void {
 				};
 				const result = await executeVerifyTextAsync(ctx.cwd, opts);
 
-				// Truncate long results for the steer message
+				// Truncate long results for the queued next-turn message.
+				// deliverAs: "nextTurn" is mandatory here (#780): the async verify
+				// can return while the bash `git commit` tool is still running, and a
+				// mid-turn "steer" message gets inserted into the session tree as the
+				// current leaf. The toolResult parentId then attaches to that custom
+				// message instead of the tool call, breaking the tool_calls chain and
+				// leaving every later API call on the session failing with 400.
 				const lines = result.split("\n");
 				const truncated = lines.length > 60 ? lines.slice(0, 60).join("\n") + "\n... (truncated)" : result;
 
@@ -76,7 +82,7 @@ export function registerPrecommitVerify(pi: ExtensionAPI): void {
 					},
 					{
 						triggerTurn: false,
-						deliverAs: "steer",
+						deliverAs: "nextTurn",
 					},
 				);
 			} catch (err) {
