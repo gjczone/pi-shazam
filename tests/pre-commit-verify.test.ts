@@ -13,7 +13,7 @@
  * already write to stderr and remain unchanged.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -154,5 +154,17 @@ describe("issue #554: stderr-only tools (cargo, go vet) still work", () => {
 		expect(result.verdict).toBe("FAIL");
 		expect(result.message).toContain("cargo check failed");
 		expect(result.message).toContain("E0277");
+	});
+});
+
+describe("issue #780: precommit verify delivery must not break tool_calls chains", () => {
+	it("queues the verify result for the next turn instead of mid-turn steer", () => {
+		// The async verify callback can return while the bash `git commit` tool
+		// is still running. deliverAs: "steer" would insert the message into the
+		// session tree mid-turn and break the toolResult parent chain, so the
+		// source must use "nextTurn" and never "steer" again (#780).
+		const source = readFileSync(new URL("../hooks/precommit-verify.ts", import.meta.url), "utf8");
+		expect(source).toContain('deliverAs: "nextTurn"');
+		expect(source).not.toContain('deliverAs: "steer"');
 	});
 });
