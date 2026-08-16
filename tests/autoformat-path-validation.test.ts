@@ -17,8 +17,31 @@ import { mkdtempSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { isPathInRoot, validatePathInProject } from "../tools/_factory.js";
 
+/**
+ * Symlink capability probe: standard Windows accounts without Developer Mode
+ * (and unelevated shells) are denied symlink creation with EPERM, so the
+ * escape scenario cannot be reproduced on such machines. GitHub Actions
+ * Windows runners run elevated and can create symlinks, so the guard below
+ * is still fully exercised on CI; locally the symlink-dependent test is
+ * skipped instead of failing for an environment the machine cannot provide.
+ */
+function canCreateSymlinks(): boolean {
+	const probe = mkdtempSync(join(tmpdir(), "pi-shazam-symlink-probe-"));
+	try {
+		writeFileSync(join(probe, "target.txt"), "t");
+		symlinkSync(join(probe, "target.txt"), join(probe, "link.txt"));
+		return true;
+	} catch {
+		return false;
+	} finally {
+		rmSync(probe, { recursive: true, force: true });
+	}
+}
+
+const symlinksAvailable = canCreateSymlinks();
+
 describe("autoFormatFile symlink-escape guard (#688)", () => {
-	it("rejects a symlink inside the project root pointing outside it", () => {
+	it.skipIf(!symlinksAvailable)("rejects a symlink inside the project root pointing outside it", () => {
 		const root = mkdtempSync(join(tmpdir(), "pi-shazam-688-root-"));
 		const outside = mkdtempSync(join(tmpdir(), "pi-shazam-688-outside-"));
 		try {
