@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.0] - 2026-08-16
+
+### Added
+
+- **ZCode prompt-injection hooks**: SessionStart / UserPromptSubmit / PreToolUse /
+  PostToolUse / Stop lifecycle hooks for ZCode that inject shazam-tool guidance
+  and verify-pending reminders into the agent context (`hooks/zcode/`).
+
+### Fixed
+
+- **precommit-verify mid-turn delivery corrupting sessions (#780)**: the async
+  verify hook could return while the bash `git commit` tool was still running and
+  delivered its message as a mid-turn "steer", inserting it into the session tree
+  as the current leaf. The toolResult parentId then attached to that custom
+  message instead of the tool call, breaking the tool_calls chain and leaving
+  every later API call on the session failing with 400. The message is now queued
+  with `deliverAs: "nextTurn"` so it is injected on the next user turn, and a
+  regression test guards the delivery mode. (#781)
+
+### Changed
+
+- **Dependency bumps**: protobufjs 8.7.1 -> 8.7.2 (#779), protobufjs-cli
+  2.6.1 -> 2.6.2 (#778), typebox 1.3.8 -> 1.3.10 (#776), @types/node 26.1.2 ->
+  26.2.0 (#777), github/codeql-action 4.37.3 -> 4.37.6 (#775).
+
+### Removed
+
+- **Dependabot configuration**: `.github/dependabot.yml` removed so automatic
+  version-update PRs are no longer opened for this repository. (#781)
+
 ## [0.30.1] - 2026-08-03
 
 ### Changed
