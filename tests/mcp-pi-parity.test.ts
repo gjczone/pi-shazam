@@ -5,19 +5,46 @@
  * Both paths now call the same dispatcher (tools/_dispatchers.ts),
  * so the output should be identical aside from wrapping differences.
  */
-import { describe, it, expect, beforeAll } from "vitest";
-import { scanProject, getEffectiveRoot } from "../core/scanner.js";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { scanProject, getEffectiveRoot, setProjectRoot, resetProjectRoot } from "../core/scanner.js";
 import type { RepoGraph } from "../core/graph.js";
 import type { ExtensionAPI, ExtensionContext, ToolCallEvent } from "../types/pi-extension.js";
 import { execFileSync } from "node:child_process";
-import { appendFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, appendFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // -- Helpers ------------------------------------------------------------
 
 let graph: RepoGraph;
 
+/**
+ * The whole suite runs against a disposable git repository in the system temp
+ * dir instead of the real worktree. The shazam_changes clean/dirty fixtures
+ * mutate git state (stash push/pop, checkout), and running them against the
+ * real repo can destroy uncommitted work — observed on Windows where an
+ * autocrlf-lossy stash pop silently swallowed a local edit. A temp repo makes
+ * every mutation harmless and deterministic; setProjectRoot points the tools
+ * at it, and afterAll restores the override.
+ */
+let projectRoot = process.cwd();
+
 beforeAll(() => {
-	graph = scanProject(".");
+	projectRoot = mkdtempSync(join(tmpdir(), "pi-shazam-parity-"));
+	writeFileSync(join(projectRoot, "index.ts"), "export function parityTarget(): number { return 1; }\n");
+	writeFileSync(join(projectRoot, "README.md"), "# pi-shazam parity fixture\n");
+	execFileSync("git", ["init", "--initial-branch=main"], { cwd: projectRoot });
+	execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "add", "-A"], { cwd: projectRoot });
+	execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "fixture"], {
+		cwd: projectRoot,
+	});
+	setProjectRoot(projectRoot);
+	graph = scanProject(projectRoot);
+});
+
+afterAll(() => {
+	resetProjectRoot();
+	rmSync(projectRoot, { recursive: true, force: true });
 });
 
 /**
@@ -30,18 +57,17 @@ function normalize(text: string): string {
 }
 
 /**
- * Run a git command in the current working directory (the worktree under
- * test) and return trimmed stdout. Used by the shazam_changes tree-state
- * fixtures (issue #644).
+ * Run a git command inside the disposable fixture repo and return trimmed
+ * stdout. Used by the shazam_changes tree-state fixtures (issue #644).
  */
 function execGit(args: string[]): string {
-	return execFileSync("git", args, { cwd: process.cwd(), encoding: "utf8" }).trim();
+	return execFileSync("git", args, { cwd: projectRoot, encoding: "utf8" }).trim();
 }
 
 /**
- * Force the working tree into a known state for the shazam_changes parity
- * cases (issue #644). Returns a `restore` callback that MUST be invoked in
- * a `finally` block to undo the mutation.
+ * Force the fixture repo's working tree into a known state for the
+ * shazam_changes parity cases (issue #644). Returns a `restore` callback
+ * that MUST be invoked in a `finally` block to undo the mutation.
  *
  * - "clean": stash every local change (tracked + untracked, but not ignored
  *   files like node_modules) so `getGitChangedFiles()` sees an empty diff and
@@ -67,7 +93,7 @@ function prepareTree(mode: "clean" | "dirty"): () => void {
 		}
 		return () => {};
 	}
-	appendFileSync("README.md", "\n<!-- pi-parity-dirty-marker -->\n");
+	appendFileSync(join(projectRoot, "README.md"), "\n<!-- pi-parity-dirty-marker -->\n");
 	return () => {
 		try {
 			execGit(["checkout", "--", "README.md"]);
@@ -207,14 +233,14 @@ describe("MCP-Pi parity contract tests", () => {
 	// -- shazam_lookup --
 	describe("shazam_lookup", () => {
 		it("produces equivalent output for known symbol", async () => {
-			const piText = await invokePiTool("shazam_lookup", { name: "scanProject" });
-			const mcpText = await invokeMcpTool("shazam_lookup", { name: "scanProject" });
+			const piText = await invokePiTool("shazam_lookup", { name: "parityTarget" });
+			const mcpText = await invokeMcpTool("shazam_lookup", { name: "parityTarget" });
 			expect(piText).toBe(mcpText);
 		});
 
 		it("produces equivalent output for file path", async () => {
-			const piText = await invokePiTool("shazam_lookup", { name: "core/graph.ts" });
-			const mcpText = await invokeMcpTool("shazam_lookup", { name: "core/graph.ts" });
+			const piText = await invokePiTool("shazam_lookup", { name: "index.ts" });
+			const mcpText = await invokeMcpTool("shazam_lookup", { name: "index.ts" });
 			expect(piText).toBe(mcpText);
 		});
 
@@ -240,20 +266,20 @@ describe("MCP-Pi parity contract tests", () => {
 	// -- shazam_impact --
 	describe("shazam_impact", () => {
 		it("produces equivalent output for symbol call chain", async () => {
-			const piText = await invokePiTool("shazam_impact", { symbol: "scanProject" });
-			const mcpText = await invokeMcpTool("shazam_impact", { symbol: "scanProject" });
+			const piText = await invokePiTool("shazam_impact", { symbol: "parityTarget" });
+			const mcpText = await invokeMcpTool("shazam_impact", { symbol: "parityTarget" });
 			expect(piText).toBe(mcpText);
 		});
 
 		it("produces equivalent output for file impact analysis", async () => {
-			const piText = await invokePiTool("shazam_impact", { files: ["core/scanner.ts"] });
-			const mcpText = await invokeMcpTool("shazam_impact", { files: ["core/scanner.ts"] });
+			const piText = await invokePiTool("shazam_impact", { files: ["index.ts"] });
+			const mcpText = await invokeMcpTool("shazam_impact", { files: ["index.ts"] });
 			expect(piText).toBe(mcpText);
 		});
 
 		it("produces equivalent error for mutual exclusion", async () => {
-			const piText = await invokePiTool("shazam_impact", { symbol: "scanProject", files: ["core/scanner.ts"] });
-			const mcpText = await invokeMcpTool("shazam_impact", { symbol: "scanProject", files: ["core/scanner.ts"] });
+			const piText = await invokePiTool("shazam_impact", { symbol: "parityTarget", files: ["index.ts"] });
+			const mcpText = await invokeMcpTool("shazam_impact", { symbol: "parityTarget", files: ["index.ts"] });
 			expect(piText).toBe(mcpText);
 		});
 	});
@@ -287,15 +313,6 @@ describe("MCP-Pi parity contract tests", () => {
 		// Issue #644: split the fragile single assertion into explicit
 		// clean/dirty tree variants so both the compact no-op (#634) and the
 		// full output are verified for exactly the sections they emit.
-		// Revert install-time mutations (e.g. package-lock.json from
-		// `npm install`) so they never leak into assertions or the diff.
-		beforeAll(() => {
-			try {
-				execGit(["checkout", "--", "package-lock.json"]);
-			} catch {
-				/* already clean or absent — ignore */
-			}
-		});
 
 		it.each([
 			{ name: "clean", mode: "clean" as const },
